@@ -156,9 +156,9 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E9-02 (Today's Picks Page)
-Currently working: E9-03 (Performance Tracker Page)
-Next up: E9-04 (League Explorer Page)
+Last completed: E9-03 (Performance Tracker Page)
+Currently working: E9-04 (League Explorer Page)
+Next up: E9-05 (Model Health + Match Deep Dive Pages)
 
 ---
 
