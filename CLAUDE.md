@@ -156,9 +156,9 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E10-04 (Onboarding Flow)
-Currently working: E11-01 (Email Templates)
-Next up: E11-02 (Email Sender)
+Last completed: E11-01 (Email Templates)
+Currently working: E11-02 (Email Sender)
+Next up: E11-03 (Email Integration with Pipeline)
 
 ---
 

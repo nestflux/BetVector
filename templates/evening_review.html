@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BetVector — Evening Review</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #0D1117; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;">
+    <!--
+    BetVector Evening Review Email Template (E11-01)
+    =================================================
+    Sent daily at 22:00 UTC with today's results and P&L.
+
+    Template variables:
+      date              - str: today's date
+      user_name         - str: recipient's name
+      results           - list[dict]: today's resolved bets
+        .home_team      - str
+        .away_team      - str
+        .league         - str
+        .market         - str
+        .selection      - str
+        .result         - str: "won" | "lost" | "pending" | "void"
+        .odds           - float
+        .stake          - float
+        .pnl            - float: profit/loss for this bet
+      daily_pnl         - float: total P&L today
+      daily_wins        - int
+      daily_losses      - int
+      daily_pending     - int
+      weekly_pnl        - float: running weekly P&L
+      monthly_roi       - float: running monthly ROI (0-1)
+      current_bankroll  - float
+      tomorrow_fixtures - int: number of fixtures tomorrow
+      tomorrow_leagues  - str: league names for tomorrow
+      all_lost_msg      - str|None: message when all bets lost
+      dashboard_url     - str
+    -->
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #0D1117;">
+        <tr>
+            <td align="center" style="padding: 24px 16px;">
+                <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width: 600px; width: 100%;">
+
+                    <!-- Header -->
+                    <tr>
+                        <td style="padding: 24px 24px 16px; background-color: #161B22; border-radius: 8px 8px 0 0; border-bottom: 1px solid #30363D;">
+                            <h1 style="margin: 0 0 4px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 22px; font-weight: 700; color: #E6EDF3;">
+                                BetVector Evening —
+                                <span style="color: {% if daily_pnl >= 0 %}#3FB950{% else %}#F85149{% endif %};">
+                                    {% if daily_pnl >= 0 %}+&pound;{{ '%.2f' | format(daily_pnl) }}{% else %}-&pound;{{ '%.2f' | format(daily_pnl | abs) }}{% endif %} Today
+                                </span>
+                                &middot; {{ daily_wins }}/{{ daily_wins + daily_losses }} Wins
+                            </h1>
+                            <p style="margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 13px; color: #8B949E;">
+                                {{ date }}
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Greeting -->
+                    <tr>
+                        <td style="padding: 20px 24px 8px; background-color: #161B22;">
+                            <p style="margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 14px; color: #E6EDF3;">
+                                Good evening{{ ', ' + user_name if user_name else '' }}. Here's today's recap.
+                            </p>
+                        </td>
+                    </tr>
+
+                    {% if results %}
+                    <!-- Results Table -->
+                    <tr>
+                        <td style="padding: 16px 24px; background-color: #161B22;">
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse;">
+                                <tr>
+                                    <td style="padding: 8px 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 11px; font-weight: 600; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #30363D;">
+                                        Match
+                                    </td>
+                                    <td style="padding: 8px 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 11px; font-weight: 600; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #30363D;">
+                                        Market
+                                    </td>
+                                    <td style="padding: 8px 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 11px; font-weight: 600; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #30363D; text-align: center;">
+                                        Result
+                                    </td>
+                                    <td style="padding: 8px 10px; font-family: 'Courier New', Courier, monospace; font-size: 11px; font-weight: 600; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #30363D; text-align: right;">
+                                        P&amp;L
+                                    </td>
+                                </tr>
+                                {% for r in results %}
+                                <tr>
+                                    <td style="padding: 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 13px; color: #E6EDF3; border-bottom: 1px solid #21262D;">
+                                        {{ r.home_team }} vs {{ r.away_team }}<br>
+                                        <span style="font-size: 11px; color: #8B949E;">{{ r.league }}</span>
+                                    </td>
+                                    <td style="padding: 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 13px; color: #E6EDF3; border-bottom: 1px solid #21262D;">
+                                        {{ r.market }}<br>
+                                        <span style="font-size: 11px; color: #58A6FF;">{{ r.selection }}</span>
+                                    </td>
+                                    <td style="padding: 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 16px; border-bottom: 1px solid #21262D; text-align: center;">
+                                        {% if r.result == 'won' %}&#9989;{% elif r.result == 'lost' %}&#10060;{% elif r.result == 'pending' %}&#9203;{% else %}&#9898;{% endif %}
+                                    </td>
+                                    <td style="padding: 10px; font-family: 'Courier New', Courier, monospace; font-size: 13px; font-weight: 700; border-bottom: 1px solid #21262D; text-align: right;
+                                        {% if r.pnl and r.pnl > 0 %}color: #3FB950;{% elif r.pnl and r.pnl < 0 %}color: #F85149;{% else %}color: #8B949E;{% endif %}">
+                                        {% if r.pnl and r.pnl >= 0 %}+&pound;{{ '%.2f' | format(r.pnl) }}{% elif r.pnl %}-&pound;{{ '%.2f' | format(r.pnl | abs) }}{% else %}&mdash;{% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </table>
+                        </td>
+                    </tr>
+                    {% endif %}
+
+                    <!-- Daily Summary Stats -->
+                    <tr>
+                        <td style="padding: 16px 24px; background-color: #161B22;">
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                                <tr>
+                                    <td width="33%" style="padding: 12px; background-color: #0D1117; border-radius: 6px; text-align: center;">
+                                        <p style="margin: 0 0 4px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 11px; color: #8B949E; text-transform: uppercase;">
+                                            Daily P&amp;L
+                                        </p>
+                                        <p style="margin: 0; font-family: 'Courier New', Courier, monospace; font-size: 18px; font-weight: 700;
+                                            {% if daily_pnl >= 0 %}color: #3FB950;{% else %}color: #F85149;{% endif %}">
+                                            {% if daily_pnl >= 0 %}+&pound;{{ '%.2f' | format(daily_pnl) }}{% else %}-&pound;{{ '%.2f' | format(daily_pnl | abs) }}{% endif %}
+                                        </p>
+                                    </td>
+                                    <td width="4%"></td>
+                                    <td width="30%" style="padding: 12px; background-color: #0D1117; border-radius: 6px; text-align: center;">
+                                        <p style="margin: 0 0 4px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 11px; color: #8B949E; text-transform: uppercase;">
+                                            Weekly P&amp;L
+                                        </p>
+                                        <p style="margin: 0; font-family: 'Courier New', Courier, monospace; font-size: 18px; font-weight: 700;
+                                            {% if weekly_pnl >= 0 %}color: #3FB950;{% else %}color: #F85149;{% endif %}">
+                                            {% if weekly_pnl >= 0 %}+&pound;{{ '%.2f' | format(weekly_pnl) }}{% else %}-&pound;{{ '%.2f' | format(weekly_pnl | abs) }}{% endif %}
+                                        </p>
+                                    </td>
+                                    <td width="4%"></td>
+                                    <td width="30%" style="padding: 12px; background-color: #0D1117; border-radius: 6px; text-align: center;">
+                                        <p style="margin: 0 0 4px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 11px; color: #8B949E; text-transform: uppercase;">
+                                            Monthly ROI
+                                        </p>
+                                        <p style="margin: 0; font-family: 'Courier New', Courier, monospace; font-size: 18px; font-weight: 700;
+                                            {% if monthly_roi >= 0 %}color: #3FB950;{% else %}color: #F85149;{% endif %}">
+                                            {{ '%+.1f' | format(monthly_roi * 100) }}%
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    {% if all_lost_msg %}
+                    <!-- Variance note (shown when all bets lost) -->
+                    <tr>
+                        <td style="padding: 12px 24px; background-color: #161B22;">
+                            <p style="margin: 0; padding: 12px 16px; background-color: #0D1117; border-left: 3px solid #D29922; border-radius: 4px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 13px; color: #8B949E;">
+                                {{ all_lost_msg }}
+                            </p>
+                        </td>
+                    </tr>
+                    {% endif %}
+
+                    <!-- Tomorrow preview -->
+                    <tr>
+                        <td style="padding: 16px 24px; background-color: #161B22;">
+                            <p style="margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 13px; color: #8B949E;">
+                                {% if tomorrow_fixtures > 0 %}
+                                &#128197; {{ tomorrow_fixtures }} match{{ 'es' if tomorrow_fixtures != 1 else '' }} tomorrow{{ ' (' + tomorrow_leagues + ')' if tomorrow_leagues else '' }}. Predictions will run at 6:00 AM.
+                                {% else %}
+                                No matches scheduled for tomorrow.
+                                {% endif %}
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Dashboard CTA -->
+                    <tr>
+                        <td style="padding: 20px 24px; background-color: #161B22; text-align: center;">
+                            <a href="{{ dashboard_url }}" style="display: inline-block; padding: 12px 32px; background-color: #3FB950; color: #0D1117; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 600; text-decoration: none; border-radius: 6px;">
+                                Open Dashboard
+                            </a>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="padding: 16px 24px 24px; background-color: #161B22; border-radius: 0 0 8px 8px; border-top: 1px solid #30363D; text-align: center;">
+                            <p style="margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 11px; color: #484F58;">
+                                BetVector &middot; Quantitative edge in football betting<br>
+                                This is an automated email. Model predictions are not financial advice.
+                            </p>
+                        </td>
+                    </tr>
+
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

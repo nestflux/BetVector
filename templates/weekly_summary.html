@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BetVector — Weekly Summary</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #0D1117; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;">
+    <!--
+    BetVector Weekly Summary Email Template (E11-01)
+    =================================================
+    Sent every Sunday at 20:00 UTC with the week's performance recap.
+
+    Template variables:
+      week_label         - str: e.g. "Week of 23 Feb – 1 Mar 2026"
+      user_name          - str: recipient's name
+
+      --- Core Stats ---
+      total_bets         - int: total bets placed this week
+      wins               - int: number of winning bets
+      losses             - int: number of losing bets
+      pending            - int: number still pending
+      win_rate           - float: 0-1 win rate
+      weekly_pnl         - float: P&L for the week (£)
+      weekly_roi         - float: ROI for the week (0-1)
+      cumulative_roi     - float: all-time ROI (0-1)
+      bankroll_start     - float: bankroll at start of week
+      bankroll_end       - float: bankroll at end of week
+      bankroll_change    - float: bankroll_end - bankroll_start
+
+      --- Model Health Snapshot ---
+      brier_score        - float: current Brier score
+      brier_trend        - str: "improving" | "stable" | "declining"
+      calibration_status - str: "well_calibrated" | "overconfident" | "underconfident"
+      clv_mean           - float: mean closing line value (%)
+      clv_trend          - str: "positive" | "flat" | "negative"
+
+      --- Highlights ---
+      best_pick          - dict|None: best pick of the week
+        .home_team       - str
+        .away_team       - str
+        .league          - str
+        .market          - str
+        .selection       - str
+        .edge            - float: edge at time of pick (0-1)
+        .odds            - float
+        .pnl             - float
+      worst_pick         - dict|None: worst pick of the week
+        .home_team       - str
+        .away_team       - str
+        .league          - str
+        .market          - str
+        .selection       - str
+        .edge            - float
+        .odds            - float
+        .pnl             - float
+
+      --- Daily P&L Breakdown ---
+      daily_breakdown    - list[dict]: P&L by day of week
+        .day             - str: e.g. "Mon", "Tue"
+        .pnl             - float
+        .bets            - int
+
+      --- Next Week Preview ---
+      next_week_fixtures - int: number of fixtures next week
+      next_week_leagues  - str: league names for next week
+
+      dashboard_url      - str: link to the dashboard
+    -->
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #0D1117;">
+        <tr>
+            <td align="center" style="padding: 24px 16px;">
+                <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width: 600px; width: 100%;">
+
+                    <!-- Header -->
+                    <tr>
+                        <td style="padding: 24px 24px 16px; background-color: #161B22; border-radius: 8px 8px 0 0; border-bottom: 1px solid #30363D;">
+                            <h1 style="margin: 0 0 4px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 22px; font-weight: 700; color: #E6EDF3;">
+                                &#128202; BetVector Weekly —
+                                <span style="color: {% if weekly_pnl >= 0 %}#3FB950{% else %}#F85149{% endif %};">
+                                    {% if weekly_pnl >= 0 %}+&pound;{{ '%.2f' | format(weekly_pnl) }}{% else %}-&pound;{{ '%.2f' | format(weekly_pnl | abs) }}{% endif %}
+                                </span>
+                                &middot; {{ wins }}/{{ total_bets }} Wins
+                            </h1>
+                            <p style="margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 13px; color: #8B949E;">
+                                {{ week_label }}
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Greeting -->
+                    <tr>
+                        <td style="padding: 20px 24px 8px; background-color: #161B22;">
+                            <p style="margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 14px; color: #E6EDF3;">
+                                Good evening{{ ', ' + user_name if user_name else '' }}. Here's your week in review.
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Summary Stats (2 rows of 3) -->
+                    <tr>
+                        <td style="padding: 16px 24px 8px; background-color: #161B22;">
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                                <tr>
+                                    <td width="30%" style="padding: 12px; background-color: #0D1117; border-radius: 6px; text-align: center;">
+                                        <p style="margin: 0 0 4px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 11px; color: #8B949E; text-transform: uppercase;">
+                                            Weekly P&amp;L
+                                        </p>
+                                        <p style="margin: 0; font-family: 'Courier New', Courier, monospace; font-size: 18px; font-weight: 700;
+                                            {% if weekly_pnl >= 0 %}color: #3FB950;{% else %}color: #F85149;{% endif %}">
+                                            {% if weekly_pnl >= 0 %}+&pound;{{ '%.2f' | format(weekly_pnl) }}{% else %}-&pound;{{ '%.2f' | format(weekly_pnl | abs) }}{% endif %}
+                                        </p>
+                                    </td>
+                                    <td width="5%"></td>
+                                    <td width="30%" style="padding: 12px; background-color: #0D1117; border-radius: 6px; text-align: center;">
+                                        <p style="margin: 0 0 4px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 11px; color: #8B949E; text-transform: uppercase;">
+                                            Win Rate
+                                        </p>
+                                        <p style="margin: 0; font-family: 'Courier New', Courier, monospace; font-size: 18px; font-weight: 700; color: #E6EDF3;">
+                                            {{ '%.0f' | format(win_rate * 100) }}%
+                                            <span style="font-size: 12px; color: #8B949E;">({{ wins }}/{{ total_bets }})</span>
+                                        </p>
+                                    </td>
+                                    <td width="5%"></td>
+                                    <td width="30%" style="padding: 12px; background-color: #0D1117; border-radius: 6px; text-align: center;">
+                                        <p style="margin: 0 0 4px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 11px; color: #8B949E; text-transform: uppercase;">
+                                            Weekly ROI
+                                        </p>
+                                        <p style="margin: 0; font-family: 'Courier New', Courier, monospace; font-size: 18px; font-weight: 700;
+                                            {% if weekly_roi >= 0 %}color: #3FB950;{% else %}color: #F85149;{% endif %}">
+                                            {{ '%+.1f' | format(weekly_roi * 100) }}%
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 24px 16px; background-color: #161B22;">
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                                <tr>
+                                    <td width="30%" style="padding: 12px; background-color: #0D1117; border-radius: 6px; text-align: center;">
+                                        <p style="margin: 0 0 4px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 11px; color: #8B949E; text-transform: uppercase;">
+                                            Bankroll
+                                        </p>
+                                        <p style="margin: 0; font-family: 'Courier New', Courier, monospace; font-size: 18px; font-weight: 700; color: #E6EDF3;">
+                                            &pound;{{ '%.2f' | format(bankroll_end) }}
+                                        </p>
+                                        <p style="margin: 2px 0 0; font-family: 'Courier New', Courier, monospace; font-size: 11px;
+                                            {% if bankroll_change >= 0 %}color: #3FB950;{% else %}color: #F85149;{% endif %}">
+                                            {% if bankroll_change >= 0 %}&#9650; +&pound;{{ '%.2f' | format(bankroll_change) }}{% else %}&#9660; -&pound;{{ '%.2f' | format(bankroll_change | abs) }}{% endif %}
+                                        </p>
+                                    </td>
+                                    <td width="5%"></td>
+                                    <td width="30%" style="padding: 12px; background-color: #0D1117; border-radius: 6px; text-align: center;">
+                                        <p style="margin: 0 0 4px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 11px; color: #8B949E; text-transform: uppercase;">
+                                            Total Bets
+                                        </p>
+                                        <p style="margin: 0; font-family: 'Courier New', Courier, monospace; font-size: 18px; font-weight: 700; color: #E6EDF3;">
+                                            {{ total_bets }}
+                                        </p>
+                                    </td>
+                                    <td width="5%"></td>
+                                    <td width="30%" style="padding: 12px; background-color: #0D1117; border-radius: 6px; text-align: center;">
+                                        <p style="margin: 0 0 4px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 11px; color: #8B949E; text-transform: uppercase;">
+                                            Cumulative ROI
+                                        </p>
+                                        <p style="margin: 0; font-family: 'Courier New', Courier, monospace; font-size: 18px; font-weight: 700;
+                                            {% if cumulative_roi >= 0 %}color: #3FB950;{% else %}color: #F85149;{% endif %}">
+                                            {{ '%+.1f' | format(cumulative_roi * 100) }}%
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- Daily P&L Breakdown -->
+                    {% if daily_breakdown %}
+                    <tr>
+                        <td style="padding: 16px 24px; background-color: #161B22;">
+                            <p style="margin: 0 0 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 600; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px;">
+                                Daily Breakdown
+                            </p>
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse;">
+                                <tr>
+                                    {% for d in daily_breakdown %}
+                                    <td style="padding: 8px 4px; text-align: center; border-bottom: 1px solid #21262D; {% if not loop.last %}border-right: 1px solid #21262D;{% endif %}">
+                                        <p style="margin: 0 0 4px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 11px; color: #8B949E;">
+                                            {{ d.day }}
+                                        </p>
+                                        <p style="margin: 0; font-family: 'Courier New', Courier, monospace; font-size: 13px; font-weight: 700;
+                                            {% if d.pnl > 0 %}color: #3FB950;{% elif d.pnl < 0 %}color: #F85149;{% else %}color: #8B949E;{% endif %}">
+                                            {% if d.bets > 0 %}{% if d.pnl >= 0 %}+{{ '%.0f' | format(d.pnl) }}{% else %}{{ '%.0f' | format(d.pnl) }}{% endif %}{% else %}&mdash;{% endif %}
+                                        </p>
+                                        <p style="margin: 2px 0 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 10px; color: #484F58;">
+                                            {% if d.bets > 0 %}{{ d.bets }} bet{{ 's' if d.bets != 1 else '' }}{% else %}&nbsp;{% endif %}
+                                        </p>
+                                    </td>
+                                    {% endfor %}
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    {% endif %}
+
+                    <!-- Best & Worst Picks -->
+                    {% if best_pick or worst_pick %}
+                    <tr>
+                        <td style="padding: 16px 24px; background-color: #161B22;">
+                            <p style="margin: 0 0 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 600; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px;">
+                                Highlights of the Week
+                            </p>
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                                {% if best_pick %}
+                                <tr>
+                                    <td style="padding: 12px; background-color: #0D1117; border-left: 3px solid #3FB950; border-radius: 4px; margin-bottom: 8px;">
+                                        <p style="margin: 0 0 4px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 11px; font-weight: 600; color: #3FB950; text-transform: uppercase;">
+                                            &#9989; Best Pick
+                                        </p>
+                                        <p style="margin: 0 0 2px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 14px; color: #E6EDF3;">
+                                            {{ best_pick.home_team }} vs {{ best_pick.away_team }}
+                                        </p>
+                                        <p style="margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 12px; color: #8B949E;">
+                                            {{ best_pick.league }} &middot; {{ best_pick.market }} &middot;
+                                            <span style="color: #58A6FF;">{{ best_pick.selection }}</span>
+                                            @ {{ '%.2f' | format(best_pick.odds) }} &middot;
+                                            Edge: +{{ '%.1f' | format(best_pick.edge * 100) }}% &middot;
+                                            <span style="color: #3FB950; font-family: 'Courier New', Courier, monospace; font-weight: 700;">+&pound;{{ '%.2f' | format(best_pick.pnl) }}</span>
+                                        </p>
+                                    </td>
+                                </tr>
+                                <tr><td style="height: 8px;"></td></tr>
+                                {% endif %}
+                                {% if worst_pick %}
+                                <tr>
+                                    <td style="padding: 12px; background-color: #0D1117; border-left: 3px solid #F85149; border-radius: 4px;">
+                                        <p style="margin: 0 0 4px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 11px; font-weight: 600; color: #F85149; text-transform: uppercase;">
+                                            &#10060; Worst Pick
+                                        </p>
+                                        <p style="margin: 0 0 2px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 14px; color: #E6EDF3;">
+                                            {{ worst_pick.home_team }} vs {{ worst_pick.away_team }}
+                                        </p>
+                                        <p style="margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 12px; color: #8B949E;">
+                                            {{ worst_pick.league }} &middot; {{ worst_pick.market }} &middot;
+                                            <span style="color: #58A6FF;">{{ worst_pick.selection }}</span>
+                                            @ {{ '%.2f' | format(worst_pick.odds) }} &middot;
+                                            Edge: +{{ '%.1f' | format(worst_pick.edge * 100) }}% &middot;
+                                            <span style="color: #F85149; font-family: 'Courier New', Courier, monospace; font-weight: 700;">-&pound;{{ '%.2f' | format(worst_pick.pnl | abs) }}</span>
+                                        </p>
+                                    </td>
+                                </tr>
+                                {% endif %}
+                            </table>
+                        </td>
+                    </tr>
+                    {% endif %}
+
+                    <!-- Model Health Snapshot -->
+                    <tr>
+                        <td style="padding: 16px 24px; background-color: #161B22;">
+                            <p style="margin: 0 0 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 600; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px;">
+                                Model Health
+                            </p>
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                                <tr>
+                                    <!-- Brier Score -->
+                                    <td width="30%" style="padding: 12px; background-color: #0D1117; border-radius: 6px; text-align: center;">
+                                        <p style="margin: 0 0 4px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 11px; color: #8B949E; text-transform: uppercase;">
+                                            Brier Score
+                                        </p>
+                                        <p style="margin: 0; font-family: 'Courier New', Courier, monospace; font-size: 16px; font-weight: 700; color: #E6EDF3;">
+                                            {{ '%.4f' | format(brier_score) }}
+                                        </p>
+                                        <p style="margin: 2px 0 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 11px;
+                                            {% if brier_trend == 'improving' %}color: #3FB950;{% elif brier_trend == 'declining' %}color: #F85149;{% else %}color: #8B949E;{% endif %}">
+                                            {% if brier_trend == 'improving' %}&#8595; Improving{% elif brier_trend == 'declining' %}&#8593; Declining{% else %}&#8596; Stable{% endif %}
+                                        </p>
+                                    </td>
+                                    <td width="5%"></td>
+                                    <!-- Calibration -->
+                                    <td width="30%" style="padding: 12px; background-color: #0D1117; border-radius: 6px; text-align: center;">
+                                        <p style="margin: 0 0 4px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 11px; color: #8B949E; text-transform: uppercase;">
+                                            Calibration
+                                        </p>
+                                        <p style="margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 700;
+                                            {% if calibration_status == 'well_calibrated' %}color: #3FB950;{% elif calibration_status == 'overconfident' %}color: #D29922;{% else %}color: #F85149;{% endif %}">
+                                            {% if calibration_status == 'well_calibrated' %}&#9989; Good{% elif calibration_status == 'overconfident' %}&#9888;&#65039; Overconfident{% else %}&#9888;&#65039; Underconfident{% endif %}
+                                        </p>
+                                    </td>
+                                    <td width="5%"></td>
+                                    <!-- CLV -->
+                                    <td width="30%" style="padding: 12px; background-color: #0D1117; border-radius: 6px; text-align: center;">
+                                        <p style="margin: 0 0 4px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 11px; color: #8B949E; text-transform: uppercase;">
+                                            CLV
+                                        </p>
+                                        <p style="margin: 0; font-family: 'Courier New', Courier, monospace; font-size: 16px; font-weight: 700;
+                                            {% if clv_mean > 0 %}color: #3FB950;{% elif clv_mean < 0 %}color: #F85149;{% else %}color: #8B949E;{% endif %}">
+                                            {{ '%+.1f' | format(clv_mean) }}%
+                                        </p>
+                                        <p style="margin: 2px 0 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 11px;
+                                            {% if clv_trend == 'positive' %}color: #3FB950;{% elif clv_trend == 'negative' %}color: #F85149;{% else %}color: #8B949E;{% endif %}">
+                                            {% if clv_trend == 'positive' %}&#8593; Positive{% elif clv_trend == 'negative' %}&#8595; Negative{% else %}&#8596; Flat{% endif %}
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- Next Week Preview -->
+                    <tr>
+                        <td style="padding: 16px 24px; background-color: #161B22;">
+                            <p style="margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 13px; color: #8B949E;">
+                                {% if next_week_fixtures > 0 %}
+                                &#128197; {{ next_week_fixtures }} match{{ 'es' if next_week_fixtures != 1 else '' }} next week{{ ' (' + next_week_leagues + ')' if next_week_leagues else '' }}. Predictions run daily at 6:00 AM.
+                                {% else %}
+                                No matches scheduled for next week.
+                                {% endif %}
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Dashboard CTA -->
+                    <tr>
+                        <td style="padding: 20px 24px; background-color: #161B22; text-align: center;">
+                            <a href="{{ dashboard_url }}" style="display: inline-block; padding: 12px 32px; background-color: #3FB950; color: #0D1117; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 600; text-decoration: none; border-radius: 6px;">
+                                Open Dashboard
+                            </a>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="padding: 16px 24px 24px; background-color: #161B22; border-radius: 0 0 8px 8px; border-top: 1px solid #30363D; text-align: center;">
+                            <p style="margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 11px; color: #484F58;">
+                                BetVector &middot; Quantitative edge in football betting<br>
+                                This is an automated email. Model predictions are not financial advice.
+                            </p>
+                        </td>
+                    </tr>
+
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BetVector — Morning Picks</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #0D1117; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;">
+    <!--
+    BetVector Morning Picks Email Template (E11-01)
+    ================================================
+    Sent daily at 06:00 UTC with today's value bets.
+
+    Template variables:
+      date            - str: today's date (e.g. "Monday 28 Feb 2026")
+      picks           - list[dict]: value bets for today
+        .home_team    - str
+        .away_team    - str
+        .league       - str
+        .market       - str: market label (e.g. "O/U 2.5")
+        .selection    - str: the recommended selection
+        .probability  - float: model probability (0-1)
+        .odds         - float: best available odds
+        .implied_prob - float: implied probability from odds (0-1)
+        .edge         - float: edge percentage (0-1)
+        .confidence   - str: "high" | "medium" | "low"
+        .stake        - float: suggested stake in £
+        .explanation  - str: one-sentence reasoning
+      pick_count      - int: number of picks
+      no_picks_msg    - str|None: message when no picks found
+      dashboard_url   - str: link to the dashboard
+      user_name       - str: recipient's name
+      edge_threshold  - float: user's edge threshold (e.g. 0.05)
+    -->
+
+    <!-- Wrapper table for email client compatibility -->
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #0D1117;">
+        <tr>
+            <td align="center" style="padding: 24px 16px;">
+                <!-- Main content container -->
+                <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width: 600px; width: 100%;">
+
+                    <!-- Header -->
+                    <tr>
+                        <td style="padding: 24px 24px 16px; background-color: #161B22; border-radius: 8px 8px 0 0; border-bottom: 1px solid #30363D;">
+                            <h1 style="margin: 0 0 4px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 22px; font-weight: 700; color: #E6EDF3;">
+                                &#9917; BetVector — {{ pick_count }} Value Bet{{ 's' if pick_count != 1 else '' }} Today
+                            </h1>
+                            <p style="margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 13px; color: #8B949E;">
+                                {{ date }}
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Greeting -->
+                    <tr>
+                        <td style="padding: 20px 24px 8px; background-color: #161B22;">
+                            <p style="margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 14px; color: #E6EDF3;">
+                                Good morning{{ ', ' + user_name if user_name else '' }}.
+                            </p>
+                        </td>
+                    </tr>
+
+                    {% if picks %}
+                    <!-- Value Bets Table -->
+                    <tr>
+                        <td style="padding: 16px 24px; background-color: #161B22;">
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse;">
+                                <!-- Table header -->
+                                <tr>
+                                    <td style="padding: 8px 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 11px; font-weight: 600; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #30363D;">
+                                        Match
+                                    </td>
+                                    <td style="padding: 8px 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 11px; font-weight: 600; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #30363D;">
+                                        Market
+                                    </td>
+                                    <td style="padding: 8px 10px; font-family: 'Courier New', Courier, monospace; font-size: 11px; font-weight: 600; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #30363D; text-align: center;">
+                                        Prob
+                                    </td>
+                                    <td style="padding: 8px 10px; font-family: 'Courier New', Courier, monospace; font-size: 11px; font-weight: 600; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #30363D; text-align: center;">
+                                        Odds
+                                    </td>
+                                    <td style="padding: 8px 10px; font-family: 'Courier New', Courier, monospace; font-size: 11px; font-weight: 600; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #30363D; text-align: center;">
+                                        Edge
+                                    </td>
+                                    <td style="padding: 8px 10px; font-family: 'Courier New', Courier, monospace; font-size: 11px; font-weight: 600; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #30363D; text-align: right;">
+                                        Stake
+                                    </td>
+                                </tr>
+                                <!-- Pick rows -->
+                                {% for pick in picks %}
+                                <tr>
+                                    <td style="padding: 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 13px; color: #E6EDF3; border-bottom: 1px solid #21262D;">
+                                        {{ pick.home_team }} vs {{ pick.away_team }}<br>
+                                        <span style="font-size: 11px; color: #8B949E;">{{ pick.league }}</span>
+                                    </td>
+                                    <td style="padding: 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 13px; color: #E6EDF3; border-bottom: 1px solid #21262D;">
+                                        {{ pick.market }}<br>
+                                        <span style="font-size: 11px; color: #58A6FF;">{{ pick.selection }}</span>
+                                    </td>
+                                    <td style="padding: 10px; font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #E6EDF3; border-bottom: 1px solid #21262D; text-align: center;">
+                                        {{ '%.1f' | format(pick.probability * 100) }}%
+                                    </td>
+                                    <td style="padding: 10px; font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #E6EDF3; border-bottom: 1px solid #21262D; text-align: center;">
+                                        {{ '%.2f' | format(pick.odds) }}
+                                    </td>
+                                    <td style="padding: 10px; font-family: 'Courier New', Courier, monospace; font-size: 13px; font-weight: 700; border-bottom: 1px solid #21262D; text-align: center;
+                                        {% if pick.confidence == 'high' %}color: #3FB950;{% elif pick.confidence == 'medium' %}color: #D29922;{% else %}color: #8B949E;{% endif %}">
+                                        +{{ '%.1f' | format(pick.edge * 100) }}%
+                                    </td>
+                                    <td style="padding: 10px; font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #E6EDF3; border-bottom: 1px solid #21262D; text-align: right;">
+                                        &pound;{{ '%.2f' | format(pick.stake) }}
+                                    </td>
+                                </tr>
+                                <!-- Explanation row -->
+                                <tr>
+                                    <td colspan="6" style="padding: 6px 10px 14px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 12px; color: #8B949E; border-bottom: 1px solid #30363D;">
+                                        &#128161; {{ pick.explanation }}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </table>
+                        </td>
+                    </tr>
+
+                    {% else %}
+                    <!-- No picks empty state -->
+                    <tr>
+                        <td style="padding: 32px 24px; background-color: #161B22; text-align: center;">
+                            <p style="margin: 0 0 8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 15px; color: #E6EDF3;">
+                                No value bets today.
+                            </p>
+                            <p style="margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 13px; color: #8B949E;">
+                                {{ no_picks_msg or "The model found no edges above your threshold (" + '%.1f' | format(edge_threshold * 100) + "%). Next check at 1:00 PM when odds update." }}
+                            </p>
+                        </td>
+                    </tr>
+                    {% endif %}
+
+                    <!-- Dashboard CTA -->
+                    <tr>
+                        <td style="padding: 20px 24px; background-color: #161B22; text-align: center;">
+                            <a href="{{ dashboard_url }}" style="display: inline-block; padding: 12px 32px; background-color: #3FB950; color: #0D1117; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 600; text-decoration: none; border-radius: 6px;">
+                                Open Dashboard
+                            </a>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="padding: 16px 24px 24px; background-color: #161B22; border-radius: 0 0 8px 8px; border-top: 1px solid #30363D; text-align: center;">
+                            <p style="margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 11px; color: #484F58;">
+                                BetVector &middot; Quantitative edge in football betting<br>
+                                This is an automated email. Model predictions are not financial advice.
+                            </p>
+                        </td>
+                    </tr>
+
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
