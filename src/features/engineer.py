@@ -1,0 +1,336 @@
+"""
+BetVector — Feature Pipeline Orchestrator (E4-03)
+===================================================
+Combines rolling averages, head-to-head, and context features into a single
+pipeline that computes and stores features for all matches in a league-season.
+
+Two main entry points:
+
+  - ``compute_features(match_id)`` — compute all features for a single match
+    (both home and away teams), save to the ``features`` table, return as dict.
+
+  - ``compute_all_features(league_id, season)`` — iterate through all matches
+    in chronological order, compute and store features for each.  Idempotent —
+    skips matches that already have features.  Returns a training-ready
+    DataFrame with one row per match and home_*/away_* columns.
+
+The returned DataFrame is the direct input to the prediction models.
+Each row represents a match with features for both teams, suitable for
+training a Poisson regression or feeding into an XGBoost model.
+
+Master Plan refs: MP §4 Feature Set, MP §6 features table, MP §7 Feature Engineer Interface
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any, Dict, List, Optional, Tuple
+
+import pandas as pd
+from sqlalchemy import and_
+
+from src.config import config
+from src.database.db import get_session
+from src.database.models import Feature, Match, Team
+from src.features.context import calculate_context_features
+from src.features.rolling import (
+    calculate_rolling_features,
+    save_features,
+)
+
+logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# Public API
+# ============================================================================
+
+def compute_features(match_id: int, league_id: int) -> Dict[str, Dict[str, Any]]:
+    """Compute and save all features for a single match.
+
+    Calculates rolling averages, venue-specific stats, head-to-head,
+    rest days, and season progress for both home and away teams.
+
+    Parameters
+    ----------
+    match_id : int
+        Database ID of the match.
+    league_id : int
+        Database ID of the league.
+
+    Returns
+    -------
+    dict
+        ``{"home": {features...}, "away": {features...}}`` with all
+        feature columns from the features table schema.
+    """
+    windows = config.settings.features.rolling_windows  # [5, 10]
+
+    with get_session() as session:
+        match = session.query(Match).filter_by(id=match_id).first()
+        if match is None:
+            raise ValueError(f"Match {match_id} not found")
+
+        match_date = match.date
+        home_team_id = match.home_team_id
+        away_team_id = match.away_team_id
+        matchday = match.matchday
+
+        # Get team names for logging
+        home_team = session.query(Team).filter_by(id=home_team_id).first()
+        away_team = session.query(Team).filter_by(id=away_team_id).first()
+        home_name = home_team.name if home_team else f"team_{home_team_id}"
+        away_name = away_team.name if away_team else f"team_{away_team_id}"
+
+    # Get total matchdays from league config
+    league_cfg = _get_league_config(league_id)
+    total_matchdays = league_cfg.total_matchdays if league_cfg else 38
+
+    # --- Rolling features for each window ---
+    home_features: Dict[str, Any] = {}
+    away_features: Dict[str, Any] = {}
+
+    for w in windows:
+        home_rolling = calculate_rolling_features(
+            home_team_id, match_date, w, league_id, is_home=1,
+        )
+        away_rolling = calculate_rolling_features(
+            away_team_id, match_date, w, league_id, is_home=0,
+        )
+        home_features.update(home_rolling)
+        away_features.update(away_rolling)
+
+    # --- Context features (H2H, rest days, season progress) ---
+    home_context = calculate_context_features(
+        home_team_id, away_team_id, match_date, league_id,
+        matchday=matchday, total_matchdays=total_matchdays,
+    )
+    away_context = calculate_context_features(
+        away_team_id, home_team_id, match_date, league_id,
+        matchday=matchday, total_matchdays=total_matchdays,
+    )
+
+    home_features.update(home_context)
+    away_features.update(away_context)
+
+    # --- Save to database ---
+    save_features(match_id, home_team_id, is_home=1, features=home_features)
+    save_features(match_id, away_team_id, is_home=0, features=away_features)
+
+    return {"home": home_features, "away": away_features}
+
+
+def compute_all_features(
+    league_id: int,
+    season: str,
+) -> pd.DataFrame:
+    """Compute and store features for every match in a league-season.
+
+    Iterates through matches in chronological order, computes features
+    for each, and stores them in the ``features`` table.  Matches that
+    already have features are skipped (idempotent).
+
+    Parameters
+    ----------
+    league_id : int
+        Database ID of the league.
+    season : str
+        Season identifier, e.g. ``"2024-25"``.
+
+    Returns
+    -------
+    pd.DataFrame
+        Training-ready DataFrame with one row per match.  Columns follow
+        the pattern ``home_form_5, home_form_10, ..., away_form_5, ...``.
+    """
+    # Get all matches in chronological order
+    with get_session() as session:
+        matches = session.query(Match).filter(
+            Match.league_id == league_id,
+            Match.season == season,
+            Match.status == "finished",
+        ).order_by(Match.date).all()
+
+        # Collect match info (detach from session)
+        match_info = [
+            {
+                "id": m.id,
+                "date": m.date,
+                "home_team_id": m.home_team_id,
+                "away_team_id": m.away_team_id,
+            }
+            for m in matches
+        ]
+
+    total = len(match_info)
+    logger.info(
+        "Computing features for %d matches in %s season %s",
+        total, _league_name(league_id), season,
+    )
+
+    computed = 0
+    skipped = 0
+    rows: List[Dict[str, Any]] = []
+
+    for i, m in enumerate(match_info):
+        match_id = m["id"]
+
+        # Check if features already exist (idempotent)
+        with get_session() as session:
+            existing_count = session.query(Feature).filter_by(
+                match_id=match_id,
+            ).count()
+
+        # Get team names for progress message
+        with get_session() as session:
+            home_team = session.query(Team).filter_by(id=m["home_team_id"]).first()
+            away_team = session.query(Team).filter_by(id=m["away_team_id"]).first()
+            home_name = home_team.name if home_team else "?"
+            away_name = away_team.name if away_team else "?"
+
+        if existing_count >= 2:
+            # Both home and away features exist — skip
+            skipped += 1
+            # Still read existing features for the DataFrame
+            row = _read_existing_features(match_id, m)
+            if row:
+                rows.append(row)
+
+            if (i + 1) % 50 == 0 or (i + 1) == total:
+                logger.info(
+                    "Computing features: match %d/%d (%s vs %s, %s) — skipped",
+                    i + 1, total, home_name, away_name, m["date"],
+                )
+            continue
+
+        # Compute features for this match
+        logger.info(
+            "Computing features: match %d/%d (%s vs %s, %s)",
+            i + 1, total, home_name, away_name, m["date"],
+        )
+        features = compute_features(match_id, league_id)
+        computed += 1
+
+        # Build a flat row for the training DataFrame
+        row = _flatten_features(match_id, m, features)
+        rows.append(row)
+
+    logger.info(
+        "Feature computation complete: %d computed, %d skipped, %d total",
+        computed, skipped, total,
+    )
+
+    if not rows:
+        return pd.DataFrame()
+
+    return pd.DataFrame(rows)
+
+
+# ============================================================================
+# Internal helpers
+# ============================================================================
+
+def _flatten_features(
+    match_id: int,
+    match_info: Dict[str, Any],
+    features: Dict[str, Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Flatten home/away feature dicts into a single row for the DataFrame.
+
+    Prefixes home features with ``home_`` and away features with ``away_``.
+    Shared features (matchday, season_progress) are not duplicated.
+    """
+    row: Dict[str, Any] = {
+        "match_id": match_id,
+        "date": match_info["date"],
+        "home_team_id": match_info["home_team_id"],
+        "away_team_id": match_info["away_team_id"],
+    }
+
+    home = features.get("home", {})
+    away = features.get("away", {})
+
+    # Rolling and venue features get prefixed
+    for key, val in home.items():
+        if key in ("matchday", "season_progress"):
+            row[key] = val  # Shared — same for both teams
+        else:
+            row[f"home_{key}"] = val
+
+    for key, val in away.items():
+        if key in ("matchday", "season_progress"):
+            continue  # Already added from home
+        row[f"away_{key}"] = val
+
+    return row
+
+
+def _read_existing_features(
+    match_id: int,
+    match_info: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
+    """Read existing features from the database and flatten into a row."""
+    with get_session() as session:
+        home_feat = session.query(Feature).filter_by(
+            match_id=match_id, is_home=1,
+        ).first()
+        away_feat = session.query(Feature).filter_by(
+            match_id=match_id, is_home=0,
+        ).first()
+
+    if home_feat is None or away_feat is None:
+        return None
+
+    row: Dict[str, Any] = {
+        "match_id": match_id,
+        "date": match_info["date"],
+        "home_team_id": match_info["home_team_id"],
+        "away_team_id": match_info["away_team_id"],
+    }
+
+    # Feature columns from the Feature model (excluding metadata)
+    feature_cols = [
+        "form_5", "goals_scored_5", "goals_conceded_5",
+        "xg_5", "xga_5", "xg_diff_5", "shots_5", "shots_on_target_5",
+        "possession_5",
+        "form_10", "goals_scored_10", "goals_conceded_10",
+        "xg_10", "xga_10", "xg_diff_10", "shots_10", "shots_on_target_10",
+        "possession_10",
+        "venue_form_5", "venue_goals_scored_5", "venue_goals_conceded_5",
+        "venue_xg_5", "venue_xga_5",
+        "h2h_wins", "h2h_draws", "h2h_losses",
+        "h2h_goals_scored", "h2h_goals_conceded",
+        "rest_days",
+    ]
+
+    for col in feature_cols:
+        row[f"home_{col}"] = getattr(home_feat, col, None)
+        row[f"away_{col}"] = getattr(away_feat, col, None)
+
+    row["matchday"] = home_feat.matchday
+    row["season_progress"] = home_feat.season_progress
+
+    return row
+
+
+def _get_league_config(league_id: int):
+    """Look up league config by database ID."""
+    with get_session() as session:
+        from src.database.models import League
+        league = session.query(League).filter_by(id=league_id).first()
+        if league is None:
+            return None
+        short_name = league.short_name
+
+    for lg in config.leagues:
+        if lg.short_name == short_name:
+            return lg
+    return None
+
+
+def _league_name(league_id: int) -> str:
+    """Get league short name for logging."""
+    with get_session() as session:
+        from src.database.models import League
+        league = session.query(League).filter_by(id=league_id).first()
+        return league.short_name if league else f"league_{league_id}"

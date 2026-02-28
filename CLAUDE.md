@@ -156,9 +156,9 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E4-02 (Head-to-Head and Context Features)
-Currently working: E4-03 (Feature Pipeline Orchestrator)
-Next up: E5-01 (Poisson Model)
+Last completed: E4-03 (Feature Pipeline Orchestrator)
+Currently working: E5-01 (Poisson Model)
+Next up: E5-02 (Scoreline Matrix and Market Derivation)
 
 ---
 
