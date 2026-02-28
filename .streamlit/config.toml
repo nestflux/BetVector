@@ -1,0 +1,15 @@
+# BetVector — Streamlit Theme Configuration
+# Dark trading terminal aesthetic (MP §8 Design System)
+
+[theme]
+primaryColor = "#3FB950"                  # Accent Green — buttons, links, highlights
+backgroundColor = "#0D1117"               # Main background (near-black with blue undertone)
+secondaryBackgroundColor = "#161B22"       # Surface — sidebar, cards, elevated panels
+textColor = "#E6EDF3"                     # Primary text (high contrast on dark bg)
+font = "sans serif"                       # Streamlit base font (overridden with custom CSS)
+
+[server]
+headless = true
+
+[browser]
+gatherUsageStats = false

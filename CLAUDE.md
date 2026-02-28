@@ -156,9 +156,9 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E8-02 (CLI Interface)
-Currently working: E9-01 (Streamlit Dashboard Shell)
-Next up: E9-02 (Today's Picks Page)
+Last completed: E9-01 (Streamlit App Shell and Theme)
+Currently working: E9-02 (Today's Picks Page)
+Next up: E9-03 (Performance Tracker Page)
 
 ---
 
