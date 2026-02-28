@@ -156,9 +156,9 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E4-01 (Feature Engineering — Rolling Averages)
-Currently working: E4-02 (Head-to-Head and Context Features)
-Next up: E4-03 (Feature Pipeline Orchestrator)
+Last completed: E4-02 (Head-to-Head and Context Features)
+Currently working: E4-03 (Feature Pipeline Orchestrator)
+Next up: E5-01 (Poisson Model)
 
 ---
 
