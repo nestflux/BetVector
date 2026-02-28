@@ -156,9 +156,9 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E6-01 (Value Detection Engine)
-Currently working: E6-02 (Staking Calculator)
-Next up: E6-03 (Bet Logging)
+Last completed: E6-02 (Staking Calculator)
+Currently working: E6-03 (Bet Logging)
+Next up: E7-01 (Backtesting Engine)
 
 ---
 
