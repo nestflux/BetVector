@@ -156,9 +156,9 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E9-04 (League Explorer Page)
-Currently working: E9-05 (Match Deep Dive View)
-Next up: E10-01 (Model Health Page)
+Last completed: E9-05 (Match Deep Dive View)
+Currently working: E10-01 (Model Health Page)
+Next up: E10-02 (Bankroll Manager Page)
 
 ---
 

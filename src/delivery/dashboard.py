@@ -356,6 +356,11 @@ def get_pages() -> list:
             title="Settings",
             icon="⚙️",
         ),
+        st.Page(
+            "pages/match_detail.py",
+            title="Match Deep Dive",
+            icon="🔍",
+        ),
     ]
 
 
