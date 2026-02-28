@@ -156,9 +156,9 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E10-01 (Model Health Page)
-Currently working: E10-02 (Bankroll Manager Page)
-Next up: E10-03 (Settings Page)
+Last completed: E10-02 (Bankroll Manager Page)
+Currently working: E10-03 (Settings Page)
+Next up: E10-04 (Onboarding Flow)
 
 ---
 
