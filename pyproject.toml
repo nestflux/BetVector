@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "betvector"
+version = "0.1.0"
+description = "Quantitative edge detection for football betting"
+requires-python = ">=3.10"
+
+[tool.setuptools.packages.find]
+include = ["src*"]
+
+# This allows `from src.models.poisson import PoissonModel` to work
+# when installed with `pip install -e .`

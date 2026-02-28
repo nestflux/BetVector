@@ -1,0 +1,203 @@
+# ============================================================================
+# BetVector — System Settings
+# ============================================================================
+# Every tuneable parameter lives here.  Modules read these values through
+# src/config.py — never hardcode them in application code.
+#
+# Master Plan references:
+#   §5  Architecture (config-driven everything)
+#   §6  Database Schema (users-table defaults)
+#   §11 Self-Improvement Engine (guardrail thresholds)
+# ============================================================================
+
+# ---------------------------------------------------------------------------
+# Database
+# ---------------------------------------------------------------------------
+# SQLite for MVP.  When migrating to PostgreSQL, change connection_string
+# and set enable_wal to false (PostgreSQL handles concurrency differently).
+database:
+  path: "data/betvector.db"
+  enable_wal: true
+
+# ---------------------------------------------------------------------------
+# Feature Engineering
+# ---------------------------------------------------------------------------
+# Rolling windows expressed in number of matches (not calendar days).
+# Used by src/features/ to compute rolling averages, form indicators, etc.
+features:
+  rolling_windows:
+    - 5
+    - 10
+
+# ---------------------------------------------------------------------------
+# Value Bet Detection  (MP §6 — edge_threshold column in users table)
+# ---------------------------------------------------------------------------
+# A fixture is flagged as a "value bet" when the model's estimated
+# probability exceeds the implied odds probability by at least this amount.
+# Example: edge_threshold 0.05 means the model must see ≥5 % edge.
+value_betting:
+  edge_threshold: 0.05
+  # Confidence tiers used in the value_bets table and email templates
+  confidence_thresholds:
+    high: 0.10       # edge >= 10 %
+    medium: 0.05     # 5 % <= edge < 10 %
+
+# ---------------------------------------------------------------------------
+# Bankroll Management  (MP §6 — users table defaults)
+# ---------------------------------------------------------------------------
+# These values seed new users.  Individual users can override them via the
+# dashboard settings page (stored in the users table).
+bankroll:
+  starting_amount: 1000.0
+  staking_method: "flat"       # Options: flat | percentage | kelly
+  stake_percentage: 0.02       # 2 % of current bankroll per bet
+  kelly_fraction: 0.25         # Quarter-Kelly to reduce variance
+  paper_trading_mode: true     # MVP launches in paper-trading (no real money)
+
+# ---------------------------------------------------------------------------
+# Safety Limits  (MP §5 — "never let a bad run wipe you out")
+# ---------------------------------------------------------------------------
+# These guard-rails apply regardless of staking method.  Breach any limit
+# and the system pauses automated staking and alerts the user.
+safety:
+  max_bet_percentage: 0.05              # Never stake > 5 % of bankroll on one bet
+  daily_loss_limit: 0.10                # Alert if daily losses exceed 10 % of bankroll
+  drawdown_alert_threshold: 0.25        # Alert if drawdown from peak exceeds 25 %
+  minimum_bankroll_percentage: 0.50     # Alert if bankroll drops below 50 % of starting
+
+# ---------------------------------------------------------------------------
+# Model Settings
+# ---------------------------------------------------------------------------
+# active_models lists the model keys that the pipeline runs today.
+# The ensemble is enabled only after each model has 300+ resolved preds.
+models:
+  active_models:
+    - "poisson_v1"
+  ensemble_enabled: false
+
+# ---------------------------------------------------------------------------
+# Scoreline Matrix  (MP §5 — universal model interface)
+# ---------------------------------------------------------------------------
+# Every prediction model outputs a matrix of home-goals × away-goals
+# probabilities.  All market probabilities are derived from this matrix.
+scoreline_matrix:
+  max_goals: 7    # 0-6 goals per side → 7×7 matrix
+
+# ---------------------------------------------------------------------------
+# Self-Improvement Engine  (MP §11 — guardrails)
+# ---------------------------------------------------------------------------
+# Every automatic adjustment has a minimum sample size, a maximum change
+# rate, and a rollback mechanism.  These thresholds prevent an overconfident
+# self-improvement loop from destabilising the system.
+
+self_improvement:
+
+  # §11.1 — Automatic Recalibration
+  # Platt scaling or isotonic regression applied to model probabilities.
+  recalibration:
+    min_sample_size: 200                  # Minimum resolved predictions before recalibrating
+    calibration_error_threshold: 0.03     # Trigger recal if mean-abs calibration error > 3 pp
+    calibration_methods:
+      - "platt"
+      - "isotonic"
+
+  # §11.2 — Feature Importance Tracking
+  # Only applies to tree-based models (XGBoost, LightGBM).
+  # Features below importance_threshold for flagging_window consecutive
+  # training cycles are flagged for human review — never auto-removed.
+  feature_importance:
+    enabled_for_models:
+      - "xgboost"
+      - "lightgbm"
+    importance_threshold: 0.01            # Flag features contributing < 1 %
+    flagging_window: 3                    # Must be low for 3 consecutive cycles
+    auto_removal: false                   # NEVER auto-drop; human decision required
+
+  # §11.3 — Adaptive Ensemble Weights
+  # After each model accumulates enough resolved predictions, their ensemble
+  # weights are adjusted based on recent Brier-score performance.
+  adaptive_weights:
+    min_sample_size: 300                  # Per-model minimum before adjusting weights
+    evaluation_window: 300                # Look-back window in resolved predictions
+    max_weight_change: 0.10               # Max ±10 pp per recalculation cycle
+    weight_floor: 0.10                    # No model drops below 10 % weight
+    weight_ceiling: 0.60                  # No model exceeds 60 % weight
+    weight_method: "inverse_brier"        # Weight ~ 1 / Brier score
+
+  # §11.4 — Odds Market Feedback Loop
+  # Tracks ROI per league × market combination.  A market is "profitable"
+  # only when the 95 % CI lower bound is positive AND n >= 100.
+  market_feedback:
+    min_sample_size: 50                   # Min resolved bets before assessing a market
+    confidence_interval: 0.95             # 95 % CI for ROI estimates
+    profitable_min_bets: 100              # Min bets for "profitable" classification
+    assessment_frequency: "weekly"
+    assessment_day: "sunday"
+    assessment_time: "20:00"              # UTC
+
+  # §11.5 — Seasonal Re-training Triggers
+  # If a model's rolling Brier score degrades by ≥15 % vs its all-time
+  # average, an automatic retrain is triggered (subject to cooldown).
+  retrain:
+    rolling_window: 100                   # Monitor last 100 predictions
+    degradation_threshold: 0.15           # 15 % worse than all-time triggers retrain
+    cooldown_period_days: 30              # No auto-retrain within 30 days of last retrain
+    use_full_history: true                # Retrain on ALL available data
+    comparison_window: 50                 # Compare new vs old model over 50 preds
+    auto_rollback: true                   # Roll back if new model is worse
+
+# ---------------------------------------------------------------------------
+# Scraping / Rate Limiting
+# ---------------------------------------------------------------------------
+scraping:
+  min_request_interval_seconds: 2         # Min seconds between requests to same domain
+  api_football:
+    daily_request_limit: 100              # Free-tier cap on RapidAPI
+  request_timeout_seconds: 30
+  max_retries: 3
+
+# ---------------------------------------------------------------------------
+# Pipeline Scheduling  (UTC times)
+# ---------------------------------------------------------------------------
+scheduling:
+  morning:
+    time: "06:00"
+    operations:
+      - "scrape_fixtures"
+      - "scrape_odds"
+      - "compute_features"
+      - "generate_predictions"
+      - "detect_value"
+      - "send_morning_email"
+  evening:
+    time: "22:00"
+    operations:
+      - "scrape_results"
+      - "resolve_bets"
+      - "update_bankroll"
+      - "send_evening_email"
+  weekly:
+    day: "sunday"
+    time: "20:00"
+    operations:
+      - "market_feedback"
+      - "recalibrate"
+      - "send_weekly_email"
+
+# ---------------------------------------------------------------------------
+# Enum Definitions  (MP §6 — used for validation throughout the codebase)
+# ---------------------------------------------------------------------------
+enums:
+  market_types:       ["1X2", "OU25", "OU15", "OU35", "BTTS", "AH"]
+  match_statuses:     ["scheduled", "in_play", "finished", "postponed"]
+  bet_statuses:       ["pending", "won", "lost", "void", "half_won", "half_lost"]
+  bet_types:          ["system_pick", "user_placed"]
+  confidence_levels:  ["high", "medium", "low"]
+  user_roles:         ["owner", "viewer"]
+  staking_methods:    ["flat", "percentage", "kelly"]
+  pipeline_run_types: ["morning", "midday", "evening", "manual", "backtest"]
+  pipeline_statuses:  ["running", "completed", "failed"]
+  period_types:       ["daily", "weekly", "monthly", "season", "all_time"]
+  calibration_methods: ["platt", "isotonic"]
+  trigger_types:      ["automatic", "manual", "scheduled"]
+  market_assessments: ["profitable", "promising", "insufficient", "unprofitable"]

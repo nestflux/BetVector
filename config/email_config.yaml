@@ -1,0 +1,62 @@
+# ============================================================================
+# BetVector — Email Configuration
+# ============================================================================
+# Gmail SMTP settings and email schedule.  Credentials are NEVER stored
+# here — they live in .env and are loaded at runtime via os.environ.
+#
+# Environment variables required:
+#   GMAIL_APP_PASSWORD  — Gmail App Password (not your regular password)
+#   FROM_EMAIL          — The Gmail address to send from
+# ============================================================================
+
+# ---------------------------------------------------------------------------
+# SMTP Connection
+# ---------------------------------------------------------------------------
+smtp:
+  host: "smtp.gmail.com"
+  port: 587
+  use_tls: true
+  timeout_seconds: 30
+
+# ---------------------------------------------------------------------------
+# Sender Identity
+# ---------------------------------------------------------------------------
+# The actual values are pulled from environment variables at runtime.
+# These placeholder keys tell the config loader which env vars to look up.
+sender:
+  from_address_env: "FROM_EMAIL"
+  app_password_env: "GMAIL_APP_PASSWORD"
+  display_name: "BetVector"
+
+# ---------------------------------------------------------------------------
+# Email Schedule  (all times in UTC)
+# ---------------------------------------------------------------------------
+schedule:
+  morning_picks:
+    time: "07:00"
+    subject_template: "BetVector — {pick_count} Value Bets Today ({leagues})"
+  evening_review:
+    time: "22:00"
+    subject_template: "BetVector Evening — {pnl} Today ({wins}/{total} Wins)"
+  weekly_summary:
+    day: "sunday"
+    time: "20:00"
+    subject_template: "BetVector Weekly — {weekly_pnl} | {roi}% ROI"
+
+# ---------------------------------------------------------------------------
+# Email Content Options
+# ---------------------------------------------------------------------------
+content:
+  include_match_deepdive_link: true
+  include_confidence_indicators: true
+  include_calibration_status: true
+  include_running_pnl: true
+  include_bankroll_status: true
+
+# ---------------------------------------------------------------------------
+# Template Paths  (relative to project root)
+# ---------------------------------------------------------------------------
+templates:
+  morning_picks: "templates/morning_picks.html"
+  evening_review: "templates/evening_review.html"
+  weekly_summary: "templates/weekly_summary.html"

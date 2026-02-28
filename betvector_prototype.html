@@ -1,0 +1,1424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BetVector — Prototype</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ========== CSS VARIABLES — MP §8 Design System ========== */
+:root {
+  --bg: #0D1117;
+  --surface: #161B22;
+  --surface-hover: #1C2333;
+  --border: #30363D;
+  --text-primary: #E6EDF3;
+  --text-secondary: #8B949E;
+  --text-muted: #484F58;
+  --green: #3FB950;
+  --red: #F85149;
+  --yellow: #D29922;
+  --blue: #58A6FF;
+  --purple: #BC8CFF;
+  --row-even: #0D1117;
+  --row-odd: #161B22;
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-xxl: 48px;
+  --radius: 8px;
+}
+
+/* ========== RESET ========== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 14px; }
+body {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ========== LAYOUT ========== */
+.app { display: flex; min-height: 100vh; }
+.sidebar {
+  width: 220px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: var(--space-lg) 0;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 100;
+}
+.main {
+  margin-left: 220px;
+  flex: 1;
+  padding: var(--space-xl);
+  min-height: 100vh;
+}
+
+/* ========== SIDEBAR ========== */
+.logo {
+  padding: 0 var(--space-lg);
+  margin-bottom: var(--space-xl);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.logo-icon { font-size: 24px; }
+.logo-text { font-weight: 700; font-size: 18px; color: var(--text-primary); }
+.logo-beta {
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--green);
+  color: var(--bg);
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 10px var(--space-lg);
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.15s;
+  border-left: 3px solid transparent;
+}
+.nav-item:hover { background: var(--surface-hover); color: var(--text-primary); }
+.nav-item.active {
+  color: var(--text-primary);
+  background: var(--surface-hover);
+  border-left-color: var(--green);
+}
+.nav-icon { font-size: 16px; width: 20px; text-align: center; }
+.nav-divider { height: 1px; background: var(--border); margin: var(--space-md) 0; }
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: var(--space-md) var(--space-lg);
+  border-top: 1px solid var(--border);
+}
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 13px;
+}
+.user-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--blue);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--bg);
+}
+.user-name { color: var(--text-primary); font-weight: 500; }
+.user-role { color: var(--text-muted); font-size: 11px; }
+
+/* ========== SCREENS (all hidden by default) ========== */
+.screen { display: none; }
+.screen.active { display: block; }
+
+/* ========== PAGE HEADER ========== */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-xl);
+}
+.page-title { font-size: 24px; font-weight: 700; }
+.page-subtitle { color: var(--text-secondary); font-size: 13px; margin-top: var(--space-xs); }
+.header-right { display: flex; align-items: center; gap: var(--space-md); }
+
+/* ========== METRIC CARDS ========== */
+.metrics-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-lg);
+  margin-bottom: var(--space-xl);
+}
+.metric-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-md) var(--space-lg);
+}
+.metric-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-sm);
+}
+.metric-value {
+  font-family: var(--font-mono);
+  font-size: 28px;
+  font-weight: 700;
+}
+.metric-change {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  margin-top: var(--space-xs);
+}
+.positive { color: var(--green); }
+.negative { color: var(--red); }
+.neutral { color: var(--text-secondary); }
+
+/* ========== CARDS ========== */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-lg);
+  margin-bottom: var(--space-lg);
+}
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-md);
+}
+.card-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* ========== VALUE BET CARDS ========== */
+.bet-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-lg);
+  margin-bottom: var(--space-md);
+  transition: border-color 0.15s;
+  cursor: pointer;
+}
+.bet-card:hover { border-color: var(--blue); }
+.bet-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--space-md);
+}
+.bet-match {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.bet-teams { font-size: 16px; font-weight: 600; }
+.bet-league { font-size: 12px; color: var(--text-secondary); }
+.bet-kickoff { font-size: 12px; color: var(--text-muted); }
+.bet-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.badge-high { background: var(--green); color: var(--bg); }
+.badge-medium { background: var(--yellow); color: var(--bg); }
+.badge-low { background: var(--text-muted); color: var(--bg); }
+
+.bet-stats {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
+  padding: var(--space-md) 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.bet-stat-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-xs);
+}
+.bet-stat-value {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 700;
+}
+.bet-explanation {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: var(--space-md);
+}
+.bet-actions { display: flex; gap: var(--space-sm); }
+
+/* ========== BUTTONS ========== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s;
+  font-family: var(--font-sans);
+}
+.btn-primary { background: var(--green); color: var(--bg); }
+.btn-primary:hover { background: #4cc960; }
+.btn-secondary { background: var(--surface-hover); color: var(--text-primary); border: 1px solid var(--border); }
+.btn-secondary:hover { background: #242d3a; }
+.btn-sm { padding: 5px 12px; font-size: 12px; }
+
+/* ========== TABLES ========== */
+.table-wrapper { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+}
+td {
+  padding: var(--space-sm) var(--space-md);
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-mono);
+}
+tr:nth-child(even) td { background: var(--row-odd); }
+tr:hover td { background: var(--surface-hover); }
+td.text { font-family: var(--font-sans); }
+
+/* ========== SLIDER ========== */
+.slider-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+.slider-group input[type="range"] {
+  -webkit-appearance: none;
+  background: var(--border);
+  height: 4px;
+  border-radius: 2px;
+  outline: none;
+  width: 160px;
+}
+.slider-group input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--green);
+  cursor: pointer;
+}
+.slider-value {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--green);
+  min-width: 36px;
+}
+
+/* ========== CHART PLACEHOLDERS ========== */
+.chart-placeholder {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  height: 260px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+.chart-line {
+  position: absolute;
+  bottom: 30px;
+  left: 30px;
+  right: 30px;
+  height: 180px;
+}
+.chart-svg { width: 100%; height: 100%; }
+
+/* ========== HEATMAP ========== */
+.heatmap-grid {
+  display: grid;
+  grid-template-columns: 40px repeat(7, 1fr);
+  gap: 2px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.heatmap-cell {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  font-weight: 500;
+}
+.heatmap-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+/* ========== FORM BADGES ========== */
+.form-badges { display: flex; gap: 3px; }
+.form-badge {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--bg);
+}
+.form-w { background: var(--green); }
+.form-d { background: var(--text-muted); }
+.form-l { background: var(--red); }
+
+/* ========== MODAL ========== */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.6);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal-overlay.visible { display: flex; }
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: var(--space-xl);
+  width: 460px;
+  max-width: 90vw;
+}
+.modal-title { font-size: 18px; font-weight: 700; margin-bottom: var(--space-lg); }
+.form-group { margin-bottom: var(--space-md); }
+.form-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: var(--space-xs);
+}
+.form-input {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 14px;
+}
+.form-input:focus { outline: none; border-color: var(--blue); }
+.modal-actions { display: flex; gap: var(--space-sm); justify-content: flex-end; margin-top: var(--space-lg); }
+
+/* ========== ONBOARDING ========== */
+.onboarding-container {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: var(--space-xxl) 0;
+}
+.onboarding-progress {
+  display: flex;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-xl);
+}
+.progress-dot {
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+}
+.progress-dot.filled { background: var(--green); }
+.onboarding-step-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: var(--space-sm);
+}
+.onboarding-title { font-size: 28px; font-weight: 700; margin-bottom: var(--space-sm); }
+.onboarding-desc { color: var(--text-secondary); line-height: 1.6; margin-bottom: var(--space-xl); }
+.onboarding-options { display: flex; flex-direction: column; gap: var(--space-sm); margin-bottom: var(--space-xl); }
+.onboarding-option {
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-md) var(--space-lg);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.onboarding-option:hover { border-color: var(--blue); }
+.onboarding-option.selected { border-color: var(--green); background: rgba(63,185,80,0.08); }
+.onboarding-option-title { font-weight: 600; margin-bottom: var(--space-xs); }
+.onboarding-option-desc { font-size: 13px; color: var(--text-secondary); }
+.onboarding-actions { display: flex; justify-content: space-between; }
+
+/* ========== EMPTY STATES ========== */
+.empty-state {
+  text-align: center;
+  padding: var(--space-xxl) var(--space-lg);
+  color: var(--text-secondary);
+}
+.empty-icon { font-size: 48px; margin-bottom: var(--space-md); opacity: 0.5; }
+.empty-title { font-size: 18px; font-weight: 600; color: var(--text-primary); margin-bottom: var(--space-sm); }
+.empty-desc { font-size: 14px; line-height: 1.5; max-width: 400px; margin: 0 auto; }
+
+/* ========== MARKET EDGE MAP ========== */
+.edge-map {
+  display: grid;
+  grid-template-columns: 120px repeat(4, 1fr);
+  gap: 4px;
+  font-size: 12px;
+}
+.edge-map-header {
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-sm);
+}
+.edge-map-label {
+  display: flex;
+  align-items: center;
+  padding: var(--space-sm);
+  font-weight: 500;
+}
+.edge-map-cell {
+  padding: var(--space-sm);
+  border-radius: 4px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-weight: 500;
+}
+.edge-profitable { background: rgba(63,185,80,0.15); color: var(--green); }
+.edge-promising { background: rgba(210,153,34,0.15); color: var(--yellow); }
+.edge-insufficient { background: rgba(72,79,88,0.15); color: var(--text-muted); }
+.edge-unprofitable { background: rgba(248,81,73,0.15); color: var(--red); }
+
+/* ========== SAFETY INDICATORS ========== */
+.safety-row { display: flex; gap: var(--space-lg); margin-bottom: var(--space-lg); }
+.safety-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 13px;
+}
+.safety-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+.safety-ok { background: var(--green); }
+.safety-warning { background: var(--yellow); }
+.safety-danger { background: var(--red); }
+
+/* ========== TWO-COL LAYOUT ========== */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-lg); }
+
+/* ========== MOBILE ========== */
+@media (max-width: 768px) {
+  .sidebar { display: none; }
+  .main { margin-left: 0; padding: var(--space-md); }
+  .metrics-row { grid-template-columns: repeat(2, 1fr); }
+  .bet-stats { grid-template-columns: repeat(3, 1fr); }
+  .two-col { grid-template-columns: 1fr; }
+  .mobile-nav {
+    display: flex !important;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    z-index: 100;
+    justify-content: space-around;
+    padding: var(--space-sm) 0;
+  }
+  .mobile-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    font-size: 10px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: var(--space-xs);
+  }
+  .mobile-nav-item.active { color: var(--green); }
+  .mobile-nav-icon { font-size: 18px; }
+}
+.mobile-nav { display: none; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- ========== SIDEBAR ========== -->
+  <nav class="sidebar">
+    <div class="logo">
+      <span class="logo-icon">⚽</span>
+      <span class="logo-text">BetVector</span>
+      <span class="logo-beta">Beta</span>
+    </div>
+    <div class="nav-item active" onclick="navigate('picks')">
+      <span class="nav-icon">📊</span> Today's Picks
+    </div>
+    <div class="nav-item" onclick="navigate('performance')">
+      <span class="nav-icon">📈</span> Performance
+    </div>
+    <div class="nav-item" onclick="navigate('leagues')">
+      <span class="nav-icon">🏆</span> Leagues
+    </div>
+    <div class="nav-item" onclick="navigate('health')">
+      <span class="nav-icon">🔬</span> Model Health
+    </div>
+    <div class="nav-item" onclick="navigate('bankroll')">
+      <span class="nav-icon">💰</span> Bankroll
+    </div>
+    <div class="nav-divider"></div>
+    <div class="nav-item" onclick="navigate('settings')">
+      <span class="nav-icon">⚙️</span> Settings
+    </div>
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar">O</div>
+        <div>
+          <div class="user-name">Owner</div>
+          <div class="user-role">Paper Trading</div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ========== MOBILE NAV ========== -->
+  <div class="mobile-nav">
+    <div class="mobile-nav-item active" onclick="navigate('picks')"><span class="mobile-nav-icon">📊</span>Picks</div>
+    <div class="mobile-nav-item" onclick="navigate('performance')"><span class="mobile-nav-icon">📈</span>P&L</div>
+    <div class="mobile-nav-item" onclick="navigate('leagues')"><span class="mobile-nav-icon">🏆</span>Leagues</div>
+    <div class="mobile-nav-item" onclick="navigate('health')"><span class="mobile-nav-icon">🔬</span>Health</div>
+    <div class="mobile-nav-item" onclick="navigate('bankroll')"><span class="mobile-nav-icon">💰</span>Bankroll</div>
+  </div>
+
+  <!-- ========== MAIN CONTENT ========== -->
+  <div class="main">
+
+    <!-- ==================== ONBOARDING ==================== -->
+    <div class="screen" id="screen-onboarding">
+      <div class="onboarding-container">
+        <div class="onboarding-progress">
+          <div class="progress-dot filled"></div>
+          <div class="progress-dot"></div>
+          <div class="progress-dot"></div>
+          <div class="progress-dot"></div>
+          <div class="progress-dot"></div>
+        </div>
+        <div class="onboarding-step-label">Step 1 of 5</div>
+        <div class="onboarding-title">Welcome to BetVector</div>
+        <div class="onboarding-desc">Let's configure your system. First, what's your starting bankroll? This is the total amount you're setting aside for betting. BetVector will calculate stakes as a percentage of this amount.</div>
+        <div class="form-group">
+          <label class="form-label">Starting Bankroll (£)</label>
+          <input type="number" class="form-input" value="500" style="max-width:200px">
+        </div>
+        <div class="onboarding-actions">
+          <div></div>
+          <button class="btn btn-primary" onclick="navigate('onboarding-2')">Continue →</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="screen" id="screen-onboarding-2">
+      <div class="onboarding-container">
+        <div class="onboarding-progress">
+          <div class="progress-dot filled"></div>
+          <div class="progress-dot filled"></div>
+          <div class="progress-dot"></div>
+          <div class="progress-dot"></div>
+          <div class="progress-dot"></div>
+        </div>
+        <div class="onboarding-step-label">Step 2 of 5</div>
+        <div class="onboarding-title">Staking Method</div>
+        <div class="onboarding-desc">How should BetVector calculate how much to bet on each value bet?</div>
+        <div class="onboarding-options">
+          <div class="onboarding-option selected" onclick="this.parentElement.querySelectorAll('.onboarding-option').forEach(o=>o.classList.remove('selected'));this.classList.add('selected')">
+            <div class="onboarding-option-title">Flat Stakes (Recommended)</div>
+            <div class="onboarding-option-desc">Bet 2% of your bankroll on every qualifying bet. Simple, safe, and easy to track.</div>
+          </div>
+          <div class="onboarding-option" onclick="this.parentElement.querySelectorAll('.onboarding-option').forEach(o=>o.classList.remove('selected'));this.classList.add('selected')">
+            <div class="onboarding-option-title">Percentage of Bankroll</div>
+            <div class="onboarding-option-desc">Bet a fixed % of your current bankroll. Adjusts automatically — bets shrink during losing streaks.</div>
+          </div>
+          <div class="onboarding-option" onclick="this.parentElement.querySelectorAll('.onboarding-option').forEach(o=>o.classList.remove('selected'));this.classList.add('selected')">
+            <div class="onboarding-option-title">Kelly Criterion (Advanced)</div>
+            <div class="onboarding-option-desc">Mathematically optimal staking based on edge size. Only recommended after 500+ bets.</div>
+          </div>
+        </div>
+        <div class="onboarding-actions">
+          <button class="btn btn-secondary" onclick="navigate('onboarding')">← Back</button>
+          <button class="btn btn-primary" onclick="navigate('onboarding-3')">Continue →</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="screen" id="screen-onboarding-3">
+      <div class="onboarding-container">
+        <div class="onboarding-progress">
+          <div class="progress-dot filled"></div>
+          <div class="progress-dot filled"></div>
+          <div class="progress-dot filled"></div>
+          <div class="progress-dot"></div>
+          <div class="progress-dot"></div>
+        </div>
+        <div class="onboarding-step-label">Step 3 of 5</div>
+        <div class="onboarding-title">Edge Threshold</div>
+        <div class="onboarding-desc">BetVector only flags a bet when your model's probability exceeds the bookmaker's implied probability by at least this amount. Higher = fewer but stronger picks.</div>
+        <div style="margin-bottom:var(--space-xl)">
+          <div class="slider-group">
+            <input type="range" min="1" max="15" value="5" oninput="this.nextElementSibling.textContent=this.value+'%'">
+            <span class="slider-value">5%</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-top:var(--space-xs);width:210px">
+            <span>More picks</span><span>Stronger picks</span>
+          </div>
+        </div>
+        <div class="onboarding-actions">
+          <button class="btn btn-secondary" onclick="navigate('onboarding-2')">← Back</button>
+          <button class="btn btn-primary" onclick="navigate('picks')">Start BetVector →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== TODAY'S PICKS ==================== -->
+    <div class="screen active" id="screen-picks">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Today's Picks</div>
+          <div class="page-subtitle">Saturday, 28 Feb 2026 · 3 value bets found across 2 leagues</div>
+        </div>
+        <div class="header-right">
+          <div class="slider-group">
+            <span style="font-size:12px;color:var(--text-secondary)">Min Edge</span>
+            <input type="range" min="1" max="15" value="5" oninput="this.nextElementSibling.textContent=this.value+'%'">
+            <span class="slider-value">5%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bet Card 1 -->
+      <div class="bet-card" onclick="navigate('match-detail')">
+        <div class="bet-card-header">
+          <div class="bet-match">
+            <div class="bet-teams">Arsenal vs Fulham</div>
+            <div class="bet-league">English Premier League</div>
+            <div class="bet-kickoff">⏱ Kickoff 15:00</div>
+          </div>
+          <span class="bet-badge badge-high">High Value</span>
+        </div>
+        <div class="bet-stats">
+          <div>
+            <div class="bet-stat-label">Market</div>
+            <div class="bet-stat-value" style="font-size:14px">Over 2.5</div>
+          </div>
+          <div>
+            <div class="bet-stat-label">BetVector</div>
+            <div class="bet-stat-value positive">68.2%</div>
+          </div>
+          <div>
+            <div class="bet-stat-label">FanDuel</div>
+            <div class="bet-stat-value">1.83</div>
+          </div>
+          <div>
+            <div class="bet-stat-label">Edge</div>
+            <div class="bet-stat-value positive">+13.5%</div>
+          </div>
+          <div>
+            <div class="bet-stat-label">Stake</div>
+            <div class="bet-stat-value">£10.00</div>
+          </div>
+        </div>
+        <div class="bet-explanation">Arsenal's 10-game rolling xG at home is 2.14, Fulham conceding 1.82 xGA away. Combined expected goals of 3.96 strongly favours the over. FanDuel pricing this at 54.6% — our model sees 68.2%.</div>
+        <div class="bet-actions">
+          <button class="btn btn-primary btn-sm" onclick="event.stopPropagation();openModal()">✓ Mark as Placed</button>
+          <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();navigate('match-detail')">Deep Dive →</button>
+        </div>
+      </div>
+
+      <!-- Bet Card 2 -->
+      <div class="bet-card">
+        <div class="bet-card-header">
+          <div class="bet-match">
+            <div class="bet-teams">Aston Villa vs Newcastle</div>
+            <div class="bet-league">English Premier League</div>
+            <div class="bet-kickoff">⏱ Kickoff 17:30</div>
+          </div>
+          <span class="bet-badge badge-medium">Medium Value</span>
+        </div>
+        <div class="bet-stats">
+          <div>
+            <div class="bet-stat-label">Market</div>
+            <div class="bet-stat-value" style="font-size:14px">BTTS Yes</div>
+          </div>
+          <div>
+            <div class="bet-stat-label">BetVector</div>
+            <div class="bet-stat-value positive">62.4%</div>
+          </div>
+          <div>
+            <div class="bet-stat-label">FanDuel</div>
+            <div class="bet-stat-value">1.80</div>
+          </div>
+          <div>
+            <div class="bet-stat-label">Edge</div>
+            <div class="bet-stat-value positive">+6.8%</div>
+          </div>
+          <div>
+            <div class="bet-stat-label">Stake</div>
+            <div class="bet-stat-value">£10.00</div>
+          </div>
+        </div>
+        <div class="bet-explanation">Both teams have scored in 7 of Villa's last 10 home matches and 8 of Newcastle's last 10 away. Villa's home xG of 1.68 and Newcastle's away xG of 1.42 both support goals.</div>
+        <div class="bet-actions">
+          <button class="btn btn-primary btn-sm" onclick="event.stopPropagation();openModal()">✓ Mark as Placed</button>
+          <button class="btn btn-secondary btn-sm">Deep Dive →</button>
+        </div>
+      </div>
+
+      <!-- Bet Card 3 -->
+      <div class="bet-card">
+        <div class="bet-card-header">
+          <div class="bet-match">
+            <div class="bet-teams">Napoli vs Juventus</div>
+            <div class="bet-league">Serie A</div>
+            <div class="bet-kickoff">⏱ Kickoff 20:45</div>
+          </div>
+          <span class="bet-badge badge-medium">Medium Value</span>
+        </div>
+        <div class="bet-stats">
+          <div>
+            <div class="bet-stat-label">Market</div>
+            <div class="bet-stat-value" style="font-size:14px">Home Win</div>
+          </div>
+          <div>
+            <div class="bet-stat-label">BetVector</div>
+            <div class="bet-stat-value positive">52.7%</div>
+          </div>
+          <div>
+            <div class="bet-stat-label">FanDuel</div>
+            <div class="bet-stat-value">2.15</div>
+          </div>
+          <div>
+            <div class="bet-stat-label">Edge</div>
+            <div class="bet-stat-value positive">+6.2%</div>
+          </div>
+          <div>
+            <div class="bet-stat-label">Stake</div>
+            <div class="bet-stat-value">£10.00</div>
+          </div>
+        </div>
+        <div class="bet-explanation">Napoli unbeaten in 8 home matches with 2.31 xG/game at the Maradona. Juventus away xGA of 1.54 suggests defensive vulnerability. Model gives Napoli 52.7% vs FanDuel's implied 46.5%.</div>
+        <div class="bet-actions">
+          <button class="btn btn-primary btn-sm" onclick="event.stopPropagation();openModal()">✓ Mark as Placed</button>
+          <button class="btn btn-secondary btn-sm">Deep Dive →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== PERFORMANCE ==================== -->
+    <div class="screen" id="screen-performance">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Performance Tracker</div>
+          <div class="page-subtitle">Paper Trading · Started 15 Jan 2026 · 44 days active</div>
+        </div>
+      </div>
+
+      <div class="metrics-row">
+        <div class="metric-card">
+          <div class="metric-label">Total P&L</div>
+          <div class="metric-value positive">+£127.40</div>
+          <div class="metric-change positive">+£12.40 today</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">ROI</div>
+          <div class="metric-value positive">+4.8%</div>
+          <div class="metric-change neutral">147 bets tracked</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Win Rate</div>
+          <div class="metric-value">53.1%</div>
+          <div class="metric-change neutral">78 W · 69 L</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Avg CLV</div>
+          <div class="metric-value positive">+1.8%</div>
+          <div class="metric-change positive">Beating closing line</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Cumulative P&L</div>
+          <div style="display:flex;gap:var(--space-sm)">
+            <button class="btn btn-sm btn-secondary" style="font-size:11px">1W</button>
+            <button class="btn btn-sm btn-secondary" style="font-size:11px;border-color:var(--green);color:var(--green)">1M</button>
+            <button class="btn btn-sm btn-secondary" style="font-size:11px">All</button>
+          </div>
+        </div>
+        <div class="chart-placeholder">
+          <div class="chart-line">
+            <svg class="chart-svg" viewBox="0 0 600 180">
+              <polyline fill="none" stroke="#30363D" stroke-width="0.5" points="0,180 600,180"/>
+              <polyline fill="none" stroke="#30363D" stroke-width="0.5" points="0,90 600,90"/>
+              <polyline fill="none" stroke="#30363D" stroke-width="0.5" points="0,0 600,0"/>
+              <polyline fill="none" stroke="#3FB950" stroke-width="2.5" stroke-linejoin="round"
+                points="0,140 30,130 60,120 90,135 120,110 150,100 180,115 210,95 240,80 270,90 300,75 330,85 360,70 390,60 420,75 450,55 480,45 510,50 540,40 570,35 600,30"/>
+              <circle cx="600" cy="30" r="4" fill="#3FB950"/>
+              <text x="590" y="22" fill="#3FB950" font-size="12" font-family="JetBrains Mono" text-anchor="end">+£127</text>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title" style="margin-bottom:var(--space-md)">Recent Bets</div>
+        <div class="table-wrapper">
+          <table>
+            <thead><tr><th>Date</th><th>Match</th><th>Market</th><th>Odds</th><th>Stake</th><th>Result</th><th>P&L</th></tr></thead>
+            <tbody>
+              <tr><td>28 Feb</td><td class="text">Arsenal vs Fulham</td><td>O2.5</td><td>1.83</td><td>£10.00</td><td><span class="positive">✅ Won</span></td><td class="positive">+£8.30</td></tr>
+              <tr><td>28 Feb</td><td class="text">Villa vs Newcastle</td><td>BTTS</td><td>1.80</td><td>£10.00</td><td><span class="positive">✅ Won</span></td><td class="positive">+£8.00</td></tr>
+              <tr><td>28 Feb</td><td class="text">Napoli vs Juventus</td><td>1X2 H</td><td>2.15</td><td>£10.00</td><td><span class="negative">❌ Lost</span></td><td class="negative">-£10.00</td></tr>
+              <tr><td>25 Feb</td><td class="text">Liverpool vs Man City</td><td>O2.5</td><td>1.72</td><td>£10.00</td><td><span class="positive">✅ Won</span></td><td class="positive">+£7.20</td></tr>
+              <tr><td>25 Feb</td><td class="text">Brighton vs Wolves</td><td>1X2 H</td><td>1.95</td><td>£10.00</td><td><span class="negative">❌ Lost</span></td><td class="negative">-£10.00</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== LEAGUES ==================== -->
+    <div class="screen" id="screen-leagues">
+      <div class="page-header">
+        <div>
+          <div class="page-title">League Explorer</div>
+          <div class="page-subtitle">English Premier League · 2024-25</div>
+        </div>
+        <select class="form-input" style="width:auto;font-family:var(--font-sans);font-size:13px">
+          <option>English Premier League</option>
+          <option>La Liga</option>
+          <option>Serie A</option>
+        </select>
+      </div>
+
+      <div class="card">
+        <div class="card-title" style="margin-bottom:var(--space-md)">Standings</div>
+        <div class="table-wrapper">
+          <table>
+            <thead><tr><th>#</th><th>Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GD</th><th>Pts</th><th>Form</th></tr></thead>
+            <tbody>
+              <tr><td>1</td><td class="text">Arsenal</td><td>27</td><td>19</td><td>5</td><td>3</td><td class="positive">+38</td><td style="font-weight:700">62</td><td><div class="form-badges"><span class="form-badge form-w">W</span><span class="form-badge form-w">W</span><span class="form-badge form-d">D</span><span class="form-badge form-w">W</span><span class="form-badge form-w">W</span></div></td></tr>
+              <tr><td>2</td><td class="text">Liverpool</td><td>27</td><td>18</td><td>6</td><td>3</td><td class="positive">+34</td><td style="font-weight:700">60</td><td><div class="form-badges"><span class="form-badge form-w">W</span><span class="form-badge form-d">D</span><span class="form-badge form-w">W</span><span class="form-badge form-w">W</span><span class="form-badge form-l">L</span></div></td></tr>
+              <tr><td>3</td><td class="text">Man City</td><td>27</td><td>17</td><td>4</td><td>6</td><td class="positive">+29</td><td style="font-weight:700">55</td><td><div class="form-badges"><span class="form-badge form-l">L</span><span class="form-badge form-w">W</span><span class="form-badge form-w">W</span><span class="form-badge form-d">D</span><span class="form-badge form-w">W</span></div></td></tr>
+              <tr><td>4</td><td class="text">Chelsea</td><td>27</td><td>14</td><td>8</td><td>5</td><td class="positive">+18</td><td style="font-weight:700">50</td><td><div class="form-badges"><span class="form-badge form-w">W</span><span class="form-badge form-w">W</span><span class="form-badge form-d">D</span><span class="form-badge form-d">D</span><span class="form-badge form-w">W</span></div></td></tr>
+              <tr><td>5</td><td class="text">Aston Villa</td><td>27</td><td>14</td><td>5</td><td>8</td><td class="positive">+12</td><td style="font-weight:700">47</td><td><div class="form-badges"><span class="form-badge form-w">W</span><span class="form-badge form-l">L</span><span class="form-badge form-w">W</span><span class="form-badge form-w">W</span><span class="form-badge form-d">D</span></div></td></tr>
+              <tr><td>6</td><td class="text">Newcastle</td><td>27</td><td>13</td><td>6</td><td>8</td><td class="positive">+10</td><td style="font-weight:700">45</td><td><div class="form-badges"><span class="form-badge form-d">D</span><span class="form-badge form-w">W</span><span class="form-badge form-l">L</span><span class="form-badge form-w">W</span><span class="form-badge form-w">W</span></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title" style="margin-bottom:var(--space-md)">Upcoming Fixtures with Value</div>
+        <div class="table-wrapper">
+          <table>
+            <thead><tr><th>Date</th><th>Home</th><th>Away</th><th>Best Market</th><th>Edge</th><th></th></tr></thead>
+            <tbody>
+              <tr><td>1 Mar</td><td class="text">Arsenal</td><td class="text">Fulham</td><td>Over 2.5</td><td class="positive">+13.5%</td><td><button class="btn btn-sm btn-secondary" onclick="navigate('match-detail')">View →</button></td></tr>
+              <tr><td>1 Mar</td><td class="text">Villa</td><td class="text">Newcastle</td><td>BTTS Yes</td><td class="positive">+6.8%</td><td><button class="btn btn-sm btn-secondary">View →</button></td></tr>
+              <tr><td>2 Mar</td><td class="text">Chelsea</td><td class="text">Tottenham</td><td style="color:var(--text-muted)">No edge</td><td class="neutral">—</td><td><button class="btn btn-sm btn-secondary">View →</button></td></tr>
+              <tr><td>2 Mar</td><td class="text">Man City</td><td class="text">Everton</td><td style="color:var(--text-muted)">No edge</td><td class="neutral">—</td><td><button class="btn btn-sm btn-secondary">View →</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== MATCH DETAIL ==================== -->
+    <div class="screen" id="screen-match-detail">
+      <div style="margin-bottom:var(--space-lg)">
+        <button class="btn btn-secondary btn-sm" onclick="navigate('picks')">← Back to Picks</button>
+      </div>
+      <div class="page-header">
+        <div>
+          <div class="page-title">Arsenal vs Fulham</div>
+          <div class="page-subtitle">EPL · Saturday 28 Feb · 15:00 · Emirates Stadium</div>
+        </div>
+        <span class="bet-badge badge-high">High Value: O2.5 +13.5%</span>
+      </div>
+
+      <div class="two-col">
+        <div class="card">
+          <div class="card-title" style="margin-bottom:var(--space-md)">Scoreline Probability Matrix</div>
+          <div class="heatmap-grid">
+            <div class="heatmap-label"></div>
+            <div class="heatmap-label">0</div><div class="heatmap-label">1</div><div class="heatmap-label">2</div><div class="heatmap-label">3</div><div class="heatmap-label">4</div><div class="heatmap-label">5</div><div class="heatmap-label">6</div>
+            <div class="heatmap-label">0</div>
+            <div class="heatmap-cell" style="background:rgba(63,185,80,0.08)">2.4%</div><div class="heatmap-cell" style="background:rgba(63,185,80,0.15)">5.1%</div><div class="heatmap-cell" style="background:rgba(63,185,80,0.12)">5.4%</div><div class="heatmap-cell" style="background:rgba(63,185,80,0.08)">3.8%</div><div class="heatmap-cell" style="background:rgba(63,185,80,0.05)">2.0%</div><div class="heatmap-cell" style="background:rgba(63,185,80,0.03)">0.9%</div><div class="heatmap-cell" style="background:rgba(63,185,80,0.01)">0.3%</div>
+            <div class="heatmap-label">1</div>
+            <div class="heatmap-cell" style="background:rgba(63,185,80,0.12)">5.1%</div><div class="heatmap-cell" style="background:rgba(63,185,80,0.25)">10.8%</div><div class="heatmap-cell" style="background:rgba(63,185,80,0.22);color:var(--green);font-weight:700;border:1px solid var(--green)">11.5%</div><div class="heatmap-cell" style="background:rgba(63,185,80,0.18)">8.1%</div><div class="heatmap-cell" style="background:rgba(63,185,80,0.1)">4.3%</div><div class="heatmap-cell" style="background:rgba(63,185,80,0.05)">1.8%</div><div class="heatmap-cell" style="background:rgba(63,185,80,0.02)">0.6%</div>
+            <div class="heatmap-label">2</div>
+            <div class="heatmap-cell" style="background:rgba(63,185,80,0.12)">5.4%</div><div class="heatmap-cell" style="background:rgba(63,185,80,0.22)">11.5%</div><div class="heatmap-cell" style="background:rgba(63,185,80,0.2)">9.1%</div><div class="heatmap-cell" style="background:rgba(63,185,80,0.15)">6.4%</div><div class="heatmap-cell" style="background:rgba(63,185,80,0.08)">3.4%</div><div class="heatmap-cell" style="background:rgba(63,185,80,0.04)">1.4%</div><div class="heatmap-cell" style="background:rgba(63,185,80,0.02)">0.5%</div>
+            <div class="heatmap-label">3</div>
+            <div class="heatmap-cell" style="background:rgba(63,185,80,0.08)">3.8%</div><div class="heatmap-cell" style="background:rgba(63,185,80,0.15)">5.4%</div><div class="heatmap-cell" style="background:rgba(63,185,80,0.12)">4.3%</div><div class="heatmap-cell" style="background:rgba(63,185,80,0.08)">3.0%</div><div class="heatmap-cell" style="background:rgba(63,185,80,0.05)">1.6%</div><div class="heatmap-cell" style="background:rgba(63,185,80,0.02)">0.7%</div><div class="heatmap-cell" style="background:rgba(63,185,80,0.01)">0.2%</div>
+            <div class="heatmap-label">4</div>
+            <div class="heatmap-cell" style="background:rgba(63,185,80,0.04)">1.4%</div><div class="heatmap-cell" style="background:rgba(63,185,80,0.08)">2.0%</div><div class="heatmap-cell" style="background:rgba(63,185,80,0.06)">1.6%</div><div class="heatmap-cell" style="background:rgba(63,185,80,0.04)">1.1%</div><div class="heatmap-cell" style="background:rgba(63,185,80,0.02)">0.6%</div><div class="heatmap-cell" style="background:rgba(63,185,80,0.01)">0.3%</div><div class="heatmap-cell" style="background:rgba(63,185,80,0.005)">0.1%</div>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:var(--space-sm)">Rows = Arsenal goals · Columns = Fulham goals · Most likely: 1-2 (11.5%)</div>
+        </div>
+
+        <div class="card">
+          <div class="card-title" style="margin-bottom:var(--space-md)">Market Probabilities</div>
+          <table>
+            <thead><tr><th>Market</th><th>BetVector</th><th>FanDuel</th><th>Edge</th></tr></thead>
+            <tbody>
+              <tr><td>Home Win</td><td class="positive">48.3%</td><td>1.95 (51.3%)</td><td class="negative">-3.0%</td></tr>
+              <tr><td>Draw</td><td>24.1%</td><td>3.50 (28.6%)</td><td class="negative">-4.5%</td></tr>
+              <tr><td>Away Win</td><td>27.6%</td><td>4.20 (23.8%)</td><td class="positive">+3.8%</td></tr>
+              <tr><td style="font-weight:700">Over 2.5</td><td class="positive" style="font-weight:700">68.2%</td><td style="font-weight:700">1.83 (54.6%)</td><td class="positive" style="font-weight:700">+13.5%</td></tr>
+              <tr><td>Under 2.5</td><td>31.8%</td><td>2.00 (50.0%)</td><td class="negative">-18.2%</td></tr>
+              <tr><td>BTTS Yes</td><td>58.9%</td><td>1.70 (58.8%)</td><td class="neutral">+0.1%</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="card">
+          <div class="card-title" style="margin-bottom:var(--space-md)">Head to Head (Last 5)</div>
+          <table>
+            <thead><tr><th>Date</th><th>Home</th><th>Score</th><th>Away</th></tr></thead>
+            <tbody>
+              <tr><td>Oct 2025</td><td class="text">Fulham</td><td style="font-weight:700">1 - 3</td><td class="text">Arsenal</td></tr>
+              <tr><td>Apr 2025</td><td class="text">Arsenal</td><td style="font-weight:700">2 - 1</td><td class="text">Fulham</td></tr>
+              <tr><td>Jan 2025</td><td class="text">Fulham</td><td style="font-weight:700">2 - 2</td><td class="text">Arsenal</td></tr>
+              <tr><td>Aug 2024</td><td class="text">Arsenal</td><td style="font-weight:700">3 - 0</td><td class="text">Fulham</td></tr>
+              <tr><td>Dec 2023</td><td class="text">Fulham</td><td style="font-weight:700">1 - 2</td><td class="text">Arsenal</td></tr>
+            </tbody>
+          </table>
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:var(--space-sm)">Arsenal: 4W 1D 0L · Avg 2.4 goals/game · 4 of 5 had 3+ total goals</div>
+        </div>
+
+        <div class="card">
+          <div class="card-title" style="margin-bottom:var(--space-md)">Team Form (Last 10)</div>
+          <table>
+            <thead><tr><th>Stat</th><th>Arsenal (H)</th><th>Fulham (A)</th></tr></thead>
+            <tbody>
+              <tr><td class="text">xG / game</td><td class="positive">2.14</td><td>1.18</td></tr>
+              <tr><td class="text">xGA / game</td><td>0.92</td><td class="negative">1.82</td></tr>
+              <tr><td class="text">Goals / game</td><td class="positive">2.30</td><td>1.10</td></tr>
+              <tr><td class="text">Clean sheets</td><td>4 / 10</td><td>2 / 10</td></tr>
+              <tr><td class="text">Points / game</td><td class="positive">2.50</td><td>1.00</td></tr>
+              <tr><td class="text">Possession</td><td>61.2%</td><td>42.8%</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== MODEL HEALTH ==================== -->
+    <div class="screen" id="screen-health">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Model Health</div>
+          <div class="page-subtitle">poisson_v1 · 147 predictions evaluated · Last trained 26 Feb 2026</div>
+        </div>
+      </div>
+
+      <div class="metrics-row">
+        <div class="metric-card">
+          <div class="metric-label">Brier Score</div>
+          <div class="metric-value positive">0.198</div>
+          <div class="metric-change positive">Better than random (0.250)</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Calibration Error</div>
+          <div class="metric-value positive">2.1%</div>
+          <div class="metric-change positive">Below 3% threshold</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Ensemble Weights</div>
+          <div class="metric-value">100%</div>
+          <div class="metric-change neutral">1 model active</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Next Recalibration</div>
+          <div class="metric-value neutral">53</div>
+          <div class="metric-change neutral">predictions until check</div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="card">
+          <div class="card-title" style="margin-bottom:var(--space-md)">Calibration Plot</div>
+          <div class="chart-placeholder">
+            <div class="chart-line">
+              <svg class="chart-svg" viewBox="0 0 300 300">
+                <line x1="0" y1="300" x2="300" y2="0" stroke="#30363D" stroke-width="1" stroke-dasharray="4"/>
+                <text x="150" y="295" fill="#484F58" font-size="10" font-family="Inter" text-anchor="middle">Predicted Probability</text>
+                <circle cx="45" cy="260" r="5" fill="#3FB950" opacity="0.8"/><text x="55" y="264" fill="#8B949E" font-size="9" font-family="JetBrains Mono">0.15</text>
+                <circle cx="90" cy="215" r="7" fill="#3FB950" opacity="0.8"/><text x="102" y="219" fill="#8B949E" font-size="9" font-family="JetBrains Mono">0.30</text>
+                <circle cx="135" cy="160" r="8" fill="#3FB950" opacity="0.8"/><text x="149" y="164" fill="#8B949E" font-size="9" font-family="JetBrains Mono">0.47</text>
+                <circle cx="180" cy="115" r="9" fill="#3FB950" opacity="0.8"/><text x="195" y="119" fill="#8B949E" font-size="9" font-family="JetBrains Mono">0.58</text>
+                <circle cx="225" cy="80" r="6" fill="#D29922" opacity="0.8"/><text x="237" y="84" fill="#8B949E" font-size="9" font-family="JetBrains Mono">0.68</text>
+                <circle cx="270" cy="25" r="4" fill="#3FB950" opacity="0.8"/><text x="255" y="20" fill="#8B949E" font-size="9" font-family="JetBrains Mono">0.82</text>
+              </svg>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:var(--space-sm)">Points near the diagonal = well calibrated · Dot size = sample count</div>
+        </div>
+
+        <div class="card">
+          <div class="card-title" style="margin-bottom:var(--space-md)">Market Edge Map</div>
+          <div class="edge-map">
+            <div class="edge-map-header"></div>
+            <div class="edge-map-header">1X2</div>
+            <div class="edge-map-header">O/U 2.5</div>
+            <div class="edge-map-header">BTTS</div>
+            <div class="edge-map-header">AH</div>
+
+            <div class="edge-map-label">EPL</div>
+            <div class="edge-map-cell edge-promising">+3.1%<br><span style="font-size:9px;opacity:0.7">n=42</span></div>
+            <div class="edge-map-cell edge-profitable">+7.2%<br><span style="font-size:9px;opacity:0.7">n=38</span></div>
+            <div class="edge-map-cell edge-promising">+4.8%<br><span style="font-size:9px;opacity:0.7">n=31</span></div>
+            <div class="edge-map-cell edge-insufficient">—<br><span style="font-size:9px;opacity:0.7">n=12</span></div>
+
+            <div class="edge-map-label">Serie A</div>
+            <div class="edge-map-cell edge-insufficient">—<br><span style="font-size:9px;opacity:0.7">n=8</span></div>
+            <div class="edge-map-cell edge-promising">+5.4%<br><span style="font-size:9px;opacity:0.7">n=10</span></div>
+            <div class="edge-map-cell edge-insufficient">—<br><span style="font-size:9px;opacity:0.7">n=6</span></div>
+            <div class="edge-map-cell edge-insufficient">—<br><span style="font-size:9px;opacity:0.7">n=0</span></div>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:var(--space-md)">
+            <span style="color:var(--green)">■</span> Profitable (CI > 0, n≥100)
+            <span style="color:var(--yellow);margin-left:12px">■</span> Promising
+            <span style="color:var(--text-muted);margin-left:12px">■</span> Insufficient data
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title" style="margin-bottom:var(--space-md)">Self-Improvement Status</div>
+        <table>
+          <thead><tr><th>Capability</th><th>Status</th><th>Last Action</th><th>Next Check</th></tr></thead>
+          <tbody>
+            <tr><td class="text">Auto-Recalibration</td><td><span class="positive">Active</span></td><td class="text">No correction needed (error 2.1%)</td><td>In 53 predictions</td></tr>
+            <tr><td class="text">Feature Importance</td><td><span class="neutral">Waiting</span></td><td class="text">Requires XGBoost model (post-launch)</td><td>—</td></tr>
+            <tr><td class="text">Adaptive Weights</td><td><span class="neutral">Waiting</span></td><td class="text">Requires 2+ models active</td><td>—</td></tr>
+            <tr><td class="text">Market Feedback</td><td><span class="positive">Active</span></td><td class="text">Updated 23 Feb · EPL O/U 2.5 looking strong</td><td>2 Mar (Sunday)</td></tr>
+            <tr><td class="text">Retrain Trigger</td><td><span class="positive">Monitoring</span></td><td class="text">Brier 0.198 vs threshold 0.230 — healthy</td><td>Daily check</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ==================== BANKROLL ==================== -->
+    <div class="screen" id="screen-bankroll">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Bankroll Manager</div>
+          <div class="page-subtitle">Paper Trading Mode · Flat Stakes (2%)</div>
+        </div>
+      </div>
+
+      <div class="metrics-row">
+        <div class="metric-card">
+          <div class="metric-label">Current Bankroll</div>
+          <div class="metric-value positive">£627.40</div>
+          <div class="metric-change positive">+£127.40 from start</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Starting Bankroll</div>
+          <div class="metric-value">£500.00</div>
+          <div class="metric-change neutral">Set 15 Jan 2026</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Peak Bankroll</div>
+          <div class="metric-value">£641.20</div>
+          <div class="metric-change neutral">Reached 24 Feb</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Current Drawdown</div>
+          <div class="metric-value" style="color:var(--yellow)">-2.2%</div>
+          <div class="metric-change neutral">Alert at 25%</div>
+        </div>
+      </div>
+
+      <div class="safety-row">
+        <div class="safety-item"><span class="safety-dot safety-ok"></span> Daily loss limit: £2.10 / £50.00</div>
+        <div class="safety-item"><span class="safety-dot safety-ok"></span> Drawdown: 2.2% / 25% alert</div>
+        <div class="safety-item"><span class="safety-dot safety-ok"></span> Min bankroll: £627 / £250 floor</div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Bankroll Over Time</div>
+        </div>
+        <div class="chart-placeholder">
+          <div class="chart-line">
+            <svg class="chart-svg" viewBox="0 0 600 180">
+              <line x1="0" y1="120" x2="600" y2="120" stroke="#30363D" stroke-width="0.5" stroke-dasharray="4"/>
+              <text x="2" y="115" fill="#484F58" font-size="10" font-family="JetBrains Mono">£500</text>
+              <polyline fill="none" stroke="#3FB950" stroke-width="2.5" stroke-linejoin="round"
+                points="0,120 30,125 60,115 90,130 120,110 150,105 180,115 210,95 240,80 270,90 300,75 330,65 360,55 390,60 420,45 450,40 480,30 510,25 540,30 570,20 600,28"/>
+              <circle cx="480" cy="30" r="4" fill="#58A6FF"/>
+              <text x="485" y="22" fill="#58A6FF" font-size="10" font-family="JetBrains Mono">Peak £641</text>
+              <circle cx="600" cy="28" r="4" fill="#3FB950"/>
+              <text x="560" y="45" fill="#3FB950" font-size="10" font-family="JetBrains Mono">£627</text>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title" style="margin-bottom:var(--space-md)">Monthly Breakdown</div>
+        <table>
+          <thead><tr><th>Month</th><th>Bets</th><th>Wins</th><th>Losses</th><th>P&L</th><th>ROI</th></tr></thead>
+          <tbody>
+            <tr><td>Jan 2026</td><td>38</td><td>21</td><td>17</td><td class="positive">+£42.60</td><td class="positive">+5.6%</td></tr>
+            <tr><td>Feb 2026</td><td>109</td><td>57</td><td>52</td><td class="positive">+£84.80</td><td class="positive">+4.4%</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ==================== SETTINGS ==================== -->
+    <div class="screen" id="screen-settings">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Settings</div>
+          <div class="page-subtitle">Configure your BetVector system</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title" style="margin-bottom:var(--space-lg)">Betting Preferences</div>
+        <div class="form-group">
+          <label class="form-label">Staking Method</label>
+          <select class="form-input" style="max-width:300px;font-family:var(--font-sans)">
+            <option selected>Flat Stakes (2% per bet)</option>
+            <option>Percentage of Bankroll</option>
+            <option>Fractional Kelly (Quarter)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Edge Threshold</label>
+          <div class="slider-group">
+            <input type="range" min="1" max="15" value="5" oninput="this.nextElementSibling.textContent=this.value+'%'">
+            <span class="slider-value">5%</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Stake Percentage</label>
+          <div class="slider-group">
+            <input type="range" min="1" max="5" value="2" step="0.5" oninput="this.nextElementSibling.textContent=this.value+'%'">
+            <span class="slider-value">2%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title" style="margin-bottom:var(--space-lg)">Active Leagues</div>
+        <div style="display:flex;flex-direction:column;gap:var(--space-sm)">
+          <label style="display:flex;align-items:center;gap:var(--space-sm);cursor:pointer"><input type="checkbox" checked> English Premier League</label>
+          <label style="display:flex;align-items:center;gap:var(--space-sm);cursor:pointer"><input type="checkbox"> La Liga</label>
+          <label style="display:flex;align-items:center;gap:var(--space-sm);cursor:pointer"><input type="checkbox" checked> Serie A</label>
+          <label style="display:flex;align-items:center;gap:var(--space-sm);cursor:pointer"><input type="checkbox"> Bundesliga</label>
+          <label style="display:flex;align-items:center;gap:var(--space-sm);cursor:pointer"><input type="checkbox"> Ligue 1</label>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title" style="margin-bottom:var(--space-lg)">Notifications</div>
+        <div style="display:flex;flex-direction:column;gap:var(--space-sm)">
+          <label style="display:flex;align-items:center;gap:var(--space-sm);cursor:pointer"><input type="checkbox" checked> Morning picks email (7:00 AM)</label>
+          <label style="display:flex;align-items:center;gap:var(--space-sm);cursor:pointer"><input type="checkbox" checked> Evening review email (10:00 PM)</label>
+          <label style="display:flex;align-items:center;gap:var(--space-sm);cursor:pointer"><input type="checkbox" checked> Weekly summary (Sunday 8:00 PM)</label>
+          <label style="display:flex;align-items:center;gap:var(--space-sm);cursor:pointer;color:var(--text-muted)"><input type="checkbox" disabled> Telegram alerts (coming soon)</label>
+        </div>
+        <div class="form-group" style="margin-top:var(--space-md)">
+          <label class="form-label">Email Address</label>
+          <input type="email" class="form-input" value="owner@email.com" style="max-width:300px">
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Users</div>
+          <button class="btn btn-primary btn-sm">+ Invite User</button>
+        </div>
+        <table>
+          <thead><tr><th>Name</th><th>Role</th><th>Bankroll</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td class="text">Owner</td><td class="text">Owner</td><td>£627.40</td><td><span class="positive">Active</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ==================== EMPTY STATE EXAMPLE ==================== -->
+    <div class="screen" id="screen-empty">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Today's Picks</div>
+          <div class="page-subtitle">Monday, 3 Mar 2026 · No matches today</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="empty-state">
+          <div class="empty-icon">⚽</div>
+          <div class="empty-title">No value bets today</div>
+          <div class="empty-desc">Your bankroll thanks you for your patience. The model found no edges above your 5% threshold. Next matches are on Tuesday — predictions will run at 6:00 AM.</div>
+          <button class="btn btn-secondary" style="margin-top:var(--space-lg)" onclick="navigate('leagues')">Explore League Stats →</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- .main -->
+</div><!-- .app -->
+
+<!-- ========== PLACE BET MODAL ========== -->
+<div class="modal-overlay" id="bet-modal">
+  <div class="modal">
+    <div class="modal-title">Mark Bet as Placed</div>
+    <div style="background:var(--bg);padding:var(--space-md);border-radius:6px;margin-bottom:var(--space-lg)">
+      <div style="font-weight:600;margin-bottom:var(--space-xs)">Arsenal vs Fulham — Over 2.5 Goals</div>
+      <div style="font-size:12px;color:var(--text-secondary)">EPL · 28 Feb · Model: 68.2% · Edge: +13.5%</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Actual Odds (on FanDuel)</label>
+      <input type="number" class="form-input" value="1.83" step="0.01">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Actual Stake (£)</label>
+      <input type="number" class="form-input" value="10.00" step="0.50">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Bookmaker</label>
+      <select class="form-input" style="font-family:var(--font-sans)">
+        <option selected>FanDuel</option>
+        <option>Bet365</option>
+        <option>Other</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="closeModal()">✓ Confirm Bet</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ========== NAVIGATION ========== */
+const screenMap = {
+  'picks': 'screen-picks',
+  'performance': 'screen-performance',
+  'leagues': 'screen-leagues',
+  'health': 'screen-health',
+  'bankroll': 'screen-bankroll',
+  'settings': 'screen-settings',
+  'match-detail': 'screen-match-detail',
+  'onboarding': 'screen-onboarding',
+  'onboarding-2': 'screen-onboarding-2',
+  'onboarding-3': 'screen-onboarding-3',
+  'empty': 'screen-empty'
+};
+
+const navLabels = {
+  'picks': "Today's Picks",
+  'performance': 'Performance',
+  'leagues': 'Leagues',
+  'health': 'Model Health',
+  'bankroll': 'Bankroll',
+  'settings': 'Settings'
+};
+
+function navigate(screenId) {
+  // Hide all screens
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  // Show target
+  const target = document.getElementById(screenMap[screenId]);
+  if (target) target.classList.add('active');
+  // Update sidebar
+  document.querySelectorAll('.sidebar .nav-item').forEach(n => n.classList.remove('active'));
+  const navTarget = Object.keys(navLabels).indexOf(screenId);
+  if (navTarget >= 0) {
+    document.querySelectorAll('.sidebar .nav-item')[navTarget].classList.add('active');
+  }
+  // Update mobile nav
+  document.querySelectorAll('.mobile-nav-item').forEach(n => n.classList.remove('active'));
+  const mobileIdx = ['picks','performance','leagues','health','bankroll'].indexOf(screenId);
+  if (mobileIdx >= 0) {
+    document.querySelectorAll('.mobile-nav-item')[mobileIdx].classList.add('active');
+  }
+  // Scroll to top
+  document.querySelector('.main').scrollTop = 0;
+  window.scrollTo(0, 0);
+}
+
+/* ========== MODAL ========== */
+function openModal() {
+  document.getElementById('bet-modal').classList.add('visible');
+}
+function closeModal() {
+  document.getElementById('bet-modal').classList.remove('visible');
+}
+document.getElementById('bet-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+</script>
+</body>
+</html>

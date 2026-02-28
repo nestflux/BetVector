@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BetVector — The Pitch</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0A0E14;
+  --bg2: #0D1117;
+  --surface: #151B23;
+  --surface2: #1C2333;
+  --border: #2A3140;
+  --text: #E6EDF3;
+  --text2: #8B949E;
+  --text3: #484F58;
+  --green: #3FB950;
+  --green-dim: rgba(63,185,80,0.12);
+  --red: #F85149;
+  --red-dim: rgba(248,81,73,0.12);
+  --yellow: #D29922;
+  --yellow-dim: rgba(210,153,34,0.12);
+  --blue: #58A6FF;
+  --blue-dim: rgba(88,166,255,0.10);
+  --purple: #BC8CFF;
+  --gradient: linear-gradient(135deg, #3FB950 0%, #58A6FF 100%);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; font-size: 16px; }
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ===== NAV ===== */
+.nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  padding: 16px 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(10,14,20,0.85);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(42,49,64,0.5);
+}
+.nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 20px;
+}
+.nav-logo span { color: var(--green); }
+.nav-dots {
+  display: flex;
+  gap: 8px;
+}
+.nav-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text3);
+  cursor: pointer;
+  transition: all 0.3s;
+}
+.nav-dot.active { background: var(--green); transform: scale(1.3); }
+
+/* ===== SECTIONS ===== */
+section {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 100px 60px;
+  position: relative;
+}
+@media (max-width: 768px) {
+  section { padding: 80px 24px; }
+  .nav { padding: 12px 20px; }
+}
+
+.section-inner {
+  max-width: 1100px;
+  width: 100%;
+}
+
+/* ===== TYPOGRAPHY ===== */
+.kicker {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--green);
+  margin-bottom: 16px;
+}
+.headline {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: clamp(36px, 5vw, 64px);
+  font-weight: 700;
+  line-height: 1.1;
+  margin-bottom: 24px;
+}
+.headline .accent { color: var(--green); }
+.subline {
+  font-size: clamp(18px, 2.5vw, 22px);
+  color: var(--text2);
+  line-height: 1.6;
+  max-width: 680px;
+}
+
+/* ===== HERO ===== */
+.hero { text-align: center; }
+.hero .section-inner { display: flex; flex-direction: column; align-items: center; }
+.hero .subline { max-width: 600px; margin: 0 auto 40px; }
+.hero-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: var(--text2);
+  padding: 12px 28px;
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  cursor: pointer;
+  transition: all 0.3s;
+  text-decoration: none;
+}
+.hero-cta:hover { border-color: var(--green); color: var(--green); }
+.hero-bg {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  overflow: hidden;
+  z-index: -1;
+}
+.hero-bg::after {
+  content: '';
+  position: absolute;
+  top: 15%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 800px;
+  height: 800px;
+  background: radial-gradient(circle, rgba(63,185,80,0.06) 0%, transparent 70%);
+  border-radius: 50%;
+}
+.hero-grid {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-image:
+    linear-gradient(rgba(42,49,64,0.15) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(42,49,64,0.15) 1px, transparent 1px);
+  background-size: 60px 60px;
+  mask-image: radial-gradient(ellipse at center, black 20%, transparent 70%);
+  -webkit-mask-image: radial-gradient(ellipse at center, black 20%, transparent 70%);
+}
+
+/* ===== PROBLEM SECTION ===== */
+.problem-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin-top: 48px;
+}
+@media (max-width: 768px) { .problem-grid { grid-template-columns: 1fr; } }
+.problem-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 32px;
+  position: relative;
+  overflow: hidden;
+}
+.problem-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--red);
+  opacity: 0.6;
+}
+.problem-icon {
+  font-size: 32px;
+  margin-bottom: 16px;
+}
+.problem-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+.problem-desc {
+  font-size: 14px;
+  color: var(--text2);
+  line-height: 1.6;
+}
+.problem-stat {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--red);
+  margin-top: 16px;
+}
+
+/* ===== SOLUTION SECTION ===== */
+.solution-header { margin-bottom: 48px; }
+.solution-features {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+@media (max-width: 768px) { .solution-features { grid-template-columns: 1fr; } }
+.solution-feature {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 28px;
+  display: flex;
+  gap: 16px;
+  transition: border-color 0.3s;
+}
+.solution-feature:hover { border-color: var(--green); }
+.feature-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.feature-icon.green { background: var(--green-dim); }
+.feature-icon.blue { background: var(--blue-dim); }
+.feature-icon.yellow { background: var(--yellow-dim); }
+.feature-icon.purple { background: rgba(188,140,255,0.12); }
+.feature-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 6px;
+}
+.feature-desc {
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.5;
+}
+
+/* ===== HOW IT WORKS ===== */
+.pipeline {
+  margin-top: 48px;
+  position: relative;
+}
+.pipeline-line {
+  position: absolute;
+  top: 32px;
+  left: 31px;
+  width: 3px;
+  bottom: 0;
+  background: linear-gradient(to bottom, var(--green) 0%, var(--blue) 50%, var(--purple) 100%);
+  border-radius: 2px;
+  opacity: 0.4;
+}
+.pipeline-step {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 36px;
+  position: relative;
+}
+.step-dot {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  flex-shrink: 0;
+  z-index: 1;
+}
+.step-dot.s1 { background: var(--green-dim); border: 2px solid rgba(63,185,80,0.3); }
+.step-dot.s2 { background: var(--blue-dim); border: 2px solid rgba(88,166,255,0.3); }
+.step-dot.s3 { background: var(--yellow-dim); border: 2px solid rgba(210,153,34,0.3); }
+.step-dot.s4 { background: rgba(188,140,255,0.12); border: 2px solid rgba(188,140,255,0.3); }
+.step-dot.s5 { background: var(--green-dim); border: 2px solid rgba(63,185,80,0.3); }
+.step-content { padding-top: 8px; }
+.step-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text3);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.step-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.step-desc {
+  font-size: 14px;
+  color: var(--text2);
+  line-height: 1.6;
+  max-width: 580px;
+}
+
+/* ===== DASHBOARD PREVIEW ===== */
+.dashboard-section { background: var(--bg2); }
+.dashboard-preview {
+  margin-top: 48px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+}
+.dash-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.dash-dot-r { width: 12px; height: 12px; border-radius: 50%; background: #F85149; }
+.dash-dot-y { width: 12px; height: 12px; border-radius: 50%; background: #D29922; }
+.dash-dot-g { width: 12px; height: 12px; border-radius: 50%; background: #3FB950; }
+.dash-url {
+  margin-left: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--text3);
+  background: var(--bg);
+  padding: 4px 16px;
+  border-radius: 6px;
+  flex: 1;
+  max-width: 300px;
+}
+.dash-body {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  min-height: 420px;
+}
+@media (max-width: 768px) {
+  .dash-body { grid-template-columns: 1fr; }
+  .dash-sidebar { display: none; }
+}
+.dash-sidebar {
+  border-right: 1px solid var(--border);
+  padding: 16px 0;
+}
+.dash-nav-item {
+  padding: 8px 16px;
+  font-size: 13px;
+  color: var(--text2);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dash-nav-item.active {
+  color: var(--text);
+  border-left: 3px solid var(--green);
+  background: rgba(63,185,80,0.05);
+}
+.dash-content { padding: 24px; }
+.dash-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+@media (max-width: 768px) { .dash-metrics { grid-template-columns: repeat(2, 1fr); } }
+.dash-metric {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+.dash-metric-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text3);
+  margin-bottom: 4px;
+}
+.dash-metric-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 22px;
+  font-weight: 700;
+}
+.dash-bet-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 10px;
+}
+.dash-bet-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.dash-bet-teams {
+  font-weight: 600;
+  font-size: 14px;
+}
+.dash-bet-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 4px;
+  background: var(--green-dim);
+  color: var(--green);
+}
+.dash-bet-stats {
+  display: flex;
+  gap: 24px;
+  font-size: 12px;
+  color: var(--text2);
+}
+.dash-bet-stats strong {
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* ===== SELF IMPROVEMENT ===== */
+.improve-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+  margin-top: 48px;
+}
+@media (max-width: 900px) { .improve-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 500px) { .improve-grid { grid-template-columns: 1fr; } }
+.improve-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+}
+.improve-icon {
+  font-size: 28px;
+  margin-bottom: 12px;
+}
+.improve-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+.improve-desc {
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.5;
+}
+.improve-guardrail {
+  margin-top: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--yellow);
+  background: var(--yellow-dim);
+  padding: 4px 8px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+/* ===== ROADMAP ===== */
+.roadmap {
+  margin-top: 48px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+@media (max-width: 768px) { .roadmap { grid-template-columns: 1fr; } }
+.roadmap-phase {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 32px;
+  position: relative;
+}
+.roadmap-phase::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  border-radius: 16px 16px 0 0;
+}
+.roadmap-phase.p1::before { background: var(--green); }
+.roadmap-phase.p2::before { background: var(--blue); }
+.roadmap-phase.p3::before { background: var(--purple); }
+.phase-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.p1 .phase-label { color: var(--green); }
+.p2 .phase-label { color: var(--blue); }
+.p3 .phase-label { color: var(--purple); }
+.phase-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+.phase-items {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.phase-items li {
+  font-size: 14px;
+  color: var(--text2);
+  padding-left: 20px;
+  position: relative;
+}
+.phase-items li::before {
+  content: '→';
+  position: absolute;
+  left: 0;
+  color: var(--text3);
+}
+
+/* ===== CLOSING ===== */
+.closing { text-align: center; background: var(--bg2); }
+.closing .section-inner { display: flex; flex-direction: column; align-items: center; }
+.closing-stat-row {
+  display: flex;
+  gap: 48px;
+  margin-top: 48px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.closing-stat {
+  text-align: center;
+}
+.closing-stat-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 42px;
+  font-weight: 700;
+}
+.closing-stat-label {
+  font-size: 13px;
+  color: var(--text2);
+  margin-top: 4px;
+}
+
+/* ===== ANIMATIONS ===== */
+.fade-in {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.7s ease, transform 0.7s ease;
+}
+.fade-in.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.stagger-1 { transition-delay: 0.1s; }
+.stagger-2 { transition-delay: 0.2s; }
+.stagger-3 { transition-delay: 0.3s; }
+.stagger-4 { transition-delay: 0.4s; }
+.stagger-5 { transition-delay: 0.5s; }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-logo">⚽ BetVector<span>.</span></div>
+  <div class="nav-dots">
+    <div class="nav-dot active" onclick="scrollToSection(0)"></div>
+    <div class="nav-dot" onclick="scrollToSection(1)"></div>
+    <div class="nav-dot" onclick="scrollToSection(2)"></div>
+    <div class="nav-dot" onclick="scrollToSection(3)"></div>
+    <div class="nav-dot" onclick="scrollToSection(4)"></div>
+    <div class="nav-dot" onclick="scrollToSection(5)"></div>
+    <div class="nav-dot" onclick="scrollToSection(6)"></div>
+  </div>
+</nav>
+
+<!-- ============================== HERO ============================== -->
+<section class="hero" id="s0">
+  <div class="hero-bg">
+    <div class="hero-grid"></div>
+  </div>
+  <div class="section-inner">
+    <div class="kicker fade-in">Personal Quantitative Betting Intelligence</div>
+    <h1 class="headline fade-in stagger-1">Stop guessing.<br>Start finding <span class="accent">mathematical edge</span>.</h1>
+    <p class="subline fade-in stagger-2">BetVector is a self-built system that scrapes football data, builds probability models, and tells you exactly when the bookmaker's price is wrong — so you only bet when the maths is in your favour.</p>
+    <a href="#s1" class="hero-cta fade-in stagger-3">↓ See how it works</a>
+  </div>
+</section>
+
+<!-- ============================== THE PROBLEM ============================== -->
+<section id="s1">
+  <div class="section-inner">
+    <div class="kicker fade-in">The Problem</div>
+    <h2 class="headline fade-in stagger-1">Why <span class="accent">97% of bettors</span> lose money</h2>
+    <p class="subline fade-in stagger-2">The bookmaker's entire business model is designed to ensure you lose. Here's how.</p>
+    <div class="problem-grid">
+      <div class="problem-card fade-in stagger-1">
+        <div class="problem-icon">🎰</div>
+        <div class="problem-title">The House Edge (Overround)</div>
+        <div class="problem-desc">Bookmakers set odds so implied probabilities sum to 105–110%. That extra 5–10% is their guaranteed margin on every market, every match, every day. You're starting behind before you even place a bet.</div>
+        <div class="problem-stat">~5–10%</div>
+      </div>
+      <div class="problem-card fade-in stagger-2">
+        <div class="problem-icon">🧠</div>
+        <div class="problem-title">Gut Feel vs Data</div>
+        <div class="problem-desc">Most bettors pick based on instinct, bias, or what the TV pundits say. They don't calculate probabilities. They don't compare their assessment to the bookmaker's. They guess — and the house always wins against guesswork.</div>
+        <div class="problem-stat">0 edge</div>
+      </div>
+      <div class="problem-card fade-in stagger-3">
+        <div class="problem-icon">📉</div>
+        <div class="problem-title">No Performance Tracking</div>
+        <div class="problem-desc">Without tracking your bets systematically — ROI, Brier score, calibration, CLV — you have no idea if your approach works. You can't improve what you can't measure. Most bettors have no idea what their actual win rate is.</div>
+        <div class="problem-stat">blind</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== THE SOLUTION ============================== -->
+<section id="s2" style="background: var(--bg2);">
+  <div class="section-inner">
+    <div class="solution-header">
+      <div class="kicker fade-in">The Solution</div>
+      <h2 class="headline fade-in stagger-1">BetVector: your personal<br><span class="accent">quant betting system</span></h2>
+      <p class="subline fade-in stagger-2">A complete intelligence system that does the work a sports trading desk does — data collection, statistical modelling, value detection, bankroll management — but built by you, for you.</p>
+    </div>
+    <div class="solution-features">
+      <div class="solution-feature fade-in stagger-1">
+        <div class="feature-icon green">📡</div>
+        <div>
+          <div class="feature-title">Automated Data Pipeline</div>
+          <div class="feature-desc">Scrapes results, xG, odds from 3 sources every day. 5 seasons of historical data across multiple leagues. You never manually collect data again.</div>
+        </div>
+      </div>
+      <div class="solution-feature fade-in stagger-2">
+        <div class="feature-icon blue">🧮</div>
+        <div>
+          <div class="feature-title">Probability Models</div>
+          <div class="feature-desc">Poisson regression generates a scoreline probability matrix for every match — the exact probability of every possible score from 0-0 to 6-6. All markets (1X2, O/U, BTTS) derived from one matrix.</div>
+        </div>
+      </div>
+      <div class="solution-feature fade-in stagger-3">
+        <div class="feature-icon yellow">💡</div>
+        <div>
+          <div class="feature-title">Value Detection</div>
+          <div class="feature-desc">Compares your model's probabilities to every bookmaker's odds. Flags bets only when the edge exceeds your threshold. No edge, no bet — your bankroll thanks you.</div>
+        </div>
+      </div>
+      <div class="solution-feature fade-in stagger-4">
+        <div class="feature-icon purple">🛡️</div>
+        <div>
+          <div class="feature-title">Bankroll Management</div>
+          <div class="feature-desc">Three staking methods (flat, percentage, Kelly), daily loss limits, drawdown alerts, and a minimum bankroll floor. The system protects you from yourself.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== HOW IT WORKS ============================== -->
+<section id="s3">
+  <div class="section-inner">
+    <div class="kicker fade-in">How It Works</div>
+    <h2 class="headline fade-in stagger-1">From raw data to <span class="accent">actionable edge</span></h2>
+    <p class="subline fade-in stagger-2">Every morning at 6 AM, BetVector runs automatically. By 7 AM, you have an email with today's value bets.</p>
+    <div class="pipeline">
+      <div class="pipeline-line"></div>
+      <div class="pipeline-step fade-in stagger-1">
+        <div class="step-dot s1">📥</div>
+        <div class="step-content">
+          <div class="step-label">Step 1 — 06:00</div>
+          <div class="step-title">Scrape & Load</div>
+          <div class="step-desc">Pull latest results, xG, team stats from Football-Data.co.uk and FBref. Fetch live odds from API-Football. Load everything into the database.</div>
+        </div>
+      </div>
+      <div class="pipeline-step fade-in stagger-2">
+        <div class="step-dot s2">⚙️</div>
+        <div class="step-content">
+          <div class="step-label">Step 2 — 06:02</div>
+          <div class="step-title">Compute Features</div>
+          <div class="step-desc">Calculate rolling form, xG trends, H2H records, rest days, venue stats. 30+ features per team, computed with strict temporal integrity — never leaking future data.</div>
+        </div>
+      </div>
+      <div class="pipeline-step fade-in stagger-3">
+        <div class="step-dot s3">🧠</div>
+        <div class="step-content">
+          <div class="step-label">Step 3 — 06:05</div>
+          <div class="step-title">Predict Scorelines</div>
+          <div class="step-desc">Poisson model generates a 7×7 probability matrix for every upcoming match. All market probabilities — 1X2, Over/Under, BTTS — derived from this single matrix.</div>
+        </div>
+      </div>
+      <div class="pipeline-step fade-in stagger-4">
+        <div class="step-dot s4">💡</div>
+        <div class="step-content">
+          <div class="step-label">Step 4 — 06:06</div>
+          <div class="step-title">Find Value Bets</div>
+          <div class="step-desc">Compare model probabilities to bookmaker odds across every market. Flag bets where edge exceeds your threshold (default: 5%). Calculate optimal stakes.</div>
+        </div>
+      </div>
+      <div class="pipeline-step fade-in stagger-5">
+        <div class="step-dot s5">📧</div>
+        <div class="step-content">
+          <div class="step-label">Step 5 — 07:00</div>
+          <div class="step-title">Deliver Picks</div>
+          <div class="step-desc">Morning email with today's value bets. Open the dashboard for deep dives. Evening email with results and P&L. Weekly summary with calibration and model health.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== DASHBOARD ============================== -->
+<section class="dashboard-section" id="s4">
+  <div class="section-inner">
+    <div class="kicker fade-in">The Dashboard</div>
+    <h2 class="headline fade-in stagger-1">A trading terminal for <span class="accent">football bets</span></h2>
+    <p class="subline fade-in stagger-2">Dark theme. Real-time picks. Scoreline heatmaps. Calibration plots. Everything you need to make informed decisions — and track every one.</p>
+    <div class="dashboard-preview fade-in stagger-3">
+      <div class="dash-toolbar">
+        <div class="dash-dot-r"></div>
+        <div class="dash-dot-y"></div>
+        <div class="dash-dot-g"></div>
+        <div class="dash-url">betvector.streamlit.app</div>
+      </div>
+      <div class="dash-body">
+        <div class="dash-sidebar">
+          <div class="dash-nav-item active">📊 Today's Picks</div>
+          <div class="dash-nav-item">📈 Performance</div>
+          <div class="dash-nav-item">🏆 Leagues</div>
+          <div class="dash-nav-item">🔬 Model Health</div>
+          <div class="dash-nav-item">💰 Bankroll</div>
+          <div class="dash-nav-item" style="opacity:0.5">⚙️ Settings</div>
+        </div>
+        <div class="dash-content">
+          <div class="dash-metrics">
+            <div class="dash-metric">
+              <div class="dash-metric-label">Total P&L</div>
+              <div class="dash-metric-value" style="color:var(--green)">+£127</div>
+            </div>
+            <div class="dash-metric">
+              <div class="dash-metric-label">ROI</div>
+              <div class="dash-metric-value" style="color:var(--green)">+4.8%</div>
+            </div>
+            <div class="dash-metric">
+              <div class="dash-metric-label">Win Rate</div>
+              <div class="dash-metric-value">53.1%</div>
+            </div>
+            <div class="dash-metric">
+              <div class="dash-metric-label">Avg CLV</div>
+              <div class="dash-metric-value" style="color:var(--green)">+1.8%</div>
+            </div>
+          </div>
+          <div class="dash-bet-card">
+            <div class="dash-bet-row">
+              <div class="dash-bet-teams">Arsenal vs Fulham</div>
+              <div class="dash-bet-badge">+13.5% EDGE</div>
+            </div>
+            <div class="dash-bet-stats">
+              <span>Market: <strong>Over 2.5</strong></span>
+              <span>Model: <strong>68.2%</strong></span>
+              <span>FanDuel: <strong>1.83</strong></span>
+              <span>Stake: <strong>£10</strong></span>
+            </div>
+          </div>
+          <div class="dash-bet-card">
+            <div class="dash-bet-row">
+              <div class="dash-bet-teams">Aston Villa vs Newcastle</div>
+              <div class="dash-bet-badge" style="background:var(--yellow-dim);color:var(--yellow)">+6.8% EDGE</div>
+            </div>
+            <div class="dash-bet-stats">
+              <span>Market: <strong>BTTS Yes</strong></span>
+              <span>Model: <strong>62.4%</strong></span>
+              <span>FanDuel: <strong>1.80</strong></span>
+              <span>Stake: <strong>£10</strong></span>
+            </div>
+          </div>
+          <div class="dash-bet-card">
+            <div class="dash-bet-row">
+              <div class="dash-bet-teams">Napoli vs Juventus</div>
+              <div class="dash-bet-badge" style="background:var(--yellow-dim);color:var(--yellow)">+6.2% EDGE</div>
+            </div>
+            <div class="dash-bet-stats">
+              <span>Market: <strong>Home Win</strong></span>
+              <span>Model: <strong>52.7%</strong></span>
+              <span>FanDuel: <strong>2.15</strong></span>
+              <span>Stake: <strong>£10</strong></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== SELF-IMPROVEMENT ============================== -->
+<section id="s5">
+  <div class="section-inner">
+    <div class="kicker fade-in">The Edge</div>
+    <h2 class="headline fade-in stagger-1">It gets <span class="accent">smarter</span> over time</h2>
+    <p class="subline fade-in stagger-2">BetVector has a self-improvement engine with five capabilities — each with guardrails to prevent overreaction to noise.</p>
+    <div class="improve-grid">
+      <div class="improve-card fade-in stagger-1">
+        <div class="improve-icon">🎯</div>
+        <div class="improve-title">Auto-Recalibration</div>
+        <div class="improve-desc">Detects when probabilities drift and corrects them statistically.</div>
+        <div class="improve-guardrail">Min 200 predictions</div>
+      </div>
+      <div class="improve-card fade-in stagger-2">
+        <div class="improve-icon">📊</div>
+        <div class="improve-title">Feature Tracking</div>
+        <div class="improve-desc">Monitors which data signals matter most and which are fading.</div>
+        <div class="improve-guardrail">Reports only, human decides</div>
+      </div>
+      <div class="improve-card fade-in stagger-3">
+        <div class="improve-icon">⚖️</div>
+        <div class="improve-title">Adaptive Weights</div>
+        <div class="improve-desc">Shifts ensemble weight toward better-performing models.</div>
+        <div class="improve-guardrail">Max ±10% per cycle</div>
+      </div>
+      <div class="improve-card fade-in stagger-4">
+        <div class="improve-icon">🗺️</div>
+        <div class="improve-title">Market Feedback</div>
+        <div class="improve-desc">Learns which league × market combos have real edge.</div>
+        <div class="improve-guardrail">95% confidence intervals</div>
+      </div>
+      <div class="improve-card fade-in stagger-5">
+        <div class="improve-icon">🔄</div>
+        <div class="improve-title">Auto-Retrain</div>
+        <div class="improve-desc">Triggers retraining when accuracy degrades beyond threshold.</div>
+        <div class="improve-guardrail">30-day cooldown</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== ROADMAP ============================== -->
+<section id="s6" style="background:var(--bg2);">
+  <div class="section-inner">
+    <div class="kicker fade-in">Roadmap</div>
+    <h2 class="headline fade-in stagger-1">Where it's <span class="accent">going</span></h2>
+    <div class="roadmap">
+      <div class="roadmap-phase p1 fade-in stagger-1">
+        <div class="phase-label">Phase 1 — Launch</div>
+        <div class="phase-title">Foundation</div>
+        <ul class="phase-items">
+          <li>EPL data pipeline (5 seasons)</li>
+          <li>Poisson prediction model</li>
+          <li>Value detection across all bookmakers</li>
+          <li>Streamlit dashboard (dark theme)</li>
+          <li>Email alerts (morning/evening/weekly)</li>
+          <li>Paper trading mode (500-bet minimum)</li>
+          <li>Walk-forward backtesting</li>
+        </ul>
+      </div>
+      <div class="roadmap-phase p2 fade-in stagger-2">
+        <div class="phase-label">Phase 2 — Expand</div>
+        <div class="phase-title">More Models & Leagues</div>
+        <ul class="phase-items">
+          <li>Elo + XGBoost models</li>
+          <li>Weighted ensemble predictions</li>
+          <li>La Liga, Serie A, Bundesliga</li>
+          <li>Champions League & Europa League</li>
+          <li>Telegram alerts</li>
+          <li>Self-improvement engine activated</li>
+          <li>Smaller value leagues (Eredivisie, etc.)</li>
+        </ul>
+      </div>
+      <div class="roadmap-phase p3 fade-in stagger-3">
+        <div class="phase-label">Phase 3 — Mature</div>
+        <div class="phase-title">Full Quant System</div>
+        <ul class="phase-items">
+          <li>Player-level features</li>
+          <li>Market-specific models (O/U, BTTS)</li>
+          <li>Live odds monitoring</li>
+          <li>Migration to PostgreSQL</li>
+          <li>Feature evolution (automated testing)</li>
+          <li>Positive CLV over 1000+ bets</li>
+          <li>Real money mode unlocked</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== CLOSING ============================== -->
+<section class="closing">
+  <div class="section-inner">
+    <div class="kicker fade-in">Built for Edge</div>
+    <h1 class="headline fade-in stagger-1">This is <span class="accent">BetVector</span>.</h1>
+    <p class="subline fade-in stagger-2" style="margin: 0 auto;">A personal quantitative betting intelligence system that turns football data into mathematical edge — and gets smarter every week.</p>
+    <div class="closing-stat-row fade-in stagger-3">
+      <div class="closing-stat">
+        <div class="closing-stat-value" style="color:var(--green)">18</div>
+        <div class="closing-stat-label">database tables</div>
+      </div>
+      <div class="closing-stat">
+        <div class="closing-stat-value" style="color:var(--blue)">45</div>
+        <div class="closing-stat-label">build issues</div>
+      </div>
+      <div class="closing-stat">
+        <div class="closing-stat-value" style="color:var(--yellow)">3</div>
+        <div class="closing-stat-label">daily pipeline runs</div>
+      </div>
+      <div class="closing-stat">
+        <div class="closing-stat-value" style="color:var(--purple)">5</div>
+        <div class="closing-stat-label">self-improvement engines</div>
+      </div>
+      <div class="closing-stat">
+        <div class="closing-stat-value" style="color:var(--green)">$0</div>
+        <div class="closing-stat-label">operating cost</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+// Scroll-triggered fade-in animations
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+    }
+  });
+}, { threshold: 0.15 });
+document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+
+// Nav dot tracking
+const sections = document.querySelectorAll('section');
+const navDots = document.querySelectorAll('.nav-dot');
+const sectionObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      const idx = Array.from(sections).indexOf(entry.target);
+      navDots.forEach(d => d.classList.remove('active'));
+      if (navDots[idx]) navDots[idx].classList.add('active');
+    }
+  });
+}, { threshold: 0.4 });
+sections.forEach(s => sectionObserver.observe(s));
+
+function scrollToSection(idx) {
+  sections[idx].scrollIntoView({ behavior: 'smooth' });
+}
+</script>
+</body>
+</html>

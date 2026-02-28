@@ -1,0 +1,42 @@
+# ============================================================================
+# BetVector — League Configuration
+# ============================================================================
+# Defines which leagues are tracked, their data-source identifiers, and
+# which seasons to ingest.  Add new leagues by copying the EPL block and
+# changing the values.  Set is_active: false to disable a league without
+# removing it.
+# ============================================================================
+
+leagues:
+  - name: "English Premier League"
+    short_name: "EPL"
+    country: "England"
+    # Football-Data.co.uk uses two-letter codes for CSV file names
+    football_data_code: "E0"
+    # soccerdata / FBref league identifier (used by the soccerdata package)
+    fbref_league_id: "ENG-Premier League"
+    # RapidAPI / API-Football numeric league ID
+    api_football_id: 39
+    is_active: true
+    seasons:
+      - "2020-21"
+      - "2021-22"
+      - "2022-23"
+      - "2023-24"
+      - "2024-25"
+    total_matchdays: 38
+
+  # -------------------------------------------------------------------------
+  # Example: adding La Liga
+  # Uncomment the block below and set is_active: true when ready to expand.
+  # -------------------------------------------------------------------------
+  # - name: "La Liga"
+  #   short_name: "LaLiga"
+  #   country: "Spain"
+  #   football_data_code: "SP1"
+  #   fbref_league_id: "ESP-La Liga"
+  #   api_football_id: 140
+  #   is_active: false
+  #   seasons:
+  #     - "2024-25"
+  #   total_matchdays: 38
