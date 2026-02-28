@@ -156,9 +156,9 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E7-03 (Backtest Reporting)
-Currently working: E8-01 (Daily Pipeline Orchestrator)
-Next up: E8-02 (CLI Interface)
+Last completed: E8-01 (Pipeline Runner)
+Currently working: E8-02 (CLI Interface)
+Next up: E9-01 (Streamlit Dashboard Shell)
 
 ---
 
