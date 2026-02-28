@@ -156,9 +156,9 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E6-03 (Bet Logging)
-Currently working: E7-01 (Backtesting Engine)
-Next up: E7-02 (Performance Metrics Calculator)
+Last completed: E7-01 (Metrics Module)
+Currently working: E7-02 (Walk-Forward Backtester)
+Next up: E7-03 (Backtest Reporting)
 
 ---
 
