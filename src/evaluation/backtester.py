@@ -84,6 +84,9 @@ class BacktestResult:
     calibration_data: Dict = field(default_factory=dict)
     clv_avg: Optional[float] = None
     daily_pnl_series: List[Dict[str, Any]] = field(default_factory=list)
+    # Per-bet details for market breakdown in reports
+    # Each entry: {stake, pnl, status, market_type, ...}
+    bet_details: List[Dict[str, Any]] = field(default_factory=list)
 
 
 # ============================================================================
@@ -346,6 +349,7 @@ def run_backtest(
         calibration_data=calibration,
         clv_avg=None,  # No closing odds in historical backtest
         daily_pnl_series=daily_pnl_series,
+        bet_details=all_bet_results,
     )
 
     print(f"\nBacktest complete in {elapsed:.1f}s")
