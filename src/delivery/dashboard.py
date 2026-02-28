@@ -386,6 +386,25 @@ def render_sidebar() -> None:
 # Main
 # ============================================================================
 
+def check_onboarding() -> bool:
+    """Check if the current user has completed onboarding.
+
+    Returns True if onboarding is complete (normal dashboard should load).
+    Returns False if onboarding is needed (wizard should display instead).
+    New users (has_onboarded=0) see the onboarding wizard.
+    Returning users skip straight to the dashboard.
+    """
+    from src.database.db import get_session
+    from src.database.models import User
+
+    with get_session() as session:
+        # Default to user_id=1 for MVP (single-user system)
+        user = session.get(User, 1)
+        if not user:
+            return True  # No user yet — let setup handle it
+        return bool(user.has_onboarded)
+
+
 def main() -> None:
     """Main entry point for the BetVector dashboard."""
     # Inject custom CSS (must come after set_page_config)
@@ -393,6 +412,16 @@ def main() -> None:
 
     # Password gate
     if not check_password():
+        return
+
+    # Onboarding gate — new users see the wizard instead of the dashboard.
+    # We use st.navigation with a single page to prevent Streamlit from
+    # showing the default page discovery sidebar.
+    if not check_onboarding():
+        from src.delivery.pages.onboarding import render_onboarding
+        onboarding_page = st.Page(render_onboarding, title="Welcome", icon="👋")
+        nav = st.navigation([onboarding_page], position="hidden")
+        nav.run()
         return
 
     # Render sidebar branding
