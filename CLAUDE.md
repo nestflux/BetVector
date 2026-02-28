@@ -156,9 +156,9 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E3-01 (Base Scraper and Rate Limiter)
-Currently working: E3-02 (Football-Data.co.uk Scraper)
-Next up: E3-03 (FBref Scraper)
+Last completed: E3-02 (Football-Data.co.uk Scraper)
+Currently working: E3-03 (FBref Scraper)
+Next up: E3-04 (Data Loader)
 
 ---
 

@@ -1,0 +1,359 @@
+"""
+BetVector — Football-Data.co.uk Scraper (E3-02)
+================================================
+Downloads match results and closing odds from Football-Data.co.uk, the
+primary data source for historical EPL data.  Each season is a single CSV
+file containing every match with full-time/half-time scores and closing
+odds from 50+ bookmakers.
+
+URL pattern::
+
+    https://www.football-data.co.uk/mmz4281/{season_code}/{league_code}.csv
+
+Where ``season_code`` is the last two digits of each year joined together
+(e.g. "2024-25" → "2425") and ``league_code`` comes from config (e.g. "E0"
+for the English Premier League).
+
+Key columns parsed:
+  - Results: Date, HomeTeam, AwayTeam, FTHG, FTAG, HTHG, HTAG
+  - Odds: B365H/D/A (Bet365), PSH/D/A (Pinnacle), AvgH/D/A (market avg),
+    Avg>2.5 / Avg<2.5 (over/under 2.5 goals market average)
+
+Not all seasons have all bookmaker columns — the scraper handles missing
+odds columns gracefully by filling them with NaN.
+
+Master Plan refs: MP §5 Data Sources, MP §7 Scraper Interface
+"""
+
+from __future__ import annotations
+
+import io
+import logging
+from typing import Dict, List, Optional
+
+import pandas as pd
+
+from src.scrapers.base_scraper import BaseScraper, ScraperError
+
+logger = logging.getLogger(__name__)
+
+# ============================================================================
+# Football-Data.co.uk domain (for rate limiting)
+# ============================================================================
+DOMAIN = "www.football-data.co.uk"
+BASE_URL = "https://www.football-data.co.uk/mmz4281"
+
+# ============================================================================
+# Team Name Normalisation
+# ============================================================================
+# Football-Data.co.uk uses abbreviated team names.  We map them to canonical
+# full names so every data source (Football-Data, FBref, API-Football) uses
+# the same names throughout the database.
+#
+# This mapping covers all EPL teams from the 2020-21 through 2024-25 seasons.
+# When adding a new league, add its team mappings here or in a separate dict.
+
+EPL_TEAM_NAME_MAP: Dict[str, str] = {
+    # Teams that need no change (already canonical)
+    "Arsenal": "Arsenal",
+    "Aston Villa": "Aston Villa",
+    "Brentford": "Brentford",
+    "Burnley": "Burnley",
+    "Chelsea": "Chelsea",
+    "Crystal Palace": "Crystal Palace",
+    "Everton": "Everton",
+    "Fulham": "Fulham",
+    "Liverpool": "Liverpool",
+    "Southampton": "Southampton",
+    "Watford": "Watford",
+
+    # Teams whose Football-Data names differ from canonical
+    "Bournemouth": "AFC Bournemouth",
+    "Brighton": "Brighton & Hove Albion",
+    "Ipswich": "Ipswich Town",
+    "Leeds": "Leeds United",
+    "Leicester": "Leicester City",
+    "Luton": "Luton Town",
+    "Man City": "Manchester City",
+    "Man United": "Manchester United",
+    "Newcastle": "Newcastle United",
+    "Nott'm Forest": "Nottingham Forest",
+    "Norwich": "Norwich City",
+    "Sheffield United": "Sheffield United",
+    "Tottenham": "Tottenham Hotspur",
+    "West Brom": "West Bromwich Albion",
+    "West Ham": "West Ham United",
+    "Wolves": "Wolverhampton Wanderers",
+}
+
+# ============================================================================
+# Column definitions
+# ============================================================================
+# Columns we always expect in the CSV (results)
+RESULT_COLUMNS = ["Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG", "HTHG", "HTAG"]
+
+# Odds columns we want — grouped by bookmaker and market.
+# Not all are present in every season; missing ones become NaN.
+ODDS_COLUMNS: Dict[str, List[str]] = {
+    # 1X2 (match result) odds from key bookmakers
+    "bet365_1x2": ["B365H", "B365D", "B365A"],
+    "pinnacle_1x2": ["PSH", "PSD", "PSA"],
+    "william_hill_1x2": ["WHH", "WHD", "WHA"],
+    "market_avg_1x2": ["AvgH", "AvgD", "AvgA"],
+    # Over/Under 2.5 goals (market average)
+    "market_avg_ou25": ["Avg>2.5", "Avg<2.5"],
+}
+
+# Flat list of all desired odds columns
+ALL_ODDS_COLUMNS = [col for cols in ODDS_COLUMNS.values() for col in cols]
+
+# Renamed columns for the clean DataFrame output
+RENAME_MAP = {
+    "Date": "date",
+    "HomeTeam": "home_team",
+    "AwayTeam": "away_team",
+    "FTHG": "home_goals",
+    "FTAG": "away_goals",
+    "HTHG": "home_ht_goals",
+    "HTAG": "away_ht_goals",
+}
+
+
+# ============================================================================
+# Scraper
+# ============================================================================
+
+class FootballDataScraper(BaseScraper):
+    """Scraper for Football-Data.co.uk CSV match data.
+
+    Downloads one CSV per league-season containing match results and
+    closing bookmaker odds.  Saves raw CSV to ``data/raw/`` before
+    parsing and normalising.
+    """
+
+    @property
+    def source_name(self) -> str:
+        return "football_data"
+
+    def scrape(
+        self,
+        league_config: object,
+        season: str,
+    ) -> pd.DataFrame:
+        """Download and parse match data for one league-season.
+
+        Parameters
+        ----------
+        league_config : ConfigNamespace
+            League config from ``config.get_active_leagues()``.
+            Must have ``football_data_code`` (e.g. "E0") and
+            ``short_name`` (e.g. "EPL").
+        season : str
+            Season identifier, e.g. ``"2024-25"``.
+
+        Returns
+        -------
+        pd.DataFrame
+            Clean DataFrame with normalised team names, result columns,
+            and available odds columns.
+
+        Raises
+        ------
+        ScraperError
+            If the CSV cannot be downloaded after retries.
+        """
+        league_code = league_config.football_data_code  # type: ignore[attr-defined]
+        short_name = league_config.short_name  # type: ignore[attr-defined]
+        season_code = self._season_to_code(season)
+
+        url = f"{BASE_URL}/{season_code}/{league_code}.csv"
+        logger.info(
+            "Scraping Football-Data.co.uk: %s %s → %s",
+            short_name, season, url,
+        )
+
+        # Download the CSV (with rate limiting and retries)
+        response = self._request_with_retry(url, DOMAIN)
+
+        # Parse the CSV from the response content
+        raw_df = self._parse_csv(response.text, season)
+
+        # Save raw data before any processing (reproducibility)
+        self.save_raw(raw_df, short_name, season)
+
+        # Clean and normalise
+        clean_df = self._clean(raw_df, short_name)
+
+        logger.info(
+            "Football-Data.co.uk %s %s: %d matches parsed",
+            short_name, season, len(clean_df),
+        )
+        return clean_df
+
+    # --- internal helpers -----------------------------------------------------
+
+    @staticmethod
+    def _season_to_code(season: str) -> str:
+        """Convert a season string to Football-Data.co.uk's URL code.
+
+        Examples::
+
+            "2024-25" → "2425"
+            "2020-21" → "2021"
+            "2023-24" → "2324"
+
+        The code is the last two digits of each year concatenated.
+        """
+        parts = season.split("-")
+        if len(parts) != 2:
+            raise ScraperError(
+                f"Invalid season format '{season}' — expected 'YYYY-YY' "
+                f"(e.g. '2024-25')"
+            )
+        # First year: last 2 digits of the full year
+        start = parts[0][-2:]
+        # Second year: already 2 digits
+        end = parts[1][-2:]
+        return f"{start}{end}"
+
+    def _parse_csv(self, csv_text: str, season: str) -> pd.DataFrame:
+        """Parse raw CSV text into a DataFrame.
+
+        Handles encoding quirks and trailing empty rows that
+        Football-Data.co.uk CSVs sometimes contain.
+        """
+        try:
+            df = pd.read_csv(
+                io.StringIO(csv_text),
+                encoding="utf-8",
+                on_bad_lines="warn",
+            )
+        except Exception as exc:
+            raise ScraperError(
+                f"Failed to parse Football-Data.co.uk CSV for {season}: {exc}"
+            ) from exc
+
+        # Drop rows that are entirely empty (trailing garbage rows)
+        df = df.dropna(how="all")
+
+        # Drop rows where essential columns are missing
+        # (sometimes the CSV has extra rows at the bottom with no data)
+        essential = ["Date", "HomeTeam", "AwayTeam"]
+        for col in essential:
+            if col not in df.columns:
+                raise ScraperError(
+                    f"Football-Data.co.uk CSV missing essential column "
+                    f"'{col}' — available columns: {list(df.columns)}"
+                )
+        df = df.dropna(subset=essential)
+
+        logger.info("Parsed %d rows from Football-Data.co.uk CSV", len(df))
+        return df
+
+    def _clean(self, df: pd.DataFrame, league_short_name: str) -> pd.DataFrame:
+        """Clean and normalise the raw DataFrame.
+
+        Steps:
+          1. Select result columns and available odds columns
+          2. Rename columns to our standard names
+          3. Parse and normalise the date column
+          4. Normalise team names
+          5. Convert numeric columns to proper types
+        """
+        # --- 1. Select columns ------------------------------------------------
+        # Start with result columns (always required)
+        keep_cols = list(RESULT_COLUMNS)
+
+        # Add odds columns that exist in this season's CSV
+        available_odds = [c for c in ALL_ODDS_COLUMNS if c in df.columns]
+        missing_odds = [c for c in ALL_ODDS_COLUMNS if c not in df.columns]
+        keep_cols.extend(available_odds)
+
+        if missing_odds:
+            logger.warning(
+                "Football-Data.co.uk %s: missing odds columns (will be NaN): %s",
+                league_short_name, missing_odds,
+            )
+
+        clean = df[keep_cols].copy()
+
+        # Add missing odds columns as NaN so downstream code always sees them
+        for col in missing_odds:
+            clean[col] = float("nan")
+
+        # --- 2. Rename result columns -----------------------------------------
+        clean = clean.rename(columns=RENAME_MAP)
+
+        # --- 3. Parse date column ---------------------------------------------
+        clean["date"] = self._parse_dates(clean["date"])
+
+        # --- 4. Normalise team names ------------------------------------------
+        name_map = self._get_team_name_map(league_short_name)
+        clean["home_team"] = clean["home_team"].map(
+            lambda x: name_map.get(x, x)
+        )
+        clean["away_team"] = clean["away_team"].map(
+            lambda x: name_map.get(x, x)
+        )
+
+        # Log any team names that weren't in our mapping (so we can add them)
+        all_teams = set(clean["home_team"]) | set(clean["away_team"])
+        unknown = [t for t in all_teams if t not in name_map.values()]
+        if unknown:
+            logger.warning(
+                "Football-Data.co.uk %s: unmapped team names (passed through "
+                "as-is): %s",
+                league_short_name, sorted(unknown),
+            )
+
+        # --- 5. Convert numeric types -----------------------------------------
+        int_cols = ["home_goals", "away_goals", "home_ht_goals", "away_ht_goals"]
+        for col in int_cols:
+            clean[col] = pd.to_numeric(clean[col], errors="coerce").astype(
+                "Int64"  # Nullable integer — supports NaN for unplayed matches
+            )
+
+        float_cols = available_odds + missing_odds
+        for col in float_cols:
+            clean[col] = pd.to_numeric(clean[col], errors="coerce")
+
+        return clean.reset_index(drop=True)
+
+    @staticmethod
+    def _parse_dates(date_series: pd.Series) -> pd.Series:
+        """Parse the Date column into ISO format (YYYY-MM-DD).
+
+        Football-Data.co.uk uses DD/MM/YYYY format (and sometimes
+        DD/MM/YY for older seasons).  We normalise to ISO.
+        """
+        # Try DD/MM/YYYY first, then DD/MM/YY as fallback
+        parsed = pd.to_datetime(date_series, format="%d/%m/%Y", errors="coerce")
+        # Fill any failures with the 2-digit year format
+        mask = parsed.isna()
+        if mask.any():
+            fallback = pd.to_datetime(
+                date_series[mask], format="%d/%m/%y", errors="coerce"
+            )
+            parsed[mask] = fallback
+
+        # Convert to ISO string format
+        return parsed.dt.strftime("%Y-%m-%d")
+
+    @staticmethod
+    def _get_team_name_map(league_short_name: str) -> Dict[str, str]:
+        """Return the team name normalisation map for a given league.
+
+        Currently only EPL is supported.  When adding new leagues,
+        create a new mapping dict and add a branch here.
+        """
+        maps: Dict[str, Dict[str, str]] = {
+            "EPL": EPL_TEAM_NAME_MAP,
+        }
+        if league_short_name not in maps:
+            logger.warning(
+                "No team name map for league '%s' — names will pass through "
+                "un-normalised. Add a mapping to football_data.py.",
+                league_short_name,
+            )
+            return {}
+        return maps[league_short_name]
