@@ -547,3 +547,272 @@ class Prediction(Base):
             f"H={self.prob_home_win:.2f}/D={self.prob_draw:.2f}/"
             f"A={self.prob_away_win:.2f})"
         )
+
+
+# ============================================================================
+# 10. VALUE_BETS  (E2-03)
+# ============================================================================
+# Identified value bets where the model's probability exceeds the bookmaker's
+# implied probability by at least the configured edge threshold.
+#
+# Key betting concepts (MP §12 Glossary):
+#   Edge = model_prob - implied_prob (how much we think the bookie is wrong)
+#   EV   = (model_prob × odds) - 1.0 (expected profit per unit staked)
+#   Confidence tiers: high (≥10% edge), medium (5–10%), low (<5%)
+
+class ValueBet(Base):
+    __tablename__ = "value_bets"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    match_id = Column(
+        Integer, ForeignKey("matches.id"), nullable=False,
+    )
+    prediction_id = Column(
+        Integer, ForeignKey("predictions.id"), nullable=False,
+    )
+    bookmaker = Column(String, nullable=False)
+    market_type = Column(String, nullable=False)
+    selection = Column(String, nullable=False)
+    # model_prob: the model's estimated true probability for this outcome
+    model_prob = Column(Float, nullable=False)
+    # bookmaker_odds: best available decimal odds (e.g. 2.10)
+    bookmaker_odds = Column(Float, nullable=False)
+    # implied_prob: 1.0 / bookmaker_odds (includes the bookie's margin / vig)
+    implied_prob = Column(Float, nullable=False)
+    # edge: model_prob - implied_prob (positive = we think it's underpriced)
+    edge = Column(Float, nullable=False)
+    # expected_value: (model_prob × bookmaker_odds) - 1.0
+    expected_value = Column(Float, nullable=False)
+    confidence = Column(String, nullable=False)
+    # Human-readable explanation of why this is a value bet
+    explanation = Column(Text, nullable=True)
+    detected_at = Column(
+        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+    )
+
+    # Relationships
+    match = relationship("Match")
+    prediction = relationship("Prediction")
+
+    __table_args__ = (
+        CheckConstraint(
+            "confidence IN ('high', 'medium', 'low')",
+            name="ck_value_bets_confidence",
+        ),
+        UniqueConstraint(
+            "match_id", "market_type", "selection", "bookmaker", "detected_at",
+            name="uq_value_bets_match_market_sel_bookie_time",
+        ),
+        Index("idx_value_bets_match", "match_id"),
+        Index("idx_value_bets_edge", "edge"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"ValueBet(match={self.match_id}, {self.market_type}/"
+            f"{self.selection}, edge={self.edge:.3f}, "
+            f"confidence='{self.confidence}')"
+        )
+
+
+# ============================================================================
+# 11. BET_LOG  (E2-03)
+# ============================================================================
+# The most important tracking table.  Records every bet — both system picks
+# (auto-logged when a value bet is detected) and user-placed bets (logged
+# when the user confirms they placed the bet with a bookmaker).
+#
+# Dual bet tracking (MP §6, CLAUDE.md Rule 6):
+#   system_pick  — auto-logged for every value bet, tracks model performance
+#   user_placed  — logged when the user actually bets, tracks real P&L
+#
+# Odds are captured at three points in time:
+#   odds_at_detection  — when the system first spotted the value
+#   odds_at_placement  — when the user placed the bet (NULL for system_pick)
+#   closing_odds       — just before kickoff (for CLV calculation)
+#
+# CLV (Closing Line Value) measures whether you beat the closing line —
+# the strongest indicator of long-term betting skill (MP §12).
+
+class BetLog(Base):
+    __tablename__ = "bet_log"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    # Always scoped to a user — even with one user (prevents refactor later)
+    user_id = Column(
+        Integer, ForeignKey("users.id"), nullable=False,
+    )
+    # NULL if this is a manual bet not from a system pick
+    value_bet_id = Column(
+        Integer, ForeignKey("value_bets.id"), nullable=True,
+    )
+    match_id = Column(
+        Integer, ForeignKey("matches.id"), nullable=False,
+    )
+    date = Column(String, nullable=False)                  # Match date ISO
+    league = Column(String, nullable=False)
+    home_team = Column(String, nullable=False)
+    away_team = Column(String, nullable=False)
+    market_type = Column(String, nullable=False)
+    selection = Column(String, nullable=False)
+    model_prob = Column(Float, nullable=False)
+    bookmaker = Column(String, nullable=False)
+    odds_at_detection = Column(Float, nullable=False)
+    # NULL for system_pick — only populated when user actually places bet
+    odds_at_placement = Column(Float, nullable=True)
+    implied_prob = Column(Float, nullable=False)
+    edge = Column(Float, nullable=False)
+    stake = Column(Float, nullable=False)                  # Amount in currency
+    stake_method = Column(String, nullable=False)          # flat/percentage/kelly
+    bet_type = Column(
+        String, nullable=False, server_default="system_pick",
+    )
+    status = Column(
+        String, nullable=False, server_default="pending",
+    )
+    # P&L: positive = profit, negative = loss
+    pnl = Column(Float, server_default="0.0")
+    bankroll_before = Column(Float, nullable=True)
+    bankroll_after = Column(Float, nullable=True)
+    # Closing odds captured just before kickoff
+    closing_odds = Column(Float, nullable=True)
+    # CLV = implied_prob(closing) - implied_prob(placement)
+    # Positive CLV means you beat the market
+    clv = Column(Float, nullable=True)
+    resolved_at = Column(String, nullable=True)
+    created_at = Column(
+        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+    )
+    updated_at = Column(
+        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+    )
+
+    # Relationships
+    user = relationship("User")
+    value_bet = relationship("ValueBet")
+    match = relationship("Match")
+
+    __table_args__ = (
+        CheckConstraint(
+            "bet_type IN ('system_pick', 'user_placed')",
+            name="ck_bet_log_bet_type",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'won', 'lost', 'void', "
+            "'half_won', 'half_lost')",
+            name="ck_bet_log_status",
+        ),
+        Index("idx_bet_log_user", "user_id"),
+        Index("idx_bet_log_match", "match_id"),
+        Index("idx_bet_log_status", "status"),
+        Index("idx_bet_log_date", "date"),
+        Index("idx_bet_log_type", "bet_type"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"BetLog(id={self.id}, user={self.user_id}, "
+            f"{self.bet_type}, {self.market_type}/{self.selection}, "
+            f"edge={self.edge:.3f}, status='{self.status}', "
+            f"pnl={self.pnl})"
+        )
+
+
+# ============================================================================
+# 12. MODEL_PERFORMANCE  (E2-03)
+# ============================================================================
+# Aggregated performance metrics per model per time period.  Used by the
+# dashboard and self-improvement engine to track how well each model is doing.
+#
+# Brier score (MP §12): mean squared error of probability predictions.
+#   Lower = better.  0.25 = coin flip, <0.20 = decent, <0.15 = good.
+# ROI: return on investment = total_profit / total_staked.
+# CLV: closing line value, the gold-standard metric for betting edge.
+
+class ModelPerformance(Base):
+    __tablename__ = "model_performance"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    model_name = Column(String, nullable=False)
+    period_type = Column(String, nullable=False)
+    period_start = Column(String, nullable=False)
+    period_end = Column(String, nullable=False)
+    total_predictions = Column(Integer, nullable=False)
+    # Brier score: lower is better (0 = perfect, 0.25 = useless)
+    brier_score = Column(Float, nullable=True)
+    roi = Column(Float, nullable=True)
+    avg_clv = Column(Float, nullable=True)
+    # JSON: {"0.5-0.55": {"predicted": 0.525, "actual": 0.51, "count": 40}}
+    calibration_json = Column(Text, nullable=True)
+    win_rate_1x2 = Column(Float, nullable=True)
+    win_rate_ou = Column(Float, nullable=True)
+    win_rate_btts = Column(Float, nullable=True)
+    computed_at = Column(
+        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "period_type IN ('daily', 'weekly', 'monthly', "
+            "'season', 'all_time')",
+            name="ck_model_perf_period_type",
+        ),
+        UniqueConstraint(
+            "model_name", "period_type", "period_start",
+            name="uq_model_perf_model_period",
+        ),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"ModelPerformance(model='{self.model_name}', "
+            f"{self.period_type} {self.period_start}→{self.period_end}, "
+            f"brier={self.brier_score}, roi={self.roi})"
+        )
+
+
+# ============================================================================
+# 13. PIPELINE_RUNS  (E2-03)
+# ============================================================================
+# Operational log for every pipeline execution.  Records what was run, when,
+# how long it took, and whether it succeeded or failed.  Essential for
+# debugging and monitoring system health.
+
+class PipelineRun(Base):
+    __tablename__ = "pipeline_runs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    run_type = Column(String, nullable=False)
+    started_at = Column(
+        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+    )
+    completed_at = Column(String, nullable=True)
+    status = Column(
+        String, nullable=False, server_default="running",
+    )
+    matches_scraped = Column(Integer, server_default="0")
+    predictions_made = Column(Integer, server_default="0")
+    value_bets_found = Column(Integer, server_default="0")
+    emails_sent = Column(Integer, server_default="0")
+    error_message = Column(Text, nullable=True)
+    duration_seconds = Column(Float, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "run_type IN ('morning', 'midday', 'evening', "
+            "'manual', 'backtest')",
+            name="ck_pipeline_runs_run_type",
+        ),
+        CheckConstraint(
+            "status IN ('running', 'completed', 'failed')",
+            name="ck_pipeline_runs_status",
+        ),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"PipelineRun(id={self.id}, type='{self.run_type}', "
+            f"status='{self.status}', "
+            f"scraped={self.matches_scraped}, "
+            f"predicted={self.predictions_made})"
+        )

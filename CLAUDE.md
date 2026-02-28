@@ -156,9 +156,9 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E2-02 (Core ORM Models — 9 Tables)
-Currently working: E2-03 (Odds, Predictions, and Value Bets Tables)
-Next up: E2-04 (Self-Improvement Tables)
+Last completed: E2-03 (Betting and Tracking ORM Models — 4 Tables)
+Currently working: E2-04 (Self-Improvement Tables)
+Next up: E3-01 (Football-Data.co.uk Scraper)
 
 ---
 
