@@ -156,9 +156,9 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E7-01 (Metrics Module)
-Currently working: E7-02 (Walk-Forward Backtester)
-Next up: E7-03 (Backtest Reporting)
+Last completed: E7-02 (Walk-Forward Backtester)
+Currently working: E7-03 (Backtest Reporting)
+Next up: E8-01 (Daily Pipeline Orchestrator)
 
 ---
 
