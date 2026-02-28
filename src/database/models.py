@@ -816,3 +816,215 @@ class PipelineRun(Base):
             f"scraped={self.matches_scraped}, "
             f"predicted={self.predictions_made})"
         )
+
+
+# ============================================================================
+# 14. CALIBRATION_HISTORY  (E2-04)
+# ============================================================================
+# Tracks every automatic recalibration event (MP §11.1).
+#
+# Recalibration applies Platt scaling or isotonic regression to model outputs
+# to correct systematic over/under-confidence.  Only runs after 200+ resolved
+# predictions AND mean absolute calibration error exceeds 3 percentage points.
+# If the next 100 predictions show worse performance, the recalibration is
+# rolled back automatically.
+
+class CalibrationHistory(Base):
+    __tablename__ = "calibration_history"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    model_name = Column(String, nullable=False)
+    calibration_method = Column(String, nullable=False)
+    sample_size = Column(Integer, nullable=False)
+    # Calibration error before and after — lower is better
+    mean_abs_error_before = Column(Float, nullable=False)
+    mean_abs_error_after = Column(Float, nullable=False)
+    # Serialised calibration model parameters (JSON)
+    parameters_json = Column(Text, nullable=False)
+    is_active = Column(Integer, nullable=False, server_default="1")
+    rolled_back = Column(Integer, nullable=False, server_default="0")
+    created_at = Column(
+        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "calibration_method IN ('platt', 'isotonic')",
+            name="ck_calibration_method",
+        ),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"CalibrationHistory(model='{self.model_name}', "
+            f"method='{self.calibration_method}', "
+            f"err {self.mean_abs_error_before:.3f}→{self.mean_abs_error_after:.3f}, "
+            f"active={self.is_active})"
+        )
+
+
+# ============================================================================
+# 15. FEATURE_IMPORTANCE_LOG  (E2-04)
+# ============================================================================
+# Tracks feature importance over time for tree-based models (MP §11.2).
+#
+# Only XGBoost and LightGBM produce native feature importance scores.
+# Features below 1% importance for 3 consecutive training cycles are flagged
+# for human review on the dashboard — they are NEVER auto-removed.
+
+class FeatureImportanceLog(Base):
+    __tablename__ = "feature_importance_log"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    model_name = Column(String, nullable=False)
+    training_date = Column(String, nullable=False)         # ISO date
+    feature_name = Column(String, nullable=False)          # e.g. "form_5", "xg_10"
+    # importance_gain: feature importance by "gain" method (native to XGBoost/LightGBM)
+    importance_gain = Column(Float, nullable=False)
+    importance_rank = Column(Integer, nullable=False)      # 1 = most important
+    created_at = Column(
+        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+    )
+
+    __table_args__ = (
+        Index(
+            "idx_feature_importance_model",
+            "model_name", "training_date",
+        ),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"FeatureImportanceLog(model='{self.model_name}', "
+            f"date='{self.training_date}', "
+            f"feature='{self.feature_name}', "
+            f"gain={self.importance_gain:.4f}, rank={self.importance_rank})"
+        )
+
+
+# ============================================================================
+# 16. ENSEMBLE_WEIGHT_HISTORY  (E2-04)
+# ============================================================================
+# Tracks ensemble model weight changes over time (MP §11.3).
+#
+# Weights are recalculated every 100 resolved ensemble predictions using
+# inverse Brier score weighting.  Guardrails:
+#   - Max ±10 pp change per recalculation
+#   - Weight floor: 10% (no model drops below)
+#   - Weight ceiling: 60% (preserve ensemble diversity)
+
+class EnsembleWeightHistory(Base):
+    __tablename__ = "ensemble_weight_history"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    model_name = Column(String, nullable=False)
+    weight = Column(Float, nullable=False)                 # 0.0–1.0
+    brier_score = Column(Float, nullable=False)
+    evaluation_window = Column(Integer, nullable=False)    # e.g. 300
+    previous_weight = Column(Float, nullable=True)
+    reason = Column(String, nullable=False)
+    created_at = Column(
+        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+    )
+
+    def __repr__(self) -> str:
+        prev = f"{self.previous_weight:.2f}" if self.previous_weight else "N/A"
+        return (
+            f"EnsembleWeight(model='{self.model_name}', "
+            f"weight={self.weight:.2f} (was {prev}), "
+            f"brier={self.brier_score:.3f})"
+        )
+
+
+# ============================================================================
+# 17. MARKET_PERFORMANCE  (E2-04)
+# ============================================================================
+# Tracks edge and ROI by league × market type (MP §11.4).
+#
+# Assessment tiers (evaluated weekly on Sundays):
+#   profitable   — ROI positive AND 95% CI lower bound positive AND n >= 100
+#   promising    — ROI positive but CI includes zero, OR 50 <= n < 100
+#   insufficient — fewer than 50 bets
+#   unprofitable — ROI negative AND 95% CI upper bound negative AND n >= 100
+
+class MarketPerformance(Base):
+    __tablename__ = "market_performance"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    league = Column(String, nullable=False)                # e.g. "EPL"
+    market_type = Column(String, nullable=False)           # e.g. "1X2", "OU25"
+    period_end = Column(String, nullable=False)            # ISO date (Sunday)
+    total_bets = Column(Integer, nullable=False)
+    wins = Column(Integer, nullable=False)
+    losses = Column(Integer, nullable=False)
+    total_staked = Column(Float, nullable=False)
+    total_pnl = Column(Float, nullable=False)
+    roi = Column(Float, nullable=False)
+    roi_ci_lower = Column(Float, nullable=True)            # 95% CI lower bound
+    roi_ci_upper = Column(Float, nullable=True)            # 95% CI upper bound
+    assessment = Column(String, nullable=False)
+    computed_at = Column(
+        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "assessment IN ('profitable', 'promising', "
+            "'insufficient', 'unprofitable')",
+            name="ck_market_perf_assessment",
+        ),
+        UniqueConstraint(
+            "league", "market_type", "period_end",
+            name="uq_market_perf_league_market_period",
+        ),
+        Index("idx_market_perf_league", "league", "market_type"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"MarketPerformance({self.league} {self.market_type}, "
+            f"roi={self.roi:.3f}, n={self.total_bets}, "
+            f"assessment='{self.assessment}')"
+        )
+
+
+# ============================================================================
+# 18. RETRAIN_HISTORY  (E2-04)
+# ============================================================================
+# Tracks automatic and manual model retrains (MP §11.5).
+#
+# Automatic retrain fires when the rolling Brier score (last 100 predictions)
+# degrades by >= 15% vs the all-time average.  Cooldown: 30 days between
+# auto-retrains.  If the new model performs worse over 50 test predictions,
+# it is automatically rolled back.
+
+class RetrainHistory(Base):
+    __tablename__ = "retrain_history"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    model_name = Column(String, nullable=False)
+    trigger_type = Column(String, nullable=False)
+    trigger_reason = Column(String, nullable=False)
+    brier_before = Column(Float, nullable=False)
+    brier_after = Column(Float, nullable=True)             # NULL if rolled back immediately
+    training_samples = Column(Integer, nullable=False)
+    was_rolled_back = Column(Integer, nullable=False, server_default="0")
+    created_at = Column(
+        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "trigger_type IN ('automatic', 'manual', 'scheduled')",
+            name="ck_retrain_trigger_type",
+        ),
+    )
+
+    def __repr__(self) -> str:
+        after = f"{self.brier_after:.3f}" if self.brier_after else "N/A"
+        return (
+            f"RetrainHistory(model='{self.model_name}', "
+            f"trigger='{self.trigger_type}', "
+            f"brier {self.brier_before:.3f}→{after}, "
+            f"rolled_back={self.was_rolled_back})"
+        )
