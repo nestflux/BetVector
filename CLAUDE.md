@@ -156,9 +156,9 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E5-02 (Poisson Regression Model)
-Currently working: E5-03 (Prediction Pipeline)
-Next up: E6-01 (Value Detection Engine)
+Last completed: E5-03 (Prediction Storage and Retrieval)
+Currently working: E6-01 (Value Detection Engine)
+Next up: E6-02 (Staking Calculator)
 
 ---
 
