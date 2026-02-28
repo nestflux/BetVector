@@ -1,0 +1,1470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BetVector — Build Plan</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #0D1117;
+      color: #E6EDF3;
+      line-height: 1.7;
+      font-size: 16px;
+    }
+
+    /* --- Top Nav --- */
+    .top-nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: #0D1117;
+      border-bottom: 1px solid #30363D;
+      padding: 0.75rem 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+      backdrop-filter: blur(12px);
+    }
+    .top-nav .logo {
+      font-size: 1.3rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #3FB950, #58a6ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-decoration: none;
+    }
+    .top-nav .page-title {
+      color: #8B949E;
+      font-size: 1rem;
+      font-weight: 500;
+    }
+    .hamburger {
+      display: none;
+      background: none;
+      border: none;
+      color: #E6EDF3;
+      font-size: 1.5rem;
+      cursor: pointer;
+      margin-left: auto;
+    }
+
+    /* --- Layout --- */
+    .layout {
+      display: flex;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    /* --- Sidebar TOC --- */
+    .sidebar {
+      width: 280px;
+      min-width: 280px;
+      position: sticky;
+      top: 52px;
+      height: calc(100vh - 52px);
+      overflow-y: auto;
+      border-right: 1px solid #30363D;
+      padding: 1.5rem 0;
+      scrollbar-width: thin;
+      scrollbar-color: #30363D transparent;
+    }
+    .sidebar::-webkit-scrollbar { width: 4px; }
+    .sidebar::-webkit-scrollbar-track { background: transparent; }
+    .sidebar::-webkit-scrollbar-thumb { background: #30363D; border-radius: 2px; }
+    .sidebar .toc-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #8B949E;
+      padding: 0 1.25rem;
+      margin-bottom: 0.75rem;
+    }
+    .toc-item {
+      display: block;
+      padding: 0.35rem 1.25rem;
+      color: #8B949E;
+      text-decoration: none;
+      font-size: 0.85rem;
+      border-left: 2px solid transparent;
+      transition: all 0.15s;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .toc-item:hover {
+      color: #E6EDF3;
+      background: #161B22;
+    }
+    .toc-item.active {
+      color: #3FB950;
+      border-left-color: #3FB950;
+    }
+    .toc-h3 { padding-left: 2.25rem; font-size: 0.8rem; }
+
+    /* --- Main Content --- */
+    .content {
+      flex: 1;
+      min-width: 0;
+      padding: 2rem 3rem;
+      max-width: 900px;
+    }
+
+    /* --- Typography --- */
+    .md-h2.section-header {
+      font-size: 1.75rem;
+      font-weight: 700;
+      margin: 2.5rem 0 1rem;
+      padding: 0.5rem 0 0.5rem 1rem;
+      border-left: 4px solid #3FB950;
+    }
+    .md-h3.subsection-header {
+      font-size: 1.3rem;
+      font-weight: 600;
+      margin: 2rem 0 0.75rem;
+      color: #58a6ff;
+    }
+    .md-h4 { font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
+    .md-h5 { font-size: 1rem; font-weight: 600; margin: 1rem 0 0.5rem; color: #8B949E; }
+    .md-p { margin-bottom: 1rem; }
+    .md-p strong { color: #fff; }
+
+    /* --- Links --- */
+    .md-link { color: #58a6ff; text-decoration: none; }
+    .md-link:hover { text-decoration: underline; }
+
+    /* --- Lists --- */
+    .md-list {
+      margin: 0.5rem 0 1rem 1.5rem;
+    }
+    .md-list li {
+      margin-bottom: 0.4rem;
+      padding-left: 0.25rem;
+    }
+
+    /* --- Checkboxes --- */
+    .checkbox {
+      font-family: 'JetBrains Mono', monospace;
+      color: #8B949E;
+      margin-right: 0.3rem;
+    }
+    .checkbox.checked { color: #3FB950; }
+
+    /* --- Code --- */
+    .inline-code {
+      font-family: 'JetBrains Mono', monospace;
+      background: #161B22;
+      border: 1px solid #30363D;
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      font-size: 0.88em;
+      color: #58a6ff;
+    }
+    .code-block {
+      position: relative;
+      background: #161B22;
+      border: 1px solid #30363D;
+      border-radius: 8px;
+      margin: 1rem 0;
+      overflow-x: auto;
+    }
+    .code-block pre {
+      padding: 1.25rem;
+      margin: 0;
+      overflow-x: auto;
+    }
+    .code-block code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      line-height: 1.6;
+      color: #E6EDF3;
+    }
+    .code-lang {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.75rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      color: #8B949E;
+      text-transform: uppercase;
+    }
+    .code-keyword { color: #ff7b72; font-weight: 500; }
+    .code-string { color: #a5d6ff; }
+    .code-comment { color: #8B949E; font-style: italic; }
+    .code-decorator { color: #D29922; }
+
+    /* --- Tables --- */
+    .table-wrapper {
+      overflow-x: auto;
+      margin: 1rem 0;
+      border-radius: 8px;
+      border: 1px solid #30363D;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    thead th {
+      background: #161B22;
+      padding: 0.75rem 1rem;
+      text-align: left;
+      font-weight: 600;
+      color: #E6EDF3;
+      border-bottom: 1px solid #30363D;
+      white-space: nowrap;
+    }
+    tbody td {
+      padding: 0.6rem 1rem;
+      border-bottom: 1px solid #30363D;
+    }
+    tbody tr:nth-child(even) {
+      background: rgba(22, 27, 34, 0.5);
+    }
+    tbody tr:hover {
+      background: rgba(63, 185, 80, 0.05);
+    }
+
+    /* --- Blockquotes --- */
+    .md-blockquote {
+      border-left: 3px solid #58a6ff;
+      padding: 0.75rem 1.25rem;
+      margin: 1rem 0;
+      background: #161B22;
+      border-radius: 0 8px 8px 0;
+      color: #8B949E;
+      font-style: italic;
+    }
+
+    /* --- Horizontal rules --- */
+    .md-hr {
+      border: none;
+      border-top: 1px solid #30363D;
+      margin: 2rem 0;
+    }
+
+    /* --- Badges --- */
+    .badge {
+      display: inline-block;
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 0.2rem 0.6rem;
+      border-radius: 12px;
+      vertical-align: middle;
+      margin-left: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .badge-completed {
+      background: rgba(63, 185, 80, 0.15);
+      color: #3FB950;
+      border: 1px solid rgba(63, 185, 80, 0.3);
+    }
+
+    /* --- Back to top --- */
+    .back-to-top {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: #3FB950;
+      color: #0D1117;
+      border: none;
+      cursor: pointer;
+      font-size: 1.25rem;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      transition: transform 0.2s;
+      z-index: 50;
+    }
+    .back-to-top:hover { transform: scale(1.1); }
+    .back-to-top.visible { display: flex; }
+
+    /* --- Mobile --- */
+    @media (max-width: 768px) {
+      .hamburger { display: block; }
+      .sidebar {
+        position: fixed;
+        top: 52px;
+        left: -300px;
+        width: 280px;
+        min-width: 280px;
+        height: calc(100vh - 52px);
+        background: #0D1117;
+        z-index: 90;
+        transition: left 0.3s ease;
+        border-right: 1px solid #30363D;
+      }
+      .sidebar.open { left: 0; }
+      .sidebar-overlay {
+        display: none;
+        position: fixed;
+        top: 52px;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 80;
+      }
+      .sidebar-overlay.open { display: block; }
+      .content {
+        padding: 1.5rem 1rem;
+      }
+      .md-h2.section-header { font-size: 1.4rem; }
+    }
+    </style>
+</head>
+<body>
+  <nav class="top-nav">
+    <a href="index.html" class="logo">BetVector</a>
+    <span class="page-title">Build Plan · v1.0</span>
+    <button class="hamburger" id="hamburger">&#9776;</button>
+  </nav>
+
+  <div class="sidebar-overlay" id="overlay"></div>
+
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="toc-title">Contents</div>
+      <a href="#purpose" class="toc-item toc-h2">Purpose</a>
+<a href="#epics-overview" class="toc-item toc-h2">Epics Overview</a>
+<a href="#how-to-use-this-document" class="toc-item toc-h2">How to Use This Document</a>
+<a href="#critical-path" class="toc-item toc-h2">Critical Path</a>
+<a href="#e1-development-environment" class="toc-item toc-h2">E1 — Development Environment</a>
+<a href="#e1-01-project-structure-and-folder-scaffold" class="toc-item toc-h3">E1-01 — Project Structure and Folder Scaffold</a>
+<a href="#e1-02-dependencies-and-virtual-environment" class="toc-item toc-h3">E1-02 — Dependencies and Virtual Environment</a>
+<a href="#e1-03-configuration-system" class="toc-item toc-h3">E1-03 — Configuration System</a>
+<a href="#e2-database" class="toc-item toc-h2">E2 — Database</a>
+<a href="#e2-01-database-connection-and-setup" class="toc-item toc-h3">E2-01 — Database Connection and Setup</a>
+<a href="#e2-02-core-orm-models" class="toc-item toc-h3">E2-02 — Core ORM Models</a>
+<a href="#e2-03-betting-and-tracking-orm-models" class="toc-item toc-h3">E2-03 — Betting and Tracking ORM Models</a>
+<a href="#e2-04-self-improvement-orm-models-and-seed-data" class="toc-item toc-h3">E2-04 — Self-Improvement ORM Models and Seed Data</a>
+<a href="#e3-data-scrapers" class="toc-item toc-h2">E3 — Data Scrapers</a>
+<a href="#e3-01-base-scraper-and-rate-limiter" class="toc-item toc-h3">E3-01 — Base Scraper and Rate Limiter</a>
+<a href="#e3-02-football-datacouk-scraper" class="toc-item toc-h3">E3-02 — Football-Data.co.uk Scraper</a>
+<a href="#e3-03-fbref-scraper" class="toc-item toc-h3">E3-03 — FBref Scraper</a>
+<a href="#e3-04-data-loader" class="toc-item toc-h3">E3-04 — Data Loader</a>
+<a href="#e4-feature-engineering" class="toc-item toc-h2">E4 — Feature Engineering</a>
+<a href="#e4-01-rolling-feature-calculator" class="toc-item toc-h3">E4-01 — Rolling Feature Calculator</a>
+<a href="#e4-02-head-to-head-and-context-features" class="toc-item toc-h3">E4-02 — Head-to-Head and Context Features</a>
+<a href="#e4-03-feature-pipeline-orchestration" class="toc-item toc-h3">E4-03 — Feature Pipeline Orchestration</a>
+<a href="#e5-prediction-models" class="toc-item toc-h2">E5 — Prediction Models</a>
+<a href="#e5-01-base-model-interface-and-match-prediction-dataclass" class="toc-item toc-h3">E5-01 — Base Model Interface and Match Prediction Dataclass</a>
+<a href="#e5-02-poisson-regression-model" class="toc-item toc-h3">E5-02 — Poisson Regression Model</a>
+<a href="#e5-03-prediction-storage-and-retrieval" class="toc-item toc-h3">E5-03 — Prediction Storage and Retrieval</a>
+<a href="#e6-value-detection-bankroll" class="toc-item toc-h2">E6 — Value Detection & Bankroll</a>
+<a href="#e6-01-value-finder" class="toc-item toc-h3">E6-01 — Value Finder</a>
+<a href="#e6-02-bankroll-manager" class="toc-item toc-h3">E6-02 — Bankroll Manager</a>
+<a href="#e6-03-bet-tracker" class="toc-item toc-h3">E6-03 — Bet Tracker</a>
+<a href="#e7-evaluation-backtesting" class="toc-item toc-h2">E7 — Evaluation & Backtesting</a>
+<a href="#e7-01-metrics-module" class="toc-item toc-h3">E7-01 — Metrics Module</a>
+<a href="#e7-02-walk-forward-backtester" class="toc-item toc-h3">E7-02 — Walk-Forward Backtester</a>
+<a href="#e7-03-backtest-reporting" class="toc-item toc-h3">E7-03 — Backtest Reporting</a>
+<a href="#e8-pipeline-orchestrator" class="toc-item toc-h2">E8 — Pipeline Orchestrator</a>
+<a href="#e8-01-pipeline-runner" class="toc-item toc-h3">E8-01 — Pipeline Runner</a>
+<a href="#e8-02-cli-interface" class="toc-item toc-h3">E8-02 — CLI Interface</a>
+<a href="#e9-dashboard-core" class="toc-item toc-h2">E9 — Dashboard — Core</a>
+<a href="#e9-01-streamlit-app-shell-and-theme" class="toc-item toc-h3">E9-01 — Streamlit App Shell and Theme</a>
+<a href="#e9-02-todays-picks-page" class="toc-item toc-h3">E9-02 — Today's Picks Page</a>
+<a href="#e9-03-performance-tracker-page" class="toc-item toc-h3">E9-03 — Performance Tracker Page</a>
+<a href="#e9-04-league-explorer-page" class="toc-item toc-h3">E9-04 — League Explorer Page</a>
+<a href="#e9-05-match-deep-dive-view" class="toc-item toc-h3">E9-05 — Match Deep Dive View</a>
+<a href="#e10-dashboard-advanced" class="toc-item toc-h2">E10 — Dashboard — Advanced</a>
+<a href="#e10-01-model-health-page" class="toc-item toc-h3">E10-01 — Model Health Page</a>
+<a href="#e10-02-bankroll-manager-page" class="toc-item toc-h3">E10-02 — Bankroll Manager Page</a>
+<a href="#e10-03-settings-page" class="toc-item toc-h3">E10-03 — Settings Page</a>
+<a href="#e10-04-onboarding-flow" class="toc-item toc-h3">E10-04 — Onboarding Flow</a>
+<a href="#e11-email-notifications" class="toc-item toc-h2">E11 — Email Notifications</a>
+<a href="#e11-01-email-templates" class="toc-item toc-h3">E11-01 — Email Templates</a>
+<a href="#e11-02-email-sender" class="toc-item toc-h3">E11-02 — Email Sender</a>
+<a href="#e11-03-email-integration-with-pipeline" class="toc-item toc-h3">E11-03 — Email Integration with Pipeline</a>
+<a href="#e12-self-improvement-engine" class="toc-item toc-h2">E12 — Self-Improvement Engine</a>
+<a href="#e12-01-automatic-recalibration" class="toc-item toc-h3">E12-01 — Automatic Recalibration</a>
+<a href="#e12-02-feature-importance-tracking" class="toc-item toc-h3">E12-02 — Feature Importance Tracking</a>
+<a href="#e12-03-adaptive-ensemble-weights" class="toc-item toc-h3">E12-03 — Adaptive Ensemble Weights</a>
+<a href="#e12-04-market-feedback-loop" class="toc-item toc-h3">E12-04 — Market Feedback Loop</a>
+<a href="#e12-05-seasonal-re-training-triggers" class="toc-item toc-h3">E12-05 — Seasonal Re-training Triggers</a>
+<a href="#e13-automation-deployment" class="toc-item toc-h2">E13 — Automation & Deployment</a>
+<a href="#e13-01-github-actions-workflows" class="toc-item toc-h3">E13-01 — GitHub Actions Workflows</a>
+<a href="#e13-02-streamlit-cloud-deployment" class="toc-item toc-h3">E13-02 — Streamlit Cloud Deployment</a>
+<a href="#e13-03-security-hardening" class="toc-item toc-h3">E13-03 — Security Hardening</a>
+    </aside>
+    <main class="content">
+      <h1 id="betvector-build-plan" class="md-h1">BetVector &mdash; Build Plan</h1>
+<p class="md-p">Version 1.0 · February 2026</p>
+<hr class='md-hr'>
+<h2 id="purpose" class="md-h2 section-header">Purpose</h2>
+<p class="md-p">This document breaks the BetVector masterplan into sequenced epics and issues that Claude Code (or Cowork) can execute one at a time, in order, without making architectural decisions. Every issue references the masterplan sections it implements and has objectively verifiable acceptance criteria.</p>
+<hr class='md-hr'>
+<h2 id="epics-overview" class="md-h2 section-header">Epics Overview</h2>
+<div class='table-wrapper'><table><thead><tr><th>Epic</th><th>Title</th><th>Issues</th><th>Description</th></tr></thead><tbody><tr><td>E1</td><td>Development Environment</td><td>3</td><td>Project structure, dependencies, config system, Git repo</td></tr><tr><td>E2</td><td>Database</td><td>4</td><td>All tables, indexes, ORM models, connection management</td></tr><tr><td>E3</td><td>Data Scrapers</td><td>4</td><td>Football-Data.co.uk scraper, FBref scraper, API-Football scraper, data loader</td></tr><tr><td>E4</td><td>Feature Engineering</td><td>3</td><td>Rolling features, H2H features, feature pipeline orchestration</td></tr><tr><td>E5</td><td>Prediction Models</td><td>3</td><td>Base model interface, Poisson model, scoreline-to-market derivation</td></tr><tr><td>E6</td><td>Value Detection & Bankroll</td><td>3</td><td>Value finder, bankroll manager, bet tracker</td></tr><tr><td>E7</td><td>Evaluation & Backtesting</td><td>3</td><td>Metrics module, walk-forward backtester, model performance logger</td></tr><tr><td>E8</td><td>Pipeline Orchestrator</td><td>2</td><td>Pipeline runner, CLI interface</td></tr><tr><td>E9</td><td>Dashboard &mdash; Core</td><td>5</td><td>Streamlit app shell, Today's Picks, Performance Tracker, League Explorer, Match Deep Dive</td></tr><tr><td>E10</td><td>Dashboard &mdash; Advanced</td><td>4</td><td>Model Health page, Bankroll Manager page, Settings page, Onboarding flow</td></tr><tr><td>E11</td><td>Email Notifications</td><td>3</td><td>Email templates, email sender, scheduled email integration</td></tr><tr><td>E12</td><td>Self-Improvement Engine</td><td>5</td><td>Auto-recalibration, feature importance tracking, adaptive ensemble weights, market feedback loop, retrain triggers</td></tr><tr><td>E13</td><td>Automation & Deployment</td><td>3</td><td>GitHub Actions workflows, Streamlit Cloud deployment, security hardening</td></tr></tbody></table></div>
+<p class="md-p"><strong>Total: 13 epics, 45 issues</strong></p>
+<hr class='md-hr'>
+<h2 id="how-to-use-this-document" class="md-h2 section-header">How to Use This Document</h2>
+<ol class='md-list'><li>Read the referenced masterplan sections (<code class="inline-code">MP §X</code>) before writing any code for an issue</li>
+<li>Complete <strong>all</strong> acceptance criteria before marking an issue done</li>
+<li>Never proceed to the next issue if current acceptance criteria are not met</li>
+<li>Issues within an epic are ordered by dependency &mdash; do not skip ahead</li>
+<li>When an issue is complete, update the <code class="inline-code">Current Status</code> section in <code class="inline-code">CLAUDE.md</code></li></ol>
+<hr class='md-hr'>
+<h2 id="critical-path" class="md-h2 section-header">Critical Path</h2>
+<div class="code-block"><pre><code>E1-01 → E1-02 → E1-03 → E2-01 → E2-02 → E2-03 → E2-04 →
+E3-01 → E3-02 → E3-03 → E3-04 → E4-01 → E4-02 → E4-03 →
+E5-01 → E5-02 → E5-03 → E6-01 → E6-02 → E6-03 →
+E7-01 → E7-02 → E7-03 → E8-01 → E8-02 →
+E9-01 → E9-02 → E9-03 → E9-04 → E9-05 →
+E10-01 → E10-02 → E10-03 → E10-04 →
+E11-01 → E11-02 → E11-03 →
+E12-01 → E12-02 → E12-03 → E12-04 → E12-05 →
+E13-01 → E13-02 → E13-03</code></pre></div>
+<hr class='md-hr'>
+<h2 id="e1-development-environment" class="md-h2 section-header">E1 &mdash; Development Environment</h2>
+<h3 id="e1-01-project-structure-and-folder-scaffold" class="md-h3 subsection-header">E1-01 &mdash; Project Structure and Folder Scaffold <span class="badge badge-completed">Completed</span></h3>
+<p class="md-p"><strong>Type:</strong> Setup</p>
+<p class="md-p"><strong>Depends on:</strong> Nothing</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §5 Architecture</p>
+<p class="md-p">Create the complete project folder structure for BetVector. This establishes the modular architecture that every subsequent issue builds into.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create all directories as specified in MP §5: <code class="inline-code">config/</code>, <code class="inline-code">data/raw/</code>, <code class="inline-code">data/processed/</code>, <code class="inline-code">data/predictions/</code>, <code class="inline-code">src/scrapers/</code>, <code class="inline-code">src/database/</code>, <code class="inline-code">src/features/</code>, <code class="inline-code">src/models/</code>, <code class="inline-code">src/evaluation/</code>, <code class="inline-code">src/betting/</code>, <code class="inline-code">src/delivery/</code>, <code class="inline-code">src/self_improvement/</code>, <code class="inline-code">notebooks/</code>, <code class="inline-code">tests/</code>, <code class="inline-code">templates/</code></li>
+<li>Every Python package directory must have an <code class="inline-code">__init__.py</code></li>
+<li>Create a <code class="inline-code">setup.py</code> or <code class="inline-code">pyproject.toml</code> so that <code class="inline-code">from src.models.poisson import PoissonModel</code> works from any location</li>
+<li>Create a comprehensive <code class="inline-code">.gitignore</code> that excludes: <code class="inline-code">data/<em>.db</code>, <code class="inline-code">data/raw/</code>, <code class="inline-code">__pycache__/</code>, <code class="inline-code">.env</code>, <code class="inline-code">.ipynb_checkpoints/</code>, <code class="inline-code"></em>.pkl</code>, <code class="inline-code">*.joblib</code>, <code class="inline-code">.DS_Store</code></li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> Running <code class="inline-code">find . -name "__init__.py"</code> from the project root lists an <code class="inline-code">__init__.py</code> in every package directory under <code class="inline-code">src/</code></li>
+<li><span class="checkbox">☐</span> Running <code class="inline-code">python -c "from src import scrapers, database, features, models, evaluation, betting, delivery, self_improvement"</code> succeeds without ImportError</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">.gitignore</code> exists and contains entries for <code class="inline-code">data/<em>.db</code>, <code class="inline-code">__pycache__</code>, <code class="inline-code">.env</code>, <code class="inline-code"></em>.pkl</code></li>
+<li><span class="checkbox">☐</span> <code class="inline-code">data/raw/</code>, <code class="inline-code">data/processed/</code>, <code class="inline-code">data/predictions/</code> directories exist</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">config/</code>, <code class="inline-code">notebooks/</code>, <code class="inline-code">tests/</code>, <code class="inline-code">templates/</code> directories exist</li></ul>
+<hr class='md-hr'>
+<h3 id="e1-02-dependencies-and-virtual-environment" class="md-h3 subsection-header">E1-02 &mdash; Dependencies and Virtual Environment <span class="badge badge-completed">Completed</span></h3>
+<p class="md-p"><strong>Type:</strong> Setup</p>
+<p class="md-p"><strong>Depends on:</strong> E1-01</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §5 Architecture → Key Libraries</p>
+<p class="md-p">Install all required Python dependencies in a virtual environment and create a <code class="inline-code">requirements.txt</code> that pins exact versions.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create a Python virtual environment using <code class="inline-code">python3 -m venv venv</code></li>
+<li>Install all libraries listed in MP §5: pandas, numpy, scipy, scikit-learn, statsmodels, soccerdata, requests, beautifulsoup4, pyyaml, sqlalchemy, plotly, streamlit, xgboost, lightgbm, matplotlib, seaborn, mplsoccer, jinja2, pytest</li>
+<li>Pin exact versions in <code class="inline-code">requirements.txt</code> using <code class="inline-code">pip freeze</code></li>
+<li>Create a <code class="inline-code">Makefile</code> with common commands: <code class="inline-code">make install</code>, <code class="inline-code">make test</code>, <code class="inline-code">make run</code>, <code class="inline-code">make lint</code></li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> <code class="inline-code">requirements.txt</code> exists and lists all dependencies from MP §5 with pinned versions</li>
+<li><span class="checkbox">☐</span> Running <code class="inline-code">pip install -r requirements.txt</code> in a fresh virtual environment completes without errors</li>
+<li><span class="checkbox">☐</span> Running <code class="inline-code">python -c "import pandas, numpy, scipy, sklearn, statsmodels, requests, bs4, yaml, sqlalchemy, plotly, streamlit, xgboost, lightgbm"</code> succeeds</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">Makefile</code> exists with targets: <code class="inline-code">install</code>, <code class="inline-code">test</code>, <code class="inline-code">run</code></li>
+<li><span class="checkbox">☐</span> <code class="inline-code">venv/</code> directory is listed in <code class="inline-code">.gitignore</code></li></ul>
+<hr class='md-hr'>
+<h3 id="e1-03-configuration-system" class="md-h3 subsection-header">E1-03 &mdash; Configuration System <span class="badge badge-completed">Completed</span></h3>
+<p class="md-p"><strong>Type:</strong> Setup</p>
+<p class="md-p"><strong>Depends on:</strong> E1-01</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §5 Architecture → Config-driven</p>
+<p class="md-p">Create the YAML configuration files that drive all system behaviour. Every tuneable parameter lives here, not in code.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">config/leagues.yaml</code> with EPL configuration: name, short_name, country, football_data_code (<code class="inline-code">E0</code>), fbref_league_id, api_football_id, seasons (2020-21 through 2024-25). Include a commented-out La Liga example showing how to add a league.</li>
+<li>Create <code class="inline-code">config/settings.yaml</code> with: database path (<code class="inline-code">data/betvector.db</code>), feature windows (<code class="inline-code">[5, 10]</code>), edge threshold default (<code class="inline-code">0.05</code>), bankroll defaults (starting: 1000, method: flat, stake_pct: 0.02, kelly_fraction: 0.25), safety limits (max_bet_pct: 0.05, daily_loss_limit: 0.10, drawdown_alert: 0.25, min_bankroll_pct: 0.50), model settings, self-improvement thresholds (min_calibration_sample: 200, calibration_error_threshold: 0.03, min_ensemble_sample: 300, max_weight_change: 0.10, weight_floor: 0.10, weight_ceiling: 0.60, retrain_degradation_threshold: 0.15, retrain_cooldown_days: 30, min_market_feedback_bets: 50)</li>
+<li>Create <code class="inline-code">config/email_config.yaml</code> with: SMTP settings for Gmail (host, port, use_tls), schedule (morning: "07:00", evening: "22:00", weekly: "sunday_20:00"), placeholder for credentials (reference to env vars, never actual values)</li>
+<li>Create <code class="inline-code">src/config.py</code> &mdash; a Python module that loads all YAML configs, validates them, and provides typed access: <code class="inline-code">config.leagues</code>, <code class="inline-code">config.settings.edge_threshold</code>, <code class="inline-code">config.email.schedule</code>, etc. Use dataclasses or Pydantic for type safety.</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> <code class="inline-code">config/leagues.yaml</code> exists with full EPL configuration including 5 seasons and a commented La Liga example</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">config/settings.yaml</code> exists with all parameters from MP §5, §6, §11 including self-improvement thresholds</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">config/email_config.yaml</code> exists with Gmail SMTP template and schedule</li>
+<li><span class="checkbox">☐</span> No config file contains actual credentials &mdash; all sensitive values reference environment variables</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">src/config.py</code> loads all three config files and exposes typed attributes</li>
+<li><span class="checkbox">☐</span> Running <code class="inline-code">python -c "from src.config import config; print(config.settings.edge_threshold)"</code> prints <code class="inline-code">0.05</code></li>
+<li><span class="checkbox">☐</span> Running <code class="inline-code">python -c "from src.config import config; print(config.leagues[0].short_name)"</code> prints <code class="inline-code">EPL</code></li></ul>
+<hr class='md-hr'>
+<h2 id="e2-database" class="md-h2 section-header">E2 &mdash; Database</h2>
+<h3 id="e2-01-database-connection-and-setup" class="md-h3 subsection-header">E2-01 &mdash; Database Connection and Setup <span class="badge badge-completed">Completed</span></h3>
+<p class="md-p"><strong>Type:</strong> Schema</p>
+<p class="md-p"><strong>Depends on:</strong> E1-03</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §5 Architecture → Database, MP §6 Database Schema</p>
+<p class="md-p">Create the database connection manager using SQLAlchemy. This is the foundation that every other module reads from and writes to.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Use SQLAlchemy 2.0+ with the new-style API (<code class="inline-code">create_engine</code>, <code class="inline-code">Session</code>, <code class="inline-code">DeclarativeBase</code>)</li>
+<li>Database path comes from <code class="inline-code">config.settings.database_path</code> (default: <code class="inline-code">data/betvector.db</code>)</li>
+<li>Create a <code class="inline-code">src/database/db.py</code> with: <code class="inline-code">get_engine()</code>, <code class="inline-code">get_session()</code>, <code class="inline-code">init_db()</code> (creates all tables), <code class="inline-code">reset_db()</code> (drops and recreates &mdash; for development only)</li>
+<li>Connection string format: <code class="inline-code">sqlite:///data/betvector.db</code> for SQLite. When migrating to PostgreSQL, only this string changes.</li>
+<li>Enable WAL mode for SQLite for better concurrent read performance: <code class="inline-code">PRAGMA journal_mode=WAL</code></li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> <code class="inline-code">src/database/db.py</code> exists with <code class="inline-code">get_engine()</code>, <code class="inline-code">get_session()</code>, <code class="inline-code">init_db()</code>, <code class="inline-code">reset_db()</code> functions</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">init_db()</code> creates the database file at the configured path</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">get_session()</code> returns a working SQLAlchemy session that can execute <code class="inline-code">SELECT 1</code></li>
+<li><span class="checkbox">☐</span> Database path is read from config, not hardcoded</li>
+<li><span class="checkbox">☐</span> SQLite WAL mode is enabled after connection</li></ul>
+<hr class='md-hr'>
+<h3 id="e2-02-core-orm-models" class="md-h3 subsection-header">E2-02 &mdash; Core ORM Models <span class="badge badge-completed">Completed</span></h3>
+<p class="md-p"><strong>Type:</strong> Schema</p>
+<p class="md-p"><strong>Depends on:</strong> E2-01</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §6 Database Schema (users through predictions tables)</p>
+<p class="md-p">Define SQLAlchemy ORM models for all core tables: users, leagues, seasons, teams, matches, match_stats, odds, features, predictions.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">src/database/models.py</code> with one class per table</li>
+<li>Follow the exact schema from MP §6: every column, type, constraint, default, and CHECK constraint</li>
+<li>Use SQLAlchemy's <code class="inline-code">CheckConstraint</code> for enum-like TEXT fields (e.g., <code class="inline-code">status IN ('scheduled', 'in_play', 'finished', 'postponed')</code>)</li>
+<li>Define all relationships: <code class="inline-code">Match.home_team</code> → <code class="inline-code">Team</code>, <code class="inline-code">Match.match_stats</code> → <code class="inline-code">[MatchStat]</code>, <code class="inline-code">Prediction.match</code> → <code class="inline-code">Match</code>, etc.</li>
+<li>Create all indexes specified in MP §6</li>
+<li>Add <code class="inline-code">__repr__</code> methods for debugging readability</li>
+<li>Tables to create in this issue: <code class="inline-code">users</code>, <code class="inline-code">leagues</code>, <code class="inline-code">seasons</code>, <code class="inline-code">teams</code>, <code class="inline-code">matches</code>, <code class="inline-code">match_stats</code>, <code class="inline-code">odds</code>, <code class="inline-code">features</code>, <code class="inline-code">predictions</code></li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> <code class="inline-code">src/database/models.py</code> defines ORM classes for all 9 core tables</li>
+<li><span class="checkbox">☐</span> Running <code class="inline-code">init_db()</code> creates all 9 tables in the SQLite database</li>
+<li><span class="checkbox">☐</span> Every column from MP §6 is present with the correct type and constraints</li>
+<li><span class="checkbox">☐</span> CHECK constraints exist for: <code class="inline-code">users.role</code>, <code class="inline-code">users.staking_method</code>, <code class="inline-code">matches.status</code>, <code class="inline-code">odds.market_type</code>, <code class="inline-code">odds.selection</code></li>
+<li><span class="checkbox">☐</span> Foreign key relationships are defined: <code class="inline-code">matches.home_team_id</code> → <code class="inline-code">teams.id</code>, <code class="inline-code">match_stats.match_id</code> → <code class="inline-code">matches.id</code>, etc.</li>
+<li><span class="checkbox">☐</span> Indexes exist for: <code class="inline-code">matches(date)</code>, <code class="inline-code">matches(league_id, season)</code>, <code class="inline-code">matches(status)</code>, <code class="inline-code">match_stats(match_id)</code>, <code class="inline-code">odds(match_id)</code>, <code class="inline-code">odds(bookmaker)</code>, <code class="inline-code">odds(market_type)</code>, <code class="inline-code">features(match_id)</code>, <code class="inline-code">predictions(match_id)</code>, <code class="inline-code">predictions(model_name)</code></li>
+<li><span class="checkbox">☐</span> A test user (the owner) can be inserted and queried back successfully</li></ul>
+<hr class='md-hr'>
+<h3 id="e2-03-betting-and-tracking-orm-models" class="md-h3 subsection-header">E2-03 &mdash; Betting and Tracking ORM Models <span class="badge badge-completed">Completed</span></h3>
+<p class="md-p"><strong>Type:</strong> Schema</p>
+<p class="md-p"><strong>Depends on:</strong> E2-02</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §6 Database Schema (value_bets, bet_log, model_performance, pipeline_runs)</p>
+<p class="md-p">Define SQLAlchemy ORM models for the betting, tracking, and operational tables.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create these tables in <code class="inline-code">src/database/models.py</code> (append to existing file): <code class="inline-code">value_bets</code>, <code class="inline-code">bet_log</code>, <code class="inline-code">model_performance</code>, <code class="inline-code">pipeline_runs</code></li>
+<li>Follow exact schema from MP §6 including all CHECK constraints and indexes</li>
+<li><code class="inline-code">bet_log</code> is the most important table &mdash; it tracks every bet the system recommends and every bet the user places. Double-check all columns match MP §6.</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> ORM classes exist for <code class="inline-code">value_bets</code>, <code class="inline-code">bet_log</code>, <code class="inline-code">model_performance</code>, <code class="inline-code">pipeline_runs</code></li>
+<li><span class="checkbox">☐</span> Running <code class="inline-code">init_db()</code> creates all 13 tables (9 core + 4 from this issue)</li>
+<li><span class="checkbox">☐</span> CHECK constraints exist for: <code class="inline-code">value_bets.confidence</code>, <code class="inline-code">bet_log.bet_type</code>, <code class="inline-code">bet_log.status</code>, <code class="inline-code">model_performance.period_type</code>, <code class="inline-code">pipeline_runs.run_type</code>, <code class="inline-code">pipeline_runs.status</code></li>
+<li><span class="checkbox">☐</span> Indexes exist for: <code class="inline-code">value_bets(match_id)</code>, <code class="inline-code">value_bets(edge DESC)</code>, <code class="inline-code">bet_log(user_id)</code>, <code class="inline-code">bet_log(match_id)</code>, <code class="inline-code">bet_log(status)</code>, <code class="inline-code">bet_log(date)</code>, <code class="inline-code">bet_log(bet_type)</code></li></ul>
+<hr class='md-hr'>
+<h3 id="e2-04-self-improvement-orm-models-and-seed-data" class="md-h3 subsection-header">E2-04 &mdash; Self-Improvement ORM Models and Seed Data <span class="badge badge-completed">Completed</span></h3>
+<p class="md-p"><strong>Type:</strong> Schema</p>
+<p class="md-p"><strong>Depends on:</strong> E2-03</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §6 Database Schema Addendum (§11), MP §11 Self-Improvement Engine</p>
+<p class="md-p">Define ORM models for self-improvement tables and seed the database with initial data.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create these tables: <code class="inline-code">calibration_history</code>, <code class="inline-code">feature_importance_log</code>, <code class="inline-code">ensemble_weight_history</code>, <code class="inline-code">market_performance</code>, <code class="inline-code">retrain_history</code> (from MP §11 database addendum)</li>
+<li>Create <code class="inline-code">src/database/seed.py</code> that:</li>
+<li>Inserts the owner user (id=1, name from config, role='owner', defaults from config)</li>
+<li>Inserts EPL league configuration</li>
+<li>Inserts EPL seasons (2020-21 through 2024-25)</li>
+<li>Is idempotent &mdash; running it twice doesn't create duplicates</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> ORM classes exist for all 5 self-improvement tables</li>
+<li><span class="checkbox">☐</span> Running <code class="inline-code">init_db()</code> creates all 18 tables total</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">seed.py</code> creates the owner user with role='owner' and config defaults</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">seed.py</code> creates EPL league and 5 season entries</li>
+<li><span class="checkbox">☐</span> Running <code class="inline-code">seed.py</code> twice does not create duplicate records</li>
+<li><span class="checkbox">☐</span> Total table count in database after <code class="inline-code">init_db()</code> + <code class="inline-code">seed.py</code>: 18 tables, 1 user, 1 league, 5 seasons</li></ul>
+<hr class='md-hr'>
+<h2 id="e3-data-scrapers" class="md-h2 section-header">E3 &mdash; Data Scrapers</h2>
+<h3 id="e3-01-base-scraper-and-rate-limiter" class="md-h3 subsection-header">E3-01 &mdash; Base Scraper and Rate Limiter <span class="badge badge-completed">Completed</span></h3>
+<p class="md-p"><strong>Type:</strong> Backend</p>
+<p class="md-p"><strong>Depends on:</strong> E1-03</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §5 Architecture → Data Sources, MP §7 Scraper Interface</p>
+<p class="md-p">Create the abstract base scraper class and shared utilities (rate limiting, logging, raw file saving).</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">src/scrapers/base_scraper.py</code> with the abstract interface from MP §7</li>
+<li>Implement rate limiting: minimum 2 seconds between HTTP requests to the same domain. Use <code class="inline-code">time.sleep()</code>.</li>
+<li>Implement <code class="inline-code">save_raw()</code>: saves DataFrames to <code class="inline-code">data/raw/{source}_{league}_{season}_{date}.csv</code></li>
+<li>Use Python <code class="inline-code">logging</code> module: INFO for progress, WARNING for retries, ERROR for failures</li>
+<li>Implement retry logic: 3 retries with exponential backoff for HTTP errors</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> <code class="inline-code">src/scrapers/base_scraper.py</code> defines <code class="inline-code">BaseScraper</code> ABC with <code class="inline-code">scrape()</code>, <code class="inline-code">save_raw()</code> abstract methods</li>
+<li><span class="checkbox">☐</span> Rate limiter enforces minimum 2-second gap between requests (testable with a mock)</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">save_raw()</code> writes a CSV to <code class="inline-code">data/raw/</code> with a filename containing source, league, season, and date</li>
+<li><span class="checkbox">☐</span> Retry logic attempts 3 retries with increasing delay on HTTP 429/500/503 errors</li>
+<li><span class="checkbox">☐</span> Logger is configured and outputs INFO-level progress messages</li></ul>
+<hr class='md-hr'>
+<h3 id="e3-02-football-datacouk-scraper" class="md-h3 subsection-header">E3-02 &mdash; Football-Data.co.uk Scraper <span class="badge badge-completed">Completed</span></h3>
+<p class="md-p"><strong>Type:</strong> Backend</p>
+<p class="md-p"><strong>Depends on:</strong> E3-01, E2-02</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §5 Architecture → Data Sources, MP §7 Scraper Interface</p>
+<p class="md-p">Build the scraper for Football-Data.co.uk &mdash; the primary source for match results and betting odds.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">src/scrapers/football_data.py</code> inheriting from <code class="inline-code">BaseScraper</code></li>
+<li>URL pattern: <code class="inline-code">https://www.football-data.co.uk/mmz4281/{season_code}/{league_code}.csv</code> where season_code is like <code class="inline-code">2425</code> for 2024-25 and league_code comes from config (e.g., <code class="inline-code">E0</code> for EPL)</li>
+<li>Parse columns: Date, HomeTeam, AwayTeam, FTHG, FTAG, HTHG, HTAG (results) + B365H, B365D, B365A, PSH, PSD, PSA, WHH, WHD, WHA, AvgH, AvgD, AvgA, Avg>2.5, Avg<2.5 (odds)</li>
+<li>Normalise team names to canonical form (create a mapping dict for known variations)</li>
+<li>Handle missing odds columns gracefully &mdash; not all seasons have all bookmakers</li>
+<li>Save raw CSV before any processing</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> <code class="inline-code">FootballDataScraper.scrape(league_config, season)</code> downloads the CSV for the given league-season</li>
+<li><span class="checkbox">☐</span> Raw CSV is saved to <code class="inline-code">data/raw/football_data_EPL_2024-25_{date}.csv</code></li>
+<li><span class="checkbox">☐</span> Returned DataFrame contains columns: <code class="inline-code">date, home_team, away_team, home_goals, away_goals, home_ht_goals, away_ht_goals</code></li>
+<li><span class="checkbox">☐</span> Returned DataFrame contains odds columns for at least: Bet365, Pinnacle (PS prefix), market average (Avg prefix) for 1X2 and O/U 2.5</li>
+<li><span class="checkbox">☐</span> Team names are normalised (e.g., "Man United" → "Manchester United")</li>
+<li><span class="checkbox">☐</span> Scraper handles HTTP errors and missing columns without crashing</li>
+<li><span class="checkbox">☐</span> Scraper respects the 2-second rate limit between requests</li></ul>
+<hr class='md-hr'>
+<h3 id="e3-03-fbref-scraper" class="md-h3 subsection-header">E3-03 &mdash; FBref Scraper <span class="badge badge-completed">Completed</span></h3>
+<p class="md-p"><strong>Type:</strong> Backend</p>
+<p class="md-p"><strong>Depends on:</strong> E3-01, E2-02</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §5 Architecture → Data Sources, MP §7 Scraper Interface</p>
+<p class="md-p">Build the scraper for FBref match statistics using the soccerdata library.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">src/scrapers/fbref_scraper.py</code> inheriting from <code class="inline-code">BaseScraper</code></li>
+<li>Use <code class="inline-code">soccerdata.FBref</code> class to fetch team-level match stats</li>
+<li>Extract per-match: xG, xGA, shots, shots on target, possession, passes completed, passes attempted</li>
+<li>soccerdata handles FBref's rate limiting internally, but add a note about this</li>
+<li>Map FBref team names to canonical names (same mapping as Football-Data scraper)</li>
+<li>Cache soccerdata results to avoid re-downloading (soccerdata has built-in caching)</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> <code class="inline-code">FBrefScraper.scrape(league_config, season)</code> returns a DataFrame with per-match team stats</li>
+<li><span class="checkbox">☐</span> DataFrame contains columns: <code class="inline-code">date, team, opponent, is_home, xg, xga, shots, shots_on_target, possession, passes_completed, passes_attempted</code></li>
+<li><span class="checkbox">☐</span> Team names are normalised to the same canonical names as Football-Data scraper</li>
+<li><span class="checkbox">☐</span> xG and xGA values are numeric (not strings) and reasonable (0.0–6.0 range)</li>
+<li><span class="checkbox">☐</span> Raw data is saved to <code class="inline-code">data/raw/fbref_EPL_2024-25_{date}.csv</code></li>
+<li><span class="checkbox">☐</span> Scraper handles seasons where some stats are unavailable without crashing</li></ul>
+<hr class='md-hr'>
+<h3 id="e3-04-data-loader" class="md-h3 subsection-header">E3-04 &mdash; Data Loader <span class="badge badge-completed">Completed</span></h3>
+<p class="md-p"><strong>Type:</strong> Backend</p>
+<p class="md-p"><strong>Depends on:</strong> E3-02, E3-03, E2-04</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §7 Scraper Interface, MP §6 Database Schema</p>
+<p class="md-p">Build the data loader that takes scraped DataFrames and loads them into the database with deduplication.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">src/scrapers/loader.py</code> with functions: <code class="inline-code">load_matches()</code>, <code class="inline-code">load_match_stats()</code>, <code class="inline-code">load_odds()</code></li>
+<li><code class="inline-code">load_matches()</code>: inserts into <code class="inline-code">matches</code> table, creates <code class="inline-code">teams</code> entries if they don't exist, skips duplicates based on UNIQUE(league_id, date, home_team_id, away_team_id)</li>
+<li><code class="inline-code">load_odds()</code>: inserts into <code class="inline-code">odds</code> table, handles all market types (1X2, OU25), maps bookmaker column names to canonical bookmaker names (B365 → Bet365, PS → Pinnacle, etc.)</li>
+<li><code class="inline-code">load_match_stats()</code>: inserts into <code class="inline-code">match_stats</code> table, links to match_id via date + team matching</li>
+<li>All loaders print a summary: "Loaded X matches (Y new, Z skipped as duplicates)"</li>
+<li>Use SQLAlchemy's <code class="inline-code">session.merge()</code> or INSERT OR IGNORE for deduplication</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> <code class="inline-code">load_matches(df, league_id, season)</code> inserts matches and creates teams automatically</li>
+<li><span class="checkbox">☐</span> Running <code class="inline-code">load_matches()</code> twice with the same data does not create duplicate records</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">load_odds(df, league_id)</code> correctly maps bookmaker column names (B365H → Bet365, home, 1X2)</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">load_odds()</code> stores both 1X2 and O/U 2.5 odds with correct <code class="inline-code">market_type</code> and <code class="inline-code">selection</code> values</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">load_match_stats(df, league_id)</code> links stats to the correct match_id via date and team matching</li>
+<li><span class="checkbox">☐</span> After loading EPL 2024-25: matches table has ~380 rows, odds table has thousands of rows, match_stats has ~760 rows (2 per match)</li>
+<li><span class="checkbox">☐</span> Each loader prints a summary of new vs skipped records</li></ul>
+<hr class='md-hr'>
+<h2 id="e4-feature-engineering" class="md-h2 section-header">E4 &mdash; Feature Engineering</h2>
+<h3 id="e4-01-rolling-feature-calculator" class="md-h3 subsection-header">E4-01 &mdash; Rolling Feature Calculator <span class="badge badge-completed">Completed</span></h3>
+<p class="md-p"><strong>Type:</strong> Backend</p>
+<p class="md-p"><strong>Depends on:</strong> E3-04</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §4 Feature Set → Feature Engineering, MP §6 features table</p>
+<p class="md-p">Build the rolling feature calculator that computes team form, xG, and performance stats over configurable windows.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">src/features/rolling.py</code></li>
+<li>For each team, for each match, look back at the team's last N matches (where N comes from config, default [5, 10]) and calculate: points_per_game, goals_scored_per_game, goals_conceded_per_game, xg_per_game, xga_per_game, xg_diff_per_game, shots_per_game, shots_on_target_per_game, possession_avg</li>
+<li>Calculate venue-specific variants (home-only and away-only) using only matches at the same venue over last 5</li>
+<li>CRITICAL: Only use matches BEFORE the current match date. Sort by date descending, take last N, never include the match being predicted.</li>
+<li>Handle edge cases: team has fewer than N matches (use however many are available), team just promoted (start fresh)</li>
+<li>Use pandas vectorised operations where possible for speed</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> <code class="inline-code">calculate_rolling_features(team_id, match_date, window)</code> returns a dict of all rolling features</li>
+<li><span class="checkbox">☐</span> Features use only matches strictly before <code class="inline-code">match_date</code> &mdash; never includes the current match or future matches</li>
+<li><span class="checkbox">☐</span> For a team with 20+ matches, features for window=5 use exactly the 5 most recent matches before the date</li>
+<li><span class="checkbox">☐</span> For a team with only 3 matches, features for window=5 use all 3 available matches</li>
+<li><span class="checkbox">☐</span> Venue-specific features (venue_form_5, venue_xg_5, etc.) use only home matches for home features and only away matches for away features</li>
+<li><span class="checkbox">☐</span> All features are REAL numbers (no NaN for teams with at least 1 prior match; NULL/None for teams with 0 prior matches)</li></ul>
+<hr class='md-hr'>
+<h3 id="e4-02-head-to-head-and-context-features" class="md-h3 subsection-header">E4-02 &mdash; Head-to-Head and Context Features <span class="badge badge-completed">Completed</span></h3>
+<p class="md-p"><strong>Type:</strong> Backend</p>
+<p class="md-p"><strong>Depends on:</strong> E4-01</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §4 Feature Set → Feature Engineering, MP §6 features table</p>
+<p class="md-p">Build the head-to-head calculator and contextual features (rest days, season progress).</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">src/features/context.py</code></li>
+<li>H2H features: look up last 5 meetings between the two teams (regardless of venue) before the current match date. Calculate: wins, draws, losses, avg goals scored, avg goals conceded for each team.</li>
+<li>Rest days: calculate days between the current match date and the team's previous match date. If no previous match (season opener), use a default of 7 days.</li>
+<li>Season progress: <code class="inline-code">matchday / total_matchdays</code> as a 0.0–1.0 float. For EPL, total_matchdays = 38.</li>
+<li>Matchday: the matchday number from the matches table.</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> <code class="inline-code">calculate_h2h_features(team_id, opponent_id, match_date)</code> returns wins, draws, losses, avg goals for/against from last 5 H2H meetings</li>
+<li><span class="checkbox">☐</span> H2H only uses meetings strictly before <code class="inline-code">match_date</code></li>
+<li><span class="checkbox">☐</span> If fewer than 5 H2H meetings exist, uses however many are available</li>
+<li><span class="checkbox">☐</span> If 0 H2H meetings exist, returns zeros for all H2H features</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">calculate_rest_days(team_id, match_date)</code> returns the correct number of days since last match</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">calculate_season_progress(matchday, league_config)</code> returns a float between 0.0 and 1.0</li></ul>
+<hr class='md-hr'>
+<h3 id="e4-03-feature-pipeline-orchestration" class="md-h3 subsection-header">E4-03 &mdash; Feature Pipeline Orchestration <span class="badge badge-completed">Completed</span></h3>
+<p class="md-p"><strong>Type:</strong> Backend</p>
+<p class="md-p"><strong>Depends on:</strong> E4-01, E4-02</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §4 Feature Set, MP §6 features table, MP §7 Feature Engineer Interface</p>
+<p class="md-p">Combine rolling, H2H, and context features into a single pipeline that computes and stores features for all matches in a league-season.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">src/features/engineer.py</code> implementing the <code class="inline-code">FeatureEngineer</code> interface from MP §7</li>
+<li><code class="inline-code">compute_features(match_id)</code>: compute all features for a single match (both home and away teams), return as dict</li>
+<li><code class="inline-code">compute_all_features(league_id, season)</code>: iterate through all matches in a league-season in chronological order, compute features for each, store in the <code class="inline-code">features</code> table</li>
+<li>Skip matches that already have features (idempotent)</li>
+<li>Print progress: "Computing features: match 127/380 (Arsenal vs Chelsea, 2024-11-10)"</li>
+<li>Return a DataFrame suitable for model training: one row per match with home_<em> and away_</em> feature columns</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> <code class="inline-code">compute_features(match_id)</code> returns a dict with all feature columns from MP §6 features table for both home and away teams</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">compute_all_features(league_id, season)</code> stores features for every match in the features table</li>
+<li><span class="checkbox">☐</span> Running <code class="inline-code">compute_all_features()</code> twice does not create duplicate feature rows</li>
+<li><span class="checkbox">☐</span> Returned DataFrame has one row per match with columns matching the pattern: <code class="inline-code">home_form_5, home_form_10, ..., away_form_5, away_form_10, ..., h2h_home_wins, ..., home_rest_days, away_rest_days, matchday, season_progress</code></li>
+<li><span class="checkbox">☐</span> No feature for any match uses data from that match or future matches (temporal integrity)</li>
+<li><span class="checkbox">☐</span> Progress messages print to console during computation</li></ul>
+<hr class='md-hr'>
+<h2 id="e5-prediction-models" class="md-h2 section-header">E5 &mdash; Prediction Models</h2>
+<h3 id="e5-01-base-model-interface-and-match-prediction-dataclass" class="md-h3 subsection-header">E5-01 &mdash; Base Model Interface and Match Prediction Dataclass <span class="badge badge-completed">Completed</span></h3>
+<p class="md-p"><strong>Type:</strong> Backend</p>
+<p class="md-p"><strong>Depends on:</strong> E1-03</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §5 Architecture → Scoreline matrix decision, MP §7 Model Interface</p>
+<p class="md-p">Create the abstract base model class and the MatchPrediction dataclass that all models must produce.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">src/models/base_model.py</code> with the <code class="inline-code">BaseModel</code> ABC from MP §7</li>
+<li>Create the <code class="inline-code">MatchPrediction</code> dataclass from MP §7 with all fields</li>
+<li>The scoreline matrix is a 7×7 list of lists (indexes 0–6 for each team's goals), probabilities summing to 1.0</li>
+<li>Create a utility function <code class="inline-code">derive_market_probabilities(scoreline_matrix)</code> that takes a 7×7 matrix and returns all market probabilities:</li>
+<li>prob_home_win = sum of matrix[h][a] where h > a</li>
+<li>prob_draw = sum of matrix[h][a] where h == a</li>
+<li>prob_away_win = sum of matrix[h][a] where h < a</li>
+<li>prob_over_25 = sum of matrix[h][a] where h + a > 2.5 (i.e., >= 3)</li>
+<li>prob_under_25 = 1 - prob_over_25</li>
+<li>prob_over_15 / prob_under_15 (same pattern with 1.5 threshold)</li>
+<li>prob_over_35 / prob_under_35 (same pattern with 3.5 threshold)</li>
+<li>prob_btts_yes = sum of matrix[h][a] where h >= 1 AND a >= 1</li>
+<li>prob_btts_no = 1 - prob_btts_yes</li>
+<li>This utility function is THE critical piece &mdash; every model's market probabilities flow through it</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> <code class="inline-code">BaseModel</code> ABC defines abstract methods: <code class="inline-code">train()</code>, <code class="inline-code">predict()</code>, <code class="inline-code">save()</code>, <code class="inline-code">load()</code>, and properties <code class="inline-code">name</code>, <code class="inline-code">version</code></li>
+<li><span class="checkbox">☐</span> <code class="inline-code">MatchPrediction</code> dataclass has all fields from MP §7</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">derive_market_probabilities([[...]])</code> correctly computes all market probabilities from a 7×7 matrix</li>
+<li><span class="checkbox">☐</span> For a known scoreline matrix, <code class="inline-code">prob_home_win + prob_draw + prob_away_win</code> equals 1.0 (within floating point tolerance)</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">prob_over_25 + prob_under_25</code> equals 1.0</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">prob_btts_yes + prob_btts_no</code> equals 1.0</li>
+<li><span class="checkbox">☐</span> A test with a uniform scoreline matrix (equal probability for all 49 outcomes) produces probabilities that are mathematically correct</li></ul>
+<hr class='md-hr'>
+<h3 id="e5-02-poisson-regression-model" class="md-h3 subsection-header">E5-02 &mdash; Poisson Regression Model <span class="badge badge-completed">Completed</span></h3>
+<p class="md-p"><strong>Type:</strong> Backend</p>
+<p class="md-p"><strong>Depends on:</strong> E5-01, E4-03</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §4 Feature Set → Prediction Models, MP §5 Architecture → Scoreline matrix</p>
+<p class="md-p">Implement the Poisson regression model &mdash; BetVector's foundational prediction model.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">src/models/poisson.py</code> inheriting from <code class="inline-code">BaseModel</code></li>
+<li>Training: use statsmodels <code class="inline-code">GLM</code> with Poisson family to predict goals scored based on team attack strength, opponent defense strength, and home advantage</li>
+<li>The model produces two lambda values per match: <code class="inline-code">lambda_home</code> (expected home goals) and <code class="inline-code">lambda_away</code> (expected away goals)</li>
+<li>Scoreline matrix generation: for each cell [h][a], probability = <code class="inline-code">poisson.pmf(h, lambda_home) × poisson.pmf(a, lambda_away)</code> using <code class="inline-code">scipy.stats.poisson</code></li>
+<li>Truncate at 6 goals and renormalise so the matrix sums to 1.0</li>
+<li>Use <code class="inline-code">derive_market_probabilities()</code> from E5-01 to get all market probs</li>
+<li>Save/load model using <code class="inline-code">joblib</code> or <code class="inline-code">pickle</code></li>
+<li>Add extensive comments explaining: Poisson distribution, attack/defense strength, why independence assumption works, how the scoreline matrix is built</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> <code class="inline-code">PoissonModel.train(features_df, results_df)</code> fits a Poisson regression without errors</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">PoissonModel.predict(features_df)</code> returns a list of <code class="inline-code">MatchPrediction</code> objects</li>
+<li><span class="checkbox">☐</span> Each prediction has <code class="inline-code">predicted_home_goals</code> and <code class="inline-code">predicted_away_goals</code> as positive floats (typically 0.5–3.5)</li>
+<li><span class="checkbox">☐</span> Each prediction's <code class="inline-code">scoreline_matrix</code> is a 7×7 matrix where all values sum to 1.0 (±0.001)</li>
+<li><span class="checkbox">☐</span> All derived market probabilities are between 0.0 and 1.0</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">prob_home_win + prob_draw + prob_away_win</code> = 1.0 (±0.001) for every prediction</li>
+<li><span class="checkbox">☐</span> Model can be saved to a file and loaded back, producing identical predictions</li>
+<li><span class="checkbox">☐</span> Code comments explain what Poisson distribution is, how attack/defense strengths work, and how the scoreline matrix is generated</li></ul>
+<hr class='md-hr'>
+<h3 id="e5-03-prediction-storage-and-retrieval" class="md-h3 subsection-header">E5-03 &mdash; Prediction Storage and Retrieval <span class="badge badge-completed">Completed</span></h3>
+<p class="md-p"><strong>Type:</strong> Backend</p>
+<p class="md-p"><strong>Depends on:</strong> E5-02, E2-02</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §6 predictions table, MP §7 Model Interface</p>
+<p class="md-p">Store model predictions in the database and provide retrieval functions for downstream modules (value finder, dashboard).</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">src/models/storage.py</code></li>
+<li><code class="inline-code">save_predictions(predictions: list[MatchPrediction])</code>: store each prediction in the <code class="inline-code">predictions</code> table, serialising the scoreline matrix as JSON</li>
+<li><code class="inline-code">get_predictions(match_id, model_name=None)</code>: retrieve predictions for a match, optionally filtered by model. Deserialise scoreline matrix from JSON.</li>
+<li><code class="inline-code">get_latest_predictions(league_id=None)</code>: retrieve the most recent prediction for each upcoming match</li>
+<li>Handle duplicate predictions: if a prediction already exists for match_id + model_name + model_version, update it rather than inserting a duplicate</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> <code class="inline-code">save_predictions()</code> stores predictions in the database with scoreline_matrix as valid JSON</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">get_predictions(match_id)</code> returns predictions with scoreline_matrix deserialised to a Python list of lists</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">get_latest_predictions()</code> returns one prediction per upcoming match (most recent by created_at)</li>
+<li><span class="checkbox">☐</span> Saving the same prediction twice (same match_id, model_name, version) updates rather than duplicates</li>
+<li><span class="checkbox">☐</span> Stored <code class="inline-code">prob_home_win + prob_draw + prob_away_win</code> = 1.0 for every prediction in the database</li></ul>
+<hr class='md-hr'>
+<h2 id="e6-value-detection-bankroll" class="md-h2 section-header">E6 &mdash; Value Detection & Bankroll</h2>
+<h3 id="e6-01-value-finder" class="md-h3 subsection-header">E6-01 &mdash; Value Finder</h3>
+<p class="md-p"><strong>Type:</strong> Backend</p>
+<p class="md-p"><strong>Depends on:</strong> E5-03, E2-03</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §4 Feature Set → Value Detection, MP §7 Value Finder Interface, MP §12 Glossary (value bet, edge, implied probability)</p>
+<p class="md-p">Build the value finder that compares model probabilities to bookmaker odds and identifies value bets.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">src/betting/value_finder.py</code> implementing the <code class="inline-code">ValueFinder</code> interface from MP §7</li>
+<li>For each upcoming match, for each market type, for each bookmaker: calculate implied_prob = 1.0 / odds, calculate edge = model_prob - implied_prob</li>
+<li>Flag as value bet if edge >= user's configured threshold (from config or user settings)</li>
+<li>Calculate expected_value = (model_prob × odds) - 1.0</li>
+<li>Set confidence: 'high' if edge >= 0.10, 'medium' if 0.05 <= edge < 0.10, 'low' if edge < 0.05</li>
+<li>Generate human-readable explanation string for each value bet using the team names, market, and key stats</li>
+<li>Store value bets in the <code class="inline-code">value_bets</code> table</li>
+<li>Add detailed comments explaining: implied probability, edge, expected value, overround</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> <code class="inline-code">find_value_bets(match_id, edge_threshold)</code> returns a list of <code class="inline-code">ValueBet</code> objects</li>
+<li><span class="checkbox">☐</span> Each ValueBet has correct implied_prob = 1.0 / bookmaker_odds (verified mathematically)</li>
+<li><span class="checkbox">☐</span> Each ValueBet has correct edge = model_prob - implied_prob</li>
+<li><span class="checkbox">☐</span> Value bets are only returned when edge >= edge_threshold</li>
+<li><span class="checkbox">☐</span> Confidence is correctly assigned: 'high' for edge >= 10%, 'medium' for 5–10%, 'low' for < 5%</li>
+<li><span class="checkbox">☐</span> Each ValueBet has a non-empty explanation string containing team names and market type</li>
+<li><span class="checkbox">☐</span> Value bets are stored in the <code class="inline-code">value_bets</code> table with all fields populated</li></ul>
+<hr class='md-hr'>
+<h3 id="e6-02-bankroll-manager" class="md-h3 subsection-header">E6-02 &mdash; Bankroll Manager</h3>
+<p class="md-p"><strong>Type:</strong> Backend</p>
+<p class="md-p"><strong>Depends on:</strong> E6-01, E2-04</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §4 Feature Set → Bankroll Management, MP §7 Bankroll Manager Interface, MP §12 Glossary (bankroll, flat staking, Kelly)</p>
+<p class="md-p">Build the bankroll manager that calculates stakes and enforces safety limits.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">src/betting/bankroll.py</code> implementing the <code class="inline-code">BankrollManager</code> interface from MP §7</li>
+<li>Three staking methods (selected per user):</li>
+<li><code class="inline-code">flat</code>: stake = current_bankroll × stake_percentage (default 2%)</li>
+<li><code class="inline-code">percentage</code>: same as flat but recalculates after each bet (bankroll changes)</li>
+<li><code class="inline-code">kelly</code>: stake = ((model_prob × odds - 1) / (odds - 1)) × kelly_fraction × current_bankroll. Clamp to non-negative.</li>
+<li>Safety limits (from config):</li>
+<li>Max single bet: min(calculated_stake, current_bankroll × max_bet_pct)</li>
+<li>Daily loss limit: sum today's losses; if >= daily_loss_limit × starting_bankroll, return stake=0 with warning</li>
+<li>Drawdown alert: if current_bankroll < peak_bankroll × (1 - drawdown_alert), flag warning</li>
+<li>Minimum bankroll: if current_bankroll < starting_bankroll × min_bankroll_pct, return stake=0 with "paper trade only" warning</li>
+<li><code class="inline-code">check_safety_limits()</code> returns a dict: <code class="inline-code">{daily_limit_hit: bool, drawdown_warning: bool, min_bankroll_hit: bool, message: str}</code></li>
+<li>Add detailed comments explaining: bankroll management, flat stakes, Kelly Criterion formula with worked example, fractional Kelly, drawdown</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> <code class="inline-code">calculate_stake(user_id, model_prob, odds)</code> returns correct stake for flat method: current_bankroll × 0.02</li>
+<li><span class="checkbox">☐</span> Kelly stake is calculated correctly: ((0.6 × 2.1 - 1) / (2.1 - 1)) × 0.25 × bankroll = correct value</li>
+<li><span class="checkbox">☐</span> Max single bet cap is enforced: no stake exceeds 5% of current bankroll regardless of method</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">check_safety_limits()</code> returns <code class="inline-code">daily_limit_hit=True</code> when daily losses exceed 10% of starting bankroll</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">check_safety_limits()</code> returns <code class="inline-code">drawdown_warning=True</code> when bankroll is 25%+ below peak</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">check_safety_limits()</code> returns <code class="inline-code">min_bankroll_hit=True</code> when bankroll drops below 50% of starting amount</li>
+<li><span class="checkbox">☐</span> Kelly stake returns 0 when model_prob × odds < 1 (negative edge &mdash; no bet)</li>
+<li><span class="checkbox">☐</span> Code comments include a worked Kelly Criterion example with actual numbers</li></ul>
+<hr class='md-hr'>
+<h3 id="e6-03-bet-tracker" class="md-h3 subsection-header">E6-03 &mdash; Bet Tracker</h3>
+<p class="md-p"><strong>Type:</strong> Backend</p>
+<p class="md-p"><strong>Depends on:</strong> E6-02</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §4 Feature Set → Bet Tracking, MP §6 bet_log table, MP §3 Flow 5</p>
+<p class="md-p">Build the bet tracker that logs system picks and user-placed bets, and resolves them when results come in.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">src/betting/tracker.py</code></li>
+<li><code class="inline-code">log_system_picks(value_bets, user_id)</code>: auto-log all value bets as 'system_pick' entries with calculated stake based on user's staking method. Bankroll fields populated from current state.</li>
+<li><code class="inline-code">log_user_bet(value_bet_id, user_id, actual_odds, actual_stake)</code>: log a user-placed bet linked to a system pick, with the actual odds and stake they got.</li>
+<li><code class="inline-code">resolve_bets(match_id)</code>: when match results come in, update all pending bets for that match. Calculate PnL: if won, pnl = stake × (odds - 1); if lost, pnl = -stake. Update bankroll_after.</li>
+<li><code class="inline-code">get_bet_history(user_id, filters)</code>: retrieve bet log with optional filters (date range, league, market, status, bet_type)</li>
+<li>Calculate CLV for resolved bets: compare odds_at_placement to closing_odds</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> <code class="inline-code">log_system_picks()</code> creates a bet_log entry for every value bet with bet_type='system_pick' and status='pending'</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">log_user_bet()</code> creates a bet_log entry with bet_type='user_placed' and links to the correct value_bet_id</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">resolve_bets(match_id)</code> changes status from 'pending' to 'won' or 'lost' based on match result</li>
+<li><span class="checkbox">☐</span> PnL is calculated correctly: won bets have positive pnl = stake × (odds - 1), lost bets have negative pnl = -stake</li>
+<li><span class="checkbox">☐</span> User's current_bankroll in the users table is updated after bet resolution</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">get_bet_history()</code> returns results filtered correctly by date range, league, market type, and bet_type</li>
+<li><span class="checkbox">☐</span> CLV is calculated when closing_odds are available: clv = (1/closing_odds) - (1/odds_at_placement)</li></ul>
+<hr class='md-hr'>
+<h2 id="e7-evaluation-backtesting" class="md-h2 section-header">E7 &mdash; Evaluation & Backtesting</h2>
+<h3 id="e7-01-metrics-module" class="md-h3 subsection-header">E7-01 &mdash; Metrics Module</h3>
+<p class="md-p"><strong>Type:</strong> Backend</p>
+<p class="md-p"><strong>Depends on:</strong> E6-03</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §4 Feature Set → Evaluation, MP §7 Pipeline Orchestrator, MP §12 Glossary (ROI, Brier score, CLV, calibration)</p>
+<p class="md-p">Build the metrics calculation module for evaluating model and betting performance.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">src/evaluation/metrics.py</code></li>
+<li><code class="inline-code">calculate_roi(bet_logs)</code>: total_pnl / total_staked. Return as a percentage.</li>
+<li><code class="inline-code">calculate_brier_score(predictions, actuals)</code>: mean squared error between predicted probabilities and binary outcomes (0 or 1). Implement for 1X2 market: for each match, Brier = (prob_home - actual_home)² + (prob_draw - actual_draw)² + (prob_away - actual_away)²</li>
+<li><code class="inline-code">calculate_calibration(predictions, actuals, n_bins=10)</code>: bucket predictions into probability bins (0.0–0.1, 0.1–0.2, etc.), calculate actual win rate per bin. Return as dict for plotting.</li>
+<li><code class="inline-code">calculate_clv(bet_logs)</code>: average CLV across all bets where closing_odds are available</li>
+<li><code class="inline-code">generate_performance_report(user_id, period)</code>: calculate all metrics for a time period, store in <code class="inline-code">model_performance</code> table</li>
+<li>Add detailed comments explaining each metric and what "good" looks like</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> <code class="inline-code">calculate_roi()</code> returns correct ROI: if 100 staked and 105 returned, ROI = 5%</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">calculate_brier_score()</code> returns a float between 0 and 2 (for 1X2 market)</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">calculate_brier_score()</code> for a perfect predictor returns 0.0</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">calculate_calibration()</code> returns a dict with keys like <code class="inline-code">"0.5-0.6": {"predicted_avg": 0.55, "actual_rate": 0.52, "count": 30}</code></li>
+<li><span class="checkbox">☐</span> <code class="inline-code">calculate_clv()</code> returns average CLV as a float (positive = beating closing line)</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">generate_performance_report()</code> stores results in <code class="inline-code">model_performance</code> table</li>
+<li><span class="checkbox">☐</span> Code comments explain what each metric means and what ranges indicate good performance</li></ul>
+<hr class='md-hr'>
+<h3 id="e7-02-walk-forward-backtester" class="md-h3 subsection-header">E7-02 &mdash; Walk-Forward Backtester</h3>
+<p class="md-p"><strong>Type:</strong> Backend</p>
+<p class="md-p"><strong>Depends on:</strong> E7-01, E5-02, E4-03, E6-01, E6-02</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §4 Feature Set → Evaluation, MP §12 Glossary (walk-forward validation)</p>
+<p class="md-p">Build the walk-forward backtesting framework that simulates real-world usage on historical data.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">src/evaluation/backtester.py</code></li>
+<li><code class="inline-code">run_backtest(league_id, season, model_class, edge_threshold, staking_method)</code>: </li>
+<li>Sort all matches in the season by date</li>
+<li>For each matchday: (1) train model on all data before this date, (2) compute features for this matchday's matches, (3) predict, (4) find value bets, (5) simulate betting with the staking method, (6) record results</li>
+<li>Track cumulative P&L, running ROI, and running Brier score</li>
+<li>Return a <code class="inline-code">BacktestResult</code> dataclass: total_matches, total_value_bets, total_staked, total_pnl, roi, brier_score, calibration_data, clv_avg, daily_pnl_series (for plotting)</li>
+<li>Print progress: "Backtesting matchday 15/38: 3 value bets found, running ROI: +2.3%"</li>
+<li>CRITICAL: the model MUST retrain from scratch for each matchday (or use an expanding window). It must never see future data.</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> <code class="inline-code">run_backtest()</code> iterates through matchdays in chronological order</li>
+<li><span class="checkbox">☐</span> For each matchday, the model is trained only on matches before that date (verifiable by checking training set size increases)</li>
+<li><span class="checkbox">☐</span> Value bets are identified using the specified edge threshold</li>
+<li><span class="checkbox">☐</span> Betting is simulated using the specified staking method with safety limits</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">BacktestResult</code> contains: total_matches, total_value_bets, total_staked, total_pnl, roi, brier_score, calibration_data, daily_pnl_series</li>
+<li><span class="checkbox">☐</span> Progress messages print to console during backtest</li>
+<li><span class="checkbox">☐</span> A full-season EPL backtest completes in under 10 minutes</li></ul>
+<hr class='md-hr'>
+<h3 id="e7-03-backtest-reporting" class="md-h3 subsection-header">E7-03 &mdash; Backtest Reporting</h3>
+<p class="md-p"><strong>Type:</strong> Backend</p>
+<p class="md-p"><strong>Depends on:</strong> E7-02</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §4 Feature Set → Evaluation</p>
+<p class="md-p">Generate formatted backtest reports for console output and file export.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">src/evaluation/reporter.py</code></li>
+<li><code class="inline-code">print_backtest_report(result: BacktestResult)</code>: formatted console output with key metrics, including a visual P&L sparkline if terminal supports it</li>
+<li><code class="inline-code">save_backtest_report(result, filepath)</code>: save detailed report as JSON for later analysis</li>
+<li><code class="inline-code">plot_backtest_results(result)</code>: generate a matplotlib figure with: P&L curve over time, calibration plot, ROI by market type. Save as PNG to <code class="inline-code">data/predictions/</code></li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> <code class="inline-code">print_backtest_report()</code> outputs: total matches, value bets found, total staked, P&L, ROI, Brier score, CLV in a formatted table</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">save_backtest_report()</code> creates a valid JSON file with all backtest data</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">plot_backtest_results()</code> generates and saves a PNG with P&L curve and calibration plot</li>
+<li><span class="checkbox">☐</span> Report clearly labels whether ROI is positive or negative</li>
+<li><span class="checkbox">☐</span> Report includes a per-market breakdown (1X2, O/U, BTTS) if bets span multiple markets</li></ul>
+<hr class='md-hr'>
+<h2 id="e8-pipeline-orchestrator" class="md-h2 section-header">E8 &mdash; Pipeline Orchestrator</h2>
+<h3 id="e8-01-pipeline-runner" class="md-h3 subsection-header">E8-01 &mdash; Pipeline Runner</h3>
+<p class="md-p"><strong>Type:</strong> Integration</p>
+<p class="md-p"><strong>Depends on:</strong> E7-02, E6-03</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §5 Architecture → Scheduling, MP §7 Pipeline Orchestrator Interface</p>
+<p class="md-p">Build the pipeline orchestrator that chains all modules together for the three daily runs.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">src/pipeline.py</code> implementing the <code class="inline-code">Pipeline</code> interface from MP §7</li>
+<li><code class="inline-code">run_morning()</code>: scrape latest data → load into DB → compute features → run predictions → find value bets → log system picks → (email integration comes in E11)</li>
+<li><code class="inline-code">run_midday()</code>: re-fetch odds only → recalculate edges → update value_bets table</li>
+<li><code class="inline-code">run_evening()</code>: scrape results → resolve pending bets → calculate P&L → update bankroll → generate performance metrics → (email comes in E11)</li>
+<li><code class="inline-code">run_backtest()</code>: delegate to backtester from E7-02</li>
+<li>Each run creates a <code class="inline-code">pipeline_runs</code> entry with start time, status, counts, and duration</li>
+<li>Wrap each run in try/except: if any step fails, log the error in pipeline_runs and continue to next step where possible</li>
+<li>Print clear step-by-step progress: "[Step 1/6] Downloading data... → EPL: 10 new matches found"</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> <code class="inline-code">run_morning()</code> executes the full pipeline: scrape → load → features → predict → value bets → log picks</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">run_midday()</code> re-fetches odds and recalculates edges without re-scraping results</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">run_evening()</code> resolves bets, updates P&L, and recalculates performance metrics</li>
+<li><span class="checkbox">☐</span> Each run creates a <code class="inline-code">pipeline_runs</code> record with correct run_type, status, and counts</li>
+<li><span class="checkbox">☐</span> If a step fails, the error is logged and subsequent steps still attempt to run</li>
+<li><span class="checkbox">☐</span> Duration is recorded in seconds in the pipeline_runs table</li>
+<li><span class="checkbox">☐</span> Step-by-step progress messages print to console</li></ul>
+<hr class='md-hr'>
+<h3 id="e8-02-cli-interface" class="md-h3 subsection-header">E8-02 &mdash; CLI Interface</h3>
+<p class="md-p"><strong>Type:</strong> Integration</p>
+<p class="md-p"><strong>Depends on:</strong> E8-01</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §5 Architecture</p>
+<p class="md-p">Create the command-line interface for running the pipeline manually.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">run_pipeline.py</code> in the project root</li>
+<li>Use <code class="inline-code">argparse</code> for commands: <code class="inline-code">python run_pipeline.py morning</code>, <code class="inline-code">python run_pipeline.py midday</code>, <code class="inline-code">python run_pipeline.py evening</code>, <code class="inline-code">python run_pipeline.py backtest --league EPL --season 2024-25</code>, <code class="inline-code">python run_pipeline.py setup</code> (runs init_db + seed)</li>
+<li>Default (no arguments): run <code class="inline-code">morning</code> pipeline</li>
+<li>Add <code class="inline-code">--verbose</code> flag for DEBUG-level logging</li>
+<li>Add <code class="inline-code">--dry-run</code> flag that runs everything except database writes (useful for testing)</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> <code class="inline-code">python run_pipeline.py setup</code> initialises the database and seeds it</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">python run_pipeline.py morning</code> runs the full morning pipeline</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">python run_pipeline.py backtest --league EPL --season 2024-25</code> runs a backtest and prints results</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">python run_pipeline.py --help</code> shows usage information for all commands</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">--verbose</code> flag increases log output to DEBUG level</li>
+<li><span class="checkbox">☐</span> Running with no arguments defaults to the morning pipeline</li></ul>
+<hr class='md-hr'>
+<h2 id="e9-dashboard-core" class="md-h2 section-header">E9 &mdash; Dashboard &mdash; Core</h2>
+<h3 id="e9-01-streamlit-app-shell-and-theme" class="md-h3 subsection-header">E9-01 &mdash; Streamlit App Shell and Theme</h3>
+<p class="md-p"><strong>Type:</strong> Frontend</p>
+<p class="md-p"><strong>Depends on:</strong> E8-01</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §8 Design System, MP §3 Flow 4 (navigation)</p>
+<p class="md-p">Create the Streamlit app with dark theme, navigation, and page routing.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">src/delivery/dashboard.py</code> as the main Streamlit entry point</li>
+<li>Use Streamlit's multi-page app pattern with <code class="inline-code">st.navigation</code> or sidebar radio buttons</li>
+<li>Implement the dark theme from MP §8: set custom theme in <code class="inline-code">.streamlit/config.toml</code> (primaryColor, backgroundColor, secondaryBackgroundColor, textColor)</li>
+<li>Inject custom CSS via <code class="inline-code">st.markdown</code> for: JetBrains Mono font loading (Google Fonts), card styling, table styling, badge colours</li>
+<li>Simple password gate: <code class="inline-code">st.text_input(type="password")</code> checking against environment variable</li>
+<li>Mobile-responsive: test sidebar collapse on mobile, use <code class="inline-code">st.columns</code> with responsive ratios</li>
+<li>Pages: Today's Picks, Performance Tracker, League Explorer, Model Health, Bankroll Manager, Settings</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> <code class="inline-code">streamlit run src/delivery/dashboard.py</code> launches the app without errors</li>
+<li><span class="checkbox">☐</span> Background colour is <code class="inline-code">#0D1117</code>, surface colour is <code class="inline-code">#161B22</code>, text is <code class="inline-code">#E6EDF3</code></li>
+<li><span class="checkbox">☐</span> JetBrains Mono font is loaded and used for data values</li>
+<li><span class="checkbox">☐</span> Inter font is loaded and used for body text and labels</li>
+<li><span class="checkbox">☐</span> Navigation between all 6 pages works</li>
+<li><span class="checkbox">☐</span> Password gate blocks access until correct password is entered</li>
+<li><span class="checkbox">☐</span> App renders correctly on a 375px-wide viewport (mobile)</li></ul>
+<hr class='md-hr'>
+<h3 id="e9-02-todays-picks-page" class="md-h3 subsection-header">E9-02 &mdash; Today's Picks Page</h3>
+<p class="md-p"><strong>Type:</strong> Frontend</p>
+<p class="md-p"><strong>Depends on:</strong> E9-01, E6-01</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §3 Flow 1 (Morning Picks Review), MP §8 Design System</p>
+<p class="md-p">Build the Today's Picks page &mdash; the primary daily interface.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">src/delivery/pages/picks.py</code></li>
+<li>Query upcoming matches with value bets from the database</li>
+<li>Display as cards: match info (teams, league, kickoff time), market, BetVector probability, bookmaker odds (highlight FanDuel), edge, confidence badge (green/yellow/red), suggested stake</li>
+<li>"Mark as Placed" button per card: opens a form to enter actual odds and stake, saves to bet_log as 'user_placed'</li>
+<li>Edge threshold slider at the top: filters displayed picks in real-time (reads from user settings, adjustable)</li>
+<li>Sort by edge (highest first)</li>
+<li>Empty state: "No value bets right now. Your bankroll thanks you for your patience."</li>
+<li>Show odds movement warning if edge has eroded since detection</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> Page displays all value bets for today's matches, sorted by edge descending</li>
+<li><span class="checkbox">☐</span> Each card shows: teams, league, kickoff time, market, model probability, bookmaker odds, edge, confidence badge, suggested stake</li>
+<li><span class="checkbox">☐</span> Confidence badges use correct colours: green (#3FB950) for high, yellow (#D29922) for medium</li>
+<li><span class="checkbox">☐</span> Edge threshold slider filters picks in real-time</li>
+<li><span class="checkbox">☐</span> "Mark as Placed" button opens a form with editable odds and stake fields</li>
+<li><span class="checkbox">☐</span> Submitting the form creates a bet_log entry with bet_type='user_placed'</li>
+<li><span class="checkbox">☐</span> Empty state message shows when no value bets exist</li>
+<li><span class="checkbox">☐</span> FanDuel odds are highlighted if available</li></ul>
+<hr class='md-hr'>
+<h3 id="e9-03-performance-tracker-page" class="md-h3 subsection-header">E9-03 &mdash; Performance Tracker Page</h3>
+<p class="md-p"><strong>Type:</strong> Frontend</p>
+<p class="md-p"><strong>Depends on:</strong> E9-01, E7-01</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §3 Flow 2 (Evening Results Review), MP §8 Design System</p>
+<p class="md-p">Build the Performance Tracker page showing betting results and P&L.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">src/delivery/pages/performance.py</code></li>
+<li>Top row: 4 metric cards &mdash; Total P&L (large number, green/red), ROI %, Total Bets, Win Rate</li>
+<li>Main chart: Plotly line chart of cumulative P&L over time. Dark theme, green line, transparent background.</li>
+<li>Filters: date range picker, league dropdown, market type dropdown, bet_type toggle (system picks vs user placed)</li>
+<li>Below chart: recent bets table with columns: Date, Match, Market, Odds, Stake, Result (✅/❌), P&L. Alternating row colours per MP §8.</li>
+<li>Monthly summary: bar chart of monthly P&L (green bars for positive months, red for negative)</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> Page displays 4 metric cards with current P&L, ROI, total bets, and win rate</li>
+<li><span class="checkbox">☐</span> P&L number is green (#3FB950) when positive, red (#F85149) when negative</li>
+<li><span class="checkbox">☐</span> Plotly line chart shows cumulative P&L over time with correct dark theme styling</li>
+<li><span class="checkbox">☐</span> Filters (date range, league, market, bet_type) correctly filter all displayed data</li>
+<li><span class="checkbox">☐</span> Bets table shows recent bets with correct result indicators</li>
+<li><span class="checkbox">☐</span> Monthly bar chart displays with green/red bars</li>
+<li><span class="checkbox">☐</span> All numbers use JetBrains Mono font</li></ul>
+<hr class='md-hr'>
+<h3 id="e9-04-league-explorer-page" class="md-h3 subsection-header">E9-04 &mdash; League Explorer Page</h3>
+<p class="md-p"><strong>Type:</strong> Frontend</p>
+<p class="md-p"><strong>Depends on:</strong> E9-01, E4-03</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §3 Flow 4 (Dashboard Exploration), MP §8 Design System</p>
+<p class="md-p">Build the League Explorer page for browsing league data and upcoming fixtures.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">src/delivery/pages/leagues.py</code></li>
+<li>League dropdown selector at top (populated from active leagues in config)</li>
+<li>Current standings table: Pos, Team, Played, W, D, L, GF, GA, GD, Pts. Calculated from match results.</li>
+<li>Recent results: last 10 matches in the league with scores</li>
+<li>Upcoming fixtures: next 10 matches with date, teams, and "View Analysis" button</li>
+<li>Form table: last 5 results per team shown as W/D/L badges (green/grey/red circles)</li>
+<li>Click any upcoming match to navigate to Match Deep Dive (E9-05)</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> League dropdown shows all active leagues from config</li>
+<li><span class="checkbox">☐</span> Standings table calculates correctly from match results (3 pts for win, 1 for draw)</li>
+<li><span class="checkbox">☐</span> Standings table sorts by points, then goal difference, then goals scored</li>
+<li><span class="checkbox">☐</span> Recent results show last 10 matches with correct scores</li>
+<li><span class="checkbox">☐</span> Upcoming fixtures list next 10 scheduled matches</li>
+<li><span class="checkbox">☐</span> Form badges show correct W/D/L sequence for each team's last 5 matches</li>
+<li><span class="checkbox">☐</span> Clicking an upcoming match navigates to the Match Deep Dive view</li></ul>
+<hr class='md-hr'>
+<h3 id="e9-05-match-deep-dive-view" class="md-h3 subsection-header">E9-05 &mdash; Match Deep Dive View</h3>
+<p class="md-p"><strong>Type:</strong> Frontend</p>
+<p class="md-p"><strong>Depends on:</strong> E9-04, E5-03, E4-03</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §3 Flow 1 Step 8, MP §8 Design System</p>
+<p class="md-p">Build the Match Deep Dive view showing comprehensive analysis for a single match.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">src/delivery/pages/match_detail.py</code></li>
+<li>Accessible from Today's Picks cards and League Explorer upcoming fixtures</li>
+<li>Sections:</li></ul>
+<p class="md-p">  1. Match header: Teams, date, kickoff time, league</p>
+<p class="md-p">  2. Model prediction summary: scoreline matrix heatmap (Plotly), predicted score, market probabilities</p>
+<p class="md-p">  3. Value bets for this match: all flagged value bets with edge and confidence</p>
+<p class="md-p">  4. Head-to-head: last 5 meetings table (date, score, venue)</p>
+<p class="md-p">  5. Team form: side-by-side comparison of home team and away team rolling stats (xG, goals, form) with sparkline charts</p>
+<p class="md-p">  6. Injury/suspension report (placeholder &mdash; data from API-Football when available)</p>
+<ul class='md-list'><li>Scoreline matrix: 7×7 heatmap with darker cells for higher probability, most likely scoreline highlighted</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> Match detail view loads for any match when navigated to</li>
+<li><span class="checkbox">☐</span> Scoreline matrix displays as a 7×7 heatmap with probability values visible in cells</li>
+<li><span class="checkbox">☐</span> Most likely scoreline cell is visually highlighted</li>
+<li><span class="checkbox">☐</span> All derived market probabilities are displayed (1X2, O/U 2.5, BTTS)</li>
+<li><span class="checkbox">☐</span> H2H table shows last 5 meetings with correct dates and scores</li>
+<li><span class="checkbox">☐</span> Team form section shows rolling stats for both teams side-by-side</li>
+<li><span class="checkbox">☐</span> Back navigation returns to the previous page (Picks or League Explorer)</li></ul>
+<hr class='md-hr'>
+<h2 id="e10-dashboard-advanced" class="md-h2 section-header">E10 &mdash; Dashboard &mdash; Advanced</h2>
+<h3 id="e10-01-model-health-page" class="md-h3 subsection-header">E10-01 &mdash; Model Health Page</h3>
+<p class="md-p"><strong>Type:</strong> Frontend</p>
+<p class="md-p"><strong>Depends on:</strong> E9-01, E7-01</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §3 Flow 4 (Model Health), MP §8 Design System, MP §11 Self-Improvement Engine</p>
+<p class="md-p">Build the Model Health page showing calibration, Brier scores, CLV, and self-improvement status.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">src/delivery/pages/model_health.py</code></li>
+<li>Calibration plot: Plotly scatter with diagonal reference line. X-axis = predicted probability, Y-axis = actual win rate. Points sized by sample count per bin.</li>
+<li>Brier score trend: line chart over time (by week or month)</li>
+<li>CLV tracking: line chart of rolling average CLV</li>
+<li>Model comparison: if multiple models active, side-by-side metrics table (Brier, ROI, CLV per model)</li>
+<li>Ensemble weights: horizontal stacked bar showing current model weights</li>
+<li>Feature importance: horizontal bar chart of top 15 features (from E12-02)</li>
+<li>Market Edge Map: heatmap of league × market performance (from E12-04)</li>
+<li>Recalibration history: table of past recalibration events with before/after error</li>
+<li>Retrain history: table of past retrains with trigger reason and outcome</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> Calibration plot displays with diagonal reference line and correctly binned data points</li>
+<li><span class="checkbox">☐</span> Brier score trend chart shows historical scores by time period</li>
+<li><span class="checkbox">☐</span> CLV trend chart shows rolling average CLV</li>
+<li><span class="checkbox">☐</span> Model comparison table displays when 2+ models are active</li>
+<li><span class="checkbox">☐</span> Ensemble weight bar shows current weight allocation per model</li>
+<li><span class="checkbox">☐</span> Feature importance chart shows top 15 features ranked by gain</li>
+<li><span class="checkbox">☐</span> Market Edge Map heatmap is colour-coded by assessment (green/yellow/white/red)</li>
+<li><span class="checkbox">☐</span> All charts use dark theme styling from MP §8</li></ul>
+<hr class='md-hr'>
+<h3 id="e10-02-bankroll-manager-page" class="md-h3 subsection-header">E10-02 &mdash; Bankroll Manager Page</h3>
+<p class="md-p"><strong>Type:</strong> Frontend</p>
+<p class="md-p"><strong>Depends on:</strong> E9-01, E6-02</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §3 Flow 4 (Bankroll Manager), MP §8 Design System</p>
+<p class="md-p">Build the Bankroll Manager page for tracking and managing the betting bankroll.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">src/delivery/pages/bankroll.py</code></li>
+<li>Top row: current bankroll (large number), starting bankroll, peak bankroll, current drawdown %</li>
+<li>Staking method display: show current method with brief explanation</li>
+<li>Bet history table: filterable (date, league, market, result, bet_type), sortable, with pagination</li>
+<li>Safety status: traffic light indicators for each limit (daily loss, drawdown, min bankroll) &mdash; green = OK, yellow = approaching, red = triggered</li>
+<li>Bankroll chart: Plotly line chart showing bankroll over time, with peak highlighted</li>
+<li>Monthly P&L breakdown: table with month, bets placed, wins, losses, P&L, ROI</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> Current bankroll displays in large JetBrains Mono text, green if above starting, red if below</li>
+<li><span class="checkbox">☐</span> Drawdown percentage is calculated correctly from peak bankroll</li>
+<li><span class="checkbox">☐</span> Bet history table filters and sorts correctly</li>
+<li><span class="checkbox">☐</span> Safety status indicators show correct colours based on current limits</li>
+<li><span class="checkbox">☐</span> Bankroll chart shows historical bankroll with peak annotated</li>
+<li><span class="checkbox">☐</span> Monthly breakdown table calculates correctly from bet_log data</li></ul>
+<hr class='md-hr'>
+<h3 id="e10-03-settings-page" class="md-h3 subsection-header">E10-03 &mdash; Settings Page</h3>
+<p class="md-p"><strong>Type:</strong> Frontend</p>
+<p class="md-p"><strong>Depends on:</strong> E9-01, E1-03</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §3 Flow 6 (First-Time Setup), MP §3 Flow 7 (Adding a Friend)</p>
+<p class="md-p">Build the Settings page for user preferences, system configuration, and user management.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">src/delivery/pages/settings.py</code></li>
+<li>User preferences section: staking method selector (flat/percentage/kelly), stake percentage slider, Kelly fraction slider, edge threshold slider (1%–15%), starting bankroll input</li>
+<li>League management: checkboxes to enable/disable leagues</li>
+<li>Notification preferences: toggles for morning/evening/weekly emails, email address input</li>
+<li>User management (owner only): list current users, "Invite User" button that generates an access link, ability to deactivate users</li>
+<li>All changes save to the database immediately on change</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> Staking method selector shows three options with explanations</li>
+<li><span class="checkbox">☐</span> Edge threshold slider ranges from 1% to 15% with 1% increments</li>
+<li><span class="checkbox">☐</span> Changing a setting persists to the users table in the database</li>
+<li><span class="checkbox">☐</span> League toggles reflect current config and changes take effect on next pipeline run</li>
+<li><span class="checkbox">☐</span> User management section is visible only to users with role='owner'</li>
+<li><span class="checkbox">☐</span> "Invite User" creates a new user record with role='viewer'</li></ul>
+<hr class='md-hr'>
+<h3 id="e10-04-onboarding-flow" class="md-h3 subsection-header">E10-04 &mdash; Onboarding Flow</h3>
+<p class="md-p"><strong>Type:</strong> Frontend</p>
+<p class="md-p"><strong>Depends on:</strong> E10-03</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §3 Flow 6 (First-Time Setup)</p>
+<p class="md-p">Build the first-time setup wizard that guides new users through initial configuration.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">src/delivery/pages/onboarding.py</code></li>
+<li>Displayed only when user has never completed onboarding (check a <code class="inline-code">has_onboarded</code> flag in users table)</li>
+<li>5 steps as per MP §3 Flow 6: Bankroll → Staking Method → Edge Threshold → Leagues → Notifications</li>
+<li>Each step has an explanation of the concept in plain language</li>
+<li>Progress indicator at top (Step 2 of 5)</li>
+<li>"Start BetVector" button on final step sets <code class="inline-code">has_onboarded=True</code> and redirects to Today's Picks</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> Onboarding shows automatically for new users who haven't completed it</li>
+<li><span class="checkbox">☐</span> All 5 steps are present with correct explanations</li>
+<li><span class="checkbox">☐</span> Progress indicator shows current step number</li>
+<li><span class="checkbox">☐</span> Settings chosen during onboarding are saved to the users table</li>
+<li><span class="checkbox">☐</span> Completing onboarding sets a flag and redirects to Today's Picks</li>
+<li><span class="checkbox">☐</span> Returning users skip onboarding and go directly to the dashboard</li></ul>
+<hr class='md-hr'>
+<h2 id="e11-email-notifications" class="md-h2 section-header">E11 &mdash; Email Notifications</h2>
+<h3 id="e11-01-email-templates" class="md-h3 subsection-header">E11-01 &mdash; Email Templates</h3>
+<p class="md-p"><strong>Type:</strong> Backend</p>
+<p class="md-p"><strong>Depends on:</strong> E7-01, E6-03</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §3 Flows 1–3 (email content), MP §5 Architecture → Email</p>
+<p class="md-p">Create HTML email templates for all three scheduled emails using Jinja2.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">templates/morning_picks.html</code>, <code class="inline-code">templates/evening_review.html</code>, <code class="inline-code">templates/weekly_summary.html</code></li>
+<li>Use Jinja2 templating with inline CSS (email clients strip external styles)</li>
+<li>Dark theme styling matching dashboard: dark background, green/red for P&L, monospace for numbers</li>
+<li>Morning template: value bets table (match, market, probability, odds, edge, stake), one-sentence explanation per pick, link to dashboard</li>
+<li>Evening template: results table (match, result, P&L), daily totals, running stats, tomorrow preview</li>
+<li>Weekly template: week summary metrics, best/worst pick, monthly chart (as static image or simple HTML table), model health snapshot</li>
+<li>Test that emails render correctly in Gmail (the most likely client)</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> Three Jinja2 HTML templates exist in <code class="inline-code">templates/</code> directory</li>
+<li><span class="checkbox">☐</span> Morning template renders a table of value bets with all required columns</li>
+<li><span class="checkbox">☐</span> Evening template renders results with ✅/❌ indicators and P&L</li>
+<li><span class="checkbox">☐</span> Weekly template renders summary metrics and best/worst picks</li>
+<li><span class="checkbox">☐</span> All templates use inline CSS (no external stylesheets)</li>
+<li><span class="checkbox">☐</span> All templates include a "Open Dashboard" link</li>
+<li><span class="checkbox">☐</span> Templates render correctly when opened in a browser</li></ul>
+<hr class='md-hr'>
+<h3 id="e11-02-email-sender" class="md-h3 subsection-header">E11-02 &mdash; Email Sender</h3>
+<p class="md-p"><strong>Type:</strong> Backend</p>
+<p class="md-p"><strong>Depends on:</strong> E11-01</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §5 Architecture → Email (Gmail SMTP)</p>
+<p class="md-p">Build the email sending module using Gmail SMTP.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">src/delivery/email_alerts.py</code></li>
+<li>Use Python's <code class="inline-code">smtplib</code> and <code class="inline-code">email.mime</code> modules</li>
+<li>SMTP config comes from <code class="inline-code">config/email_config.yaml</code> and environment variables (GMAIL_APP_PASSWORD)</li>
+<li><code class="inline-code">send_morning_picks(user_id)</code>: render morning template with today's value bets, send to user's email</li>
+<li><code class="inline-code">send_evening_review(user_id)</code>: render evening template with today's results, send</li>
+<li><code class="inline-code">send_weekly_summary(user_id)</code>: render weekly template with week's stats, send</li>
+<li><code class="inline-code">send_alert(user_id, subject, body)</code>: generic alert (for retrain notifications, safety warnings)</li>
+<li>Retry logic: 3 attempts with 5-second delay on SMTP errors</li>
+<li>Never hardcode credentials. Always read from environment variables.</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> <code class="inline-code">send_morning_picks()</code> sends an HTML email with today's value bets to the configured address</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">send_evening_review()</code> sends an HTML email with today's results and P&L</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">send_weekly_summary()</code> sends an HTML email with the week's summary metrics</li>
+<li><span class="checkbox">☐</span> Email credentials are read from environment variables, never from config files or code</li>
+<li><span class="checkbox">☐</span> SMTP connection uses TLS</li>
+<li><span class="checkbox">☐</span> Failed sends are retried 3 times before raising an error</li>
+<li><span class="checkbox">☐</span> Sent emails are logged in pipeline_runs (emails_sent count)</li></ul>
+<hr class='md-hr'>
+<h3 id="e11-03-email-integration-with-pipeline" class="md-h3 subsection-header">E11-03 &mdash; Email Integration with Pipeline</h3>
+<p class="md-p"><strong>Type:</strong> Integration</p>
+<p class="md-p"><strong>Depends on:</strong> E11-02, E8-01</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §5 Architecture → Scheduling</p>
+<p class="md-p">Connect email sending to the pipeline runs so emails are sent automatically at the end of each pipeline.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Modify <code class="inline-code">pipeline.run_morning()</code> to call <code class="inline-code">send_morning_picks()</code> for all active users after predictions complete</li>
+<li>Modify <code class="inline-code">pipeline.run_evening()</code> to call <code class="inline-code">send_evening_review()</code> after results processing</li>
+<li>Add weekly check in evening pipeline: if today is Sunday, also call <code class="inline-code">send_weekly_summary()</code></li>
+<li>If email sending fails, log the error but don't fail the entire pipeline</li>
+<li>Add email toggle check: only send to users who have notifications enabled</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> <code class="inline-code">run_morning()</code> sends morning picks emails to all users with notifications enabled</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">run_evening()</code> sends evening review emails</li>
+<li><span class="checkbox">☐</span> Weekly summary sends on Sundays only</li>
+<li><span class="checkbox">☐</span> Email failure does not cause the pipeline to fail &mdash; error is logged and pipeline continues</li>
+<li><span class="checkbox">☐</span> Users with notifications disabled do not receive emails</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">pipeline_runs.emails_sent</code> is correctly incremented</li></ul>
+<hr class='md-hr'>
+<h2 id="e12-self-improvement-engine" class="md-h2 section-header">E12 &mdash; Self-Improvement Engine</h2>
+<h3 id="e12-01-automatic-recalibration" class="md-h3 subsection-header">E12-01 &mdash; Automatic Recalibration</h3>
+<p class="md-p"><strong>Type:</strong> Backend</p>
+<p class="md-p"><strong>Depends on:</strong> E7-01, E5-03</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §11.1 Automatic Recalibration</p>
+<p class="md-p">Build the automatic recalibration system that corrects probability drift.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">src/self_improvement/calibration.py</code></li>
+<li>After every batch of resolved predictions, check if total unprocessed predictions since last calibration >= 200 (from config)</li>
+<li>If threshold met: compute calibration error. If mean absolute error > 0.03 (from config): fit Platt scaling (sklearn <code class="inline-code">CalibratedClassifierCV</code> or manual logistic regression on probabilities) or isotonic regression</li>
+<li>Store calibration event in <code class="inline-code">calibration_history</code> table</li>
+<li>Apply calibration to future predictions by transforming raw model probabilities through the calibration function</li>
+<li>Rollback: after 100 new predictions post-calibration, compare calibrated vs raw error. If calibrated is worse, rollback (set is_active=0, rolled_back=1)</li>
+<li>Never apply calibration to fewer than 200 predictions</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> Recalibration check runs after each batch of resolved predictions</li>
+<li><span class="checkbox">☐</span> No recalibration fires if fewer than 200 predictions have accumulated since last calibration</li>
+<li><span class="checkbox">☐</span> No recalibration fires if mean absolute calibration error is below 3%</li>
+<li><span class="checkbox">☐</span> When triggered, calibration parameters are stored in <code class="inline-code">calibration_history</code> with is_active=1</li>
+<li><span class="checkbox">☐</span> Calibrated probabilities are closer to actual outcomes than raw probabilities (measurable)</li>
+<li><span class="checkbox">☐</span> Rollback activates if calibrated predictions perform worse than raw over 100 post-calibration predictions</li>
+<li><span class="checkbox">☐</span> Rolled-back calibrations have <code class="inline-code">rolled_back=1</code> and <code class="inline-code">is_active=0</code> in the database</li></ul>
+<hr class='md-hr'>
+<h3 id="e12-02-feature-importance-tracking" class="md-h3 subsection-header">E12-02 &mdash; Feature Importance Tracking</h3>
+<p class="md-p"><strong>Type:</strong> Backend</p>
+<p class="md-p"><strong>Depends on:</strong> E5-02</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §11.2 Dynamic Feature Importance Tracking</p>
+<p class="md-p">Build the feature importance logger for tree-based models.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">src/self_improvement/feature_tracking.py</code></li>
+<li>After each XGBoost or LightGBM training cycle, extract feature importance (by gain)</li>
+<li>Log all features with their importance and rank to <code class="inline-code">feature_importance_log</code> table</li>
+<li><code class="inline-code">get_importance_trends(model_name, n_cycles=5)</code>: return trend data showing how each feature's importance has changed over the last N training cycles</li>
+<li>Flag features below 1% importance for 3+ consecutive cycles with a warning message</li>
+<li>This module only logs and reports &mdash; it never auto-removes features</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> After training a gradient boosting model, feature importance is logged to <code class="inline-code">feature_importance_log</code></li>
+<li><span class="checkbox">☐</span> Each logged entry includes model_name, training_date, feature_name, importance_gain, and importance_rank</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">get_importance_trends()</code> returns a DataFrame showing importance over the last N training cycles per feature</li>
+<li><span class="checkbox">☐</span> Features below 1% importance for 3+ consecutive cycles are flagged with a warning message</li>
+<li><span class="checkbox">☐</span> No features are automatically removed &mdash; the module is read-only on model configuration</li></ul>
+<hr class='md-hr'>
+<h3 id="e12-03-adaptive-ensemble-weights" class="md-h3 subsection-header">E12-03 &mdash; Adaptive Ensemble Weights</h3>
+<p class="md-p"><strong>Type:</strong> Backend</p>
+<p class="md-p"><strong>Depends on:</strong> E7-01, E5-03</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §11.3 Adaptive Ensemble Weights</p>
+<p class="md-p">Build the adaptive ensemble weight system that shifts weight toward better-performing models.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">src/self_improvement/ensemble_weights.py</code></li>
+<li><code class="inline-code">recalculate_weights()</code>: triggered every 100 resolved ensemble predictions</li>
+<li>Weight = inverse Brier score, normalised to sum to 1.0</li>
+<li>Guardrails from MP §11.3:</li>
+<li>Don't activate until each model has 300+ resolved predictions</li>
+<li>Max weight change per recalculation: 10 percentage points</li>
+<li>Weight floor: 10% (no model below this)</li>
+<li>Weight ceiling: 60% (no model above this)</li>
+<li>Smoothing: new_weight = 0.7 × calculated_weight + 0.3 × previous_weight</li>
+<li>Store each weight change in <code class="inline-code">ensemble_weight_history</code> with reason and metrics</li>
+<li><code class="inline-code">get_current_weights()</code>: return current weights for the ensemble predictor</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> Weights are not recalculated until each model has 300+ predictions</li>
+<li><span class="checkbox">☐</span> Weight changes never exceed 10 percentage points from previous weights</li>
+<li><span class="checkbox">☐</span> No model weight drops below 10% or exceeds 60%</li>
+<li><span class="checkbox">☐</span> Smoothing is applied: new weight blends 70% calculated with 30% previous</li>
+<li><span class="checkbox">☐</span> Each recalculation is logged in <code class="inline-code">ensemble_weight_history</code> with Brier scores and reason</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">get_current_weights()</code> returns a dict of model_name → weight that sums to 1.0</li>
+<li><span class="checkbox">☐</span> With only one active model, weight is 1.0 (ensemble degrades gracefully to single model)</li></ul>
+<hr class='md-hr'>
+<h3 id="e12-04-market-feedback-loop" class="md-h3 subsection-header">E12-04 &mdash; Market Feedback Loop</h3>
+<p class="md-p"><strong>Type:</strong> Backend</p>
+<p class="md-p"><strong>Depends on:</strong> E7-01, E6-03</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §11.4 Odds Market Feedback Loop</p>
+<p class="md-p">Build the league × market performance tracker with confidence intervals and assessments.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">src/self_improvement/market_feedback.py</code></li>
+<li><code class="inline-code">update_market_performance()</code>: run weekly, compute ROI + 95% CI for every league × market combination that has resolved bets</li>
+<li>95% CI calculation: use bootstrap resampling (1000 samples) or normal approximation for ROI confidence interval</li>
+<li>Assessment logic from MP §11.4:</li>
+<li>'profitable': ROI > 0 AND CI lower bound > 0 AND n >= 100</li>
+<li>'promising': ROI > 0 but CI includes 0, OR n = 50–99</li>
+<li>'insufficient': n < 50</li>
+<li>'unprofitable': ROI < 0 AND CI upper bound < 0 AND n >= 100</li>
+<li>Store in <code class="inline-code">market_performance</code> table</li>
+<li>Never auto-filter bets. Only surface warnings in the dashboard.</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> <code class="inline-code">update_market_performance()</code> computes ROI and 95% CI for every league × market combination</li>
+<li><span class="checkbox">☐</span> Combinations with < 50 bets are assessed as 'insufficient'</li>
+<li><span class="checkbox">☐</span> Combinations with ROI > 0 and CI lower > 0 and n >= 100 are assessed as 'profitable'</li>
+<li><span class="checkbox">☐</span> Combinations with ROI < 0 and CI upper < 0 and n >= 100 are assessed as 'unprofitable'</li>
+<li><span class="checkbox">☐</span> Results are stored in <code class="inline-code">market_performance</code> table with ROI, CI bounds, and assessment</li>
+<li><span class="checkbox">☐</span> No value bets are automatically filtered or suppressed based on market performance</li>
+<li><span class="checkbox">☐</span> Warning text is generated for 'unprofitable' combinations for use in the dashboard</li></ul>
+<hr class='md-hr'>
+<h3 id="e12-05-seasonal-re-training-triggers" class="md-h3 subsection-header">E12-05 &mdash; Seasonal Re-training Triggers</h3>
+<p class="md-p"><strong>Type:</strong> Backend</p>
+<p class="md-p"><strong>Depends on:</strong> E7-01, E5-02</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §11.5 Seasonal Re-training Triggers</p>
+<p class="md-p">Build the automatic re-training trigger that detects model degradation and initiates retraining.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">src/self_improvement/retrain_trigger.py</code></li>
+<li><code class="inline-code">check_retrain_needed(model_name)</code>: run daily in the evening pipeline</li>
+<li>Calculate rolling Brier score over last 100 predictions</li>
+<li>Compare to all-time average Brier score for this model</li>
+<li>If rolling is > 15% worse than all-time: trigger retrain</li>
+<li>Cooldown: no auto-retrain within 30 days of the last retrain (check <code class="inline-code">retrain_history</code>)</li>
+<li>On trigger: retrain model on full dataset, log in <code class="inline-code">retrain_history</code>, send email alert to owner</li>
+<li>Post-retrain evaluation: after 50 new predictions, compare new vs old model Brier score. If new is worse, rollback.</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> <code class="inline-code">check_retrain_needed()</code> correctly computes rolling vs all-time Brier score</li>
+<li><span class="checkbox">☐</span> Retrain triggers when rolling Brier is > 15% worse than all-time average</li>
+<li><span class="checkbox">☐</span> No retrain fires within 30 days of the last retrain (cooldown enforced)</li>
+<li><span class="checkbox">☐</span> Triggered retrain uses full historical dataset for training</li>
+<li><span class="checkbox">☐</span> Retrain event is logged in <code class="inline-code">retrain_history</code> with trigger_reason and brier_before</li>
+<li><span class="checkbox">☐</span> Email alert is sent to the owner when retrain triggers</li>
+<li><span class="checkbox">☐</span> Post-retrain evaluation after 50 predictions detects if new model is worse and rolls back</li>
+<li><span class="checkbox">☐</span> Rolled-back retrains have <code class="inline-code">was_rolled_back=1</code> in the database</li></ul>
+<hr class='md-hr'>
+<h2 id="e13-automation-deployment" class="md-h2 section-header">E13 &mdash; Automation & Deployment</h2>
+<h3 id="e13-01-github-actions-workflows" class="md-h3 subsection-header">E13-01 &mdash; GitHub Actions Workflows</h3>
+<p class="md-p"><strong>Type:</strong> Setup</p>
+<p class="md-p"><strong>Depends on:</strong> E11-03</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §5 Architecture → Scheduling (GitHub Actions)</p>
+<p class="md-p">Create GitHub Actions workflow files for automated daily pipeline execution.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">.github/workflows/morning.yml</code>: cron schedule <code class="inline-code">0 6 <em> </em> *</code> (UTC), runs <code class="inline-code">python run_pipeline.py morning</code></li>
+<li>Create <code class="inline-code">.github/workflows/midday.yml</code>: cron schedule <code class="inline-code">0 13 <em> </em> *</code>, runs <code class="inline-code">python run_pipeline.py midday</code></li>
+<li>Create <code class="inline-code">.github/workflows/evening.yml</code>: cron schedule <code class="inline-code">0 22 <em> </em> *</code>, runs <code class="inline-code">python run_pipeline.py evening</code></li>
+<li>Each workflow: checkout repo → setup Python 3.10 → install dependencies → run script → commit database changes (if using SQLite in repo)</li>
+<li>Secrets needed: GMAIL_APP_PASSWORD, DASHBOARD_PASSWORD, and any API keys</li>
+<li>Add error notification: if workflow fails, send an email alert</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> Three workflow YAML files exist in <code class="inline-code">.github/workflows/</code></li>
+<li><span class="checkbox">☐</span> Morning workflow is scheduled for 06:00 UTC daily</li>
+<li><span class="checkbox">☐</span> Midday workflow is scheduled for 13:00 UTC daily</li>
+<li><span class="checkbox">☐</span> Evening workflow is scheduled for 22:00 UTC daily</li>
+<li><span class="checkbox">☐</span> Each workflow installs Python 3.10 and all requirements</li>
+<li><span class="checkbox">☐</span> Secrets are referenced as <code class="inline-code">${{ secrets.GMAIL_APP_PASSWORD }}</code>, never hardcoded</li>
+<li><span class="checkbox">☐</span> Workflow commits database changes back to repo (if using SQLite strategy)</li>
+<li><span class="checkbox">☐</span> A manual trigger (<code class="inline-code">workflow_dispatch</code>) is available for each workflow</li></ul>
+<hr class='md-hr'>
+<h3 id="e13-02-streamlit-cloud-deployment" class="md-h3 subsection-header">E13-02 &mdash; Streamlit Cloud Deployment</h3>
+<p class="md-p"><strong>Type:</strong> Setup</p>
+<p class="md-p"><strong>Depends on:</strong> E10-04</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §5 Architecture → Frontend (Streamlit Cloud)</p>
+<p class="md-p">Prepare the project for deployment to Streamlit Cloud.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Create <code class="inline-code">.streamlit/config.toml</code> with dark theme settings</li>
+<li>Create <code class="inline-code">.streamlit/secrets.toml.example</code> showing required secrets (actual secrets configured in Streamlit Cloud dashboard)</li>
+<li>Ensure <code class="inline-code">src/delivery/dashboard.py</code> is the entry point</li>
+<li>Add database connection logic that works both locally (SQLite file) and in cloud (Supabase connection string from secrets)</li>
+<li>Create a <code class="inline-code">README.md</code> section with Streamlit Cloud deployment instructions</li>
+<li>Test that the app runs with <code class="inline-code">streamlit run src/delivery/dashboard.py</code></li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> <code class="inline-code">.streamlit/config.toml</code> exists with dark theme configuration</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">.streamlit/secrets.toml.example</code> documents all required secrets</li>
+<li><span class="checkbox">☐</span> Dashboard runs locally with <code class="inline-code">streamlit run src/delivery/dashboard.py</code></li>
+<li><span class="checkbox">☐</span> Dashboard reads database connection from config/secrets (not hardcoded path)</li>
+<li><span class="checkbox">☐</span> README includes step-by-step Streamlit Cloud deployment instructions</li>
+<li><span class="checkbox">☐</span> App handles missing database gracefully (shows error message, not a crash)</li></ul>
+<hr class='md-hr'>
+<h3 id="e13-03-security-hardening" class="md-h3 subsection-header">E13-03 &mdash; Security Hardening</h3>
+<p class="md-p"><strong>Type:</strong> Polish</p>
+<p class="md-p"><strong>Depends on:</strong> E13-01, E13-02</p>
+<p class="md-p"><strong>Master Plan:</strong> MP §5 Architecture → Authentication</p>
+<p class="md-p">Final security review and hardening before the system goes live.</p>
+<p class="md-p"><strong>Implementation Notes:</strong></p>
+<ul class='md-list'><li>Audit all files for hardcoded credentials &mdash; there should be zero</li>
+<li>Ensure <code class="inline-code">.env</code> and <code class="inline-code">config/email_config.yaml</code> (if containing real values) are in <code class="inline-code">.gitignore</code></li>
+<li>Verify GitHub Actions secrets are properly configured</li>
+<li>Add database backup script: <code class="inline-code">scripts/backup_db.sh</code> that copies the database to a timestamped backup</li>
+<li>Add weekly backup to GitHub Actions (Sunday, after weekly summary)</li>
+<li>Document the security model in README: what's stored where, what's sensitive, how to rotate credentials</li></ul>
+<p class="md-p"><strong>Acceptance Criteria:</strong></p>
+<ul class='md-list'><li><span class="checkbox">☐</span> <code class="inline-code">grep -r "password\|secret\|key" src/</code> returns zero matches for actual credential values</li>
+<li><span class="checkbox">☐</span> <code class="inline-code">.env</code>, <code class="inline-code">*.db</code>, and <code class="inline-code">config/email_config.yaml</code> are in <code class="inline-code">.gitignore</code></li>
+<li><span class="checkbox">☐</span> <code class="inline-code">scripts/backup_db.sh</code> creates a timestamped copy of the database</li>
+<li><span class="checkbox">☐</span> Weekly backup is scheduled in GitHub Actions</li>
+<li><span class="checkbox">☐</span> README includes a security section documenting credential management</li>
+<li><span class="checkbox">☐</span> All environment variables are documented in <code class="inline-code">.env.example</code></li></ul>
+    </main>
+  </div>
+
+  <button class="back-to-top" id="backToTop" title="Back to top">&uarr;</button>
+
+  <script>
+    // Hamburger toggle
+    const hamburger = document.getElementById('hamburger');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('overlay');
+
+    if (hamburger) {
+      hamburger.addEventListener('click', () => {
+        sidebar.classList.toggle('open');
+        overlay.classList.toggle('open');
+      });
+    }
+    if (overlay) {
+      overlay.addEventListener('click', () => {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('open');
+      });
+    }
+
+    // Close sidebar on link click (mobile)
+    document.querySelectorAll('.toc-item').forEach(link => {
+      link.addEventListener('click', () => {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('open');
+      });
+    });
+
+    // Back to top
+    const btt = document.getElementById('backToTop');
+    window.addEventListener('scroll', () => {
+      if (window.scrollY > 400) {
+        btt.classList.add('visible');
+      } else {
+        btt.classList.remove('visible');
+      }
+    });
+    btt.addEventListener('click', () => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    // Active TOC highlighting
+    const tocLinks = document.querySelectorAll('.toc-item');
+    const headings = [];
+    tocLinks.forEach(link => {
+      const id = link.getAttribute('href').substring(1);
+      const el = document.getElementById(id);
+      if (el) headings.push({ el, link });
+    });
+
+    function updateActiveToc() {
+      let current = null;
+      for (const h of headings) {
+        if (h.el.getBoundingClientRect().top <= 100) {
+          current = h;
+        }
+      }
+      tocLinks.forEach(l => l.classList.remove('active'));
+      if (current) current.link.classList.add('active');
+    }
+    window.addEventListener('scroll', updateActiveToc);
+    updateActiveToc();
+    </script>
+</body>
+</html>
