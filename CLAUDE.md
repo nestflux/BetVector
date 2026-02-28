@@ -156,9 +156,9 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E5-01 (Base Model Interface and Market Derivation)
-Currently working: E5-02 (Poisson Regression Model)
-Next up: E5-03 (Prediction Pipeline)
+Last completed: E5-02 (Poisson Regression Model)
+Currently working: E5-03 (Prediction Pipeline)
+Next up: E6-01 (Value Detection Engine)
 
 ---
 
