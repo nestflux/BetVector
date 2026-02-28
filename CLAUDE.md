@@ -156,9 +156,9 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E3-04 (Data Loader)
-Currently working: E4-01 (Feature Engineering — Rolling Averages)
-Next up: E4-02 (Head-to-Head and Context Features)
+Last completed: E4-01 (Feature Engineering — Rolling Averages)
+Currently working: E4-02 (Head-to-Head and Context Features)
+Next up: E4-03 (Feature Pipeline Orchestrator)
 
 ---
 
