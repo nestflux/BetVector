@@ -156,9 +156,9 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E3-03 (FBref Scraper)
-Currently working: E3-04 (Data Loader)
-Next up: E4-01 (Feature Engineering — Rolling Averages)
+Last completed: E3-04 (Data Loader)
+Currently working: E4-01 (Feature Engineering — Rolling Averages)
+Next up: E4-02 (Head-to-Head and Context Features)
 
 ---
 
