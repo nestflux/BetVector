@@ -156,9 +156,9 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E3-02 (Football-Data.co.uk Scraper)
-Currently working: E3-03 (FBref Scraper)
-Next up: E3-04 (Data Loader)
+Last completed: E3-03 (FBref Scraper)
+Currently working: E3-04 (Data Loader)
+Next up: E4-01 (Feature Engineering — Rolling Averages)
 
 ---
 
