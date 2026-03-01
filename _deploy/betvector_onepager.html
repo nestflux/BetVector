@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BetVector — One-Pager</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #0D1117;
+    color: #E6EDF3;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 48px 40px;
+  }
+
+  /* --- Header --- */
+  .header {
+    text-align: center;
+    margin-bottom: 40px;
+  }
+  .logo-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 96px;
+    height: 96px;
+    margin-bottom: 20px;
+  }
+  .logo-mark svg { width: 96px; height: 96px; }
+  .header h1 {
+    font-size: 36px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    margin-bottom: 8px;
+  }
+  .header h1 span { color: #3FB950; }
+  .tagline {
+    font-size: 17px;
+    color: #8B949E;
+    font-weight: 500;
+  }
+
+  /* --- Divider --- */
+  .divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #30363D, transparent);
+    margin: 32px 0;
+  }
+
+  /* --- Section --- */
+  .section { margin-bottom: 36px; }
+  .section-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: #3FB950;
+    margin-bottom: 12px;
+  }
+  .section h2 {
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 14px;
+    color: #E6EDF3;
+  }
+  .section p {
+    font-size: 15px;
+    color: #C9D1D9;
+    margin-bottom: 12px;
+  }
+  .highlight {
+    color: #E6EDF3;
+    font-weight: 600;
+  }
+  .accent { color: #3FB950; font-weight: 600; }
+  .red { color: #F85149; }
+
+  /* --- Callout box --- */
+  .callout {
+    background: #161B22;
+    border: 1px solid #30363D;
+    border-left: 3px solid #3FB950;
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin: 20px 0;
+    font-size: 15px;
+    color: #C9D1D9;
+  }
+  .callout strong { color: #E6EDF3; }
+
+  /* --- Flow Steps --- */
+  .flow {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin: 24px 0;
+  }
+  .flow-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    position: relative;
+  }
+  .flow-left {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .flow-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .flow-icon svg { width: 24px; height: 24px; }
+  .flow-connector {
+    width: 2px;
+    height: 24px;
+    background: #30363D;
+  }
+  .flow-content {
+    padding-top: 4px;
+    padding-bottom: 20px;
+  }
+  .flow-content h3 {
+    font-size: 15px;
+    font-weight: 700;
+    color: #E6EDF3;
+    margin-bottom: 4px;
+  }
+  .flow-content p {
+    font-size: 14px;
+    color: #8B949E;
+    margin: 0;
+    line-height: 1.6;
+  }
+
+  /* --- Differentiators --- */
+  .diff-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 20px 0;
+  }
+  .diff-card {
+    background: #161B22;
+    border: 1px solid #30363D;
+    border-radius: 10px;
+    padding: 20px;
+  }
+  .diff-card:hover { border-color: #3FB950; }
+  .diff-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 12px;
+  }
+  .diff-icon svg { width: 20px; height: 20px; }
+  .diff-card h3 {
+    font-size: 14px;
+    font-weight: 700;
+    color: #E6EDF3;
+    margin-bottom: 6px;
+  }
+  .diff-card p {
+    font-size: 13px;
+    color: #8B949E;
+    line-height: 1.6;
+    margin: 0;
+  }
+
+  /* --- Edge Illustration --- */
+  .edge-visual {
+    background: #161B22;
+    border: 1px solid #30363D;
+    border-radius: 12px;
+    padding: 24px;
+    margin: 24px 0;
+    text-align: center;
+  }
+  .edge-bars {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 32px;
+    height: 120px;
+    margin-bottom: 16px;
+  }
+  .edge-bar-group { text-align: center; }
+  .edge-bar {
+    width: 64px;
+    border-radius: 6px 6px 0 0;
+    margin: 0 auto 8px;
+    position: relative;
+  }
+  .edge-bar-label {
+    font-size: 12px;
+    color: #8B949E;
+    font-weight: 500;
+  }
+  .edge-bar-value {
+    font-size: 18px;
+    font-weight: 700;
+    position: absolute;
+    top: -28px;
+    width: 100%;
+    text-align: center;
+  }
+  .edge-gap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    align-self: center;
+    padding-bottom: 28px;
+  }
+  .edge-gap-arrow {
+    font-size: 24px;
+    color: #3FB950;
+    line-height: 1;
+  }
+  .edge-gap-label {
+    font-size: 12px;
+    color: #3FB950;
+    font-weight: 700;
+    margin-top: 4px;
+  }
+  .edge-caption {
+    font-size: 13px;
+    color: #8B949E;
+    margin-top: 8px;
+  }
+
+  /* --- Footer --- */
+  .footer {
+    text-align: center;
+    margin-top: 40px;
+    padding-top: 24px;
+    border-top: 1px solid #30363D;
+  }
+  .footer-next {
+    font-size: 14px;
+    color: #8B949E;
+    margin-bottom: 20px;
+    line-height: 1.7;
+  }
+  .footer-next strong { color: #C9D1D9; }
+  .disclaimer {
+    font-size: 11px;
+    color: #484F58;
+    font-style: italic;
+  }
+
+  /* --- Print styles --- */
+  @media print {
+    body { background: #0D1117; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .page { padding: 24px; max-width: 100%; }
+    .diff-card:hover { border-color: #30363D; }
+  }
+
+  @media (max-width: 600px) {
+    .page { padding: 24px 20px; }
+    .diff-grid { grid-template-columns: 1fr; }
+    .header h1 { font-size: 28px; }
+    .edge-bars { gap: 16px; }
+    .edge-bar { width: 48px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="logo-mark">
+      <svg viewBox="0 0 140 140" width="96" height="96" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="70" cy="70" r="67" fill="#0D1117" stroke="#30363D" stroke-width="2"/>
+        <defs>
+          <!-- V stroke gradient: white at left arm, fading to green at arrowhead -->
+          <linearGradient id="v-grad" x1="0.2" y1="1" x2="0.9" y2="0">
+            <stop offset="0%" stop-color="#E6EDF3"/>
+            <stop offset="60%" stop-color="#E6EDF3"/>
+            <stop offset="100%" stop-color="#3FB950"/>
+          </linearGradient>
+        </defs>
+
+        <!-- B — white -->
+        <text x="20" y="86" font-family="Inter, sans-serif" font-weight="800" font-size="56" fill="#E6EDF3" letter-spacing="-1">B</text>
+
+        <!-- Symmetric V-arrow: white fading to green at the arrowhead -->
+        <path d="M 64 38 L 82 90 L 100 38"
+              stroke="url(#v-grad)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+        <!-- Arrowhead — solid green (profit) -->
+        <polygon points="105,23 92,35 108,41" fill="#3FB950"/>
+
+        <!-- Mini bar chart — blue→green ascending bars -->
+        <rect x="32" y="102" width="5" height="7" rx="1" fill="#58A6FF" opacity="0.5"/>
+        <rect x="40" y="99" width="5" height="10" rx="1" fill="#58A6FF" opacity="0.65"/>
+        <rect x="48" y="96" width="5" height="13" rx="1" fill="#4CAE8C" opacity="0.8"/>
+        <rect x="56" y="93" width="5" height="16" rx="1" fill="#3FB950" opacity="0.9"/>
+        <rect x="64" y="90" width="5" height="19" rx="1" fill="#3FB950"/>
+      </svg>
+    </div>
+    <h1>Bet<span>Vector</span></h1>
+    <p class="tagline">Your personal football betting analyst &mdash; powered by data, not gut feeling.</p>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- The Problem -->
+  <div class="section">
+    <div class="section-label">The Problem</div>
+    <p>Most football bettors pick teams that <em>"feel right,"</em> place a bet, and move on. By Monday, they can't remember if they're up or down for the month. No system. No records. No real edge.</p>
+    <p>Meanwhile, bookmakers employ entire teams of analysts and sophisticated pricing models to make sure the odds are stacked in their favour.</p>
+    <div class="callout">
+      You're essentially bringing a <strong>hunch</strong> to a <strong>data fight</strong>.
+    </div>
+  </div>
+
+  <!-- What BetVector Does -->
+  <div class="section">
+    <div class="section-label">What BetVector Does</div>
+    <p>BetVector is a personal betting intelligence system that watches football data every day and does the hard work for you. It collects match results, team performance stats, and bookmaker odds from public sources across Europe's top leagues.</p>
+    <p>Then it builds its own estimate of what should happen in each upcoming match &mdash; <span class="accent">like a weather forecast for football</span>.</p>
+
+    <!-- Edge Illustration -->
+    <div class="edge-visual">
+      <div class="edge-bars">
+        <div class="edge-bar-group">
+          <div class="edge-bar" style="height: 66px; background: #484F58;">
+            <div class="edge-bar-value" style="color: #8B949E;">55%</div>
+          </div>
+          <div class="edge-bar-label">Bookmaker<br>says</div>
+        </div>
+        <div class="edge-gap">
+          <div class="edge-gap-arrow">&#8592; &#8594;</div>
+          <div class="edge-gap-label">YOUR EDGE</div>
+        </div>
+        <div class="edge-bar-group">
+          <div class="edge-bar" style="height: 84px; background: linear-gradient(180deg, #3FB950, #238636);">
+            <div class="edge-bar-value" style="color: #3FB950;">70%</div>
+          </div>
+          <div class="edge-bar-label">Data<br>says</div>
+        </div>
+      </div>
+      <div class="edge-caption">When the bookmaker underestimates a team's real chance, that gap is your advantage.</div>
+    </div>
+
+    <p>BetVector flags these opportunities, tells you exactly how big the edge is, and recommends how much to stake based on your bankroll and risk tolerance.</p>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- How It Works -->
+  <div class="section">
+    <div class="section-label">How It Works</div>
+    <div class="flow">
+
+      <div class="flow-step">
+        <div class="flow-left">
+          <div class="flow-icon" style="background: rgba(88, 166, 255, 0.15);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#58A6FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <div class="flow-connector"></div>
+        </div>
+        <div class="flow-content">
+          <h3>Collects data daily</h3>
+          <p>Every morning, match results, team stats, and bookmaker odds are gathered automatically from trusted public sources.</p>
+        </div>
+      </div>
+
+      <div class="flow-step">
+        <div class="flow-left">
+          <div class="flow-icon" style="background: rgba(210, 153, 34, 0.15);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#D29922" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+          </div>
+          <div class="flow-connector"></div>
+        </div>
+        <div class="flow-content">
+          <h3>Analyses every match</h3>
+          <p>The system crunches the numbers: recent form, attacking and defensive strength, home advantage, head-to-head history, and more.</p>
+        </div>
+      </div>
+
+      <div class="flow-step">
+        <div class="flow-left">
+          <div class="flow-icon" style="background: rgba(63, 185, 80, 0.15);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#3FB950" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          </div>
+          <div class="flow-connector"></div>
+        </div>
+        <div class="flow-content">
+          <h3>Spots mispriced bets</h3>
+          <p>It compares its own probability estimates to the bookmaker's odds. When there's a meaningful gap in your favour, it flags a value bet.</p>
+        </div>
+      </div>
+
+      <div class="flow-step">
+        <div class="flow-left">
+          <div class="flow-icon" style="background: rgba(248, 81, 73, 0.15);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#F85149" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          </div>
+          <div class="flow-connector"></div>
+        </div>
+        <div class="flow-content">
+          <h3>Sends you an email</h3>
+          <p>Each morning: which matches have value, how confident the system is, and how much to bet. Each evening: your results and running profit.</p>
+        </div>
+      </div>
+
+      <div class="flow-step">
+        <div class="flow-left">
+          <div class="flow-icon" style="background: rgba(163, 113, 247, 0.15);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#A371F7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+          </div>
+          <div class="flow-left"></div>
+        </div>
+        <div class="flow-content">
+          <h3>Learns from its mistakes</h3>
+          <p>Every recommendation is tracked. The system measures its own accuracy over time and automatically adjusts when it drifts off course.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- What Makes It Different -->
+  <div class="section">
+    <div class="section-label">What Makes It Different</div>
+    <div class="diff-grid">
+
+      <div class="diff-card">
+        <div class="diff-icon" style="background: rgba(63, 185, 80, 0.12);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#3FB950" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        </div>
+        <h3>Probabilities, not predictions</h3>
+        <p>It doesn't tell you who will win. It tells you where the bookmaker's price is wrong &mdash; a far more profitable question over hundreds of bets.</p>
+      </div>
+
+      <div class="diff-card">
+        <div class="diff-icon" style="background: rgba(88, 166, 255, 0.12);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#58A6FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </div>
+        <h3>Fully transparent</h3>
+        <p>Every bet is logged, win or lose. See your profit over time, which leagues work best, and whether the system is getting sharper &mdash; on a private dashboard.</p>
+      </div>
+
+      <div class="diff-card">
+        <div class="diff-icon" style="background: rgba(248, 81, 73, 0.12);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#F85149" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <h3>Bankroll protection</h3>
+        <p>Built-in safety rules cap bet sizes, pause betting during losing streaks, and alert you before drawdowns get dangerous. No emotional decisions.</p>
+      </div>
+
+      <div class="diff-card">
+        <div class="diff-icon" style="background: rgba(163, 113, 247, 0.12);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#A371F7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </div>
+        <h3>Runs on autopilot</h3>
+        <p>Once set up, the entire system runs daily without you touching it. Data, analysis, predictions, emails, and tracking &mdash; all automatic.</p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <p class="footer-next">
+      BetVector currently covers the <strong>Premier League</strong> with plans to expand across Europe's top divisions &mdash; including leagues where bookmakers are less accurate and edges are larger. Additional prediction models will be layered in over time, each one sharpening accuracy. The goal is simple: <span class="accent">a growing track record over thousands of bets that proves the edge is real</span>.
+    </p>
+    <p class="disclaimer">BetVector is a quantitative tool for making informed betting decisions. It is not a guarantee of profit. All betting involves risk.</p>
+  </div>
+
+</div>
+</body>
+</html>
