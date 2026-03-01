@@ -156,9 +156,9 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E11-01 (Email Templates)
-Currently working: E11-02 (Email Sender)
-Next up: E11-03 (Email Integration with Pipeline)
+Last completed: E11-02 (Email Sender)
+Currently working: E11-03 (Email Integration with Pipeline)
+Next up: E12-01 (GitHub Actions CI/CD)
 
 ---
 
