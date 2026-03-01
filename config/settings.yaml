@@ -97,6 +97,7 @@ self_improvement:
   recalibration:
     min_sample_size: 200                  # Minimum resolved predictions before recalibrating
     calibration_error_threshold: 0.03     # Trigger recal if mean-abs calibration error > 3 pp
+    rollback_window: 100                  # Evaluate rollback after 100 post-calibration predictions
     calibration_methods:
       - "platt"
       - "isotonic"

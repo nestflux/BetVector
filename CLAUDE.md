@@ -156,9 +156,9 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E11-03 (Email Integration with Pipeline)
-Currently working: E12-01 (GitHub Actions CI/CD)
-Next up: E12-02 (Streamlit Cloud Deployment)
+Last completed: E12-01 (Automatic Recalibration)
+Currently working: E12-02 (Feature Importance Tracking)
+Next up: E12-03 (Adaptive Ensemble Weights)
 
 ---
 

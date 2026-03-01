@@ -456,13 +456,13 @@ class Pipeline:
         return result
 
     def run_evening(self) -> PipelineResult:
-        """Evening results pipeline: resolve bets → P&L → metrics.
+        """Evening results pipeline: resolve bets → P&L → metrics → recalibrate.
 
         After the day's matches are finished:
         1. Scrape latest results to update match scores
         2. Resolve pending bets (determine won/lost, calculate P&L)
-        3. Update user bankrolls
-        4. Generate updated performance metrics
+        3. Generate updated performance metrics
+        4. Check automatic recalibration (MP §11.1)
 
         Returns
         -------
@@ -563,10 +563,43 @@ class Pipeline:
                 errors.append(err)
                 print(f"  → Metrics: FAILED ({e})")
 
-        # --- Step 4: Send evening review emails ---
+        # --- Step 4: Automatic recalibration check (MP §11.1) ---
+        # After resolving bets, check if any model's probabilities have
+        # drifted and need recalibration.  Also checks whether an existing
+        # calibration should be rolled back if it's making things worse.
+        print(f"\n[Recalibration] Checking automatic recalibration...")
+        try:
+            from src.self_improvement.calibration import (
+                check_and_recalibrate,
+                check_rollback,
+            )
+            active_models = config.settings.models.active_models
+            for model_name in active_models:
+                print(f"  Model: {model_name}")
+
+                # First check if an existing calibration should be rolled back
+                rolled_back = check_rollback(model_name)
+                if rolled_back:
+                    print(f"  → Rolled back calibration for {model_name}")
+
+                # Then check if a new recalibration is needed
+                cal = check_and_recalibrate(model_name)
+                if cal:
+                    print(f"  → New {cal.calibration_method} calibration applied "
+                          f"(MAE {cal.mean_abs_error_before:.4f} → "
+                          f"{cal.mean_abs_error_after:.4f})")
+                else:
+                    print(f"  → No recalibration needed for {model_name}")
+        except Exception as e:
+            err = f"Recalibration check failed: {e}"
+            logger.error(err)
+            errors.append(err)
+            print(f"  → Recalibration: FAILED ({e})")
+
+        # --- Send evening review emails ---
         emails_sent = self._send_emails("evening", run_id, errors)
 
-        # --- Step 5: Weekly summary (Sundays only) ---
+        # --- Weekly summary (Sundays only) ---
         if datetime.utcnow().weekday() == 6:  # 6 = Sunday
             weekly_sent = self._send_emails("weekly", run_id, errors)
             emails_sent += weekly_sent
