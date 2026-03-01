@@ -86,14 +86,28 @@ jobs:
             echo "Not Sunday (day=$DAY_OF_WEEK), skipping backup"
           fi
 
+      # Handles binary DB conflicts automatically (see morning.yml for details)
       - name: Commit database changes
         run: |
           git config user.name "BetVector Bot"
           git config user.email "bot@betvector.dev"
           git add data/betvector.db
           git add data/backups/*.db 2>/dev/null || true
-          git diff --staged --quiet || git commit -m "Evening pipeline: $(date -u +%Y-%m-%d)"
-          git push
+          git diff --staged --quiet && echo "No DB changes to commit" && exit 0
+          git commit -m "Evening pipeline: $(date -u +%Y-%m-%d)"
+          MAX_RETRIES=3
+          for i in $(seq 1 $MAX_RETRIES); do
+            if git push; then
+              echo "Push succeeded"
+              break
+            fi
+            echo "Push failed (attempt $i/$MAX_RETRIES), pulling with conflict resolution..."
+            git pull --rebase --strategy-option=ours origin main || {
+              git checkout --ours data/betvector.db
+              git add data/betvector.db
+              git rebase --continue || true
+            }
+          done
 
       - name: Send failure notification
         if: failure()

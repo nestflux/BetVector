@@ -111,13 +111,32 @@ jobs:
           python run_pipeline.py morning $VERBOSE_FLAG
 
       # --- 5. Commit database changes back to repo ---
+      # Handles binary DB conflicts automatically: if another pipeline or
+      # local push updated the DB since checkout, we keep OUR version
+      # (the one that just ran the pipeline with fresh data).
       - name: Commit database changes
         run: |
           git config user.name "BetVector Bot"
           git config user.email "bot@betvector.dev"
           git add data/betvector.db
-          git diff --staged --quiet || git commit -m "Morning pipeline: $(date -u +%Y-%m-%d)"
-          git push
+          git add data/backups/*.db 2>/dev/null || true
+          git diff --staged --quiet && echo "No DB changes to commit" && exit 0
+          git commit -m "Morning pipeline: $(date -u +%Y-%m-%d)"
+          # Pull remote changes before pushing; on binary DB conflict, keep ours
+          MAX_RETRIES=3
+          for i in $(seq 1 $MAX_RETRIES); do
+            if git push; then
+              echo "Push succeeded"
+              break
+            fi
+            echo "Push failed (attempt $i/$MAX_RETRIES), pulling with conflict resolution..."
+            git pull --rebase --strategy-option=ours origin main || {
+              # If rebase conflicts on binary file, resolve and continue
+              git checkout --ours data/betvector.db
+              git add data/betvector.db
+              git rebase --continue || true
+            }
+          done
 
       # --- 6. Notify on failure ---
       - name: Send failure notification
