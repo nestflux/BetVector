@@ -164,6 +164,55 @@ deployment you need a hosted PostgreSQL database (e.g. Supabase free
 tier). Configure the connection string in Streamlit secrets as shown
 above — BetVector's database layer will use it automatically.
 
+## Security
+
+BetVector takes credential management seriously. Here is what is
+stored where and how to keep it safe.
+
+### Sensitive Files
+
+| File | Contains | Gitignored? |
+|------|----------|-------------|
+| `.env` | `GMAIL_APP_PASSWORD`, `DASHBOARD_PASSWORD`, `API_FOOTBALL_KEY` | Yes |
+| `.streamlit/secrets.toml` | Same secrets (Streamlit Cloud format) | Yes |
+| `config/email_config.yaml` | SMTP host/port/from-address (may contain credentials) | Yes |
+| `data/betvector.db` | SQLite database with all predictions, bets, and user data | Yes |
+
+### Where Secrets Live
+
+- **Local development:** `.env` file in the project root.
+  Copy `.env.example` and fill in your values.
+- **Streamlit Cloud:** Settings → Secrets in the Streamlit Cloud
+  dashboard. See `.streamlit/secrets.toml.example`.
+- **GitHub Actions:** Repository Settings → Secrets and variables →
+  Actions. Add `GMAIL_APP_PASSWORD`, `DASHBOARD_PASSWORD`, and
+  `API_FOOTBALL_KEY`.
+
+### Rotating Credentials
+
+1. **Gmail App Password:** Generate a new one at
+   [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords),
+   then update `.env`, Streamlit Cloud secrets, and GitHub Actions
+   secrets.
+2. **Dashboard Password:** Change in `.env` and Streamlit Cloud
+   secrets. No database migration needed.
+3. **API-Football Key:** Generate a new one at
+   [api-football.com](https://www.api-football.com/), update
+   everywhere as above.
+
+### Database Backups
+
+A weekly backup runs automatically every Sunday via GitHub Actions
+(after the evening pipeline). You can also run it manually:
+
+```bash
+./scripts/backup_db.sh                  # Backs up to data/backups/
+./scripts/backup_db.sh /custom/path     # Custom backup directory
+```
+
+Backups are timestamped (`betvector_YYYY-MM-DD_HHMMSS.db`) and the
+script automatically keeps only the last 10.
+
 ## License
 
 Private repository. All rights reserved.

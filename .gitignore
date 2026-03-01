@@ -22,6 +22,9 @@ env/
 .env
 .streamlit/secrets.toml
 
+# --- Email config (may contain real SMTP credentials) ---
+config/email_config.yaml
+
 # --- Jupyter notebooks ---
 .ipynb_checkpoints/
 
