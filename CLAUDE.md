@@ -158,9 +158,9 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E15-02 (Understat Scraper Expansion)
-Currently working: E15-03 (Transfermarkt Datasets Integration)
-Next up: Post-E15 — Feature engineering for new stats
+Last completed: E15-03 (Transfermarkt Datasets Integration)
+Currently working: E15 COMPLETE — All 3 data source issues done
+Next up: Feature engineering for new stats (NPxG, PPDA, market values)
 
 ---
 

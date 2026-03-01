@@ -18,6 +18,7 @@ Tables defined here:
 Additional tables (value_bets, bet_log, model_performance, pipeline_runs)
 are defined in E2-03.  Self-improvement tables are defined in E2-04.
 Weather table added for Open-Meteo match-day conditions (real-time data sources).
+Team market values and injuries tables added in E15-03 (Transfermarkt datasets).
 
 Usage::
 
@@ -1109,4 +1110,129 @@ class Weather(Base):
             f"Weather(match={self.match_id}, "
             f"temp={self.temperature_c}°C, wind={self.wind_speed_kmh}km/h, "
             f"category='{self.weather_category}')"
+        )
+
+
+# ============================================================================
+# 20. TEAM_MARKET_VALUES  (E15-03)
+# ============================================================================
+# Weekly squad market value snapshots from Transfermarkt Datasets (CC0 license).
+#
+# Market value ratio between teams is a strong predictor of match outcomes —
+# richer squads (higher total market value) generally outperform poorer ones.
+# The value is aggregated from individual player market values per club.
+#
+# Data source: https://github.com/dcaribou/transfermarkt-datasets (CDN)
+# Updated weekly.  One snapshot per team per evaluation date.
+#
+# Key features for prediction:
+#   squad_total_value — total squad market value in EUR (sum of all players)
+#   avg_player_value  — average player value in EUR (quality proxy)
+#   squad_size        — number of registered players (depth proxy)
+#   contract_expiring_count — players with contract ending ≤6 months (instability)
+
+class TeamMarketValue(Base):
+    __tablename__ = "team_market_values"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    team_id = Column(
+        Integer, ForeignKey("teams.id"), nullable=False,
+    )
+    # Total squad market value in EUR — sum of all player valuations
+    # e.g. Manchester City ~€1.2 billion, promoted teams ~€100–200 million
+    squad_total_value = Column(Float, nullable=False)
+    # Average player value in EUR — quality-per-player metric
+    avg_player_value = Column(Float, nullable=True)
+    # Number of registered first-team players
+    squad_size = Column(Integer, nullable=True)
+    # Players with contracts expiring within 6 months — a proxy for
+    # squad instability and potential loss of key assets
+    contract_expiring_count = Column(Integer, nullable=True)
+    # Date this snapshot was evaluated (YYYY-MM-DD)
+    evaluated_at = Column(String, nullable=False)
+    source = Column(String, nullable=False, server_default="transfermarkt_datasets")
+    created_at = Column(
+        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+    )
+
+    # Relationships
+    team = relationship("Team")
+
+    __table_args__ = (
+        # One snapshot per team per evaluation date — idempotent loading
+        UniqueConstraint(
+            "team_id", "evaluated_at",
+            name="uq_team_market_values_team_date",
+        ),
+        Index("idx_team_market_values_team", "team_id"),
+        Index("idx_team_market_values_date", "evaluated_at"),
+    )
+
+    def __repr__(self) -> str:
+        val_m = (self.squad_total_value or 0) / 1_000_000
+        return (
+            f"TeamMarketValue(team={self.team_id}, "
+            f"value=€{val_m:.1f}M, size={self.squad_size}, "
+            f"date='{self.evaluated_at}')"
+        )
+
+
+# ============================================================================
+# 21. TEAM_INJURIES  (E15-03 — Placeholder)
+# ============================================================================
+# Placeholder model for future injury data integration.  The original build
+# plan assumed injury data was available in the Transfermarkt datasets repo,
+# but research revealed the 10 published tables do NOT include an injuries
+# table.  This model is created for schema completeness so the feature
+# engineering layer can reference it once an injury data source is added.
+#
+# Key predictive insight (for future use):
+#   Teams missing >20% of squad value to injuries tend to underperform
+#   their expected goals — a strong signal for in-season prediction.
+
+class TeamInjury(Base):
+    __tablename__ = "team_injuries"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    team_id = Column(
+        Integer, ForeignKey("teams.id"), nullable=False,
+    )
+    player_name = Column(String, nullable=False)
+    # Type of injury (e.g. "ACL tear", "muscle strain", "illness")
+    injury_type = Column(String, nullable=True)
+    # Estimated days out — NULL if unknown
+    days_out = Column(Integer, nullable=True)
+    # Market value of the injured player in EUR — used to calculate
+    # "missing squad value" as a percentage of total squad value
+    player_market_value = Column(Float, nullable=True)
+    # Current status: "injured" (still out) or "returned" (back in training)
+    status = Column(String, nullable=False, server_default="injured")
+    # Date this injury was first reported (YYYY-MM-DD)
+    reported_at = Column(String, nullable=False)
+    # Expected return date (YYYY-MM-DD, nullable if unknown)
+    expected_return = Column(String, nullable=True)
+    source = Column(String, nullable=False, server_default="transfermarkt")
+    created_at = Column(
+        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+    )
+
+    # Relationships
+    team = relationship("Team")
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('injured', 'returned')",
+            name="ck_team_injuries_status",
+        ),
+        Index("idx_team_injuries_team", "team_id"),
+        Index("idx_team_injuries_status", "status"),
+        Index("idx_team_injuries_reported", "reported_at"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"TeamInjury(team={self.team_id}, "
+            f"player='{self.player_name}', "
+            f"status='{self.status}', "
+            f"reported='{self.reported_at}')"
         )

@@ -923,8 +923,45 @@ class Pipeline:
         # --- Send evening review emails ---
         emails_sent = self._send_emails("evening", run_id, errors)
 
-        # --- Weekly summary (Sundays only) ---
+        # --- Weekly tasks (Sundays only) ---
         if datetime.utcnow().weekday() == 6:  # 6 = Sunday
+
+            # --- Weekly: Refresh Transfermarkt squad market values ---
+            # Market values change slowly (weekly updates from Transfermarkt).
+            # Running on Sunday evening aligns with the self-improvement cycle.
+            # Market value ratio is a strong predictor — richer squads generally
+            # outperform poorer ones (long-term squad quality signal).
+            print("\n  Weekly: Transfermarkt market value refresh")
+            try:
+                from src.scrapers.transfermarkt import TransfermarktScraper
+                from src.scrapers.loader import load_market_values
+
+                tm_scraper = TransfermarktScraper()
+                for lg in leagues:
+                    lg_id = self._get_league_id(lg.short_name)
+                    lg_season = lg.seasons[-1] if lg.seasons else None
+                    if lg_id is None or lg_season is None:
+                        continue
+
+                    tm_df = tm_scraper.scrape(
+                        league_config=lg,
+                        season=lg_season,
+                    )
+                    if tm_df is not None and not tm_df.empty:
+                        mv_result = load_market_values(tm_df, lg_id)
+                        print(f"    → {lg.short_name} market values: "
+                              f"{mv_result['new']} new, "
+                              f"{mv_result['skipped']} skipped, "
+                              f"{mv_result['not_found']} not found")
+                    else:
+                        print(f"    → {lg.short_name}: no data returned")
+            except Exception as e:
+                err = f"Transfermarkt market value refresh failed: {e}"
+                logger.error(err)
+                errors.append(err)
+                print(f"    → Transfermarkt: FAILED ({e})")
+
+            # --- Weekly: Send weekly summary email ---
             weekly_sent = self._send_emails("weekly", run_id, errors)
             emails_sent += weekly_sent
 

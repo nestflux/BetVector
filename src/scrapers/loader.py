@@ -16,6 +16,8 @@ Loader functions (each independent and idempotent):
     correct match_id via (date, team) matching.
   - ``load_understat_stats(df, league_id)`` — loads xG data from Understat.
   - ``load_weather(df)`` — loads match-day weather into the weather table.
+  - ``load_market_values(df, league_id)`` — loads team market value snapshots
+    from Transfermarkt into the team_market_values table.
   - ``update_match_results(df, league_id)`` — updates scheduled matches
     with results from API-Football (goals, status).
 
@@ -33,7 +35,9 @@ from typing import Dict, List, Optional, Tuple
 import pandas as pd
 
 from src.database.db import get_session
-from src.database.models import League, Match, MatchStat, Odds, Team, Weather
+from src.database.models import (
+    League, Match, MatchStat, Odds, Team, TeamMarketValue, Weather,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -953,3 +957,94 @@ def update_team_api_names(
         )
 
     return updated
+
+
+# ============================================================================
+# Market Value Loader (Transfermarkt)
+# ============================================================================
+
+def load_market_values(
+    df: pd.DataFrame,
+    league_id: int,
+) -> Dict[str, int]:
+    """Load team market value snapshots into the team_market_values table.
+
+    Each row in the input DataFrame represents one team's aggregated squad
+    market value.  The loader is idempotent — if a snapshot for the same
+    (team_id, evaluated_at) already exists, it is skipped.
+
+    Market value ratio between teams is a strong predictor of match outcomes.
+    Richer squads (higher total market value) generally outperform poorer ones
+    because market value captures long-term squad quality — transfer spending,
+    talent retention, and depth — in a single number.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame from ``TransfermarktScraper.scrape()`` with columns:
+        team_name, squad_total_value, avg_player_value, squad_size,
+        contract_expiring_count, evaluated_at.
+    league_id : int
+        Database ID of the league.
+
+    Returns
+    -------
+    dict
+        Summary with keys: "new", "skipped", "not_found".
+    """
+    if df.empty:
+        return {"new": 0, "skipped": 0, "not_found": 0}
+
+    new_count = 0
+    skipped_count = 0
+    not_found = 0
+
+    for _, row in df.iterrows():
+        team_name = row["team_name"]
+        evaluated_at = row["evaluated_at"]
+
+        with get_session() as session:
+            # Find the team in our DB
+            team = session.query(Team).filter_by(
+                name=team_name, league_id=league_id,
+            ).first()
+
+            if team is None:
+                logger.warning(
+                    "load_market_values: Team '%s' not found in DB — skipping.",
+                    team_name,
+                )
+                not_found += 1
+                continue
+
+            # Check for existing snapshot (idempotency)
+            # UniqueConstraint: (team_id, evaluated_at)
+            existing = session.query(TeamMarketValue).filter_by(
+                team_id=team.id,
+                evaluated_at=evaluated_at,
+            ).first()
+
+            if existing:
+                skipped_count += 1
+                continue
+
+            # Insert new market value snapshot
+            mv = TeamMarketValue(
+                team_id=team.id,
+                squad_total_value=float(row["squad_total_value"]),
+                avg_player_value=_safe_float(row.get("avg_player_value")),
+                squad_size=_safe_int(row.get("squad_size")),
+                contract_expiring_count=_safe_int(row.get("contract_expiring_count")),
+                evaluated_at=evaluated_at,
+                source="transfermarkt_datasets",
+            )
+            session.add(mv)
+            new_count += 1
+
+    summary = {"new": new_count, "skipped": skipped_count, "not_found": not_found}
+    logger.info(
+        "load_market_values: %d new snapshots, %d skipped (duplicates), "
+        "%d teams not found",
+        new_count, skipped_count, not_found,
+    )
+    return summary
