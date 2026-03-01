@@ -156,9 +156,9 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E12-04 (Market Feedback Loop)
-Currently working: E12-05 (Seasonal Re-training Triggers)
-Next up: E13-01 (GitHub Actions Workflows)
+Last completed: E12-05 (Seasonal Re-training Triggers)
+Currently working: E13-01 (GitHub Actions Workflows)
+Next up: E13-02 (Deployment Configuration)
 
 ---
 

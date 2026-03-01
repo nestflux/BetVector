@@ -596,6 +596,38 @@ class Pipeline:
             errors.append(err)
             print(f"  → Recalibration: FAILED ({e})")
 
+        # --- Step 5: Retrain trigger check (MP §11.5) ---
+        # Check if any model's rolling Brier score has degraded enough
+        # to trigger an automatic retrain.  Also checks whether a recent
+        # retrain should be rolled back if the new model is worse.
+        print(f"\n[Retrain] Checking re-training triggers...")
+        try:
+            from src.self_improvement.retrain_trigger import (
+                check_retrain_needed,
+                check_post_retrain_rollback,
+            )
+            active_models = config.settings.models.active_models
+            for model_name in active_models:
+                print(f"  Model: {model_name}")
+
+                # First check if a recent retrain should be rolled back
+                rolled_back = check_post_retrain_rollback(model_name)
+                if rolled_back:
+                    print(f"  → Rolled back retrain for {model_name}")
+
+                # Then check if a new retrain is needed
+                retrain = check_retrain_needed(model_name)
+                if retrain:
+                    print(f"  → Retrain triggered for {model_name} "
+                          f"(Brier before: {retrain.brier_before:.4f})")
+                else:
+                    print(f"  → No retrain needed for {model_name}")
+        except Exception as e:
+            err = f"Retrain trigger check failed: {e}"
+            logger.error(err)
+            errors.append(err)
+            print(f"  → Retrain check: FAILED ({e})")
+
         # --- Send evening review emails ---
         emails_sent = self._send_emails("evening", run_id, errors)
 
