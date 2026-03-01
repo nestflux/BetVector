@@ -81,6 +81,11 @@ class User(Base):
     edge_threshold = Column(Float, nullable=False, server_default="0.05")
     # has_onboarded: set to 1 after the user completes the onboarding wizard
     has_onboarded = Column(Integer, nullable=False, server_default="0")
+    # Notification preferences: 1 = enabled, 0 = disabled
+    # Controls which email types this user receives.
+    notify_morning = Column(Integer, nullable=False, server_default="1")
+    notify_evening = Column(Integer, nullable=False, server_default="1")
+    notify_weekly = Column(Integer, nullable=False, server_default="1")
     is_active = Column(Integer, nullable=False, server_default="1")
     created_at = Column(
         String, nullable=False, server_default=sa_text("(datetime('now'))"),

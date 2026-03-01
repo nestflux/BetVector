@@ -95,7 +95,7 @@ class Pipeline:
     """
 
     def run_morning(self) -> PipelineResult:
-        """Full morning pipeline: scrape → load → features → predict → value → log.
+        """Full morning pipeline: scrape → load → features → predict → value → log → email.
 
         This is the primary daily run that:
         1. Downloads latest match data and odds from all sources
@@ -104,6 +104,7 @@ class Pipeline:
         4. Generates model predictions for upcoming matches
         5. Compares predictions to bookmaker odds to find value bets
         6. Auto-logs value bets as system picks for tracking
+        7. Sends morning picks emails to all users with notifications enabled
 
         Returns
         -------
@@ -144,7 +145,7 @@ class Pipeline:
                 continue
 
             # --- Step 1: Scrape data ---
-            print(f"[Step 1/6] Scraping data for {league_name} {current_season}...")
+            print(f"[Step 1/7] Scraping data for {league_name} {current_season}...")
             matches_scraped = 0
 
             # 1a. Football-Data.co.uk (match results + odds)
@@ -182,7 +183,7 @@ class Pipeline:
                 fbref_df = None
 
             # --- Step 2: Load into database ---
-            print(f"[Step 2/6] Loading data into database...")
+            print(f"[Step 2/7] Loading data into database...")
             try:
                 from src.scrapers.loader import load_matches, load_odds, load_match_stats
 
@@ -207,7 +208,7 @@ class Pipeline:
             total_matches_scraped += matches_scraped
 
             # --- Step 3: Compute features ---
-            print(f"[Step 3/6] Computing features for {league_name}...")
+            print(f"[Step 3/7] Computing features for {league_name}...")
             try:
                 from src.features.engineer import compute_all_features
                 features_df = compute_all_features(league_id, current_season)
@@ -220,7 +221,7 @@ class Pipeline:
                 continue  # Can't predict without features
 
             # --- Step 4: Generate predictions ---
-            print(f"[Step 4/6] Generating predictions...")
+            print(f"[Step 4/7] Generating predictions...")
             try:
                 predictions = self._generate_predictions(
                     league_id, current_season, features_df,
@@ -235,7 +236,7 @@ class Pipeline:
                 continue  # Can't find value bets without predictions
 
             # --- Step 5: Find value bets ---
-            print(f"[Step 5/6] Finding value bets...")
+            print(f"[Step 5/7] Finding value bets...")
             try:
                 from src.betting.value_finder import ValueFinder
                 finder = ValueFinder()
@@ -266,7 +267,7 @@ class Pipeline:
                 all_value_bets = []
 
             # --- Step 6: Log system picks ---
-            print(f"[Step 6/6] Logging system picks...")
+            print(f"[Step 6/7] Logging system picks...")
             try:
                 if all_value_bets:
                     from src.betting.tracker import log_system_picks
@@ -284,6 +285,10 @@ class Pipeline:
                 errors.append(err)
                 print(f"  → System picks: FAILED ({e})")
 
+        # --- Step 7: Send morning picks emails ---
+        emails_sent = self._send_emails("morning", run_id, errors)
+        result.emails_sent = emails_sent
+
         # --- Finalize ---
         duration = time.time() - start_time
         status = "completed" if not errors else "completed"
@@ -297,6 +302,7 @@ class Pipeline:
             matches_scraped=total_matches_scraped,
             predictions_made=total_predictions,
             value_bets_found=total_value_bets,
+            emails_sent=emails_sent,
             duration=duration,
             errors=errors,
         )
@@ -312,6 +318,7 @@ class Pipeline:
         print(f"  Matches scraped: {total_matches_scraped}")
         print(f"  Predictions: {total_predictions}")
         print(f"  Value bets: {total_value_bets}")
+        print(f"  Emails sent: {emails_sent}")
         if errors:
             print(f"  Warnings/errors: {len(errors)}")
             for err in errors:
@@ -484,7 +491,7 @@ class Pipeline:
                 continue
 
             # --- Step 1: Scrape latest results ---
-            print(f"[Step 1/4] Scraping results for {league_name}...")
+            print(f"[Step 1/3] Scraping results for {league_name}...")
             try:
                 from src.scrapers.football_data import FootballDataScraper
                 from src.scrapers.loader import load_matches, load_odds
@@ -508,7 +515,7 @@ class Pipeline:
                 print(f"  → Results: FAILED ({e})")
 
             # --- Step 2: Resolve pending bets ---
-            print(f"[Step 2/4] Resolving pending bets...")
+            print(f"[Step 2/3] Resolving pending bets...")
             try:
                 from src.betting.tracker import resolve_bets
                 # Get all finished matches that might have pending bets
@@ -532,7 +539,7 @@ class Pipeline:
                 print(f"  → Resolution: FAILED ({e})")
 
             # --- Step 3: Update performance metrics ---
-            print(f"[Step 3/4] Updating performance metrics...")
+            print(f"[Step 3/3] Updating performance metrics...")
             try:
                 from src.evaluation.metrics import generate_performance_report
                 today = datetime.now().strftime("%Y-%m-%d")
@@ -556,8 +563,15 @@ class Pipeline:
                 errors.append(err)
                 print(f"  → Metrics: FAILED ({e})")
 
-            # --- Step 4: (Email placeholder — E11) ---
-            print(f"[Step 4/4] Email delivery... (not yet implemented — E11)")
+        # --- Step 4: Send evening review emails ---
+        emails_sent = self._send_emails("evening", run_id, errors)
+
+        # --- Step 5: Weekly summary (Sundays only) ---
+        if datetime.utcnow().weekday() == 6:  # 6 = Sunday
+            weekly_sent = self._send_emails("weekly", run_id, errors)
+            emails_sent += weekly_sent
+
+        result.emails_sent = emails_sent
 
         duration = time.time() - start_time
         status = "completed"
@@ -565,6 +579,7 @@ class Pipeline:
         self._complete_run(
             run_id, status,
             matches_scraped=total_matches_scraped,
+            emails_sent=emails_sent,
             duration=duration,
             errors=errors,
         )
@@ -576,6 +591,7 @@ class Pipeline:
 
         print(f"\nEvening pipeline complete in {duration:.1f}s")
         print(f"  Matches updated: {total_matches_scraped}")
+        print(f"  Emails sent: {emails_sent}")
         if errors:
             print(f"  Warnings/errors: {len(errors)}")
 
@@ -800,6 +816,118 @@ class Pipeline:
                 .all()
             )
             return [r[0] for r in pending_match_ids]
+
+    @staticmethod
+    def _get_notifiable_users(email_type: str) -> List[int]:
+        """Get user IDs that should receive a given email type.
+
+        Checks that the user is active, has an email address set, and has
+        the relevant notification preference enabled.
+
+        Args:
+            email_type: One of "morning", "evening", or "weekly".
+
+        Returns:
+            List of user IDs to send to.
+        """
+        from src.database.models import User
+
+        # Map email type to the notification preference column
+        notify_col_map = {
+            "morning": User.notify_morning,
+            "evening": User.notify_evening,
+            "weekly": User.notify_weekly,
+        }
+        notify_col = notify_col_map.get(email_type)
+        if notify_col is None:
+            return []
+
+        with get_session() as session:
+            users = (
+                session.query(User.id)
+                .filter(
+                    User.is_active == 1,
+                    User.email.isnot(None),
+                    User.email != "",
+                    notify_col == 1,
+                )
+                .all()
+            )
+            return [u[0] for u in users]
+
+    def _send_emails(
+        self,
+        email_type: str,
+        run_id: int,
+        errors: List[str],
+    ) -> int:
+        """Send emails to all notifiable users for the given email type.
+
+        Wraps email sending in try/except so failures never crash the pipeline.
+        Increments emails_sent on the pipeline run for each successful send.
+
+        Args:
+            email_type: "morning", "evening", or "weekly".
+            run_id: Pipeline run ID for tracking emails_sent.
+            errors: Mutable error list to append failures to.
+
+        Returns:
+            Number of emails successfully sent.
+        """
+        type_labels = {
+            "morning": "morning picks",
+            "evening": "evening review",
+            "weekly": "weekly summary",
+        }
+        label = type_labels.get(email_type, email_type)
+        print(f"\n[Email] Sending {label} emails...")
+
+        user_ids = self._get_notifiable_users(email_type)
+        if not user_ids:
+            print(f"  → No users with {label} notifications enabled")
+            return 0
+
+        # Import email functions
+        try:
+            from src.delivery.email_alerts import (
+                send_morning_picks,
+                send_evening_review,
+                send_weekly_summary,
+            )
+        except ImportError as e:
+            err = f"Email module import failed: {e}"
+            logger.error(err)
+            errors.append(err)
+            print(f"  → FAILED: {err}")
+            return 0
+
+        send_func_map = {
+            "morning": send_morning_picks,
+            "evening": send_evening_review,
+            "weekly": send_weekly_summary,
+        }
+        send_func = send_func_map.get(email_type)
+        if send_func is None:
+            return 0
+
+        sent_count = 0
+        for user_id in user_ids:
+            try:
+                success = send_func(user_id)
+                if success:
+                    sent_count += 1
+                    print(f"  → Sent {label} to user {user_id}")
+                else:
+                    print(f"  → Failed to send {label} to user {user_id}")
+            except Exception as e:
+                err = f"Email send failed for user {user_id} ({label}): {e}"
+                logger.error(err)
+                errors.append(err)
+                print(f"  → FAILED for user {user_id}: {e}")
+                # Continue to next user — don't let one failure block others
+
+        print(f"  → {sent_count}/{len(user_ids)} {label} emails sent")
+        return sent_count
 
     @staticmethod
     def _create_pipeline_run(run_type: str) -> int:

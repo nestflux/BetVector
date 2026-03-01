@@ -127,6 +127,13 @@ def save_onboarding_settings(user_id: int, settings: dict) -> bool:
             )
             if settings.get("email"):
                 user.email = settings["email"]
+            # Notification preferences (1 = enabled, 0 = disabled)
+            if "notify_morning" in settings:
+                user.notify_morning = 1 if settings["notify_morning"] else 0
+            if "notify_evening" in settings:
+                user.notify_evening = 1 if settings["notify_evening"] else 0
+            if "notify_weekly" in settings:
+                user.notify_weekly = 1 if settings["notify_weekly"] else 0
             user.updated_at = datetime.utcnow().isoformat()
             session.commit()
         return True
@@ -472,6 +479,9 @@ def render_onboarding() -> None:
                     "kelly_fraction": st.session_state.get("ob_kelly", 25) / 100.0,
                     "edge_threshold": st.session_state.get("ob_edge", 5) / 100.0,
                     "email": st.session_state.get("ob_email", ""),
+                    "notify_morning": st.session_state.get("ob_notif_morning", True),
+                    "notify_evening": st.session_state.get("ob_notif_evening", True),
+                    "notify_weekly": st.session_state.get("ob_notif_weekly", True),
                 }
 
                 # Save all settings to DB
