@@ -24,6 +24,7 @@ sqlalchemy==2.0.36
 
 # --- Config ---
 pyyaml==6.0.2
+python-dotenv==1.1.0
 
 # --- Dashboard ---
 streamlit==1.41.0

@@ -772,8 +772,18 @@ class Pipeline:
     ) -> list:
         """Train the model and generate predictions for matches needing them.
 
-        Trains on all finished matches, then predicts matches that don't
-        yet have predictions from the active model.
+        Trains on ALL finished matches across ALL seasons (not just the
+        current season) to maximise the training set.  The Poisson model
+        benefits from more data — 5+ seasons of results produce more
+        stable attack/defence estimates than a single season alone.
+        (MP §4: walk-forward uses all data up to the prediction date.)
+
+        Historical season features are loaded via compute_all_features()
+        which reads from the features table.  This is idempotent — if
+        features are already computed, they're read from the DB instantly.
+
+        Predictions are only generated for the current season's matches
+        that don't yet have predictions from the active model.
 
         Returns a list of MatchPrediction objects.
         """
@@ -781,16 +791,17 @@ class Pipeline:
 
         from src.database.db import get_session
         from src.database.models import Match, Prediction
+        from src.features.engineer import compute_all_features
         from src.models.poisson import PoissonModel
         from src.models.storage import save_predictions
 
-        # Build results DataFrame for training (finished matches only)
+        # Build results DataFrame for training from ALL historical seasons
+        # (not just the current season).  More training data = better model.
         with get_session() as session:
             finished = (
                 session.query(Match)
                 .filter(
                     Match.league_id == league_id,
-                    Match.season == season,
                     Match.status == "finished",
                 )
                 .all()
@@ -805,17 +816,48 @@ class Pipeline:
                 if m.home_goals is not None
             ]
 
+            # Collect distinct historical seasons that have data
+            hist_seasons = sorted(set(
+                m.season for m in finished if m.season != season
+            ))
+
         if len(results_data) < 20:
             logger.info("Not enough finished matches to train (%d < 20)", len(results_data))
             return []
 
         results_df = pd.DataFrame(results_data)
 
-        # Filter features to finished matches for training
-        finished_ids = set(results_df["match_id"].tolist())
-        train_features = features_df[features_df["match_id"].isin(finished_ids)]
+        # Build training features from ALL seasons.
+        # The current season's features_df is passed in.  For historical
+        # seasons, call compute_all_features() which reads existing features
+        # from the DB (idempotent — no recomputation if already stored).
+        all_features = features_df
+        if hist_seasons:
+            logger.info(
+                "Loading historical features for training: %s",
+                ", ".join(hist_seasons),
+            )
+            hist_dfs = []
+            for hist_season in hist_seasons:
+                hist_df = compute_all_features(league_id, hist_season)
+                if not hist_df.empty:
+                    hist_dfs.append(hist_df)
+            if hist_dfs:
+                all_features = pd.concat(
+                    [features_df] + hist_dfs, ignore_index=True,
+                )
 
-        # Train the model
+        # Filter features to finished matches only for training
+        all_finished_ids = set(results_df["match_id"].tolist())
+        train_features = all_features[all_features["match_id"].isin(all_finished_ids)]
+        current_count = len(features_df[features_df["match_id"].isin(all_finished_ids)])
+        hist_count = len(train_features) - current_count
+        logger.info(
+            "Training on %d matches (%d current season + %d historical)",
+            len(train_features), current_count, hist_count,
+        )
+
+        # Train the model on the full historical dataset
         model = PoissonModel()
         model.train(train_features, results_df)
 

@@ -40,6 +40,14 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from pathlib import Path
+
+# Load .env for local runs (GitHub Actions sets env vars directly)
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parent / ".env")
+except ImportError:
+    pass  # python-dotenv not installed — env vars must be set externally
 
 
 def main() -> int:

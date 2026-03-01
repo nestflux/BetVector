@@ -40,7 +40,13 @@ Master Plan refs: MP §8 Design System, MP §3 Flow 4
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
 import streamlit as st
+
+# Load .env file so DASHBOARD_PASSWORD and other secrets are available
+# even when running via `streamlit run` directly (without the Desktop launcher).
+_env_path = Path(__file__).resolve().parents[2] / ".env"
+load_dotenv(_env_path)
 
 # ============================================================================
 # Page Config — must be first Streamlit call
