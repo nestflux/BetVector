@@ -156,9 +156,9 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E12-02 (Feature Importance Tracking)
-Currently working: E12-03 (Adaptive Ensemble Weights)
-Next up: E12-04 (Market Feedback Loop)
+Last completed: E12-03 (Adaptive Ensemble Weights)
+Currently working: E12-04 (Market Feedback Loop)
+Next up: E12-05 (Seasonal Re-training Triggers)
 
 ---
 
