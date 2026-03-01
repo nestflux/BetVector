@@ -1,0 +1,119 @@
+# ============================================================================
+# BetVector — Morning Pipeline (E13-01)
+# ============================================================================
+# Runs the full morning pipeline daily at 06:00 UTC:
+#   scrape data → compute features → run predictions → detect value bets
+#   → log system picks → send morning email
+#
+# Schedule: 06:00 UTC every day (cron: "0 6 * * *")
+# Manual trigger: workflow_dispatch (run from GitHub Actions UI)
+#
+# Master Plan refs: MP §5 Architecture → Scheduling (GitHub Actions)
+# ============================================================================
+
+name: Morning Pipeline
+
+on:
+  schedule:
+    # 06:00 UTC daily — matches roughly 7 AM BST / 8 AM CEST
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    # Allow manual trigger from the GitHub Actions UI
+    inputs:
+      verbose:
+        description: "Enable verbose (DEBUG) logging"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+# Only one pipeline run at a time (prevent overlapping runs)
+concurrency:
+  group: betvector-morning
+  cancel-in-progress: false
+
+jobs:
+  morning:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # --- 1. Checkout the repo (including the SQLite database) ---
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Fetch full history so git commit works
+          fetch-depth: 0
+
+      # --- 2. Set up Python 3.10 ---
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+
+      # --- 3. Install dependencies ---
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+
+      # --- 4. Run the morning pipeline ---
+      - name: Run morning pipeline
+        env:
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          DASHBOARD_PASSWORD: ${{ secrets.DASHBOARD_PASSWORD }}
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+        run: |
+          VERBOSE_FLAG=""
+          if [ "${{ inputs.verbose }}" = "true" ]; then
+            VERBOSE_FLAG="--verbose"
+          fi
+          python run_pipeline.py morning $VERBOSE_FLAG
+
+      # --- 5. Commit database changes back to repo ---
+      # The SQLite database is stored in the repo for simplicity.
+      # After the pipeline writes new predictions/bets, commit the
+      # updated .db file so the next run has the latest state.
+      - name: Commit database changes
+        run: |
+          git config user.name "BetVector Bot"
+          git config user.email "bot@betvector.dev"
+          git add data/betvector.db
+          # Only commit if there are changes (--allow-empty would noise up history)
+          git diff --staged --quiet || git commit -m "Morning pipeline: $(date -u +%Y-%m-%d)"
+          git push
+
+      # --- 6. Notify on failure ---
+      - name: Send failure notification
+        if: failure()
+        env:
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+        run: |
+          python -c "
+          import os, smtplib
+          from email.mime.text import MIMEText
+          pwd = os.environ.get('GMAIL_APP_PASSWORD', '')
+          if not pwd:
+              print('No GMAIL_APP_PASSWORD set, skipping failure notification')
+              exit(0)
+          msg = MIMEText(
+              'The BetVector morning pipeline failed.\n\n'
+              'Check the workflow run at: '
+              'https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\n\n'
+              'Timestamp: $(date -u +\"%Y-%m-%d %H:%M UTC\")'
+          )
+          msg['Subject'] = 'BetVector Morning Pipeline FAILED'
+          msg['From'] = 'betvector.alerts@gmail.com'
+          msg['To'] = 'betvector.alerts@gmail.com'
+          try:
+              with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
+                  smtp.login('betvector.alerts@gmail.com', pwd)
+                  smtp.send_message(msg)
+              print('Failure notification sent')
+          except Exception as e:
+              print(f'Failed to send notification: {e}')
+          "
