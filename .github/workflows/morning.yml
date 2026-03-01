@@ -95,6 +95,27 @@ jobs:
               if col not in cols:
                   conn.execute(sql)
                   print(f'  Added missing column: {col}')
+
+          # Teams table: add api_football_name column (real-time data sources)
+          team_cols = [r[1] for r in conn.execute('PRAGMA table_info(teams)').fetchall()]
+          if 'api_football_name' not in team_cols:
+              conn.execute('ALTER TABLE teams ADD COLUMN api_football_name TEXT')
+              print('  Added missing column: teams.api_football_name')
+
+          # Weather table: create if not exists (Open-Meteo match-day conditions)
+          conn.execute('''CREATE TABLE IF NOT EXISTS weather (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              match_id INTEGER NOT NULL UNIQUE REFERENCES matches(id),
+              temperature_c REAL,
+              wind_speed_kmh REAL,
+              humidity_pct REAL,
+              precipitation_mm REAL,
+              weather_code INTEGER,
+              weather_category TEXT,
+              source TEXT NOT NULL DEFAULT 'open_meteo',
+              created_at TEXT NOT NULL DEFAULT (datetime('now'))
+          )''')
+
           conn.commit()
           conn.close()
 

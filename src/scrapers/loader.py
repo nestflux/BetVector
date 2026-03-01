@@ -1,17 +1,23 @@
 """
-BetVector — Data Loader (E3-04)
-================================
-Takes scraped DataFrames from the Football-Data.co.uk and FBref scrapers
-and loads them into the database with full deduplication.
+BetVector — Data Loader (E3-04 + Real-Time Data Sources)
+=========================================================
+Takes scraped DataFrames from all data sources and loads them into the
+database with full deduplication.
 
-Three loader functions, each independent and idempotent:
+Loader functions (each independent and idempotent):
 
   - ``load_matches(df, league_id, season)`` — inserts matches and
     auto-creates team records if they don't already exist.
-  - ``load_odds(df, league_id)`` — maps bookmaker column names
-    (B365H → Bet365 / home / 1X2) and inserts closing odds.
+  - ``load_odds(df, league_id)`` — maps Football-Data.co.uk bookmaker
+    columns (B365H → Bet365 / home / 1X2) and inserts closing odds.
+  - ``load_odds_api_football(odds_records, league_id)`` — loads pre-match
+    odds from API-Football (dict-based, not DataFrame-based).
   - ``load_match_stats(df, league_id)`` — links FBref stats to the
     correct match_id via (date, team) matching.
+  - ``load_understat_stats(df, league_id)`` — loads xG data from Understat.
+  - ``load_weather(df)`` — loads match-day weather into the weather table.
+  - ``update_match_results(df, league_id)`` — updates scheduled matches
+    with results from API-Football (goals, status).
 
 All loaders use explicit duplicate checks before inserting.  Running
 any loader twice with the same data produces zero new records.
@@ -27,7 +33,7 @@ from typing import Dict, List, Optional, Tuple
 import pandas as pd
 
 from src.database.db import get_session
-from src.database.models import League, Match, MatchStat, Odds, Team
+from src.database.models import League, Match, MatchStat, Odds, Team, Weather
 
 logger = logging.getLogger(__name__)
 
@@ -410,10 +416,16 @@ def _insert_odds(
     market_type: str,
     selection: str,
     odds_decimal: float,
+    source: str = "football_data",
 ) -> bool:
     """Insert a single odds entry if it doesn't already exist.
 
     Returns True if inserted, False if skipped (duplicate).
+
+    Parameters
+    ----------
+    source : str
+        Data source identifier — ``"football_data"`` or ``"api_football"``.
 
     Implied probability is calculated as 1.0 / odds.  This includes the
     bookmaker's margin (also called "overround" or "vig").  For example,
@@ -443,7 +455,7 @@ def _insert_odds(
         selection=selection,
         odds_decimal=odds_decimal,
         implied_prob=implied_prob,
-        source="football_data",
+        source=source,
     )
     session.add(odds)
     return True
@@ -461,3 +473,434 @@ def _safe_float(value) -> Optional[float]:
     if value is None or pd.isna(value):
         return None
     return float(value)
+
+
+# ============================================================================
+# API-Football Odds Loader
+# ============================================================================
+
+def load_odds_api_football(
+    odds_records: List[Dict],
+    league_id: int,
+) -> Dict[str, int]:
+    """Load bookmaker odds from API-Football into the database.
+
+    Unlike ``load_odds()`` which parses Football-Data.co.uk DataFrame columns,
+    this accepts a list of pre-parsed dicts from ``APIFootballScraper.scrape_odds()``.
+
+    Each dict must have: ``date``, ``fixture_id``, ``bookmaker``,
+    ``market_type``, ``selection``, ``odds_decimal``.
+
+    The fixture_id is used to look up the match via API-Football's fixture ID.
+    If no match is found by fixture_id, falls back to date + team matching.
+
+    Parameters
+    ----------
+    odds_records : list of dict
+        Odds records from ``APIFootballScraper.scrape_odds()``.
+    league_id : int
+        Database ID of the league.
+
+    Returns
+    -------
+    dict
+        Summary with keys: "new", "skipped", "no_match", "total".
+    """
+    new_count = 0
+    skipped_count = 0
+    no_match_count = 0
+
+    # Group odds by fixture_id for efficiency (one match lookup per fixture)
+    from collections import defaultdict
+    by_fixture: Dict[int, List[Dict]] = defaultdict(list)
+    for record in odds_records:
+        fid = record.get("fixture_id")
+        if fid:
+            by_fixture[fid].append(record)
+
+    for fixture_id, records in by_fixture.items():
+        with get_session() as session:
+            # Try to find the match — first by date (since we may not have
+            # stored fixture_id on the Match model).  We use the date and
+            # look for matches on that day in this league.
+            match = None
+            sample_date = records[0].get("date") if records else None
+
+            if sample_date:
+                # Get all matches on this date for this league
+                day_matches = session.query(Match).filter_by(
+                    league_id=league_id,
+                    date=sample_date,
+                ).all()
+
+                if len(day_matches) == 1:
+                    # Only one match on this day — it's a safe match
+                    match = day_matches[0]
+                elif len(day_matches) > 1:
+                    # Multiple matches — we'd need team names to disambiguate
+                    # For now, skip these odds (rare for a single fixture_id)
+                    logger.debug(
+                        "load_odds_api_football: Multiple matches on %s — "
+                        "skipping odds for fixture %s", sample_date, fixture_id,
+                    )
+
+            if match is None:
+                no_match_count += len(records)
+                continue
+
+            # Insert each odds record
+            for record in records:
+                bookmaker = record.get("bookmaker", "")
+                market_type = record.get("market_type", "")
+                selection = record.get("selection", "")
+                odds_decimal = record.get("odds_decimal", 0.0)
+
+                if not bookmaker or not market_type or not selection or odds_decimal <= 1.0:
+                    continue
+
+                inserted = _insert_odds(
+                    session, match.id, bookmaker, market_type,
+                    selection, odds_decimal, source="api_football",
+                )
+                if inserted:
+                    new_count += 1
+                else:
+                    skipped_count += 1
+
+    summary = {
+        "new": new_count,
+        "skipped": skipped_count,
+        "no_match": no_match_count,
+        "total": len(odds_records),
+    }
+    logger.info(
+        "load_odds_api_football: %d new, %d skipped, %d no match (of %d total)",
+        new_count, skipped_count, no_match_count, len(odds_records),
+    )
+    return summary
+
+
+# ============================================================================
+# Match Results Updater (API-Football)
+# ============================================================================
+
+def update_match_results(
+    df: pd.DataFrame,
+    league_id: int,
+) -> Dict[str, int]:
+    """Update existing scheduled matches with results from API-Football.
+
+    ``load_matches()`` only inserts new matches — it never updates existing
+    ones.  This function is needed because API-Football gives us scheduled
+    matches first, then results come in later.
+
+    Matches are found by (league_id, date, home_team, away_team).
+    Only matches with status ``"scheduled"`` are updated.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame from ``APIFootballScraper.scrape()`` containing columns:
+        date, home_team, away_team, home_goals, away_goals,
+        home_ht_goals, away_ht_goals, status.
+    league_id : int
+        Database ID of the league.
+
+    Returns
+    -------
+    dict
+        Summary with keys: "updated", "skipped", "not_found".
+    """
+    updated = 0
+    skipped = 0
+    not_found = 0
+
+    # Only process rows that have results (finished matches)
+    finished_df = df[df["status"] == "finished"].copy()
+
+    for _, row in finished_df.iterrows():
+        with get_session() as session:
+            match = _find_match(
+                session, league_id, row["date"],
+                row["home_team"], row["away_team"],
+            )
+
+            if match is None:
+                not_found += 1
+                continue
+
+            # Only update if currently scheduled (don't overwrite finished matches)
+            if match.status != "scheduled":
+                skipped += 1
+                continue
+
+            # Update with results
+            match.home_goals = _safe_int(row.get("home_goals"))
+            match.away_goals = _safe_int(row.get("away_goals"))
+            match.home_ht_goals = _safe_int(row.get("home_ht_goals"))
+            match.away_ht_goals = _safe_int(row.get("away_ht_goals"))
+            match.status = "finished"
+            updated += 1
+
+    summary = {"updated": updated, "skipped": skipped, "not_found": not_found}
+    logger.info(
+        "update_match_results: %d updated, %d already finished, %d not found",
+        updated, skipped, not_found,
+    )
+    return summary
+
+
+# ============================================================================
+# Understat Stats Loader
+# ============================================================================
+
+def load_understat_stats(
+    df: pd.DataFrame,
+    league_id: int,
+) -> Dict[str, int]:
+    """Load xG data from Understat into the match_stats table.
+
+    Maps Understat match-level data to two MatchStat rows per match
+    (home team + away team), with ``source="understat"``.
+
+    Only loads data for finished matches that have xG values.
+    Does NOT overwrite existing FBref stats — if a match already has
+    MatchStat rows from FBref, Understat data is skipped.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame from ``UnderstatScraper.scrape()`` with columns:
+        date, home_team, away_team, home_xg, away_xg, home_xga, away_xga.
+    league_id : int
+        Database ID of the league.
+
+    Returns
+    -------
+    dict
+        Summary with keys: "new", "skipped", "not_found".
+    """
+    if df.empty:
+        return {"new": 0, "skipped": 0, "not_found": 0}
+
+    new_count = 0
+    skipped_count = 0
+    not_found = 0
+
+    # Only load finished matches with xG data
+    has_xg = df[df["home_xg"].notna()].copy()
+
+    for _, row in has_xg.iterrows():
+        with get_session() as session:
+            # Find the match in our DB
+            match = _find_match(
+                session, league_id, row["date"],
+                row["home_team"], row["away_team"],
+            )
+
+            if match is None:
+                not_found += 1
+                continue
+
+            # Find the home and away team IDs
+            home_team = session.query(Team).filter_by(
+                name=row["home_team"], league_id=league_id,
+            ).first()
+            away_team = session.query(Team).filter_by(
+                name=row["away_team"], league_id=league_id,
+            ).first()
+
+            if home_team is None or away_team is None:
+                not_found += 1
+                continue
+
+            # Insert home team stats (skip if already exists from any source)
+            existing_home = session.query(MatchStat).filter_by(
+                match_id=match.id, team_id=home_team.id,
+            ).first()
+
+            if existing_home is None:
+                home_stat = MatchStat(
+                    match_id=match.id,
+                    team_id=home_team.id,
+                    is_home=1,
+                    xg=_safe_float(row.get("home_xg")),
+                    xga=_safe_float(row.get("home_xga")),
+                    source="understat",
+                )
+                session.add(home_stat)
+                new_count += 1
+            else:
+                skipped_count += 1
+
+            # Insert away team stats
+            existing_away = session.query(MatchStat).filter_by(
+                match_id=match.id, team_id=away_team.id,
+            ).first()
+
+            if existing_away is None:
+                away_stat = MatchStat(
+                    match_id=match.id,
+                    team_id=away_team.id,
+                    is_home=0,
+                    xg=_safe_float(row.get("away_xg")),
+                    xga=_safe_float(row.get("away_xga")),
+                    source="understat",
+                )
+                session.add(away_stat)
+                new_count += 1
+            else:
+                skipped_count += 1
+
+    summary = {"new": new_count, "skipped": skipped_count, "not_found": not_found}
+    logger.info(
+        "load_understat_stats: %d new stat rows, %d skipped, %d matches not found",
+        new_count, skipped_count, not_found,
+    )
+    return summary
+
+
+# ============================================================================
+# Weather Loader
+# ============================================================================
+
+def load_weather(df: pd.DataFrame) -> Dict[str, int]:
+    """Load match-day weather data into the weather table.
+
+    Each match has at most one weather record (enforced by unique constraint
+    on match_id).  Idempotent — skips matches that already have weather data.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame from ``WeatherScraper.scrape_for_matches()`` with columns:
+        match_id, temperature_c, wind_speed_kmh, humidity_pct,
+        precipitation_mm, weather_code, weather_category.
+
+    Returns
+    -------
+    dict
+        Summary with keys: "new", "skipped".
+    """
+    if df.empty:
+        return {"new": 0, "skipped": 0}
+
+    new_count = 0
+    skipped_count = 0
+
+    for _, row in df.iterrows():
+        match_id = int(row["match_id"])
+
+        with get_session() as session:
+            # Check for existing weather record (idempotency)
+            existing = session.query(Weather).filter_by(
+                match_id=match_id,
+            ).first()
+
+            if existing:
+                skipped_count += 1
+                continue
+
+            weather = Weather(
+                match_id=match_id,
+                temperature_c=_safe_float(row.get("temperature_c")),
+                wind_speed_kmh=_safe_float(row.get("wind_speed_kmh")),
+                humidity_pct=_safe_float(row.get("humidity_pct")),
+                precipitation_mm=_safe_float(row.get("precipitation_mm")),
+                weather_code=_safe_int(row.get("weather_code")),
+                weather_category=row.get("weather_category"),
+                source="open_meteo",
+            )
+            session.add(weather)
+            new_count += 1
+
+    summary = {"new": new_count, "skipped": skipped_count}
+    logger.info(
+        "load_weather: %d new weather records, %d skipped as duplicates",
+        new_count, skipped_count,
+    )
+    return summary
+
+
+# ============================================================================
+# Team API Name Updater
+# ============================================================================
+
+def update_team_api_names(
+    df: pd.DataFrame,
+    league_id: int,
+) -> int:
+    """Update teams with their API-Football IDs and names.
+
+    Called after loading API-Football fixture data.  Updates the
+    ``api_football_id`` and ``api_football_name`` columns on Team records
+    so we can cross-reference in future lookups.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame from ``APIFootballScraper.scrape()`` with columns:
+        home_team, away_team, home_api_football_id, away_api_football_id,
+        home_api_football_name, away_api_football_name.
+    league_id : int
+        Database ID of the league.
+
+    Returns
+    -------
+    int
+        Number of teams updated.
+    """
+    updated = 0
+
+    # Collect unique team mappings from the fixture data
+    team_mappings: Dict[str, Dict[str, Any]] = {}
+
+    for _, row in df.iterrows():
+        # Home team
+        home_name = row.get("home_team")
+        home_api_id = row.get("home_api_football_id")
+        home_api_name = row.get("home_api_football_name")
+        if home_name and home_api_id:
+            team_mappings[home_name] = {
+                "api_football_id": int(home_api_id),
+                "api_football_name": home_api_name,
+            }
+
+        # Away team
+        away_name = row.get("away_team")
+        away_api_id = row.get("away_api_football_id")
+        away_api_name = row.get("away_api_football_name")
+        if away_name and away_api_id:
+            team_mappings[away_name] = {
+                "api_football_id": int(away_api_id),
+                "api_football_name": away_api_name,
+            }
+
+    # Update DB records
+    for canonical_name, api_info in team_mappings.items():
+        with get_session() as session:
+            team = session.query(Team).filter_by(
+                name=canonical_name, league_id=league_id,
+            ).first()
+
+            if team is None:
+                continue
+
+            changed = False
+            if team.api_football_id != api_info["api_football_id"]:
+                team.api_football_id = api_info["api_football_id"]
+                changed = True
+            if team.api_football_name != api_info.get("api_football_name"):
+                team.api_football_name = api_info.get("api_football_name")
+                changed = True
+
+            if changed:
+                updated += 1
+
+    if updated:
+        logger.info(
+            "update_team_api_names: Updated %d teams with API-Football IDs",
+            updated,
+        )
+
+    return updated

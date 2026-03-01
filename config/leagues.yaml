@@ -17,6 +17,8 @@ leagues:
     fbref_league_id: "ENG-Premier League"
     # RapidAPI / API-Football numeric league ID
     api_football_id: 39
+    # Understat league identifier (used by understatapi package)
+    understat_league: "EPL"
     is_active: true
     seasons:
       - "2020-21"

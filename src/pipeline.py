@@ -49,7 +49,7 @@ from typing import Any, Dict, List, Optional, Type
 
 from src.config import config
 from src.database.db import get_session, init_db
-from src.database.models import League, Match, PipelineRun
+from src.database.models import League, Match, PipelineRun, Weather
 from src.database.seed import seed_all
 
 logger = logging.getLogger(__name__)
@@ -182,22 +182,119 @@ class Pipeline:
                 print(f"  → FBref: FAILED ({e})")
                 fbref_df = None
 
+            # 1c. API-Football (real-time fixtures + odds + injuries)
+            # Solves the Football-Data.co.uk CSV delay problem — gives us
+            # fixtures and results within minutes of events happening.
+            api_football_df = None
+            api_football_odds = None
+            api_football_injuries = None
+            try:
+                from src.scrapers.api_football import APIFootballScraper
+                api_scraper = APIFootballScraper()
+
+                # Fixtures/results (1 request)
+                api_football_df = api_scraper.scrape(
+                    league_config=league_cfg, season=current_season,
+                )
+                if api_football_df is not None and not api_football_df.empty:
+                    print(f"  → API-Football: {len(api_football_df)} fixtures downloaded")
+                else:
+                    print("  → API-Football: No fixture data returned")
+
+                # Odds (~5 requests for paginated results)
+                api_football_odds = api_scraper.scrape_odds(
+                    league_config=league_cfg, season=current_season,
+                )
+                if api_football_odds:
+                    print(f"  → API-Football odds: {len(api_football_odds)} records")
+                else:
+                    print("  → API-Football odds: No data returned")
+
+                # Injuries (1 request)
+                api_football_injuries = api_scraper.scrape_injuries(
+                    league_config=league_cfg, season=current_season,
+                )
+                if api_football_injuries is not None and not api_football_injuries.empty:
+                    print(f"  → API-Football injuries: {len(api_football_injuries)} records")
+                else:
+                    print("  → API-Football injuries: No data returned")
+
+            except Exception as e:
+                err = f"API-Football scrape failed for {league_name}: {e}"
+                logger.error(err)
+                errors.append(err)
+                print(f"  → API-Football: FAILED ({e})")
+
+            # 1d. Understat (xG data — replaces blocked FBref)
+            understat_df = None
+            try:
+                from src.scrapers.understat_scraper import UnderstatScraper
+                us_scraper = UnderstatScraper()
+                understat_df = us_scraper.scrape(
+                    league_config=league_cfg, season=current_season,
+                )
+                if understat_df is not None and not understat_df.empty:
+                    finished = understat_df[understat_df["home_xg"].notna()]
+                    print(f"  → Understat: {len(finished)} matches with xG data")
+                else:
+                    print("  → Understat: No data returned")
+            except Exception as e:
+                err = f"Understat scrape failed for {league_name}: {e}"
+                logger.error(err)
+                errors.append(err)
+                print(f"  → Understat: FAILED ({e})")
+
             # --- Step 2: Load into database ---
             print(f"[Step 2/7] Loading data into database...")
             try:
-                from src.scrapers.loader import load_matches, load_odds, load_match_stats
+                from src.scrapers.loader import (
+                    load_matches, load_odds, load_match_stats,
+                    load_odds_api_football, load_understat_stats,
+                    update_match_results, update_team_api_names,
+                )
 
+                # Football-Data.co.uk matches + odds
                 if fd_df is not None and not fd_df.empty:
                     match_result = load_matches(fd_df, league_id, current_season)
                     matches_scraped = match_result.get("new", 0)
-                    print(f"  → Matches: {match_result}")
+                    print(f"  → Matches (Football-Data): {match_result}")
 
                     odds_result = load_odds(fd_df, league_id)
-                    print(f"  → Odds: {odds_result}")
+                    print(f"  → Odds (Football-Data): {odds_result}")
 
+                # API-Football fixtures + results + odds
+                if api_football_df is not None and not api_football_df.empty:
+                    # Insert new matches (scheduled + finished)
+                    af_match_result = load_matches(
+                        api_football_df, league_id, current_season,
+                    )
+                    matches_scraped += af_match_result.get("new", 0)
+                    print(f"  → Matches (API-Football): {af_match_result}")
+
+                    # Update scheduled → finished for matches with results
+                    af_update_result = update_match_results(
+                        api_football_df, league_id,
+                    )
+                    print(f"  → Results updated: {af_update_result}")
+
+                    # Update team API-Football IDs and names
+                    update_team_api_names(api_football_df, league_id)
+
+                if api_football_odds:
+                    af_odds_result = load_odds_api_football(
+                        api_football_odds, league_id,
+                    )
+                    print(f"  → Odds (API-Football): {af_odds_result}")
+
+                # FBref match stats
                 if fbref_df is not None and not fbref_df.empty:
                     stats_result = load_match_stats(fbref_df, league_id)
-                    print(f"  → Match stats: {stats_result}")
+                    print(f"  → Match stats (FBref): {stats_result}")
+
+                # Understat xG stats (fills gaps where FBref is blocked)
+                if understat_df is not None and not understat_df.empty:
+                    us_result = load_understat_stats(understat_df, league_id)
+                    print(f"  → xG stats (Understat): {us_result}")
 
             except Exception as e:
                 err = f"Data loading failed for {league_name}: {e}"
@@ -206,6 +303,57 @@ class Pipeline:
                 print(f"  → Loading: FAILED ({e})")
 
             total_matches_scraped += matches_scraped
+
+            # 1e. Weather (match-day conditions from Open-Meteo)
+            # Fetched after loading so we can look up match_ids in the DB
+            try:
+                from src.scrapers.weather_scraper import WeatherScraper
+                from src.scrapers.loader import load_weather
+                from src.database.models import Match as _Match, Team as _Team
+
+                weather_scraper = WeatherScraper()
+
+                # Get matches that need weather data (finished matches
+                # without weather + upcoming scheduled matches)
+                with get_session() as session:
+                    matches_needing_weather = session.query(_Match).filter(
+                        _Match.league_id == league_id,
+                        _Match.season == current_season,
+                    ).outerjoin(
+                        Weather, Weather.match_id == _Match.id,
+                    ).filter(
+                        Weather.id.is_(None),
+                    ).order_by(_Match.date.desc()).limit(50).all()
+
+                    match_list = []
+                    for m in matches_needing_weather:
+                        home_team = session.query(_Team).filter_by(
+                            id=m.home_team_id,
+                        ).first()
+                        if home_team:
+                            match_list.append({
+                                "match_id": m.id,
+                                "date": m.date,
+                                "home_team": home_team.name,
+                            })
+
+                if match_list:
+                    weather_df = weather_scraper.scrape_for_matches(
+                        match_list, league_short_name=league_name,
+                    )
+                    if not weather_df.empty:
+                        weather_result = load_weather(weather_df)
+                        print(f"  → Weather: {weather_result}")
+                    else:
+                        print("  → Weather: No data returned")
+                else:
+                    print("  → Weather: All matches already have weather data")
+
+            except Exception as e:
+                err = f"Weather scrape failed for {league_name}: {e}"
+                logger.error(err)
+                errors.append(err)
+                print(f"  → Weather: FAILED ({e})")
 
             # --- Step 3: Compute features ---
             print(f"[Step 3/7] Computing features for {league_name}...")
@@ -367,6 +515,8 @@ class Pipeline:
 
             # --- Step 1: Re-fetch odds ---
             print(f"[Step 1/3] Re-fetching odds for {league_name}...")
+
+            # 1a. Football-Data.co.uk odds
             try:
                 from src.scrapers.football_data import FootballDataScraper
                 from src.scrapers.loader import load_odds
@@ -375,15 +525,36 @@ class Pipeline:
                 fd_df = scraper.scrape(league_config=league_cfg, season=current_season)
                 if not fd_df.empty:
                     odds_result = load_odds(fd_df, league_id)
-                    print(f"  → Odds updated: {odds_result}")
+                    print(f"  → Odds (Football-Data): {odds_result}")
                 else:
-                    print("  → No odds data returned")
+                    print("  → Football-Data: No odds data returned")
             except Exception as e:
-                err = f"Odds re-fetch failed for {league_name}: {e}"
+                err = f"Football-Data odds re-fetch failed for {league_name}: {e}"
                 logger.error(err)
                 errors.append(err)
-                print(f"  → Odds: FAILED ({e})")
-                continue
+                print(f"  → Football-Data odds: FAILED ({e})")
+
+            # 1b. API-Football targeted odds refresh (upcoming fixtures only)
+            # More precise than Football-Data — fetches odds for specific
+            # upcoming matches that we have predictions for.
+            try:
+                from src.scrapers.api_football import APIFootballScraper
+                from src.scrapers.loader import load_odds_api_football
+
+                api_scraper = APIFootballScraper()
+                api_odds = api_scraper.scrape_odds(
+                    league_config=league_cfg, season=current_season,
+                )
+                if api_odds:
+                    af_odds_result = load_odds_api_football(api_odds, league_id)
+                    print(f"  → Odds (API-Football): {af_odds_result}")
+                else:
+                    print("  → API-Football: No odds data returned")
+            except Exception as e:
+                err = f"API-Football odds refresh failed for {league_name}: {e}"
+                logger.error(err)
+                errors.append(err)
+                print(f"  → API-Football odds: FAILED ({e})")
 
             # --- Step 2: Recalculate edges ---
             print(f"[Step 2/3] Recalculating value bets for {league_name}...")
@@ -495,6 +666,37 @@ class Pipeline:
 
             # --- Step 1: Scrape latest results ---
             print(f"[Step 1/3] Scraping results for {league_name}...")
+
+            # 1a. API-Football results (fastest — available within minutes)
+            try:
+                from src.scrapers.api_football import APIFootballScraper
+                from src.scrapers.loader import (
+                    load_matches as _load_matches,
+                    update_match_results as _update_results,
+                )
+
+                api_scraper = APIFootballScraper()
+                api_df = api_scraper.scrape(
+                    league_config=league_cfg, season=current_season,
+                )
+                if api_df is not None and not api_df.empty:
+                    # Insert any new matches
+                    af_result = _load_matches(api_df, league_id, current_season)
+                    total_matches_scraped += af_result.get("new", 0)
+                    print(f"  → API-Football matches: {af_result}")
+
+                    # Update scheduled → finished
+                    af_update = _update_results(api_df, league_id)
+                    print(f"  → API-Football results: {af_update}")
+                else:
+                    print("  → API-Football: No data returned")
+            except Exception as e:
+                err = f"API-Football results failed for {league_name}: {e}"
+                logger.error(err)
+                errors.append(err)
+                print(f"  → API-Football: FAILED ({e})")
+
+            # 1b. Football-Data.co.uk results (may have newer data too)
             try:
                 from src.scrapers.football_data import FootballDataScraper
                 from src.scrapers.loader import load_matches, load_odds
@@ -504,18 +706,37 @@ class Pipeline:
                 if not fd_df.empty:
                     match_result = load_matches(fd_df, league_id, current_season)
                     total_matches_scraped += match_result.get("new", 0)
-                    print(f"  → Matches: {match_result}")
+                    print(f"  → Football-Data matches: {match_result}")
 
-                    # Also update odds in case of late changes
                     odds_result = load_odds(fd_df, league_id)
-                    print(f"  → Odds: {odds_result}")
+                    print(f"  → Football-Data odds: {odds_result}")
                 else:
-                    print("  → No data returned")
+                    print("  → Football-Data: No data returned")
             except Exception as e:
-                err = f"Results scrape failed for {league_name}: {e}"
+                err = f"Football-Data results failed for {league_name}: {e}"
                 logger.error(err)
                 errors.append(err)
-                print(f"  → Results: FAILED ({e})")
+                print(f"  → Football-Data: FAILED ({e})")
+
+            # 1c. Understat xG for today's finished matches
+            try:
+                from src.scrapers.understat_scraper import UnderstatScraper
+                from src.scrapers.loader import load_understat_stats
+
+                us_scraper = UnderstatScraper()
+                us_df = us_scraper.scrape(
+                    league_config=league_cfg, season=current_season,
+                )
+                if us_df is not None and not us_df.empty:
+                    us_result = load_understat_stats(us_df, league_id)
+                    print(f"  → Understat xG: {us_result}")
+                else:
+                    print("  → Understat: No data returned")
+            except Exception as e:
+                err = f"Understat scrape failed for {league_name}: {e}"
+                logger.error(err)
+                errors.append(err)
+                print(f"  → Understat: FAILED ({e})")
 
             # --- Step 2: Resolve pending bets ---
             print(f"[Step 2/3] Resolving pending bets...")

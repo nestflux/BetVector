@@ -153,7 +153,28 @@ self_improvement:
 scraping:
   min_request_interval_seconds: 2         # Min seconds between requests to same domain
   api_football:
-    daily_request_limit: 100              # Free-tier cap on RapidAPI
+    base_url: "https://v3.football.api-sports.io"
+    daily_request_limit: 100              # Free-tier cap on API-Sports
+    warning_threshold: 20                 # Warn when remaining requests drop below this
+    hard_stop_threshold: 5                # Stop non-critical requests below this
+    # API-Football bookmaker ID → display name mapping
+    # Keys are strings (YAML int keys break ConfigNamespace)
+    # Full list at https://www.api-football.com/documentation-v3#tag/Odds/operation/get-odds-bookmakers
+    bookmaker_map:
+      "1": "Bet365"
+      "2": "Pinnacle"
+      "5": "Unibet"
+      "6": "Betfair"
+      "8": "William Hill"
+      "11": "Bwin"
+      "12": "Betway"
+      "15": "888sport"
+      "16": "Ladbrokes"
+  understat:
+    min_request_interval_seconds: 3       # Extra polite — scraping a free site
+  weather:
+    forecast_url: "https://api.open-meteo.com/v1/forecast"
+    archive_url: "https://archive-api.open-meteo.com/v1/archive"
   request_timeout_seconds: 30
   max_retries: 3
 

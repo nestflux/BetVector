@@ -78,10 +78,16 @@ def _build_connection_url() -> str:
     For PostgreSQL (Streamlit Cloud) it returns the connection string as-is.
     """
     # Check Streamlit Cloud secrets first (only available when running in
-    # Streamlit, not during pipeline CLI runs)
+    # Streamlit, not during pipeline CLI runs).
+    # We only attempt to read st.secrets when a secrets.toml file actually
+    # exists — accessing st.secrets without one triggers a visible
+    # "No secrets found" Streamlit error.
     try:
         import streamlit as st
-        if hasattr(st, "secrets") and "database" in st.secrets:
+        from pathlib import Path as _P
+        _proj_secrets = _P(__file__).resolve().parents[1].parent / ".streamlit" / "secrets.toml"
+        _home_secrets = _P.home() / ".streamlit" / "secrets.toml"
+        if (_proj_secrets.exists() or _home_secrets.exists()) and "database" in st.secrets:
             conn_str = st.secrets["database"]["connection_string"]
             if conn_str:
                 logger.info("Using database connection from Streamlit secrets")

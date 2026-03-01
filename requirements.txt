@@ -18,6 +18,7 @@ lightgbm==4.5.0
 requests==2.32.3
 beautifulsoup4==4.12.3
 soccerdata==1.7.0
+understatapi==0.7.1
 
 # --- Database ---
 sqlalchemy==2.0.36

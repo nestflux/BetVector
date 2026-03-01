@@ -1,0 +1,116 @@
+# ============================================================================
+# BetVector — Stadium Coordinates for Weather Data
+# ============================================================================
+# Latitude/longitude for each EPL team's home stadium.  Used by the Weather
+# scraper to fetch match-day conditions from Open-Meteo.  Coordinates are
+# approximate centre-of-pitch — accuracy within 100m is sufficient since
+# Open-Meteo interpolates from a ~1km grid.
+#
+# Update this file each summer when teams are promoted/relegated.
+# 2025-26 promoted: Sunderland, Leeds United, Burnley
+# 2025-26 relegated: Leicester City, Ipswich Town, Southampton
+# ============================================================================
+
+stadiums:
+  EPL:
+    # --- Top 6 (alphabetical) ---
+    "Arsenal":
+      stadium: "Emirates Stadium"
+      lat: 51.5549
+      lon: -0.1084
+
+    "Chelsea":
+      stadium: "Stamford Bridge"
+      lat: 51.4817
+      lon: -0.1910
+
+    "Liverpool":
+      stadium: "Anfield"
+      lat: 53.4308
+      lon: -2.9609
+
+    "Manchester City":
+      stadium: "Etihad Stadium"
+      lat: 53.4831
+      lon: -2.2004
+
+    "Manchester United":
+      stadium: "Old Trafford"
+      lat: 53.4631
+      lon: -2.2913
+
+    "Tottenham":
+      stadium: "Tottenham Hotspur Stadium"
+      lat: 51.6042
+      lon: -0.0662
+
+    # --- Rest of EPL 2025-26 (alphabetical) ---
+    "Aston Villa":
+      stadium: "Villa Park"
+      lat: 52.5092
+      lon: -1.8847
+
+    "Bournemouth":
+      stadium: "Vitality Stadium"
+      lat: 50.7352
+      lon: -1.8383
+
+    "Brentford":
+      stadium: "Gtech Community Stadium"
+      lat: 51.4907
+      lon: -0.2887
+
+    "Brighton":
+      stadium: "Amex Stadium"
+      lat: 50.8616
+      lon: -0.0837
+
+    "Burnley":
+      stadium: "Turf Moor"
+      lat: 53.7890
+      lon: -2.2302
+
+    "Crystal Palace":
+      stadium: "Selhurst Park"
+      lat: 51.3983
+      lon: -0.0855
+
+    "Everton":
+      stadium: "Goodison Park"
+      lat: 53.4387
+      lon: -2.9663
+
+    "Fulham":
+      stadium: "Craven Cottage"
+      lat: 51.4749
+      lon: -0.2217
+
+    "Leeds United":
+      stadium: "Elland Road"
+      lat: 53.7778
+      lon: -1.5722
+
+    "Newcastle":
+      stadium: "St James' Park"
+      lat: 54.9756
+      lon: -1.6217
+
+    "Nottingham Forest":
+      stadium: "City Ground"
+      lat: 52.9400
+      lon: -1.1326
+
+    "Sunderland":
+      stadium: "Stadium of Light"
+      lat: 54.9146
+      lon: -1.3882
+
+    "West Ham":
+      stadium: "London Stadium"
+      lat: 51.5387
+      lon: -0.0166
+
+    "Wolves":
+      stadium: "Molineux"
+      lat: 52.5901
+      lon: -2.1306

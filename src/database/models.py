@@ -17,6 +17,7 @@ Tables defined here:
 
 Additional tables (value_bets, bet_log, model_performance, pipeline_runs)
 are defined in E2-03.  Self-improvement tables are defined in E2-04.
+Weather table added for Open-Meteo match-day conditions (real-time data sources).
 
 Usage::
 
@@ -197,6 +198,9 @@ class Team(Base):
     football_data_name = Column(String, nullable=True)
     fbref_name = Column(String, nullable=True)
     api_football_id = Column(Integer, nullable=True)
+    # API-Football uses different team names than our canonical names
+    # (e.g. "Tottenham" vs "Tottenham Hotspur"), so we store their version
+    api_football_name = Column(String, nullable=True)
 
     # Relationships
     league = relationship("League", back_populates="teams")
@@ -1034,4 +1038,58 @@ class RetrainHistory(Base):
             f"trigger='{self.trigger_type}', "
             f"brier {self.brier_before:.3f}→{after}, "
             f"rolled_back={self.was_rolled_back})"
+        )
+
+
+# ============================================================================
+# 19. WEATHER  (Real-Time Data Sources)
+# ============================================================================
+# Match-day weather conditions fetched from Open-Meteo API.  Weather can
+# affect match outcomes — heavy rain reduces passing accuracy and goal-scoring,
+# strong wind makes long balls unpredictable, and extreme cold/heat affects
+# player stamina.  Each row is linked 1:1 to a match via match_id.
+#
+# Data source: Open-Meteo (free, no API key required).
+# WMO weather codes: 0–3 = clear/cloud, 51–67 = rain, 71–77 = snow,
+#   80–82 = rain showers, 95–99 = thunderstorm.
+
+class Weather(Base):
+    __tablename__ = "weather"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    match_id = Column(
+        Integer, ForeignKey("matches.id"), nullable=False,
+    )
+    # Temperature at kickoff in degrees Celsius
+    temperature_c = Column(Float, nullable=True)
+    # Wind speed at kickoff in km/h — high wind (>30 km/h) affects long balls
+    wind_speed_kmh = Column(Float, nullable=True)
+    # Relative humidity as percentage (0–100)
+    humidity_pct = Column(Float, nullable=True)
+    # Precipitation in mm during the match window
+    precipitation_mm = Column(Float, nullable=True)
+    # WMO weather code — numeric standard for weather conditions
+    weather_code = Column(Integer, nullable=True)
+    # Simplified category for feature engineering: "clear", "cloudy",
+    # "rain", "heavy_rain", "snow", "storm"
+    weather_category = Column(String, nullable=True)
+    source = Column(String, nullable=False, server_default="open_meteo")
+    created_at = Column(
+        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+    )
+
+    # Relationships
+    match = relationship("Match")
+
+    __table_args__ = (
+        # One weather record per match — idempotent loading
+        UniqueConstraint("match_id", name="uq_weather_match"),
+        Index("idx_weather_match", "match_id"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"Weather(match={self.match_id}, "
+            f"temp={self.temperature_c}°C, wind={self.wind_speed_kmh}km/h, "
+            f"category='{self.weather_category}')"
         )
