@@ -304,6 +304,23 @@ class MatchStat(Base):
     # xG measures the quality of chances created; xGA measures chances conceded.
     xg = Column(Float, nullable=True)
     xga = Column(Float, nullable=True)
+    # Non-penalty expected goals — strips out penalty xG which is essentially
+    # random (conversion rate ~76% regardless of team).  NPxG is more
+    # predictive of future performance than raw xG.  Source: Understat.
+    npxg = Column(Float, nullable=True)
+    npxga = Column(Float, nullable=True)
+    # PPDA (Passes Per Defensive Action) coefficient — measures pressing
+    # intensity.  Calculated as opponent_passes / team_defensive_actions.
+    # Lower PPDA = team presses more aggressively (e.g. Liverpool ~8,
+    # Burnley ~18).  Source: Understat.
+    ppda_coeff = Column(Float, nullable=True)
+    # PPDA allowed — same metric but from the opponent's defensive perspective.
+    # How much pressing does THIS team face?
+    ppda_allowed_coeff = Column(Float, nullable=True)
+    # Deep completions — passes that reach the area near the opponent's box.
+    # Measures attacking penetration quality.  Source: Understat.
+    deep = Column(Integer, nullable=True)
+    deep_allowed = Column(Integer, nullable=True)
     shots = Column(Integer, nullable=True)
     shots_on_target = Column(Integer, nullable=True)
     # Possession as a proportion (0.0–1.0), not percentage

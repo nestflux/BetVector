@@ -158,9 +158,9 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E14-04 (Pipeline & Loader Integration) — all E14 issues complete
-Currently working: E15-01 (Football-Data.org API Scraper)
-Next up: E15-02 (Understat Scraper Expansion)
+Last completed: E15-02 (Understat Scraper Expansion)
+Currently working: E15-03 (Transfermarkt Datasets Integration)
+Next up: Post-E15 — Feature engineering for new stats
 
 ---
 

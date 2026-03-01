@@ -164,6 +164,30 @@ class Pipeline:
                 print(f"  → Football-Data: FAILED ({e})")
                 fd_df = None
 
+            # 1a-ii. Football-Data.org API (near-real-time fixtures + results)
+            # Fills the freshness gap between Football-Data.co.uk CSV updates.
+            # The CSV only refreshes ~2x/week, but this API has results within
+            # minutes of final whistle.  Uses 1 API call per league-season.
+            fd_org_df = None
+            try:
+                from src.scrapers.football_data_org import FootballDataOrgScraper
+                fd_org_scraper = FootballDataOrgScraper()
+                fd_org_df = fd_org_scraper.scrape(
+                    league_config=league_cfg, season=current_season,
+                )
+                if fd_org_df is not None and not fd_org_df.empty:
+                    finished = fd_org_df[fd_org_df["status"] == "finished"]
+                    scheduled = fd_org_df[fd_org_df["status"] == "scheduled"]
+                    print(f"  → Football-Data.org API: {len(finished)} results, "
+                          f"{len(scheduled)} scheduled")
+                else:
+                    print("  → Football-Data.org API: No data returned")
+            except Exception as e:
+                err = f"Football-Data.org API scrape failed for {league_name}: {e}"
+                logger.error(err)
+                errors.append(err)
+                print(f"  → Football-Data.org API: FAILED ({e})")
+
             # 1b. FBref (advanced stats — xG, possession, etc.)
             try:
                 from src.scrapers.fbref_scraper import FBrefScraper
@@ -261,6 +285,21 @@ class Pipeline:
 
                     odds_result = load_odds(fd_df, league_id)
                     print(f"  → Odds (Football-Data): {odds_result}")
+
+                # Football-Data.org API fixtures + results
+                # Insert new scheduled fixtures and update with fresh results
+                if fd_org_df is not None and not fd_org_df.empty:
+                    fd_org_match_result = load_matches(
+                        fd_org_df, league_id, current_season,
+                    )
+                    matches_scraped += fd_org_match_result.get("new", 0)
+                    print(f"  → Matches (Football-Data.org): {fd_org_match_result}")
+
+                    # Update scheduled matches that now have results
+                    fd_org_update_result = update_match_results(
+                        fd_org_df, league_id,
+                    )
+                    print(f"  → Results update (Football-Data.org): {fd_org_update_result}")
 
                 # API-Football fixtures + results + odds
                 if api_football_df is not None and not api_football_df.empty:
@@ -695,6 +734,35 @@ class Pipeline:
                 logger.error(err)
                 errors.append(err)
                 print(f"  → API-Football: FAILED ({e})")
+
+            # 1a-ii. Football-Data.org API results (near-real-time, fills CSV gap)
+            try:
+                from src.scrapers.football_data_org import FootballDataOrgScraper
+                from src.scrapers.loader import (
+                    load_matches as _load_matches_org,
+                    update_match_results as _update_results_org,
+                )
+
+                fd_org_scraper = FootballDataOrgScraper()
+                fd_org_df = fd_org_scraper.scrape(
+                    league_config=league_cfg, season=current_season,
+                )
+                if fd_org_df is not None and not fd_org_df.empty:
+                    fd_org_result = _load_matches_org(
+                        fd_org_df, league_id, current_season,
+                    )
+                    total_matches_scraped += fd_org_result.get("new", 0)
+                    print(f"  → Football-Data.org matches: {fd_org_result}")
+
+                    fd_org_update = _update_results_org(fd_org_df, league_id)
+                    print(f"  → Football-Data.org results: {fd_org_update}")
+                else:
+                    print("  → Football-Data.org API: No data returned")
+            except Exception as e:
+                err = f"Football-Data.org results failed for {league_name}: {e}"
+                logger.error(err)
+                errors.append(err)
+                print(f"  → Football-Data.org API: FAILED ({e})")
 
             # 1b. Football-Data.co.uk results (may have newer data too)
             try:

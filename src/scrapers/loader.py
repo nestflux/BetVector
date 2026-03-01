@@ -658,34 +658,43 @@ def load_understat_stats(
     df: pd.DataFrame,
     league_id: int,
 ) -> Dict[str, int]:
-    """Load xG data from Understat into the match_stats table.
+    """Load xG + advanced stats from Understat into the match_stats table.
 
     Maps Understat match-level data to two MatchStat rows per match
     (home team + away team), with ``source="understat"``.
 
     Only loads data for finished matches that have xG values.
-    Does NOT overwrite existing FBref stats — if a match already has
-    MatchStat rows from FBref, Understat data is skipped.
+    Does NOT overwrite existing stats — if a match already has MatchStat
+    rows from any source, Understat data is skipped for that team/match.
+
+    Since E15-02, also stores advanced stats from the ``get_team_data()``
+    endpoint: NPxG, PPDA coefficient, deep completions, and shots.  These
+    columns are nullable — older data without advanced stats just has NULL.
 
     Parameters
     ----------
     df : pd.DataFrame
         DataFrame from ``UnderstatScraper.scrape()`` with columns:
-        date, home_team, away_team, home_xg, away_xg, home_xga, away_xga.
+        date, home_team, away_team, home_xg, away_xg, home_xga, away_xga,
+        home_npxg, away_npxg, home_npxga, away_npxga,
+        home_ppda, away_ppda, home_ppda_allowed, away_ppda_allowed,
+        home_deep, away_deep, home_deep_allowed, away_deep_allowed,
+        home_shots, away_shots.
     league_id : int
         Database ID of the league.
 
     Returns
     -------
     dict
-        Summary with keys: "new", "skipped", "not_found".
+        Summary with keys: "new", "skipped", "not_found", "updated".
     """
     if df.empty:
-        return {"new": 0, "skipped": 0, "not_found": 0}
+        return {"new": 0, "skipped": 0, "not_found": 0, "updated": 0}
 
     new_count = 0
     skipped_count = 0
     not_found = 0
+    updated_count = 0
 
     # Only load finished matches with xG data
     has_xg = df[df["home_xg"].notna()].copy()
@@ -714,26 +723,44 @@ def load_understat_stats(
                 not_found += 1
                 continue
 
-            # Insert home team stats (skip if already exists from any source)
+            # --- Home team stats ---
             existing_home = session.query(MatchStat).filter_by(
                 match_id=match.id, team_id=home_team.id,
             ).first()
 
             if existing_home is None:
+                # Insert new stat row with all available fields
                 home_stat = MatchStat(
                     match_id=match.id,
                     team_id=home_team.id,
                     is_home=1,
                     xg=_safe_float(row.get("home_xg")),
                     xga=_safe_float(row.get("home_xga")),
+                    # E15-02: Advanced stats from get_team_data()
+                    npxg=_safe_float(row.get("home_npxg")),
+                    npxga=_safe_float(row.get("home_npxga")),
+                    ppda_coeff=_safe_float(row.get("home_ppda")),
+                    ppda_allowed_coeff=_safe_float(row.get("home_ppda_allowed")),
+                    deep=_safe_int(row.get("home_deep")),
+                    deep_allowed=_safe_int(row.get("home_deep_allowed")),
                     source="understat",
                 )
                 session.add(home_stat)
                 new_count += 1
+            elif existing_home.source == "understat" and existing_home.npxg is None:
+                # Existing Understat row without advanced stats — backfill
+                # (handles re-running after E15-02 upgrade on old data)
+                existing_home.npxg = _safe_float(row.get("home_npxg"))
+                existing_home.npxga = _safe_float(row.get("home_npxga"))
+                existing_home.ppda_coeff = _safe_float(row.get("home_ppda"))
+                existing_home.ppda_allowed_coeff = _safe_float(row.get("home_ppda_allowed"))
+                existing_home.deep = _safe_int(row.get("home_deep"))
+                existing_home.deep_allowed = _safe_int(row.get("home_deep_allowed"))
+                updated_count += 1
             else:
                 skipped_count += 1
 
-            # Insert away team stats
+            # --- Away team stats ---
             existing_away = session.query(MatchStat).filter_by(
                 match_id=match.id, team_id=away_team.id,
             ).first()
@@ -745,17 +772,39 @@ def load_understat_stats(
                     is_home=0,
                     xg=_safe_float(row.get("away_xg")),
                     xga=_safe_float(row.get("away_xga")),
+                    # E15-02: Advanced stats
+                    npxg=_safe_float(row.get("away_npxg")),
+                    npxga=_safe_float(row.get("away_npxga")),
+                    ppda_coeff=_safe_float(row.get("away_ppda")),
+                    ppda_allowed_coeff=_safe_float(row.get("away_ppda_allowed")),
+                    deep=_safe_int(row.get("away_deep")),
+                    deep_allowed=_safe_int(row.get("away_deep_allowed")),
                     source="understat",
                 )
                 session.add(away_stat)
                 new_count += 1
+            elif existing_away.source == "understat" and existing_away.npxg is None:
+                # Backfill advanced stats on existing Understat rows
+                existing_away.npxg = _safe_float(row.get("away_npxg"))
+                existing_away.npxga = _safe_float(row.get("away_npxga"))
+                existing_away.ppda_coeff = _safe_float(row.get("away_ppda"))
+                existing_away.ppda_allowed_coeff = _safe_float(row.get("away_ppda_allowed"))
+                existing_away.deep = _safe_int(row.get("away_deep"))
+                existing_away.deep_allowed = _safe_int(row.get("away_deep_allowed"))
+                updated_count += 1
             else:
                 skipped_count += 1
 
-    summary = {"new": new_count, "skipped": skipped_count, "not_found": not_found}
+    summary = {
+        "new": new_count,
+        "skipped": skipped_count,
+        "not_found": not_found,
+        "updated": updated_count,
+    }
     logger.info(
-        "load_understat_stats: %d new stat rows, %d skipped, %d matches not found",
-        new_count, skipped_count, not_found,
+        "load_understat_stats: %d new, %d updated (backfill), "
+        "%d skipped, %d not found",
+        new_count, updated_count, skipped_count, not_found,
     )
     return summary
 
