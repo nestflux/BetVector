@@ -74,7 +74,9 @@ E9-01 → E9-02 → E9-03 → E9-04 → E9-05 →
 E10-01 → E10-02 → E10-03 → E10-04 →
 E11-01 → E11-02 → E11-03 →
 E12-01 → E12-02 → E12-03 → E12-04 → E12-05 →
-E13-01 → E13-02 → E13-03
+E13-01 → E13-02 → E13-03 →
+E14-01 → E14-02 → E14-03 → E14-04 →
+E15-01 → E15-02 → E15-03
 ```
 
 If you think you should jump ahead, ask first.
@@ -156,9 +158,9 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E13-03 (Security Hardening) — ALL 45 BUILD PLAN ISSUES COMPLETE
-Currently working: Post-launch enhancement — Real-Time Data Sources (API-Football + Understat + Weather)
-Next up: Solve daily data freshness gap (API-Football free tier limitation)
+Last completed: E14-04 (Pipeline & Loader Integration) — all E14 issues complete
+Currently working: E15-01 (Football-Data.org API Scraper)
+Next up: E15-02 (Understat Scraper Expansion)
 
 ---
 

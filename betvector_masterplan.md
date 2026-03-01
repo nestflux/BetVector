@@ -1,6 +1,6 @@
 # BetVector — Masterplan
 
-Version 1.0 · February 2026
+Version 1.1 · March 2026
 
 ---
 
@@ -335,6 +335,28 @@ The system is designed as a set of independent, composable modules connected thr
 | Football-Data.co.uk | Match results, betting odds (50+ bookmakers) | CSV download via HTTP | Daily (results) |
 | FBref.com | Team stats: xG, xGA, shots, possession, passing | `soccerdata` Python library | Daily (after matches) |
 | API-Football (RapidAPI) | Upcoming fixtures, lineups, injuries, live odds | REST API (free tier: 100 req/day) | 2–3× daily |
+
+#### Data Sources — Post-Launch Update (March 2026)
+
+The original data source plan above was designed in February 2026. By March 2026, two of the three sources had become unreliable or unusable:
+
+**Football-Data.co.uk** remains the primary source for historical match results and bookmaker odds, but its CSV files only update twice per week (Sunday and Wednesday nights). For a daily-picks workflow, this creates a freshness gap of up to 5 days. The system needs a near-real-time results source to supplement it.
+
+**FBref** is effectively dead for advanced statistics. In January 2026, Opta terminated its data agreement with FBref, permanently removing all xG, xGA, npxG, shots, possession, and passing data. During the build phase (E3-03), Cloudflare was already blocking automated access. Now there is nothing to access even manually. FBref retains only basic results (goals, cards), which Football-Data.co.uk already covers better.
+
+**API-Football free tier** cannot access the current 2025-26 season. The free plan covers seasons 2022–2024 only. The scraper code (E14-03) is complete and tested against historical data, but lies dormant for live predictions until a paid tier is activated or a free alternative is found.
+
+The revised data source landscape:
+
+| Source | Status | What | How | Frequency |
+|--------|--------|------|-----|-----------|
+| Football-Data.co.uk | **Active** | Match results, odds (50+ bookmakers) | CSV download via HTTP | ~2×/week (Sun, Wed nights) |
+| FBref.com | **Dead** | ~~xG, shots, possession~~ | ~~soccerdata library~~ | N/A — Opta data removed Jan 2026 |
+| API-Football (RapidAPI) | **Dormant** | Fixtures, lineups, injuries, live odds | REST API | Free tier blocked for 2025-26 |
+| Understat | **Active** | xG, xGA per match (team-level) | `understatapi` Python package | Daily (replaces FBref) |
+| Open-Meteo | **Active** | Match-day weather (temp, wind, rain) | Free REST API (no key) | Per-match (forecast + archive) |
+| Football-Data.org | **Planned** | Current-season fixtures and results | Free REST API (10 req/min) | Near real-time |
+| Transfermarkt Datasets | **Planned** | Injuries, squad market values | GitHub CSV dumps (CC0) | Weekly |
 
 ### Key Architectural Decisions
 
@@ -1202,3 +1224,63 @@ This section exists because the owner is learning betting concepts as they build
 **Asian Handicap:** A market that applies a goal handicap to one team. Example: Arsenal -1.5 means Arsenal must win by 2+ goals for the bet to win. Half-goal handicaps eliminate the possibility of a draw. Whole-goal handicaps can result in a "push" (bet returned).
 
 **Walk-forward validation:** A backtesting method for time-series data. Train the model on data up to date T, predict date T+1, then advance T forward. This simulates real-world usage where you only have historical data when making predictions. It's the only valid backtesting approach for sports prediction — random train/test splits would leak future information.
+
+---
+
+## §13 — Post-Launch Pivots and Data Source Evolution
+
+This section documents what happened after the initial 45-issue build was completed in March 2026. The original 12 sections above remain untouched — they describe the system as it was designed and built. This section describes how the system evolved once it met reality.
+
+### 13.1 — What We Planned vs What Happened
+
+The original data architecture (§5) relied on three sources:
+
+1. **Football-Data.co.uk** for historical match results and betting odds
+2. **FBref** (via `soccerdata`) for advanced team statistics (xG, shots, possession)
+3. **API-Football** (free tier) for upcoming fixtures, live odds, and injuries
+
+Within weeks of launch, two of these three sources failed:
+
+- **FBref lost all advanced statistics permanently** when Opta terminated its data agreement in January 2026. Cloudflare had already been blocking automated access during the build phase (E3-03 handled this gracefully), but the Opta departure meant there was nothing to scrape even if access were restored. FBref now only has basic results — goals, cards — which Football-Data.co.uk already provides.
+
+- **API-Football's free tier only covers seasons 2022–2024.** The current 2025-26 season returns an explicit error: *"plan: Free plans do not have access to this season, try from 2022 to 2024."* The Pro tier at $19/month would unlock current data, but the project philosophy (§9) prioritises free sources first.
+
+- **Football-Data.co.uk remained reliable** for historical data but revealed a freshness limitation: its CSV files only update twice per week (Sunday and Wednesday nights). On a Monday or Thursday, match results could be up to 5 days stale — unacceptable for a system that promises daily picks.
+
+### 13.2 — Pivots Taken (E14 — Completed)
+
+**E14 — Real-Time Data Sources** was executed as the first post-launch epic. Four issues, all completed:
+
+**E14-01: Understat xG Scraper.** Replaced FBref as the primary xG source. Built `src/scrapers/understat_scraper.py` using the `understatapi` Python package. Understat provides match-level xG and xGA for the top 6 European leagues since 2014/15. No Cloudflare blocking, no API key needed, no Selenium required. Team name mapping with fuzzy fallback handles naming differences. 262 xG stat rows loaded for EPL 2025-26 on first run.
+
+**E14-02: Open-Meteo Weather Scraper.** Added weather as a new feature dimension — heavy rain, strong wind, and extreme temperatures can materially affect match outcomes, particularly goals markets. Built `src/scrapers/weather_scraper.py` using the Open-Meteo free API (no key required). Fetches match-day temperature, wind speed, humidity, precipitation, and WMO weather code for each fixture based on stadium coordinates stored in a new `config/stadiums.yaml` file. Weather data is stored in a new `weather` database table. 35 weather records loaded on first run.
+
+**E14-03: API-Football Scraper.** Code-complete but dormant. Built `src/scrapers/api_football.py` with full support for fixtures, odds (with bookmaker ID mapping), and injuries endpoints. Rate budget tracking reads `x-ratelimit-requests-remaining` from response headers. The scraper works correctly against historical data (2022–2024 seasons) but returns empty DataFrames gracefully for the current season due to the free tier restriction. Ready to activate when budget allows or if the free tier expands.
+
+**E14-04: Pipeline and Loader Integration.** Wired all three new scrapers into the pipeline. Added 6 new loader functions to `src/scrapers/loader.py`. Parameterised `_insert_odds()` to accept a configurable source string (was hardcoded to `"football_data"`). Integrated all 3 scrapers into morning/midday/evening pipeline steps — each wrapped in try/except so failure of any individual scraper never blocks the pipeline. Updated all 3 GitHub Actions workflows with inline DB migrations for the new `weather` table and `teams.api_football_name` column.
+
+### 13.3 — Bug Fixes Applied Post-Launch
+
+Two bugs were discovered and fixed during E14 work:
+
+- **`db.py` `st.secrets` crash.** When the pipeline ran outside Streamlit (CLI, GitHub Actions), accessing `st.secrets` crashed with a `FileNotFoundError`. Fixed with a guard that checks for the existence of `.streamlit/secrets.toml` before attempting to read Streamlit secrets. Root cause: the database connection code tried to read Streamlit secrets unconditionally, but secrets are only available inside a running Streamlit app.
+
+- **ConfigNamespace integer key TypeError.** YAML config with integer keys (e.g., `1: "Bet365"` in the API-Football bookmaker map) caused a `TypeError` because Python's `setattr()` requires string attribute names. BetVector's `ConfigNamespace` class uses `setattr()` to convert YAML dicts into attribute-accessible objects. Fixed by quoting all numeric keys as strings in `config/settings.yaml` (e.g., `"1": "Bet365"`).
+
+### 13.4 — Planned Next: E15 — Data Freshness and Feature Expansion
+
+**E15-01: Football-Data.org API Scraper.** A free REST API (separate from Football-Data.co.uk) providing current-season EPL fixtures and results in near real-time. 10 requests/minute on the free tier, authentication via `X-Auth-Token` header, EPL competition code `PL`. This closes the freshness gap left by Football-Data.co.uk's twice-weekly CSV updates. Requires a free API key from football-data.org (registration only, no payment).
+
+**E15-02: Understat Scraper Expansion.** The existing Understat scraper fetches basic xG/xGA but the API already returns richer data — NPxG (non-penalty expected goals, more predictive than raw xG), PPDA (passes per defensive action, a pressing intensity metric), shots, and deep completions — that is not yet parsed. Small expansion of the existing scraper.
+
+**E15-03: Transfermarkt Datasets Integration.** Weekly CSV dumps from a public GitHub repository (CC0 license). Provides two unique data dimensions: (1) injury data — which key players are out, aggregated to team level, and (2) squad market values — a strong proxy for team quality. No scraping of transfermarkt.com required — uses pre-built, community-maintained datasets.
+
+### 13.5 — Lessons Learned
+
+1. **Free data sources are fragile.** FBref's Opta data vanishing overnight proved that any external dependency can disappear without warning. The modular scraper architecture (§5) paid for itself immediately — swapping FBref for Understat required no changes to the feature engine, model, or dashboard.
+
+2. **Freshness matters more than volume.** Football-Data.co.uk has 20+ years of historical odds data — invaluable for backtesting — but its twice-weekly update schedule makes it unreliable as a sole source for daily operations. A near-real-time source for fixtures and results is essential even if it provides less data per record.
+
+3. **Free tier APIs are marketing funnels, not infrastructure.** API-Football's free tier is deliberately limited to historical seasons to drive upgrades. Building the scraper was still worthwhile (the code is ready when the budget allows), but free tiers should never be the sole source for critical pipeline functionality.
+
+4. **Pipeline resilience was the right bet.** The standing constraint in CLAUDE.md Rule 6 — *"If one step in the pipeline fails, log the error and continue to the next step"* — meant that FBref dying, API-Football returning empty, and even Understat having occasional timeouts never prevented predictions from being generated with whatever data was available. Defensive programming at the scraper level prevented cascading failures.

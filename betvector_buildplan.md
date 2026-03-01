@@ -1,6 +1,6 @@
 # BetVector — Build Plan
 
-Version 1.0 · February 2026
+Version 1.1 · March 2026
 
 ---
 
@@ -27,8 +27,10 @@ This document breaks the BetVector masterplan into sequenced epics and issues th
 | E11 | Email Notifications | 3 | Email templates, email sender, scheduled email integration |
 | E12 | Self-Improvement Engine | 5 | Auto-recalibration, feature importance tracking, adaptive ensemble weights, market feedback loop, retrain triggers |
 | E13 | Automation & Deployment | 3 | GitHub Actions workflows, Streamlit Cloud deployment, security hardening |
+| E14 | Real-Time Data Sources | 4 | Understat xG scraper, Open-Meteo weather scraper, API-Football scraper, pipeline integration |
+| E15 | Data Freshness & Feature Expansion | 3 | Football-Data.org API scraper, Understat expansion, Transfermarkt datasets |
 
-**Total: 13 epics, 45 issues**
+**Total: 15 epics, 52 issues** (45 original + 7 post-launch)
 
 ---
 
@@ -53,7 +55,9 @@ E9-01 → E9-02 → E9-03 → E9-04 → E9-05 →
 E10-01 → E10-02 → E10-03 → E10-04 →
 E11-01 → E11-02 → E11-03 →
 E12-01 → E12-02 → E12-03 → E12-04 → E12-05 →
-E13-01 → E13-02 → E13-03
+E13-01 → E13-02 → E13-03 →
+E14-01 → E14-02 → E14-03 → E14-04 →
+E15-01 → E15-02 → E15-03
 ```
 
 ---
@@ -1309,3 +1313,250 @@ Final security review and hardening before the system goes live.
 - [ ] Weekly backup is scheduled in GitHub Actions
 - [ ] README includes a security section documenting credential management
 - [ ] All environment variables are documented in `.env.example`
+
+---
+
+## Post-Launch Enhancements
+
+> The original 45-issue build (E1–E13) was completed in March 2026. The epics below document post-launch work: pivots forced by data source failures, new scrapers, and planned feature expansion. See MP §13 for the full narrative.
+
+---
+
+## E14 — Real-Time Data Sources (Post-Launch)
+
+> **Context:** This epic was added post-launch after discovering that two of the three original data sources (FBref, API-Football free tier) were unusable for current-season data, and Football-Data.co.uk had multi-day update delays that broke the daily picks workflow. See MP §13 for the full narrative.
+
+### E14-01 — Understat xG Scraper
+
+**Type:** Backend
+**Depends on:** E3-01
+**Master Plan:** MP §5 Data Sources (post-launch update), MP §13.2
+**Status:** COMPLETED
+
+Replace FBref (which permanently lost all Opta xG/shots/possession data in January 2026) with Understat as the primary xG source.
+
+**Implementation Notes:**
+- Created `src/scrapers/understat_scraper.py` (~330 lines) inheriting from `BaseScraper`
+- Uses `understatapi` Python package (added `understatapi==0.7.1` to `requirements.txt`)
+- `UnderstatScraper.scrape(league_config, season)` fetches match-level xG data via `UnderstatClient`
+- `UNDERSTAT_EPL_TEAM_MAP` dictionary maps Understat team names to BetVector canonical names
+- Fuzzy fallback via `difflib.get_close_matches()` for unmapped names
+- Returns DataFrame with columns: `date`, `home_team`, `away_team`, `home_xg`, `away_xg`, `home_xga`, `away_xga`
+- Raw data saved to `data/raw/understat_{league}_{season}_{date}.csv`
+- Added `understat_league: "EPL"` to `config/leagues.yaml`
+- Added `understat.min_request_interval_seconds: 3` to `config/settings.yaml`
+- Handles missing data and HTTP errors without crashing — returns empty DataFrame
+
+**Acceptance Criteria:**
+- [x] `UnderstatScraper` class exists in `src/scrapers/understat_scraper.py` inheriting from `BaseScraper`
+- [x] `scrape()` returns a DataFrame with per-match xG for both teams
+- [x] Team names are mapped to BetVector canonical names with fuzzy fallback
+- [x] Raw data is saved to `data/raw/`
+- [x] Scraper handles HTTP errors and missing data without crashing
+- [x] `understatapi==0.7.1` is in `requirements.txt`
+- [x] `understat_league` field is configured in `config/leagues.yaml` for EPL
+- [x] 262 xG stat rows loaded for EPL 2025-26
+
+---
+
+### E14-02 — Open-Meteo Weather Scraper
+
+**Type:** Backend
+**Depends on:** E2-02, E3-01
+**Master Plan:** MP §13.2
+**Status:** COMPLETED
+
+Add match-day weather as a new data dimension. Weather conditions (rain, wind, extreme cold) can affect match outcomes, particularly goals and over/under markets.
+
+**Implementation Notes:**
+- Created `src/scrapers/weather_scraper.py` (~340 lines) inheriting from `BaseScraper`
+- Uses Open-Meteo free API (no API key required)
+- Created `config/stadiums.yaml` with lat/lon coordinates for all 20 EPL 2025-26 teams (including promoted Sunderland, Leeds, Burnley)
+- `WeatherScraper.scrape_for_matches(match_list)` accepts a list of matches, looks up stadium coordinates, fetches weather
+- Uses the **forecast API** (`api.open-meteo.com`) for future matches and **archive API** (`archive-api.open-meteo.com`) for past matches
+- WMO weather code mapped to simplified categories: `clear`, `cloudy`, `fog`, `drizzle`, `rain`, `heavy_rain`, `snow`, `storm`
+- Finds the hourly reading closest to the match kickoff time
+- Added `Weather` ORM model to `src/database/models.py` with `UNIQUE` constraint on `match_id`
+- Added weather API URLs to `config/settings.yaml` under `scraping.weather`
+
+**Acceptance Criteria:**
+- [x] `WeatherScraper` class exists in `src/scrapers/weather_scraper.py` inheriting from `BaseScraper`
+- [x] `config/stadiums.yaml` contains coordinates for all 20 EPL 2025-26 teams
+- [x] Forecast API used for future matches, archive API for past matches
+- [x] `Weather` ORM model exists in `src/database/models.py` with all specified columns
+- [x] Weather data is stored with unique constraint on `match_id` (idempotent)
+- [x] WMO weather codes are mapped to human-readable categories
+- [x] No API key required (Open-Meteo is fully free)
+- [x] 35 weather records loaded on first run
+
+---
+
+### E14-03 — API-Football Scraper (Code Complete, Dormant)
+
+**Type:** Backend
+**Depends on:** E2-02, E3-01
+**Master Plan:** MP §5 Data Sources, MP §13.2
+**Status:** COMPLETED (code complete; dormant due to free tier season restriction)
+
+Build the full API-Football scraper for fixtures, odds, and injuries. Code is ready for when a paid tier is activated or the free tier is extended.
+
+**Implementation Notes:**
+- Created `src/scrapers/api_football.py` (~530 lines) inheriting from `BaseScraper`
+- Three scrape methods: `scrape()` for fixtures, `scrape_odds()` for pre-match odds (paginated, max 5 pages), `scrape_injuries()` for active injuries
+- `scrape_odds_for_fixtures(fixture_ids)` for targeted midday odds refresh
+- Rate budget tracking: reads `x-ratelimit-requests-remaining` from response headers
+- Configurable thresholds in `config/settings.yaml`: `daily_request_limit: 100`, `warning_threshold: 20`, `hard_stop_threshold: 5`
+- `API_FOOTBALL_EPL_TEAM_MAP` dictionary with fuzzy fallback for team name mapping
+- `STATUS_MAP` converts API status codes (`FT`, `NS`, `1H`, `PST`, etc.) to BetVector status values
+- Bookmaker ID mapping in `config/settings.yaml` under `scraping.api_football.bookmaker_map` (keys quoted as strings to avoid ConfigNamespace integer key bug)
+- Raw JSON responses archived to `data/raw/api_football_{league}_{type}_{date}.json`
+- Added `api_football_name` column to `Team` model in `src/database/models.py`
+- **Current limitation:** Free tier returns error for 2025-26: *"plan: Free plans do not have access to this season, try from 2022 to 2024"*. Scraper handles this gracefully.
+
+**Acceptance Criteria:**
+- [x] `APIFootballScraper` class exists with `scrape()`, `scrape_odds()`, `scrape_injuries()` methods
+- [x] Rate budget tracking respects the 100 requests/day free tier limit
+- [x] Raw JSON responses are archived to `data/raw/`
+- [x] Team name mapping with fuzzy fallback
+- [x] Bookmaker ID mapping configurable in `config/settings.yaml`
+- [x] `teams.api_football_name` column exists in the ORM model
+- [x] Scraper returns empty DataFrame gracefully when free tier blocks current season
+- [x] Pipeline does not crash when API-Football returns no data
+
+---
+
+### E14-04 — Pipeline and Loader Integration
+
+**Type:** Integration
+**Depends on:** E14-01, E14-02, E14-03, E8-01
+**Master Plan:** MP §13.2
+**Status:** COMPLETED
+
+Wire all three new scrapers into the existing pipeline and data loader, with DB schema migrations for the new table and column.
+
+**Implementation Notes:**
+- Added 6 new functions to `src/scrapers/loader.py`:
+  - `load_odds_api_football(odds_records, league_id)` — loads odds with `source="api_football"`
+  - `load_understat_stats(df, league_id)` — loads xG data into `match_stats` with `source="understat"`
+  - `load_weather(df)` — loads weather records into the `weather` table
+  - `update_team_api_names(df, league_id)` — populates `teams.api_football_name`
+  - `update_match_results(df, league_id)` — updates scheduled matches with results from API-Football
+  - Parameterised `_insert_odds()` with a `source` parameter (was hardcoded to `"football_data"`)
+- Morning pipeline integration: Football-Data.co.uk → API-Football → Understat → Weather (each in try/except)
+- Midday pipeline: added API-Football odds refresh alongside Football-Data odds
+- Evening pipeline: added API-Football results fetch + Understat xG for finished matches
+- Updated `.github/workflows/morning.yml`, `midday.yml`, `evening.yml` with inline DB migrations:
+  - `ALTER TABLE teams ADD COLUMN api_football_name TEXT`
+  - `CREATE TABLE IF NOT EXISTS weather (...)` with all columns and constraints
+- Added `API_FOOTBALL_KEY` to env block in all 3 workflow files
+
+**Acceptance Criteria:**
+- [x] `load_odds_api_football()` stores odds with `source="api_football"` in the odds table
+- [x] `load_understat_stats()` stores xG data with `source="understat"` in match_stats table
+- [x] `load_weather()` stores weather records in the weather table (idempotent via unique constraint)
+- [x] `update_team_api_names()` populates `api_football_name` on Team records
+- [x] Morning pipeline runs all scrapers with graceful failure handling
+- [x] Midday pipeline re-fetches API-Football odds
+- [x] Evening pipeline fetches Understat xG for finished matches
+- [x] All 3 GitHub Actions workflows include DB migration steps
+- [x] Failure of any individual scraper does not block the pipeline
+
+---
+
+## E15 — Data Freshness & Feature Expansion (Planned)
+
+> **Context:** E14 added three new data sources but one gap remains: Football-Data.co.uk only updates 2×/week, and API-Football's free tier can't access 2025-26. We need a near-real-time source for fixtures/results (E15-01), richer features from data we already receive (E15-02), and unique supplementary data (E15-03). See MP §13.4.
+
+### E15-01 — Football-Data.org API Scraper
+
+**Type:** Backend
+**Depends on:** E3-01, E14-04
+**Master Plan:** MP §5 Data Sources (post-launch update), MP §13.4
+**Status:** PLANNED
+
+Build a scraper for the Football-Data.org free REST API to get near-real-time match results and fixtures for the current EPL season. This closes the freshness gap caused by Football-Data.co.uk's twice-weekly CSV updates.
+
+**Implementation Notes:**
+- Create `src/scrapers/football_data_org.py` inheriting from `BaseScraper`
+- API base URL: `https://api.football-data.org/v4`
+- Authentication: `X-Auth-Token` header with API key from environment variable `FOOTBALL_DATA_ORG_KEY`
+- Primary endpoint: `GET /v4/competitions/PL/matches` with optional `?status=FINISHED` or `?dateFrom=YYYY-MM-DD&dateTo=YYYY-MM-DD` query parameters
+- Free tier: 10 requests/minute rate limit (enforce via existing `BaseScraper` rate limiter)
+- Competition code for EPL: `PL`
+- Map team names from API response to BetVector canonical names
+- Returns DataFrame compatible with existing `load_matches()` and `update_match_results()` loader functions
+- Use this source for near-real-time result updates in the morning and evening pipeline, supplementing (not replacing) Football-Data.co.uk which remains the canonical source for historical odds
+- Add `FOOTBALL_DATA_ORG_KEY` to `.env.example` and GitHub Actions secrets
+- Add config section to `config/settings.yaml` under `scraping.football_data_org`
+
+**Acceptance Criteria:**
+- [ ] `FootballDataOrgScraper` class exists inheriting from `BaseScraper`
+- [ ] `scrape()` returns a DataFrame with current-season matches and results
+- [ ] API key read from environment variable, never hardcoded
+- [ ] Rate limit of 10 req/min is enforced
+- [ ] Team names mapped to canonical BetVector names
+- [ ] Results are fresher than Football-Data.co.uk (same-day updates vs 2–5 day lag)
+- [ ] Scraper handles HTTP 429 (rate limit) and 403 (auth failure) gracefully
+- [ ] Integrated into morning and evening pipeline steps
+- [ ] `FOOTBALL_DATA_ORG_KEY` documented in `.env.example`
+
+---
+
+### E15-02 — Understat Scraper Expansion
+
+**Type:** Backend
+**Depends on:** E14-01
+**Master Plan:** MP §13.4
+**Status:** PLANNED
+
+Expand the existing Understat scraper to parse additional statistics that the API already returns but are not currently extracted: NPxG, PPDA, shots, and deep completions.
+
+**Implementation Notes:**
+- Modify `src/scrapers/understat_scraper.py` to extract additional fields from the existing API response
+- New fields to parse: `npxg`, `npxga`, `ppda_att`, `ppda_def`, `deep`, `deep_allowed`
+- NPxG (non-penalty xG) is more predictive than raw xG — strips out penalty xG which is essentially random
+- PPDA (passes per defensive action) measures pressing intensity — lower PPDA = higher pressing team
+- Deep completions measure attacking penetration into the final third
+- Update `load_understat_stats()` in `src/scrapers/loader.py` to store the new fields as additional `match_stats` rows or extend existing stat entries
+- Small change — estimated ~30 minutes of work
+
+**Acceptance Criteria:**
+- [ ] Understat scraper extracts NPxG, PPDA, deep completions in addition to basic xG
+- [ ] New stat values are stored in the database
+- [ ] Existing xG data loading continues to work (backward compatible)
+- [ ] Feature engineer can access the new stats for future feature engineering
+- [ ] No regression in existing Understat scraping functionality
+
+---
+
+### E15-03 — Transfermarkt Datasets Integration
+
+**Type:** Backend
+**Depends on:** E3-01, E2-02
+**Master Plan:** MP §13.4
+**Status:** PLANNED
+
+Integrate weekly CSV dumps from the public Transfermarkt Datasets repository on GitHub (CC0 license) for injury data and squad market values — two data dimensions no other free source provides.
+
+**Implementation Notes:**
+- Create `src/scrapers/transfermarkt.py` inheriting from `BaseScraper`
+- Data source: `github.com/dcaribou/transfermarkt-datasets` — pre-scraped weekly CSVs under CC0 license (no scraping of transfermarkt.com itself)
+- Two data types to extract:
+  1. **Injuries:** Player name, team, injury type, expected return date, days out. Aggregate to team level: count of injured players, total estimated impact (using market value as proxy for player importance)
+  2. **Squad market values:** Team total squad value, average player value. Use as a static feature representing team quality/depth
+- Map Transfermarkt team names to BetVector canonical names
+- Create ORM models or extend existing tables for injury and market value data
+- Injury data is a powerful feature: teams missing >20% of squad value to injuries are weaker than their rolling stats suggest
+- Market value ratio between two teams is a simple but effective predictor of match outcome
+- Update frequency: weekly (run in Sunday evening pipeline)
+- No API key needed — public GitHub CSVs
+
+**Acceptance Criteria:**
+- [ ] `TransfermarktScraper` class exists inheriting from `BaseScraper`
+- [ ] Downloads and parses injury CSV from the public GitHub repository
+- [ ] Downloads and parses squad market value CSV
+- [ ] Team names mapped to BetVector canonical names
+- [ ] Injury data aggregated to team level (count, estimated impact)
+- [ ] Market value data stored with team-level granularity
+- [ ] Data is idempotent — running twice does not create duplicates
+- [ ] Integrated into the weekly pipeline step (Sunday evening)
