@@ -1,20 +1,10 @@
 # ============================================================================
 # BetVector — Midday Pipeline (E13-01)
 # ============================================================================
-# Runs the midday odds-update pipeline daily at 13:00 UTC:
-#   re-fetch odds → recalculate edges → update dashboard data
-#
-# Schedule: 13:00 UTC every day (cron: "0 13 * * *")
-# Manual trigger: workflow_dispatch (run from GitHub Actions UI)
-#
-# Master Plan refs: MP §5 Architecture → Scheduling (GitHub Actions)
-# ============================================================================
-
 name: Midday Pipeline
 
 on:
   schedule:
-    # 13:00 UTC daily — afternoon in Europe, right before most matches
     - cron: "0 13 * * *"
   workflow_dispatch:
     inputs:
@@ -36,6 +26,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
+    env:
+      GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+      DASHBOARD_PASSWORD: ${{ secrets.DASHBOARD_PASSWORD }}
+      API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+      FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -54,19 +50,15 @@ jobs:
           pip install -r requirements.txt
           pip install -e .
 
-      - name: Initialise database
-        env:
-          FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
-        run: |
-          python run_pipeline.py setup
-
       - name: Run midday pipeline
-        env:
-          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          DASHBOARD_PASSWORD: ${{ secrets.DASHBOARD_PASSWORD }}
-          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
-          FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
         run: |
+          python -c "
+          from src.database.db import init_db
+          init_db()
+          from src.database.seed import seed_all
+          seed_all()
+          print('Setup complete')
+          "
           VERBOSE_FLAG=""
           if [ "${{ inputs.verbose }}" = "true" ]; then
             VERBOSE_FLAG="--verbose"
@@ -83,9 +75,6 @@ jobs:
 
       - name: Send failure notification
         if: failure()
-        env:
-          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
         run: |
           python -c "
           import os, smtplib

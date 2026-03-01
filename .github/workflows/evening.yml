@@ -1,22 +1,10 @@
 # ============================================================================
 # BetVector — Evening Pipeline (E13-01)
 # ============================================================================
-# Runs the evening results pipeline daily at 22:00 UTC:
-#   scrape results → resolve bets → update P&L → compute metrics
-#   → recalibration check → retrain trigger check → send evening email
-#   → weekly summary on Sundays
-#
-# Schedule: 22:00 UTC every day (cron: "0 22 * * *")
-# Manual trigger: workflow_dispatch (run from GitHub Actions UI)
-#
-# Master Plan refs: MP §5 Architecture → Scheduling (GitHub Actions)
-# ============================================================================
-
 name: Evening Pipeline
 
 on:
   schedule:
-    # 22:00 UTC daily — after most European matches have finished
     - cron: "0 22 * * *"
   workflow_dispatch:
     inputs:
@@ -38,6 +26,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
+    env:
+      GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+      DASHBOARD_PASSWORD: ${{ secrets.DASHBOARD_PASSWORD }}
+      API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+      FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -56,30 +50,22 @@ jobs:
           pip install -r requirements.txt
           pip install -e .
 
-      - name: Initialise database
-        env:
-          FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
-        run: |
-          python run_pipeline.py setup
-
       - name: Run evening pipeline
-        env:
-          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          DASHBOARD_PASSWORD: ${{ secrets.DASHBOARD_PASSWORD }}
-          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
-          FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
         run: |
+          python -c "
+          from src.database.db import init_db
+          init_db()
+          from src.database.seed import seed_all
+          seed_all()
+          print('Setup complete')
+          "
           VERBOSE_FLAG=""
           if [ "${{ inputs.verbose }}" = "true" ]; then
             VERBOSE_FLAG="--verbose"
           fi
           python run_pipeline.py evening $VERBOSE_FLAG
 
-      # --- Weekly backup (Sundays only) ---
-      # After the evening pipeline completes, create a timestamped backup
-      # of the database.  Keeps the last 10 backups, removes older ones.
       - name: Weekly database backup (Sundays)
-        if: github.event.schedule == '0 22 * * *' && contains('0', '') || true
         run: |
           DAY_OF_WEEK=$(date -u +%u)
           if [ "$DAY_OF_WEEK" = "7" ]; then
@@ -100,9 +86,6 @@ jobs:
 
       - name: Send failure notification
         if: failure()
-        env:
-          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
         run: |
           python -c "
           import os, smtplib

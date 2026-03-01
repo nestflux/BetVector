@@ -39,12 +39,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
+    env:
+      GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+      DASHBOARD_PASSWORD: ${{ secrets.DASHBOARD_PASSWORD }}
+      API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+      FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
+
     steps:
       # --- 1. Checkout the repo (including the SQLite database) ---
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          # Fetch full history so git commit works
           fetch-depth: 0
 
       # --- 2. Set up Python 3.10 ---
@@ -61,21 +66,22 @@ jobs:
           pip install -r requirements.txt
           pip install -e .
 
-      # --- 4. Initialise database if it doesn't exist ---
-      - name: Initialise database
-        env:
-          FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
-        run: |
-          python run_pipeline.py setup
-
-      # --- 5. Run the morning pipeline ---
+      # --- 4. Verify setup and run pipeline ---
       - name: Run morning pipeline
-        env:
-          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          DASHBOARD_PASSWORD: ${{ secrets.DASHBOARD_PASSWORD }}
-          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
-          FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
         run: |
+          echo "=== Database check ==="
+          ls -la data/betvector.db 2>/dev/null && echo "DB exists" || echo "DB missing"
+          echo ""
+          echo "=== Running setup (idempotent) ==="
+          python -c "
+          from src.database.db import init_db
+          init_db()
+          from src.database.seed import seed_all
+          seed_all()
+          print('Setup complete')
+          "
+          echo ""
+          echo "=== Running morning pipeline ==="
           VERBOSE_FLAG=""
           if [ "${{ inputs.verbose }}" = "true" ]; then
             VERBOSE_FLAG="--verbose"
@@ -83,24 +89,17 @@ jobs:
           python run_pipeline.py morning $VERBOSE_FLAG
 
       # --- 5. Commit database changes back to repo ---
-      # The SQLite database is stored in the repo for simplicity.
-      # After the pipeline writes new predictions/bets, commit the
-      # updated .db file so the next run has the latest state.
       - name: Commit database changes
         run: |
           git config user.name "BetVector Bot"
           git config user.email "bot@betvector.dev"
           git add data/betvector.db
-          # Only commit if there are changes (--allow-empty would noise up history)
           git diff --staged --quiet || git commit -m "Morning pipeline: $(date -u +%Y-%m-%d)"
           git push
 
       # --- 6. Notify on failure ---
       - name: Send failure notification
         if: failure()
-        env:
-          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
         run: |
           python -c "
           import os, smtplib
