@@ -291,11 +291,14 @@ class Pipeline:
 
         # --- Finalize ---
         duration = time.time() - start_time
-        status = "completed" if not errors else "completed"
-        # Only mark as "failed" if ALL leagues had critical failures
-        # (scraping + loading + features all failed for every league)
-        if total_predictions == 0 and total_matches_scraped == 0:
-            status = "failed"
+        # Pipeline is "completed" unless there were critical errors that
+        # prevented any processing.  Zero new matches/predictions is normal
+        # when data is already up-to-date (all duplicates skipped).
+        has_critical_errors = any(
+            "Scraping failed" in e and "Loading failed" in e
+            for e in errors
+        )
+        status = "failed" if has_critical_errors else "completed"
 
         self._complete_run(
             run_id, status,
