@@ -67,6 +67,7 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           DASHBOARD_PASSWORD: ${{ secrets.DASHBOARD_PASSWORD }}
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
         run: |
           VERBOSE_FLAG=""
           if [ "${{ inputs.verbose }}" = "true" ]; then
@@ -92,26 +93,27 @@ jobs:
         if: failure()
         env:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
         run: |
           python -c "
           import os, smtplib
           from email.mime.text import MIMEText
           pwd = os.environ.get('GMAIL_APP_PASSWORD', '')
-          if not pwd:
-              print('No GMAIL_APP_PASSWORD set, skipping failure notification')
+          sender = os.environ.get('FROM_EMAIL', '')
+          if not pwd or not sender:
+              print('Missing GMAIL_APP_PASSWORD or FROM_EMAIL, skipping notification')
               exit(0)
           msg = MIMEText(
               'The BetVector morning pipeline failed.\n\n'
               'Check the workflow run at: '
               'https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\n\n'
-              'Timestamp: $(date -u +\"%Y-%m-%d %H:%M UTC\")'
           )
           msg['Subject'] = 'BetVector Morning Pipeline FAILED'
-          msg['From'] = 'betvector.alerts@gmail.com'
-          msg['To'] = 'betvector.alerts@gmail.com'
+          msg['From'] = sender
+          msg['To'] = sender
           try:
               with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
-                  smtp.login('betvector.alerts@gmail.com', pwd)
+                  smtp.login(sender, pwd)
                   smtp.send_message(msg)
               print('Failure notification sent')
           except Exception as e:
