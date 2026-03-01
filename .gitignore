@@ -20,6 +20,7 @@ env/
 
 # --- Environment variables (secrets!) ---
 .env
+.streamlit/secrets.toml
 
 # --- Jupyter notebooks ---
 .ipynb_checkpoints/

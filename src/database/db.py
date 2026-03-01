@@ -66,12 +66,31 @@ _SessionFactory: sessionmaker | None = None
 # ============================================================================
 
 def _build_connection_url() -> str:
-    """Construct a SQLAlchemy connection URL from config.
+    """Construct a SQLAlchemy connection URL from config or Streamlit secrets.
 
-    Resolves relative paths against the project root.  For SQLite this
-    produces ``sqlite:///absolute/path/to/betvector.db``.  When the owner
-    migrates to PostgreSQL, this is the only function that needs updating.
+    Resolution order:
+      1. Streamlit Cloud secrets (``st.secrets["database"]["connection_string"]``)
+         — used when deployed to Streamlit Cloud with a Supabase PostgreSQL DB.
+      2. Config file (``config/settings.yaml`` → ``database.path``)
+         — default for local development with SQLite.
+
+    For SQLite this produces ``sqlite:///absolute/path/to/betvector.db``.
+    For PostgreSQL (Streamlit Cloud) it returns the connection string as-is.
     """
+    # Check Streamlit Cloud secrets first (only available when running in
+    # Streamlit, not during pipeline CLI runs)
+    try:
+        import streamlit as st
+        if hasattr(st, "secrets") and "database" in st.secrets:
+            conn_str = st.secrets["database"]["connection_string"]
+            if conn_str:
+                logger.info("Using database connection from Streamlit secrets")
+                return conn_str
+    except Exception:
+        # Not running in Streamlit context (CLI pipeline, tests, etc.)
+        pass
+
+    # Fall back to config file (local SQLite)
     db_path = config.settings.database.path
     full_path = (PROJECT_ROOT / db_path).resolve()
     return f"sqlite:///{full_path}"

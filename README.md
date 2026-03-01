@@ -2,7 +2,7 @@
 
 Quantitative edge detection system for football betting. Combines Poisson regression modelling, walk-forward backtesting, and automated bankroll management to identify value bets across bookmaker markets.
 
-**Status:** Active development (Epic 8 of 13 complete)
+**Status:** Active development (Epic 12 of 13 complete)
 
 ## Documentation
 
@@ -119,6 +119,50 @@ BetVector runs three daily pipelines:
 | Morning | 06:00 | Scrape data, compute features, predict, find value bets |
 | Midday | 13:00 | Re-fetch odds, recalculate edges |
 | Evening | 22:00 | Scrape results, resolve bets, update P&L, compute metrics |
+
+## Dashboard
+
+Launch the dashboard locally:
+
+```bash
+streamlit run src/delivery/dashboard.py
+```
+
+### Deploy to Streamlit Cloud
+
+1. **Push to GitHub** — ensure your repo is on GitHub (public or private).
+
+2. **Go to [share.streamlit.io](https://share.streamlit.io)** and sign in with your GitHub account.
+
+3. **Create a new app:**
+   - Repository: `your-username/BetVector`
+   - Branch: `main`
+   - Main file path: `src/delivery/dashboard.py`
+
+4. **Configure secrets** — in the Streamlit Cloud app settings, go to
+   **Settings → Secrets** and paste your secrets in TOML format:
+
+   ```toml
+   DASHBOARD_PASSWORD = "your-password"
+   GMAIL_APP_PASSWORD = "your-gmail-app-password"
+   API_FOOTBALL_KEY = "your-api-key"
+
+   # Required for cloud — SQLite is not persistent on Streamlit Cloud.
+   # Use a Supabase PostgreSQL free tier (500 MB).
+   [database]
+   connection_string = "postgresql://user:password@host:5432/dbname"
+   ```
+
+   See `.streamlit/secrets.toml.example` for the full template.
+
+5. **Deploy** — Streamlit Cloud will install dependencies from
+   `requirements.txt` and launch the app.
+
+**Important:** Streamlit Cloud does not persist files between reboots.
+The SQLite database is fine for local development, but for cloud
+deployment you need a hosted PostgreSQL database (e.g. Supabase free
+tier). Configure the connection string in Streamlit secrets as shown
+above — BetVector's database layer will use it automatically.
 
 ## License
 

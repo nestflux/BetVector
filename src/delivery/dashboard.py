@@ -38,6 +38,7 @@ Master Plan refs: MP §8 Design System, MP §3 Flow 4
 """
 
 import os
+from pathlib import Path
 
 import streamlit as st
 
@@ -276,8 +277,18 @@ def check_password() -> bool:
 
     Returns True if authenticated, False otherwise.
     """
-    # If no password is set in env, allow access (dev mode)
+    # Check env var first, then Streamlit secrets (for Streamlit Cloud).
+    # We only check st.secrets when a secrets file actually exists —
+    # accessing st.secrets without one triggers a visible Streamlit warning.
     dashboard_password = os.environ.get("DASHBOARD_PASSWORD", "")
+    if not dashboard_password:
+        try:
+            secrets_path = Path(__file__).resolve().parents[2] / ".streamlit" / "secrets.toml"
+            home_secrets = Path.home() / ".streamlit" / "secrets.toml"
+            if secrets_path.exists() or home_secrets.exists():
+                dashboard_password = st.secrets.get("DASHBOARD_PASSWORD", "")
+        except Exception:
+            dashboard_password = ""
     if not dashboard_password:
         return True
 
@@ -412,6 +423,27 @@ def main() -> None:
 
     # Password gate
     if not check_password():
+        return
+
+    # Verify database is accessible before loading pages.
+    # On Streamlit Cloud the SQLite file may not exist yet — show a
+    # friendly message instead of crashing with a traceback.
+    try:
+        from src.database.db import get_engine
+        engine = get_engine()
+        with engine.connect() as conn:
+            conn.execute(__import__("sqlalchemy").text("SELECT 1"))
+    except Exception as db_err:
+        st.error("Database connection failed")
+        st.markdown(
+            "BetVector could not connect to the database. "
+            "This usually means:\n\n"
+            "- **Local:** Run `python run_pipeline.py setup` first to "
+            "create the database.\n"
+            "- **Streamlit Cloud:** Configure a PostgreSQL connection "
+            "string in Settings → Secrets under `[database]`.\n\n"
+            f"Error: `{db_err}`"
+        )
         return
 
     # Onboarding gate — new users see the wizard instead of the dashboard.
