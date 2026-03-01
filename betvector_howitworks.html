@@ -337,400 +337,1347 @@
   <div class="layout">
     <aside class="sidebar" id="sidebar">
       <div class="toc-title">Contents</div>
-      <a href="#the-big-picture" class="toc-item toc-h2">The Big Picture</a>
-<a href="#understanding-betting-odds" class="toc-item toc-h2">Understanding Betting Odds</a>
-<a href="#decimal-odds" class="toc-item toc-h3">Decimal Odds</a>
-<a href="#implied-probability" class="toc-item toc-h3">Implied Probability</a>
-<a href="#the-bookmakers-margin-overround" class="toc-item toc-h3">The Bookmaker's Margin (Overround)</a>
-<a href="#how-betvector-predicts-match-outcomes" class="toc-item toc-h2">How BetVector Predicts Match Outcomes</a>
-<a href="#the-poisson-distribution" class="toc-item toc-h3">The Poisson Distribution</a>
-<a href="#attack-strength-defence-strength-and-home-advantage" class="toc-item toc-h3">Attack Strength, Defence Strength, and Home Advantage</a>
-<a href="#from-lambda-values-to-the-scoreline-matrix" class="toc-item toc-h3">From Lambda Values to the Scoreline Matrix</a>
-<a href="#deriving-market-probabilities-from-the-matrix" class="toc-item toc-h3">Deriving Market Probabilities from the Matrix</a>
-<a href="#finding-value-bets" class="toc-item toc-h2">Finding Value Bets</a>
-<a href="#what-makes-a-bet-value" class="toc-item toc-h3">What Makes a Bet "Value"</a>
-<a href="#expected-value" class="toc-item toc-h3">Expected Value</a>
-<a href="#why-you-should-bet-on-value-not-on-winners" class="toc-item toc-h3">Why You Should Bet on Value, Not on Winners</a>
+      <a href="#1-the-big-picture" class="toc-item toc-h2">1. The Big Picture</a>
+<a href="#what-betvector-does-in-plain-english" class="toc-item toc-h3">What BetVector Does in Plain English</a>
+<a href="#the-core-idea-finding-mispriced-bets" class="toc-item toc-h3">The Core Idea: Finding Mispriced Bets</a>
+<a href="#edge----the-systems-estimate-of-your-advantage" class="toc-item toc-h3">Edge -- The System's Estimate of Your Advantage</a>
+<a href="#what-betvector-is-not" class="toc-item toc-h3">What BetVector Is Not</a>
+<a href="#2-where-the-data-comes-from" class="toc-item toc-h2">2. Where the Data Comes From</a>
+<a href="#football-datacouk" class="toc-item toc-h3">Football-Data.co.uk</a>
+<a href="#fbref-via-soccerdata" class="toc-item toc-h3">FBref (via soccerdata)</a>
+<a href="#api-football" class="toc-item toc-h3">API-Football</a>
+<a href="#how-data-gets-into-the-system" class="toc-item toc-h3">How Data Gets Into the System</a>
+<a href="#temporal-integrity----the-sacred-rule" class="toc-item toc-h3">Temporal Integrity -- The Sacred Rule</a>
+<a href="#3-feature-engineering----teaching-the-model-what-matters" class="toc-item toc-h2">3. Feature Engineering -- Teaching the Model What Matters</a>
+<a href="#what-are-features" class="toc-item toc-h3">What Are Features?</a>
+<a href="#rolling-averages" class="toc-item toc-h3">Rolling Averages</a>
+<a href="#context-features" class="toc-item toc-h3">Context Features</a>
+<a href="#how-features-are-stored" class="toc-item toc-h3">How Features Are Stored</a>
+<a href="#4-the-prediction-model----poisson-regression" class="toc-item toc-h2">4. The Prediction Model -- Poisson Regression</a>
+<a href="#what-is-poisson-regression" class="toc-item toc-h3">What Is Poisson Regression?</a>
+<a href="#understanding-lambda" class="toc-item toc-h3">Understanding Lambda</a>
+<a href="#how-it-works-step-by-step" class="toc-item toc-h3">How It Works Step by Step</a>
+<a href="#the-7x7-scoreline-matrix----the-heart-of-the-system" class="toc-item toc-h3">The 7x7 Scoreline Matrix -- The Heart of the System</a>
+<a href="#from-scoreline-matrix-to-betting-markets" class="toc-item toc-h3">From Scoreline Matrix to Betting Markets</a>
+<a href="#5-value-bet-detection----finding-the-edge" class="toc-item toc-h2">5. Value Bet Detection -- Finding the Edge</a>
+<a href="#what-makes-a-bet-value" class="toc-item toc-h3">What Makes a Bet "Value"?</a>
+<a href="#how-odds-work" class="toc-item toc-h3">How Odds Work</a>
+<a href="#the-overround----the-bookmakers-built-in-advantage" class="toc-item toc-h3">The Overround -- The Bookmaker's Built-in Advantage</a>
+<a href="#the-edge-calculation" class="toc-item toc-h3">The Edge Calculation</a>
 <a href="#confidence-tiers" class="toc-item toc-h3">Confidence Tiers</a>
-<a href="#managing-your-bankroll" class="toc-item toc-h2">Managing Your Bankroll</a>
-<a href="#why-bankroll-management-matters-more-than-predictions" class="toc-item toc-h3">Why Bankroll Management Matters More Than Predictions</a>
-<a href="#flat-staking-recommended-for-beginners" class="toc-item toc-h3">Flat Staking (Recommended for Beginners)</a>
-<a href="#percentage-staking" class="toc-item toc-h3">Percentage Staking</a>
-<a href="#the-kelly-criterion" class="toc-item toc-h3">The Kelly Criterion</a>
+<a href="#6-bankroll-management----protecting-your-money" class="toc-item toc-h2">6. Bankroll Management -- Protecting Your Money</a>
+<a href="#why-bankroll-management-matters" class="toc-item toc-h3">Why Bankroll Management Matters</a>
+<a href="#staking-methods" class="toc-item toc-h3">Staking Methods</a>
 <a href="#safety-limits" class="toc-item toc-h3">Safety Limits</a>
-<a href="#the-three-daily-pipelines" class="toc-item toc-h2">The Three Daily Pipelines</a>
-<a href="#morning-0600-utc----preparing-todays-picks" class="toc-item toc-h3">Morning (06:00 UTC) -- Preparing Today's Picks</a>
-<a href="#midday-1300-utc----catching-odds-movements" class="toc-item toc-h3">Midday (13:00 UTC) -- Catching Odds Movements</a>
-<a href="#evening-2200-utc----settling-the-books" class="toc-item toc-h3">Evening (22:00 UTC) -- Settling the Books</a>
-<a href="#pipeline-resilience" class="toc-item toc-h3">Pipeline Resilience</a>
-<a href="#walk-forward-backtesting" class="toc-item toc-h2">Walk-Forward Backtesting</a>
-<a href="#what-it-is-and-why-it-matters" class="toc-item toc-h3">What It Is and Why It Matters</a>
-<a href="#how-betvector-prevents-data-leakage" class="toc-item toc-h3">How BetVector Prevents Data Leakage</a>
-<a href="#reading-backtest-results" class="toc-item toc-h3">Reading Backtest Results</a>
-<a href="#the-self-improvement-engine" class="toc-item toc-h2">The Self-Improvement Engine</a>
-<a href="#automatic-recalibration" class="toc-item toc-h3">Automatic Recalibration</a>
-<a href="#retrain-triggers" class="toc-item toc-h3">Retrain Triggers</a>
-<a href="#market-feedback-loop" class="toc-item toc-h3">Market Feedback Loop</a>
-<a href="#why-guardrails-matter" class="toc-item toc-h3">Why Guardrails Matter</a>
-<a href="#understanding-the-dashboard" class="toc-item toc-h2">Understanding the Dashboard</a>
-<a href="#todays-picks----your-daily-action-items" class="toc-item toc-h3">Today's Picks -- Your Daily Action Items</a>
-<a href="#performance----tracking-long-term-profitability" class="toc-item toc-h3">Performance -- Tracking Long-Term Profitability</a>
-<a href="#leagues----per-league-breakdown" class="toc-item toc-h3">Leagues -- Per-League Breakdown</a>
-<a href="#match-deep-dive----under-the-hood-of-a-prediction" class="toc-item toc-h3">Match Deep Dive -- Under the Hood of a Prediction</a>
-<a href="#model-health----keeping-the-system-honest" class="toc-item toc-h3">Model Health -- Keeping the System Honest</a>
-<a href="#bankroll-manager----protecting-your-capital" class="toc-item toc-h3">Bankroll Manager -- Protecting Your Capital</a>
-<a href="#settings----configuration" class="toc-item toc-h3">Settings -- Configuration</a>
-<a href="#key-metrics-explained" class="toc-item toc-h2">Key Metrics Explained</a>
-<a href="#roi-return-on-investment" class="toc-item toc-h3">ROI (Return on Investment)</a>
+<a href="#paper-trading-mode" class="toc-item toc-h3">Paper Trading Mode</a>
+<a href="#7-performance-measurement----how-do-we-know-its-working" class="toc-item toc-h2">7. Performance Measurement -- How Do We Know It's Working?</a>
 <a href="#brier-score" class="toc-item toc-h3">Brier Score</a>
 <a href="#calibration" class="toc-item toc-h3">Calibration</a>
-<a href="#clv-closing-line-value" class="toc-item toc-h3">CLV (Closing Line Value)</a>
-<a href="#data-sources-and-limitations" class="toc-item toc-h2">Data Sources and Limitations</a>
-<a href="#where-the-data-comes-from" class="toc-item toc-h3">Where the Data Comes From</a>
-<a href="#what-happens-when-fbref-is-blocked" class="toc-item toc-h3">What Happens When FBref Is Blocked</a>
-<a href="#api-rate-limits" class="toc-item toc-h3">API Rate Limits</a>
-<a href="#epl-only-for-now-and-how-to-expand" class="toc-item toc-h3">EPL-Only (For Now) and How to Expand</a>
-<a href="#glossary" class="toc-item toc-h2">Glossary</a>
+<a href="#roi-return-on-investment" class="toc-item toc-h3">ROI (Return on Investment)</a>
+<a href="#closing-line-value-clv" class="toc-item toc-h3">Closing Line Value (CLV)</a>
+<a href="#8-the-self-improvement-engine----how-it-gets-smarter" class="toc-item toc-h2">8. The Self-Improvement Engine -- How It Gets Smarter</a>
+<a href="#automatic-recalibration" class="toc-item toc-h3">Automatic Recalibration</a>
+<a href="#feature-importance-tracking" class="toc-item toc-h3">Feature Importance Tracking</a>
+<a href="#adaptive-ensemble-weights" class="toc-item toc-h3">Adaptive Ensemble Weights</a>
+<a href="#market-feedback-loop" class="toc-item toc-h3">Market Feedback Loop</a>
+<a href="#seasonal-re-training-triggers" class="toc-item toc-h3">Seasonal Re-training Triggers</a>
+<a href="#the-philosophy-inform-dont-decide" class="toc-item toc-h3">The Philosophy: Inform, Don't Decide</a>
+<a href="#9-the-dashboard----your-command-centre" class="toc-item toc-h2">9. The Dashboard -- Your Command Centre</a>
+<a href="#todays-picks" class="toc-item toc-h3">Today's Picks</a>
+<a href="#performance-tracker" class="toc-item toc-h3">Performance Tracker</a>
+<a href="#league-explorer" class="toc-item toc-h3">League Explorer</a>
+<a href="#match-deep-dive" class="toc-item toc-h3">Match Deep Dive</a>
+<a href="#model-health" class="toc-item toc-h3">Model Health</a>
+<a href="#bankroll-manager" class="toc-item toc-h3">Bankroll Manager</a>
+<a href="#settings" class="toc-item toc-h3">Settings</a>
+<a href="#10-putting-it-all-together----a-typical-week" class="toc-item toc-h2">10. Putting It All Together -- A Typical Week</a>
+<a href="#monday-morning" class="toc-item toc-h3">Monday Morning</a>
+<a href="#monday-evening" class="toc-item toc-h3">Monday Evening</a>
+<a href="#tuesday-through-friday" class="toc-item toc-h3">Tuesday through Friday</a>
+<a href="#saturday----big-matchday" class="toc-item toc-h3">Saturday -- Big Matchday</a>
+<a href="#sunday-evening" class="toc-item toc-h3">Sunday Evening</a>
+<a href="#the-long-game" class="toc-item toc-h3">The Long Game</a>
+<a href="#11-glossary" class="toc-item toc-h2">11. Glossary</a>
     </aside>
     <main class="content">
       <h1 id="betvector----how-it-works" class="md-h1">BetVector -- How It Works</h1>
-<p class="md-p">A guide to the concepts and mechanics behind BetVector's quantitative football betting system.</p>
+<p class="md-p">A plain-English guide to understanding how a quantitative football betting system</p>
+<p class="md-p">thinks, learns, and protects your money.</p>
+<p class="md-p">If you know football but not statistics, this document is for you.</p>
 <hr class='md-hr'>
-<h2 id="the-big-picture" class="md-h2 section-header">The Big Picture</h2>
-<p class="md-p">Saturday morning. You scroll through the day's fixtures, feel good about Arsenal at home, and put money on them to win. By Monday, you can't remember whether you're up or down this month. You have no framework for deciding which bets are smart and which are just noise. You're betting on feel.</p>
-<p class="md-p">BetVector replaces feel with math.</p>
-<p class="md-p">It is a quantitative betting system that collects football data from public sources, predicts match outcomes using statistical models, compares those predictions to bookmaker odds, and flags situations where the bookmaker's price is wrong in your favour. These are called <strong>value bets</strong> -- situations where the expected return is positive.</p>
-<p class="md-p">The philosophy is simple: you don't need to predict who will win. You need to find prices that are wrong. If you bet on enough mispriced outcomes, the math works in your favour over hundreds of bets. Individual bets lose all the time. That's fine. The system is designed to profit in aggregate.</p>
-<p class="md-p">BetVector handles the entire chain: data collection, feature engineering, prediction, value detection, stake calculation, bet tracking, result resolution, performance measurement, and self-improvement. You review the picks, place the ones you choose on your sportsbook, and track everything on a dashboard.</p>
+<h2 id="1-the-big-picture" class="md-h2 section-header">1. The Big Picture</h2>
+<h3 id="what-betvector-does-in-plain-english" class="md-h3 subsection-header">What BetVector Does in Plain English</h3>
+<p class="md-p">Saturday morning. You open your phone, scroll through the day's football fixtures,</p>
+<p class="md-p">and place a bet on Arsenal because they have been playing well and it "feels right."</p>
+<p class="md-p">By Monday you cannot remember if you are up or down this month. You have a vague</p>
+<p class="md-p">sense it is negative, but no real data. You place another bet next weekend using the</p>
+<p class="md-p">same process: gut feeling, tribal knowledge, hope.</p>
+<p class="md-p">This is how the vast majority of football bettors operate. No systematic edge.</p>
+<p class="md-p">No data. No staking discipline. No performance tracking. They are, in effect,</p>
+<p class="md-p">donating money to bookmakers who employ teams of quantitative analysts, proprietary</p>
+<p class="md-p">data pipelines, and decades of model refinement.</p>
+<p class="md-p">BetVector exists to put the data on your side.</p>
+<p class="md-p">It is a Python-based system that:</p>
+<ol class='md-list'><li><strong>Scrapes football data</strong> from free public sources (match results, team statistics, bookmaker odds).</li>
+<li><strong>Engineers features</strong> -- numerical representations of team form, attack strength, defensive quality, home advantage, and other factors.</li>
+<li><strong>Builds a Poisson regression model</strong> that predicts how many goals each team will score.</li>
+<li><strong>Constructs a 7x7 scoreline probability matrix</strong> covering every possible result from 0-0 to 6-6.</li>
+<li><strong>Derives betting market probabilities</strong> (match result, over/under, both teams to score) from that single matrix.</li>
+<li><strong>Detects value bets</strong> by comparing model probabilities to bookmaker odds.</li>
+<li><strong>Manages bankroll</strong> with disciplined staking strategies and hard safety limits.</li>
+<li><strong>Tracks every bet</strong> (both system recommendations and user-placed bets) with full performance metrics.</li>
+<li><strong>Self-improves over time</strong> through automatic recalibration, market feedback, and retrain triggers.</li></ol>
+<p class="md-p">The entire system runs automatically on a daily schedule. You check your email</p>
+<p class="md-p">each morning, review the value bets on the dashboard, place the ones you choose</p>
+<p class="md-p">on your sportsbook, and the system handles everything else.</p>
+<h3 id="the-core-idea-finding-mispriced-bets" class="md-h3 subsection-header">The Core Idea: Finding Mispriced Bets</h3>
+<p class="md-p">Here is the single most important concept behind everything BetVector does:</p>
+<p class="md-p">**A bet has "value" when the bookmaker's odds imply a lower probability than</p>
+<p class="md-p">what the model calculates.**</p>
+<p class="md-p">This does not mean the bet will win. It means that if you make this type of bet</p>
+<p class="md-p">over and over -- hundreds of times -- you will come out ahead, because you are</p>
+<p class="md-p">consistently getting better prices than the true probability warrants.</p>
+<p class="md-p">Think of it like a shop that accidentally prices an item at half its market value.</p>
+<p class="md-p">Buying it is a good deal regardless of whether you end up liking the product. In</p>
+<p class="md-p">betting terms, the "discount" is the gap between what the model thinks is the true</p>
+<p class="md-p">probability and what the bookmaker's price implies.</p>
+<h3 id="edge----the-systems-estimate-of-your-advantage" class="md-h3 subsection-header">Edge -- The System's Estimate of Your Advantage</h3>
+<p class="md-p">That gap has a name: <strong>edge</strong>.</p>
+<div class="code-block"><pre><code>Edge = Model Probability - Bookmaker&#x27;s Implied Probability</code></pre></div>
+<p class="md-p"><strong>Example:</strong> BetVector's model says Manchester City has a 75% chance of beating a</p>
+<p class="md-p">struggling Wolves side at the Etihad. The bookmaker offers decimal odds of 1.54</p>
+<p class="md-p">on a Man City win. Those odds imply a probability of 1 / 1.54 = 64.9%. The edge</p>
+<p class="md-p">is 75.0% - 64.9% = <strong>10.1%</strong>.</p>
+<p class="md-p">The model is saying: "This bet is priced as if Man City have a 65% chance, but I</p>
+<p class="md-p">think they have a 75% chance. That 10% gap is your advantage."</p>
+<p class="md-p">Over a single bet, anything can happen. Wolves might score a screamer and win 1-0.</p>
+<p class="md-p">But over 200 bets with a consistent 10% edge, the mathematics of probability are</p>
+<p class="md-p">firmly on your side. This is exactly how casinos make money -- they do not win</p>
+<p class="md-p">every hand of blackjack, but the house edge guarantees they profit over thousands</p>
+<p class="md-p">of hands.</p>
+<h3 id="what-betvector-is-not" class="md-h3 subsection-header">What BetVector Is Not</h3>
+<p class="md-p">BetVector is not a "tip sheet." It does not tell you who will win. It tells you</p>
+<p class="md-p">where the bookmaker's price is wrong. A bet can be a losing bet and still be a</p>
+<p class="md-p">good bet -- if the odds offered were generous enough relative to the true</p>
+<p class="md-p">probability. This distinction between outcome and process is the foundation of</p>
+<p class="md-p">disciplined betting.</p>
+<p class="md-p">It is not a gambling app. It is not a guaranteed money-maker. It is a quantitative</p>
+<p class="md-p">tool for making informed, disciplined betting decisions backed by data -- with full</p>
+<p class="md-p">transparency about when the edge is real and when it is not.</p>
 <hr class='md-hr'>
-<h2 id="understanding-betting-odds" class="md-h2 section-header">Understanding Betting Odds</h2>
-<p class="md-p">Before anything else, you need to understand how odds work -- not as a bettor, but as a mathematician.</p>
-<h3 id="decimal-odds" class="md-h3 subsection-header">Decimal Odds</h3>
-<p class="md-p">BetVector uses <strong>decimal odds</strong>, the standard in European betting. Decimal odds tell you the total return per unit staked, including your stake back.</p>
-<div class='table-wrapper'><table><thead><tr><th>Decimal Odds</th><th>You Bet</th><th>You Get Back (if you win)</th><th>Profit</th></tr></thead><tbody><tr><td>1.50</td><td>10.00</td><td>15.00</td><td>5.00</td></tr><tr><td>2.00</td><td>10.00</td><td>20.00</td><td>10.00</td></tr><tr><td>3.50</td><td>10.00</td><td>35.00</td><td>25.00</td></tr></tbody></table></div>
-<p class="md-p">Higher odds mean a bigger payout but a less likely outcome (according to the bookmaker).</p>
-<h3 id="implied-probability" class="md-h3 subsection-header">Implied Probability</h3>
-<p class="md-p">Every set of odds can be converted into a probability -- the bookmaker's estimate of how likely that outcome is.</p>
-<div class="code-block"><pre><code>implied_probability = 1 / decimal_odds</code></pre></div>
-<p class="md-p">Examples:</p>
-<div class='table-wrapper'><table><thead><tr><th>Decimal Odds</th><th>Implied Probability</th></tr></thead><tbody><tr><td>1.50</td><td>1 / 1.50 = 66.7%</td></tr><tr><td>2.00</td><td>1 / 2.00 = 50.0%</td></tr><tr><td>3.50</td><td>1 / 3.50 = 28.6%</td></tr></tbody></table></div>
-<p class="md-p">If a bookmaker offers Arsenal at 2.00, they're saying Arsenal has roughly a 50% chance of winning.</p>
-<h3 id="the-bookmakers-margin-overround" class="md-h3 subsection-header">The Bookmaker's Margin (Overround)</h3>
-<p class="md-p">Here is the catch. Bookmakers don't offer fair odds. For a match result market (home / draw / away), add up the implied probabilities:</p>
-<div class="code-block"><pre><code>Arsenal to win:    odds 1.90  -&gt;  implied = 52.6%
-Draw:              odds 3.40  -&gt;  implied = 29.4%
-Chelsea to win:    odds 4.00  -&gt;  implied = 25.0%
-                                  Total   = 107.0%</code></pre></div>
-<p class="md-p">The total is 107%, not 100%. That extra 7% is the <strong>overround</strong> (also called the <strong>vig</strong> or <strong>vigorish</strong>). It's the bookmaker's built-in profit margin. No matter what happens, the bookmaker collects slightly more from losing bets than they pay out on winning ones.</p>
-<p class="md-p">This means the implied probabilities from odds are always inflated. The "true" fair probabilities for the match above would sum to 100%, so each outcome's real probability is slightly lower than the odds suggest. The bookmaker is systematically offering you worse prices than fair value.</p>
-<p class="md-p">This is why most bettors lose. Even if your predictions are as good as the bookmaker's, the overround ensures you lose money over time. To profit, you need to be <em>better</em> than the bookmaker -- at least some of the time.</p>
+<h2 id="2-where-the-data-comes-from" class="md-h2 section-header">2. Where the Data Comes From</h2>
+<p class="md-p">Every prediction starts with data. BetVector pulls from three sources, each</p>
+<p class="md-p">providing different pieces of the puzzle.</p>
+<h3 id="football-datacouk" class="md-h3 subsection-header">Football-Data.co.uk</h3>
+<p class="md-p">This is the bedrock data source -- a free, public repository of football match</p>
+<p class="md-p">results and bookmaker odds, maintained as downloadable CSV files. It has been</p>
+<p class="md-p">running for over two decades and covers all the major European leagues.</p>
+<p class="md-p"><strong>What it provides:</strong></p>
+<ul class='md-list'><li><strong>Final scores:</strong> Home goals, away goals, half-time scores.</li>
+<li><strong>Match statistics:</strong> Shots, shots on target, corners, fouls, yellow and red cards.</li>
+<li><strong>Bookmaker odds:</strong> Odds from dozens of bookmakers including Bet365, Pinnacle, William Hill, and many more.</li>
+<li><strong>Market average odds:</strong> The average across all bookmakers, which serves as a useful benchmark for fair prices.</li></ul>
+<p class="md-p">This is the data that tells BetVector what happened in every match and what price</p>
+<p class="md-p">the bookmakers offered. Without it, there is no training data for the model and no</p>
+<p class="md-p">odds to compare against.</p>
+<p class="md-p"><strong>Why it matters:</strong> Historical odds data is gold. It lets BetVector backtest</p>
+<p class="md-p">strategies on past seasons -- asking "if the system had been running last year,</p>
+<p class="md-p">would it have made money?" -- which is essential for validating the model before</p>
+<p class="md-p">risking real money.</p>
+<h3 id="fbref-via-soccerdata" class="md-h3 subsection-header">FBref (via soccerdata)</h3>
+<p class="md-p">FBref is the gold standard for advanced football statistics. While Football-Data</p>
+<p class="md-p">gives you goals and shots, FBref gives you the numbers behind the numbers.</p>
+<p class="md-p"><strong>What it provides:</strong></p>
+<ul class='md-list'><li><strong>Expected Goals (xG):</strong> A measure of shot quality. When a player shoots from</li></ul>
+<p class="md-p">  6 yards out after a cutback, that shot might have an xG of 0.35 (meaning it</p>
+<p class="md-p">  scores roughly 35% of the time across all football). A speculative 30-yard</p>
+<p class="md-p">  effort might have an xG of 0.03. A team's total xG for a match is the sum of</p>
+<p class="md-p">  all their shot probabilities.</p>
+<ul class='md-list'><li><strong>Expected Goals Against (xGA):</strong> The same concept from the defensive</li></ul>
+<p class="md-p">  perspective -- how many goals the opposition deserved to score based on their</p>
+<p class="md-p">  chances.</p>
+<ul class='md-list'><li><strong>Possession, pass completion, shots on target</strong> and other granular</li></ul>
+<p class="md-p">  match-level statistics.</p>
+<p class="md-p"><strong>Why xG matters so much:</strong> Goals in football are partly random. A team can</p>
+<p class="md-p">create five excellent chances and score none of them. Another team can have one</p>
+<p class="md-p">shot all match and score from 40 yards. Over a single match, actual goals are</p>
+<p class="md-p">noisy. xG cuts through that noise and measures the <em>quality</em> of chances created,</p>
+<p class="md-p">regardless of whether the ball went in.</p>
+<p class="md-p">xG is the single most predictive publicly available metric for future football</p>
+<p class="md-p">performance. A team that is "over-performing their xG" (scoring more goals than</p>
+<p class="md-p">their chances deserve) is likely to regress. A team that is "under-performing"</p>
+<p class="md-p">(creating great chances but not finishing them) is likely to improve. The model</p>
+<p class="md-p">captures these patterns.</p>
+<p class="md-p"><strong>Current status:</strong> FBref uses Cloudflare protection that periodically blocks</p>
+<p class="md-p">automated data collection with a 403 error. BetVector handles this gracefully --</p>
+<p class="md-p">when FBref is unavailable, the system continues without xG features. Goals, form,</p>
+<p class="md-p">and other features still provide a solid foundation. When FBref is accessible, xG</p>
+<p class="md-p">features are layered on top for better predictions.</p>
+<h3 id="api-football" class="md-h3 subsection-header">API-Football</h3>
+<p class="md-p">API-Football is a REST API (accessed through RapidAPI) that provides real-time</p>
+<p class="md-p">fixture data and live odds for upcoming matches.</p>
+<p class="md-p"><strong>What it provides:</strong></p>
+<ul class='md-list'><li><strong>Upcoming fixtures:</strong> Who plays whom, when, and where.</li>
+<li><strong>Current bookmaker odds</strong> for those fixtures, updated throughout the day.</li>
+<li><strong>Lineup and injury information</strong> when available before kickoff.</li></ul>
+<p class="md-p"><strong>Free tier limitations:</strong> The free plan allows 100 API requests per day.</p>
+<p class="md-p">BetVector tracks this usage carefully and spreads requests across 2-3 daily</p>
+<p class="md-p">pipeline runs to capture odds movements without exceeding the quota. Every request</p>
+<p class="md-p">includes a minimum 2-second delay to avoid overloading the service.</p>
+<h3 id="how-data-gets-into-the-system" class="md-h3 subsection-header">How Data Gets Into the System</h3>
+<p class="md-p">The data flow follows a strict, modular pattern:</p>
+<div class="code-block"><pre><code>Scraper downloads raw data from the internet
+              |
+              v
+Loader cleans, normalises, and deduplicates the data
+              |
+              v
+Loader writes to the SQLite database
+              |
+              v
+All downstream modules (features, model, value finder)
+read from the database -- never directly from each other</code></pre></div>
+<p class="md-p">This architecture is deliberate. The scraper does not hand data to the feature</p>
+<p class="md-p">engineer through a function argument. Instead, the scraper writes to the database,</p>
+<p class="md-p">and the feature engineer reads from it. This means every module is independent --</p>
+<p class="md-p">you can re-run the feature engineer without re-running the scraper, or replace</p>
+<p class="md-p">the scraper entirely without touching anything downstream.</p>
+<p class="md-p">The database is the single source of truth. If it is not in the database, it does</p>
+<p class="md-p">not exist for the system.</p>
+<h3 id="temporal-integrity----the-sacred-rule" class="md-h3 subsection-header">Temporal Integrity -- The Sacred Rule</h3>
+<p class="md-p">Every piece of data in the system is timestamped. The system never, under any</p>
+<p class="md-p">circumstances, uses data from a match that has not yet been played.</p>
+<p class="md-p">When calculating features for a Saturday fixture, BetVector uses only matches</p>
+<p class="md-p">completed before Saturday. When training the model and predicting a March 1st</p>
+<p class="md-p">match, it trains only on matches before March 1st. When backtesting a full</p>
+<p class="md-p">season, each prediction step sees only data from before that matchday.</p>
+<p class="md-p">This sounds obvious, but "future data leakage" is the most common and devastating</p>
+<p class="md-p">mistake in sports prediction systems. A model that accidentally peeks at future</p>
+<p class="md-p">results will look spectacular in testing and fail miserably in live operation.</p>
+<p class="md-p">BetVector enforces temporal integrity at every level with explicit date filters</p>
+<p class="md-p">on every database query.</p>
 <hr class='md-hr'>
-<h2 id="how-betvector-predicts-match-outcomes" class="md-h2 section-header">How BetVector Predicts Match Outcomes</h2>
-<h3 id="the-poisson-distribution" class="md-h3 subsection-header">The Poisson Distribution</h3>
-<p class="md-p">Goals in football are rare, roughly random events. A typical team scores 1 to 2 goals per match, and the exact number in any given game is unpredictable. This makes football goals a textbook application of the <strong>Poisson distribution</strong> -- a statistical model designed for exactly this type of event: counting occurrences of something that happens at a known average rate.</p>
-<p class="md-p">The Poisson distribution takes a single parameter called <strong>lambda</strong> -- the average expected number of events. If lambda = 1.5 for Arsenal's attack, the Poisson distribution tells us:</p>
-<div class="code-block"><pre><code>P(0 goals) = 22.3%
-P(1 goal)  = 33.5%
-P(2 goals) = 25.1%
-P(3 goals) = 12.6%
-P(4 goals) =  4.7%
-P(5 goals) =  1.4%
-P(6 goals) =  0.4%</code></pre></div>
-<p class="md-p">Most of the probability mass sits at 1-2 goals, with a long tail of less likely scorelines. This matches what we actually observe in football.</p>
-<h3 id="attack-strength-defence-strength-and-home-advantage" class="md-h3 subsection-header">Attack Strength, Defence Strength, and Home Advantage</h3>
-<p class="md-p">BetVector estimates two lambda values for every match:</p>
-<ul class='md-list'><li><strong>lambda_home</strong> -- how many goals the home team is expected to score</li>
-<li><strong>lambda_away</strong> -- how many goals the away team is expected to score</li></ul>
-<p class="md-p">These are calculated from <strong>rolling features</strong> -- statistics computed over each team's recent matches:</p>
-<div class='table-wrapper'><table><thead><tr><th>Feature</th><th>What It Measures</th></tr></thead><tbody><tr><td><code class="inline-code">goals_scored_5</code></td><td>Average goals scored per game over last 5 matches</td></tr><tr><td><code class="inline-code">goals_conceded_5</code></td><td>Average goals conceded per game over last 5 matches</td></tr><tr><td><code class="inline-code">xg_5</code></td><td>Average expected goals (xG) over last 5 matches</td></tr><tr><td><code class="inline-code">xga_5</code></td><td>Average expected goals against over last 5 matches</td></tr><tr><td><code class="inline-code">shots_on_target_5</code></td><td>Average shots on target over last 5 matches</td></tr><tr><td><code class="inline-code">form_5</code></td><td>Points per game over last 5 matches</td></tr></tbody></table></div>
-<p class="md-p">The model uses Poisson regression (a type of generalised linear model, or GLM) to learn the relationship between these features and actual goals scored. In essence, it learns patterns like: "a team averaging 2.1 xG over their last 5 home matches, facing a team conceding 1.6 xGA away, tends to score around 1.8 goals."</p>
-<p class="md-p"><strong>Home advantage</strong> is real and significant. Across European football, home teams score roughly 0.3 more goals per match on average than away teams. The model learns this from the data -- home and away features are calculated separately, and the regression captures the home boost naturally.</p>
-<h3 id="from-lambda-values-to-the-scoreline-matrix" class="md-h3 subsection-header">From Lambda Values to the Scoreline Matrix</h3>
-<p class="md-p">Once we have lambda_home and lambda_away, we build a <strong>scoreline probability matrix</strong>: a 7x7 grid showing the probability of every possible scoreline from 0-0 to 6-6.</p>
-<p class="md-p">Each cell is calculated as:</p>
-<div class="code-block"><pre><code>P(home = h, away = a) = poisson.pmf(h, lambda_home) * poisson.pmf(a, lambda_away)</code></pre></div>
-<p class="md-p">Here is a concrete example. Suppose for Arsenal vs Chelsea:</p>
-<div class="code-block"><pre><code>lambda_home (Arsenal) = 1.72
-lambda_away (Chelsea) = 1.14</code></pre></div>
-<p class="md-p">The scoreline matrix looks like this (probabilities as percentages):</p>
-<div class="code-block"><pre><code>         Chelsea goals
-           0      1      2      3      4      5      6
-    0    5.73   6.53   3.72   1.42   0.40   0.09   0.02
-    1    9.85  11.23   6.40   2.44   0.70   0.16   0.03
-A   2    8.47   9.66   5.50   2.10   0.60   0.14   0.03
-r   3    4.86   5.54   3.16   1.20   0.34   0.08   0.01
-s   4    2.09   2.38   1.36   0.52   0.15   0.03   0.01
-e   5    0.72   0.82   0.47   0.18   0.05   0.01   0.00
-n   6    0.21   0.24   0.13   0.05   0.01   0.00   0.00</code></pre></div>
-<p class="md-p">The most likely scoreline is 1-1 (11.23%), followed by 1-0 (9.85%) and 2-1 (9.66%). This feels right -- a moderately high-scoring match with Arsenal slightly favoured.</p>
-<p class="md-p"><strong>The independence assumption.</strong> You'll notice we multiply the home and away Poisson probabilities together. This assumes Arsenal scoring 2 goals and Chelsea scoring 1 goal are independent events. In reality, there is a weak correlation (a team chasing a deficit may score more but also concede more), but the independence assumption works well in practice for match-level predictions and keeps the model simple and interpretable.</p>
-<p class="md-p">The matrix is truncated at 6 goals per side (because 7+ goal hauls are vanishingly rare) and renormalised so all 49 cells sum to exactly 1.0.</p>
-<h3 id="deriving-market-probabilities-from-the-matrix" class="md-h3 subsection-header">Deriving Market Probabilities from the Matrix</h3>
-<p class="md-p">This is where the architecture becomes elegant. From a single scoreline matrix, BetVector derives probabilities for <em>every</em> betting market by summing the appropriate cells:</p>
-<p class="md-p"><strong>1X2 (Match Result)</strong></p>
-<div class="code-block"><pre><code>P(home win) = sum of all cells where home &gt; away     = 48.2%
-P(draw)     = sum of all cells where home == away     = 24.8%
-P(away win) = sum of all cells where away &gt; home      = 27.0%</code></pre></div>
-<p class="md-p"><strong>Over/Under 2.5 Goals</strong></p>
-<div class="code-block"><pre><code>P(over 2.5)  = sum of all cells where home + away &gt; 2  = 53.1%
-P(under 2.5) = sum of all cells where home + away &lt;= 2 = 46.9%</code></pre></div>
-<p class="md-p"><strong>Both Teams to Score (BTTS)</strong></p>
-<div class="code-block"><pre><code>P(BTTS yes) = sum of all cells where home &gt; 0 AND away &gt; 0 = 64.8%
-P(BTTS no)  = sum of all cells where home == 0 OR away == 0 = 35.2%</code></pre></div>
-<p class="md-p"><strong>Over/Under 1.5, 3.5, Asian Handicap</strong> -- all derived from the same matrix using the same logic with different cell-summing rules.</p>
-<p class="md-p">One model, one matrix, all markets. This is the core architectural insight of BetVector. When a more advanced model (Elo, XGBoost, neural net) is added later, it just produces its own scoreline matrix. Everything downstream stays the same.</p>
+<h2 id="3-feature-engineering----teaching-the-model-what-matters" class="md-h2 section-header">3. Feature Engineering -- Teaching the Model What Matters</h2>
+<h3 id="what-are-features" class="md-h3 subsection-header">What Are Features?</h3>
+<p class="md-p">In everyday language, a "feature" is a piece of information you think matters for</p>
+<p class="md-p">making a prediction. In BetVector, features are numbers that describe each team's</p>
+<p class="md-p">recent performance going into a match.</p>
+<p class="md-p">Think of features like a scouting report condensed into numbers. A football scout</p>
+<p class="md-p">might say: "Arsenal have been in great form at home, scoring freely, and their</p>
+<p class="md-p">opponents have been leaky at the back." BetVector says the same thing, but with</p>
+<p class="md-p">precision:</p>
+<div class="code-block"><pre><code>home_goals_scored_5:    1.8  (Arsenal averaged 1.8 goals per game over their last 5)
+home_venue_form_5:      2.4  (2.4 points per game in their last 5 home matches)
+away_goals_conceded_5:  1.6  (the opponent concedes 1.6 goals per game in their last 5)</code></pre></div>
+<p class="md-p">The prediction model takes these numbers as input and produces a goal expectation</p>
+<p class="md-p">as output. Better features lead to better predictions.</p>
+<h3 id="rolling-averages" class="md-h3 subsection-header">Rolling Averages</h3>
+<p class="md-p">The most important features in BetVector are <strong>rolling averages</strong> -- statistics</p>
+<p class="md-p">calculated over a team's most recent N completed matches.</p>
+<p class="md-p">BetVector uses two default windows:</p>
+<ul class='md-list'><li><strong>5-match window:</strong> Captures very recent form. If a team has won their last 5</li></ul>
+<p class="md-p">  in a row, that signal comes through strongly.</p>
+<ul class='md-list'><li><strong>10-match window:</strong> Captures a slightly longer trend, smoothing out individual</li></ul>
+<p class="md-p">  fluky results.</p>
+<p class="md-p"><strong>Why rolling windows instead of season averages?</strong></p>
+<p class="md-p">Because recent form matters more than what happened four months ago. A team that</p>
+<p class="md-p">started the season poorly but has won 8 of their last 10 is a very different</p>
+<p class="md-p">proposition from a team on a 6-match losing streak whose overall season average</p>
+<p class="md-p">looks decent only because of a strong opening run.</p>
+<p class="md-p">Here is a concrete example that shows the difference:</p>
+<div class='table-wrapper'><table><thead><tr><th>Metric</th><th>Season Average</th><th>Last 5 Matches</th><th>What This Tells You</th></tr></thead><tbody><tr><td>Goals scored per game</td><td>1.4</td><td>2.2</td><td>Team is hitting form, attack has clicked</td></tr><tr><td>Goals conceded per game</td><td>1.3</td><td>0.6</td><td>Defence has tightened significantly</td></tr><tr><td>xG per game</td><td>1.5</td><td>2.0</td><td>Creating higher-quality chances</td></tr></tbody></table></div>
+<p class="md-p">The season average says "average team." The rolling averages say "team in excellent</p>
+<p class="md-p">form." The model needs the rolling averages to capture this shift.</p>
+<p class="md-p"><strong>The full set of rolling features computed for each window:</strong></p>
+<ul class='md-list'><li><strong>Form:</strong> Points per game (Win = 3 points, Draw = 1, Loss = 0). A team averaging</li></ul>
+<p class="md-p">  2.4 points per game over 5 matches has won 4 and drawn 1 -- strong form.</p>
+<ul class='md-list'><li><strong>Goals scored per game:</strong> Raw attacking output.</li>
+<li><strong>Goals conceded per game:</strong> Raw defensive record.</li>
+<li><strong>xG per game:</strong> Quality-adjusted attacking output (when FBref data is available).</li>
+<li><strong>xGA per game:</strong> Quality-adjusted defensive record.</li>
+<li><strong>xG difference:</strong> xG minus xGA per game. Positive means creating better chances</li></ul>
+<p class="md-p">  than they are conceding. This is one of the most predictive single features in</p>
+<p class="md-p">  football analytics.</p>
+<ul class='md-list'><li><strong>Shots and shots on target per game:</strong> Volume of attacking activity.</li>
+<li><strong>Possession:</strong> Average share of the ball.</li></ul>
+<h3 id="context-features" class="md-h3 subsection-header">Context Features</h3>
+<p class="md-p">Beyond rolling performance numbers, BetVector tracks contextual factors that</p>
+<p class="md-p">influence match outcomes:</p>
+<p class="md-p"><strong>Home/away advantage:</strong> Football has a well-documented home advantage effect.</p>
+<p class="md-p">Across the Premier League, home teams win roughly 46% of the time, draw about</p>
+<p class="md-p">27%, and lose about 27%. That is a significant tilt compared to what you would</p>
+<p class="md-p">expect by chance.</p>
+<p class="md-p">BetVector captures this through <strong>venue-specific rolling features</strong> -- the same</p>
+<p class="md-p">statistics described above, but calculated using only a team's home matches (when</p>
+<p class="md-p">they are at home) or only their away matches (when they are away).</p>
+<p class="md-p">A team might score 1.8 goals per game overall, but 2.3 at home and only 1.2 away.</p>
+<p class="md-p">That venue split matters enormously for predicting a specific match. The model</p>
+<p class="md-p">receives both the overall rolling average and the venue-specific one, and learns</p>
+<p class="md-p">to weight them appropriately.</p>
+<p class="md-p"><strong>Rest days:</strong> How many days since each team's last match. A team playing on 2</p>
+<p class="md-p">days' rest after a midweek Champions League fixture is at a measurable</p>
+<p class="md-p">disadvantage compared to a team with a full week of recovery. Research consistently</p>
+<p class="md-p">shows that fatigue affects both goalscoring output and defensive concentration.</p>
+<p class="md-p"><strong>Head-to-head record:</strong> The historical record between the two specific teams</p>
+<p class="md-p">over their last 5 meetings. Some matchups have consistent patterns -- a mid-table</p>
+<p class="md-p">team might regularly raise their game against a top-6 side, or a particular</p>
+<p class="md-p">tactical approach might consistently cause problems for a specific opponent.</p>
+<p class="md-p"><strong>Season progress:</strong> Where we are in the season, expressed as a number from 0.0</p>
+<p class="md-p">to 1.0. Early-season matches (matchdays 1-5) are harder to predict because teams</p>
+<p class="md-p">are still settling formations and integrating new signings. Late-season matches can</p>
+<p class="md-p">be distorted by teams that have already secured their league position and may not</p>
+<p class="md-p">be fully motivated.</p>
+<p class="md-p"><strong>Matchday number:</strong> The specific gameweek in the season (e.g., matchday 28 of 38</p>
+<p class="md-p">in the Premier League). Related to season progress but provides a more granular</p>
+<p class="md-p">signal that the model can use to identify patterns at specific points in the</p>
+<p class="md-p">campaign.</p>
+<h3 id="how-features-are-stored" class="md-h3 subsection-header">How Features Are Stored</h3>
+<p class="md-p">All features are pre-computed before each prediction and stored in the <code class="inline-code">features</code></p>
+<p class="md-p">table in the database. Each row represents one team going into one specific match,</p>
+<p class="md-p">with columns for every rolling feature, venue feature, head-to-head metric, and</p>
+<p class="md-p">context variable.</p>
+<p class="md-p">The critical constraint bears repeating: features are computed using **only data</p>
+<p class="md-p">from before the match date**. If the match is on February 15th, the 5-match rolling</p>
+<p class="md-p">average uses the 5 most recent matches completed before February 15th. The match</p>
+<p class="md-p">itself is never included. A match that has not been played yet is never touched.</p>
+<p class="md-p">This temporal integrity rule is the foundation the entire system rests on.</p>
 <hr class='md-hr'>
-<h2 id="finding-value-bets" class="md-h2 section-header">Finding Value Bets</h2>
-<h3 id="what-makes-a-bet-value" class="md-h3 subsection-header">What Makes a Bet "Value"</h3>
-<p class="md-p">A value bet is not about who you think will win. It's about finding prices that are wrong.</p>
-<p class="md-p">Suppose BetVector's model estimates Arsenal has a 55% chance of beating Chelsea, but the bookmaker is offering odds of 2.10 (which implies only a 47.6% chance). The bookmaker thinks Arsenal is less likely to win than our model does. If our model is right, the bookmaker's price is too generous -- and we should bet on it.</p>
-<div class="code-block"><pre><code>Model probability:    55.0%
-Implied probability:  1 / 2.10 = 47.6%
-Edge:                 55.0% - 47.6% = 7.4%</code></pre></div>
-<p class="md-p">The <strong>edge</strong> is the gap between what we think is true and what the bookmaker's price implies. A positive edge means the bet has <strong>positive expected value</strong> (+EV).</p>
-<h3 id="expected-value" class="md-h3 subsection-header">Expected Value</h3>
-<p class="md-p">Expected value (EV) tells you how much you expect to profit per unit staked over the long run:</p>
-<div class="code-block"><pre><code>EV = (probability * decimal_odds) - 1
-   = (0.55 * 2.10) - 1
-   = 1.155 - 1
-   = +0.155  (or +15.5%)</code></pre></div>
-<p class="md-p">This means that for every 1.00 you bet in this situation, you expect to profit 0.155 in the long run. Not on every individual bet -- on <em>average</em>, across many similar bets.</p>
-<h3 id="why-you-should-bet-on-value-not-on-winners" class="md-h3 subsection-header">Why You Should Bet on Value, Not on Winners</h3>
-<p class="md-p">This is the hardest mental shift for new bettors. Consider two scenarios:</p>
-<p class="md-p"><strong>Scenario A:</strong> You bet on Manchester City at 1.20 odds (83.3% implied). Your model says they have an 82% chance of winning. City wins. You made money. But the bet was -EV: you needed 83.3% to break even and only had 82%. Over hundreds of these bets, you lose money despite most of them winning.</p>
-<p class="md-p"><strong>Scenario B:</strong> You bet on Nottingham Forest at 4.50 odds (22.2% implied). Your model says they have a 28% chance of winning. Forest loses. You lost money on this bet. But it was +EV: you needed only 22.2% to break even and had 28%. Over hundreds of these bets, you profit despite most of them losing.</p>
-<p class="md-p">The second bettor is the profitable one. Value betting means accepting that most of your bets on underdogs will lose, while trusting that the math works over a large enough sample. This is the <strong>law of large numbers</strong> at work -- the more bets you place, the closer your actual returns converge to the expected value.</p>
-<h3 id="confidence-tiers" class="md-h3 subsection-header">Confidence Tiers</h3>
-<p class="md-p">BetVector categorises each value bet by the size of the edge:</p>
-<div class='table-wrapper'><table><thead><tr><th>Tier</th><th>Edge</th><th>Interpretation</th></tr></thead><tbody><tr><td><strong>High</strong></td><td>>= 10%</td><td>Substantial mispricing by the bookmaker</td></tr><tr><td><strong>Medium</strong></td><td>5% to 10%</td><td>Clear value, standard betting range</td></tr><tr><td><strong>Low</strong></td><td>< 5%</td><td>Marginal value, may not survive the overround</td></tr></tbody></table></div>
-<p class="md-p">The default minimum edge threshold is 5%. You can adjust this in the dashboard settings. A higher threshold means fewer but stronger picks; a lower threshold means more picks but smaller edges.</p>
-<hr class='md-hr'>
-<h2 id="managing-your-bankroll" class="md-h2 section-header">Managing Your Bankroll</h2>
-<h3 id="why-bankroll-management-matters-more-than-predictions" class="md-h3 subsection-header">Why Bankroll Management Matters More Than Predictions</h3>
-<p class="md-p">This is counterintuitive but critical: <strong>bankroll management is more important than the quality of your model.</strong> A good model with reckless staking goes broke. A mediocre model with disciplined staking survives losing streaks and compounds gains.</p>
-<p class="md-p">The reason is variance. Even with a genuine 5% edge, you will have losing weeks, losing fortnights, sometimes losing months. If your stake sizes are too large relative to your bankroll, a normal run of bad luck can wipe you out before the edge has time to materialise.</p>
-<p class="md-p">BetVector supports three staking methods, from simplest to most advanced.</p>
-<h3 id="flat-staking-recommended-for-beginners" class="md-h3 subsection-header">Flat Staking (Recommended for Beginners)</h3>
-<p class="md-p">Bet a fixed percentage of your starting bankroll on every qualifying bet.</p>
-<div class="code-block"><pre><code>stake = starting_bankroll * stake_percentage</code></pre></div>
-<p class="md-p">Example with a 1,000 bankroll and 2% stakes:</p>
-<div class="code-block"><pre><code>stake = 1,000 * 0.02 = 20 per bet</code></pre></div>
-<p class="md-p">Every bet is 20, regardless of how the bankroll changes. Simple, predictable, and conservative. This is the default and recommended method because it requires no additional calculations and limits your exposure naturally.</p>
-<h3 id="percentage-staking" class="md-h3 subsection-header">Percentage Staking</h3>
-<p class="md-p">Same formula as flat staking, but recalculated against your <em>current</em> bankroll after each bet.</p>
-<div class="code-block"><pre><code>stake = current_bankroll * stake_percentage</code></pre></div>
-<p class="md-p">If your bankroll grows to 1,200:</p>
-<div class="code-block"><pre><code>stake = 1,200 * 0.02 = 24 per bet</code></pre></div>
-<p class="md-p">If it drops to 800:</p>
-<div class="code-block"><pre><code>stake = 800 * 0.02 = 16 per bet</code></pre></div>
-<p class="md-p">This has a natural self-correcting property: when you're winning, stakes grow and you compound faster. When you're losing, stakes shrink and you bleed more slowly. It makes it mathematically impossible to reach zero (since you're always betting a percentage of what remains).</p>
-<h3 id="the-kelly-criterion" class="md-h3 subsection-header">The Kelly Criterion</h3>
-<p class="md-p">The Kelly Criterion is a formula from information theory that calculates the mathematically optimal bet size to maximise the long-term growth rate of your bankroll. It is elegant, powerful, and dangerous if misused.</p>
-<p class="md-p">The formula:</p>
-<div class="code-block"><pre><code>f* = (p * b - 1) / (b - 1)</code></pre></div>
-<p class="md-p">Where:</p>
-<ul class='md-list'><li><code class="inline-code">f*</code> = fraction of bankroll to bet</li>
-<li><code class="inline-code">p</code> = true probability of winning (our model's estimate)</li>
-<li><code class="inline-code">b</code> = decimal odds offered by the bookmaker</li></ul>
-<p class="md-p"><strong>Worked example:</strong></p>
-<div class="code-block"><pre><code>Model says: 60% chance of Arsenal winning (p = 0.60)
-Bookmaker offers: decimal odds of 2.10 (b = 2.10)
+<h2 id="4-the-prediction-model----poisson-regression" class="md-h2 section-header">4. The Prediction Model -- Poisson Regression</h2>
+<h3 id="what-is-poisson-regression" class="md-h3 subsection-header">What Is Poisson Regression?</h3>
+<p class="md-p">The Poisson distribution is a mathematical tool for modelling how many times a</p>
+<p class="md-p">rare event occurs in a fixed interval. It was originally developed in the 1830s by</p>
+<p class="md-p">the French mathematician Simeon Denis Poisson. One of its earliest famous</p>
+<p class="md-p">applications was modelling the number of Prussian soldiers killed by horse kicks</p>
+<p class="md-p">per year -- a rare event occurring at a roughly constant rate in a fixed time</p>
+<p class="md-p">period.</p>
+<p class="md-p">Goals in football have the same statistical structure:</p>
+<ol class='md-list'><li><strong>They are relatively rare</strong> -- a typical team scores 1 to 3 per match.</li>
+<li><strong>They occur roughly independently of each other</strong> -- one goal does not strongly</li></ol>
+<p class="md-p">   prevent or cause the next (with some exceptions like tactical shifts after a</p>
+<p class="md-p">   goal, which are second-order effects).</p>
+<ol class='md-list'><li><strong>The rate of scoring depends on measurable factors</strong> -- team quality, opponent</li></ol>
+<p class="md-p">   quality, home advantage, recent form.</p>
+<p class="md-p">This makes the Poisson distribution an excellent starting point for football</p>
+<p class="md-p">prediction. It is not perfect (no model is), but it captures the essential</p>
+<p class="md-p">structure of goalscoring remarkably well.</p>
+<h3 id="understanding-lambda" class="md-h3 subsection-header">Understanding Lambda</h3>
+<p class="md-p">The key number in a Poisson model is <strong>lambda</strong> (the Greek letter). Lambda is</p>
+<p class="md-p">the <em>expected average rate</em> of the event. In BetVector, lambda represents the</p>
+<p class="md-p">expected number of goals a team will score in a particular match.</p>
+<p class="md-p">Lambda is not a prediction of the exact score. A lambda of 1.5 does not mean the</p>
+<p class="md-p">team will score 1.5 goals (which is obviously impossible). It means the team is</p>
+<p class="md-p">expected to score 1.5 goals <strong>on average</strong>, and the actual number of goals will be</p>
+<p class="md-p">drawn from a probability distribution centred around that average.</p>
+<p class="md-p">Here is what the Poisson distribution looks like for different lambda values:</p>
+<p class="md-p"><strong>Lambda = 1.0</strong> (a modest attack, or a strong opposing defence):</p>
+<div class='table-wrapper'><table><thead><tr><th>Goals</th><th>0</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th></tr></thead><tbody><tr><td>Probability</td><td>36.8%</td><td>36.8%</td><td>18.4%</td><td>6.1%</td><td>1.5%</td><td>0.3%</td><td>0.1%</td></tr></tbody></table></div>
+<p class="md-p">The most likely outcome is 0 or 1 goal. Scoring 3 or more is quite unlikely (under 8%).</p>
+<p class="md-p"><strong>Lambda = 1.5</strong> (a typical Premier League team in an average match):</p>
+<div class='table-wrapper'><table><thead><tr><th>Goals</th><th>0</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th></tr></thead><tbody><tr><td>Probability</td><td>22.3%</td><td>33.5%</td><td>25.1%</td><td>12.6%</td><td>4.7%</td><td>1.4%</td><td>0.4%</td></tr></tbody></table></div>
+<p class="md-p">Most likely 1 goal, but 2 is quite possible. A clean sheet is still a 22% chance.</p>
+<p class="md-p"><strong>Lambda = 2.5</strong> (a strong attack against a weak defence -- e.g., Man City vs a</p>
+<p class="md-p">struggling relegation candidate at home):</p>
+<div class='table-wrapper'><table><thead><tr><th>Goals</th><th>0</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th></tr></thead><tbody><tr><td>Probability</td><td>8.2%</td><td>20.5%</td><td>25.7%</td><td>21.4%</td><td>13.4%</td><td>6.7%</td><td>2.8%</td></tr></tbody></table></div>
+<p class="md-p">2 and 3 goals are most likely. The chance of keeping a clean sheet is under 10%.</p>
+<p class="md-p">Even 5 or 6 goals has a combined 9.5% chance.</p>
+<p class="md-p">Notice how as lambda increases, the distribution shifts right -- higher goal tallies</p>
+<p class="md-p">become more likely, and the chance of scoring zero drops sharply. This matches what</p>
+<p class="md-p">we observe in real football.</p>
+<h3 id="how-it-works-step-by-step" class="md-h3 subsection-header">How It Works Step by Step</h3>
+<p class="md-p">BetVector trains <strong>two separate Poisson regression models</strong>:</p>
+<p class="md-p"><strong>Home goals model:</strong> Predicts how many goals the home team will score.</p>
+<ul class='md-list'><li><strong>Input features:</strong> The home team's attacking features (goals scored, xG, shots</li></ul>
+<p class="md-p">  on target, form) and the away team's defensive features (goals conceded, xGA).</p>
+<ul class='md-list'><li><strong>Logic:</strong> "Given how well this home team has been attacking and how poorly the</li></ul>
+<p class="md-p">  away team has been defending, how many goals should we expect?"</p>
+<ul class='md-list'><li><strong>Output:</strong> lambda_home (expected home goals).</li></ul>
+<p class="md-p"><strong>Away goals model:</strong> Predicts how many goals the away team will score.</p>
+<ul class='md-list'><li><strong>Input features:</strong> The away team's attacking features and the home team's</li></ul>
+<p class="md-p">  defensive features.</p>
+<ul class='md-list'><li><strong>Logic:</strong> The mirror image -- "Given how well the away team attacks and how</li></ul>
+<p class="md-p">  well the home team defends, how many away goals should we expect?"</p>
+<ul class='md-list'><li><strong>Output:</strong> lambda_away (expected away goals).</li></ul>
+<p class="md-p">The model learns by fitting to hundreds of historical matches. It sees each match's</p>
+<p class="md-p">features and actual goals, and learns the relationship: "When the home attack</p>
+<p class="md-p">features look like <em>this</em> and the away defence features look like <em>that</em>, the home</p>
+<p class="md-p">team tends to score about <em>this many</em> goals."</p>
+<p class="md-p">Under the hood, the model uses a <strong>Generalised Linear Model (GLM)</strong> with a **log</p>
+<p class="md-p">link function**. In simplified terms:</p>
+<div class="code-block"><pre><code>log(expected_goals) = baseline + weight1 x feature1 + weight2 x feature2 + ...</code></pre></div>
+<p class="md-p">Which means:</p>
+<div class="code-block"><pre><code>expected_goals = exp(baseline + weight1 x feature1 + weight2 x feature2 + ...)</code></pre></div>
+<p class="md-p">The exponential ensures the predicted goal count is always positive (you cannot</p>
+<p class="md-p">score negative goals). It also captures the multiplicative nature of attacking and</p>
+<p class="md-p">defensive quality -- a very strong attack against a very weak defence produces</p>
+<p class="md-p">more goals than you would expect from simply adding their individual effects.</p>
+<h3 id="the-7x7-scoreline-matrix----the-heart-of-the-system" class="md-h3 subsection-header">The 7x7 Scoreline Matrix -- The Heart of the System</h3>
+<p class="md-p">Once we have lambda_home and lambda_away, we build the most important data</p>
+<p class="md-p">structure in the entire system: the <strong>scoreline probability matrix</strong>.</p>
+<p class="md-p">The matrix is a 7x7 grid covering every possible scoreline from 0-0 to 6-6. That</p>
+<p class="md-p">is 49 possible scorelines. Each cell contains the probability of that exact result</p>
+<p class="md-p">occurring.</p>
+<p class="md-p"><strong>How each cell is calculated:</strong></p>
+<div class="code-block"><pre><code>P(home scores h, away scores a) = P(home scores h) x P(away scores a)</code></pre></div>
+<p class="md-p">Using the standard Poisson probability formula:</p>
+<div class="code-block"><pre><code>P(X = k) = (lambda^k x e^(-lambda)) / k!</code></pre></div>
+<p class="md-p"><strong>Concrete example:</strong> Suppose for Arsenal vs Chelsea, the model estimates:</p>
+<div class="code-block"><pre><code>lambda_home = 1.8  (Arsenal expected to score 1.8 goals)
+lambda_away = 1.1  (Chelsea expected to score 1.1 goals)</code></pre></div>
+<p class="md-p">The probability of a 2-1 Arsenal win:</p>
+<div class="code-block"><pre><code>P(home=2, away=1) = P(Arsenal scores 2) x P(Chelsea scores 1)
 
-f* = (0.60 * 2.10 - 1) / (2.10 - 1)
+P(Arsenal scores 2) = (1.8^2 x e^(-1.8)) / 2! = 0.2678  (26.78%)
+P(Chelsea scores 1) = (1.1^1 x e^(-1.1)) / 1! = 0.3322  (33.22%)
+
+P(2-1) = 0.2678 x 0.3322 = 0.0890  (8.9%)</code></pre></div>
+<p class="md-p">There is roughly an 8.9% chance of a 2-1 Arsenal win.</p>
+<p class="md-p">Here is what the complete matrix looks like with those lambda values:</p>
+<div class="code-block"><pre><code>                       Chelsea Goals
+                   0      1      2      3      4      5      6
+Arsenal  0      5.5%   6.0%   3.3%   1.2%   0.3%   0.1%   0.0%
+Goals    1      9.8%  10.8%   6.0%   2.2%   0.6%   0.1%   0.0%
+         2      8.9%   9.7%   5.4%   2.0%   0.5%   0.1%   0.0%
+         3      5.3%   5.8%   3.2%   1.2%   0.3%   0.1%   0.0%
+         4      2.4%   2.6%   1.5%   0.5%   0.1%   0.0%   0.0%
+         5      0.9%   0.9%   0.5%   0.2%   0.1%   0.0%   0.0%
+         6      0.3%   0.3%   0.2%   0.1%   0.0%   0.0%   0.0%</code></pre></div>
+<p class="md-p">All 49 cells sum to 100%. The most likely single scoreline is 1-1 at 10.8%,</p>
+<p class="md-p">followed by 1-0 at 9.8% and 2-1 at 9.7%. This feels intuitively right for a match</p>
+<p class="md-p">where Arsenal are moderately favoured at home.</p>
+<p class="md-p"><strong>Why the matrix is so important:</strong> This single matrix is the universal interface</p>
+<p class="md-p">for the entire system. Every prediction model -- whether it is Poisson regression,</p>
+<p class="md-p">an Elo rating system, an XGBoost ensemble, or a neural network -- must produce a</p>
+<p class="md-p">7x7 scoreline matrix. All downstream calculations (market probabilities, value</p>
+<p class="md-p">detection, staking) derive from this one structure.</p>
+<p class="md-p">This design means you can swap out the prediction model entirely without changing</p>
+<p class="md-p">a single line of code in the value finder, bankroll manager, dashboard, or any</p>
+<p class="md-p">other component. The matrix is the contract between the model and the rest of the</p>
+<p class="md-p">system.</p>
+<p class="md-p"><strong>The independence assumption:</strong> You will notice that we multiply the home and away</p>
+<p class="md-p">Poisson probabilities independently:</p>
+<div class="code-block"><pre><code>P(home=h, away=a) = P(home=h) x P(away=a)</code></pre></div>
+<p class="md-p">This assumes that the number of goals Arsenal scores is statistically independent</p>
+<p class="md-p">of the number Chelsea scores. In reality, there is a weak correlation -- a team</p>
+<p class="md-p">chasing a deficit might push forward more aggressively and both score and concede</p>
+<p class="md-p">more. A match between two cautious, defensive sides might produce fewer goals for</p>
+<p class="md-p">both.</p>
+<p class="md-p">However, this correlation is small enough in practice that the independent Poisson</p>
+<p class="md-p">model remains competitive with more complex correlation-aware models. The</p>
+<p class="md-p">independence assumption is a simplification that works well and keeps the model</p>
+<p class="md-p">interpretable. Future ensemble models can combine Poisson with models that account</p>
+<p class="md-p">for correlation, getting the best of both approaches.</p>
+<p class="md-p">The matrix is truncated at 6 goals per side because scoring 7 or more goals in a</p>
+<p class="md-p">match is vanishingly rare, and renormalised so all 49 cells sum to exactly 1.0.</p>
+<h3 id="from-scoreline-matrix-to-betting-markets" class="md-h3 subsection-header">From Scoreline Matrix to Betting Markets</h3>
+<p class="md-p">This is where the architecture becomes elegant. Every betting market can be derived</p>
+<p class="md-p">from the scoreline matrix by simply summing the appropriate cells. This derivation</p>
+<p class="md-p">happens in a single function: <code class="inline-code">derive_market_probabilities()</code>. Every market</p>
+<p class="md-p">probability in BetVector flows through this one function. It is never bypassed. It</p>
+<p class="md-p">is never duplicated. If you want to know the probability of any betting outcome,</p>
+<p class="md-p">it comes from the matrix.</p>
+<p class="md-p"><strong>1X2 (Match Result):</strong></p>
+<p class="md-p">The three outcomes are home win, draw, and away win:</p>
+<ul class='md-list'><li><strong>Home win:</strong> Sum all cells where home goals > away goals (the bottom-left</li></ul>
+<p class="md-p">  triangle of the matrix: 1-0, 2-0, 2-1, 3-0, 3-1, 3-2, ...).</p>
+<ul class='md-list'><li><strong>Draw:</strong> Sum all cells along the diagonal where home goals = away goals</li></ul>
+<p class="md-p">  (0-0, 1-1, 2-2, 3-3, ...).</p>
+<ul class='md-list'><li><strong>Away win:</strong> Sum all cells where home goals < away goals (the upper-right</li></ul>
+<p class="md-p">  triangle: 0-1, 0-2, 1-2, 0-3, ...).</p>
+<p class="md-p">Using our Arsenal vs Chelsea example:</p>
+<div class="code-block"><pre><code>P(Arsenal win) = sum of lower-left triangle = approximately 53.5%
+P(Draw)        = sum of diagonal            = approximately 22.0%
+P(Chelsea win) = sum of upper-right triangle = approximately 24.5%</code></pre></div>
+<p class="md-p">These sum to 100%, as they must.</p>
+<p class="md-p"><strong>Over/Under 2.5 Goals:</strong></p>
+<ul class='md-list'><li><strong>Over 2.5:</strong> Sum all cells where home + away >= 3 (three or more total goals).</li></ul>
+<p class="md-p">  This includes every cell where the sum of row and column indices is 3 or more:</p>
+<p class="md-p">  2-1, 1-2, 3-0, 0-3, 2-2, and everything higher.</p>
+<ul class='md-list'><li><strong>Under 2.5:</strong> Sum all cells where home + away <= 2 (zero, one, or two total</li></ul>
+<p class="md-p">  goals). This includes 0-0, 1-0, 0-1, 2-0, 0-2, and 1-1.</p>
+<p class="md-p"><strong>Both Teams to Score (BTTS):</strong></p>
+<ul class='md-list'><li><strong>BTTS Yes:</strong> Sum all cells where <em>both</em> teams scored at least 1 goal</li></ul>
+<p class="md-p">  (home >= 1 AND away >= 1). This is the portion of the matrix excluding the</p>
+<p class="md-p">  entire top row (where home = 0) and the entire left column (where away = 0).</p>
+<ul class='md-list'><li><strong>BTTS No:</strong> Sum all cells where at least one team scored 0 (the top row plus</li></ul>
+<p class="md-p">  the left column, being careful not to double-count 0-0).</p>
+<p class="md-p"><strong>Over/Under 1.5 and 3.5 Goals:</strong></p>
+<p class="md-p">Exactly the same logic as Over/Under 2.5, but with different thresholds:</p>
+<ul class='md-list'><li>Over 1.5: total goals >= 2.</li>
+<li>Under 1.5: total goals <= 1.</li>
+<li>Over 3.5: total goals >= 4.</li>
+<li>Under 3.5: total goals <= 3.</li></ul>
+<p class="md-p">The beauty of this approach cannot be overstated: **one model, one matrix, all</p>
+<p class="md-p">markets**. There is no separate "Over/Under model" or "BTTS model." They all come</p>
+<p class="md-p">from the same underlying prediction, ensuring consistency across markets. If the</p>
+<p class="md-p">model thinks a match will be high-scoring, that view is reflected simultaneously</p>
+<p class="md-p">in the Over/Under probabilities, the BTTS probabilities, and the match result</p>
+<p class="md-p">probabilities.</p>
+<hr class='md-hr'>
+<h2 id="5-value-bet-detection----finding-the-edge" class="md-h2 section-header">5. Value Bet Detection -- Finding the Edge</h2>
+<h3 id="what-makes-a-bet-value" class="md-h3 subsection-header">What Makes a Bet "Value"?</h3>
+<p class="md-p">A value bet exists when the bookmaker's odds imply a lower probability than what</p>
+<p class="md-p">your model estimates. You are not trying to predict who will win. You are trying to</p>
+<p class="md-p">find prices that are wrong.</p>
+<p class="md-p">Here is the analogy that makes this concept click:</p>
+<p class="md-p"><strong>The biased coin.</strong> Imagine a coin that lands on heads 60% of the time. Someone</p>
+<p class="md-p">offers you even-money odds (decimal 2.00, implying 50%) on heads. You should take</p>
+<p class="md-p">that bet every single time. You will not win every flip -- 40% of the time you</p>
+<p class="md-p">will lose. But over 1,000 flips, you will win roughly 600 and lose roughly 400.</p>
+<p class="md-p">At even money, that nets you about 200 units of profit from 1,000 bets.</p>
+<p class="md-p">Now imagine the same coin, but someone offers odds of 1.40 on heads (implying</p>
+<p class="md-p">71.4% probability). Even though heads is the more likely outcome, the odds are</p>
+<p class="md-p">not generous enough. You need a 71.4% win rate to break even at those odds, but</p>
+<p class="md-p">the coin only delivers 60%. This is a <em>bad</em> bet despite the outcome being more</p>
+<p class="md-p">likely to win.</p>
+<p class="md-p">The first situation has positive edge. The second has negative edge. BetVector's</p>
+<p class="md-p">entire purpose is distinguishing between these two situations across thousands of</p>
+<p class="md-p">football markets.</p>
+<h3 id="how-odds-work" class="md-h3 subsection-header">How Odds Work</h3>
+<p class="md-p">Bookmaker odds in BetVector are expressed in <strong>decimal format</strong>, the standard in</p>
+<p class="md-p">European betting.</p>
+<p class="md-p"><strong>Converting decimal odds to implied probability:</strong></p>
+<div class="code-block"><pre><code>Implied probability = 1 / decimal odds</code></pre></div>
+<div class='table-wrapper'><table><thead><tr><th>Decimal Odds</th><th>Implied Probability</th><th>Interpretation</th></tr></thead><tbody><tr><td>1.50</td><td>66.7%</td><td>Heavy favourite</td></tr><tr><td>2.00</td><td>50.0%</td><td>Coin flip</td></tr><tr><td>3.00</td><td>33.3%</td><td>Underdog</td></tr><tr><td>5.00</td><td>20.0%</td><td>Long shot</td></tr><tr><td>10.00</td><td>10.0%</td><td>Very unlikely</td></tr></tbody></table></div>
+<p class="md-p"><strong>Converting decimal odds to payout:</strong></p>
+<div class="code-block"><pre><code>Total payout = stake x decimal odds
+Profit = stake x (decimal odds - 1)</code></pre></div>
+<p class="md-p">A 20-pound bet at odds of 2.50: total payout is 50 pounds (30 profit + 20 stake</p>
+<p class="md-p">returned).</p>
+<h3 id="the-overround----the-bookmakers-built-in-advantage" class="md-h3 subsection-header">The Overround -- The Bookmaker's Built-in Advantage</h3>
+<p class="md-p">In a perfectly fair market, the implied probabilities for all outcomes should sum</p>
+<p class="md-p">to exactly 100%. But bookmakers are running a business. They shade the odds so the</p>
+<p class="md-p">probabilities sum to more than 100%.</p>
+<p class="md-p"><strong>Example for an Arsenal vs Chelsea 1X2 market:</strong></p>
+<div class='table-wrapper'><table><thead><tr><th>Outcome</th><th>Fair Probability</th><th>Fair Odds</th><th>Bookmaker Odds</th><th>Implied Prob</th></tr></thead><tbody><tr><td>Arsenal win</td><td>50.0%</td><td>2.00</td><td>1.91</td><td>52.4%</td></tr><tr><td>Draw</td><td>25.0%</td><td>4.00</td><td>3.60</td><td>27.8%</td></tr><tr><td>Chelsea win</td><td>25.0%</td><td>4.00</td><td>3.60</td><td>27.8%</td></tr><tr><td><strong>Total</strong></td><td><strong>100.0%</strong></td><td></td><td></td><td><strong>108.0%</strong></td></tr></tbody></table></div>
+<p class="md-p">The implied probabilities sum to 108% instead of 100%. That extra 8% is the</p>
+<p class="md-p"><strong>overround</strong> (also called the <strong>vig</strong> or <strong>vigorish</strong> or <strong>juice</strong>). It is the</p>
+<p class="md-p">bookmaker's guaranteed profit margin. No matter what happens on the pitch, the</p>
+<p class="md-p">bookmaker collects more from losing bets than they pay out on winners.</p>
+<p class="md-p">This is why most bettors lose in the long run. They are not just trying to predict</p>
+<p class="md-p">football; they are trying to overcome a structural disadvantage built into every</p>
+<p class="md-p">price they see. BetVector's job is to find the specific situations where the</p>
+<p class="md-p">bookmaker has left enough room in their pricing -- despite the overround -- for a</p>
+<p class="md-p">positive expected return.</p>
+<h3 id="the-edge-calculation" class="md-h3 subsection-header">The Edge Calculation</h3>
+<p class="md-p">The edge calculation is straightforward:</p>
+<div class="code-block"><pre><code>Edge = Model Probability - Bookmaker&#x27;s Implied Probability</code></pre></div>
+<p class="md-p"><strong>Complete worked example:</strong></p>
+<p class="md-p">Match: Arsenal vs Chelsea, Saturday 3pm.</p>
+<p class="md-p">BetVector prediction: Arsenal home win probability = 55.0%.</p>
+<p class="md-p">Bet365 offers Arsenal to win at 2.10.</p>
+<p class="md-p">Implied probability = 1 / 2.10 = 47.6%.</p>
+<p class="md-p">Edge = 55.0% - 47.6% = <strong>7.4%</strong>.</p>
+<p class="md-p">Is this a value bet? At the default 5% threshold, yes. The model estimates a 7.4%</p>
+<p class="md-p">edge, meaning the bookmaker is underpricing Arsenal by a meaningful amount.</p>
+<p class="md-p"><strong>Expected Value (EV)</strong> tells you the average profit per pound staked:</p>
+<div class="code-block"><pre><code>EV = (model_probability x decimal_odds) - 1.0
+   = (0.55 x 2.10) - 1.0
+   = 1.155 - 1.0
+   = +0.155 (15.5% profit per pound staked on average)</code></pre></div>
+<p class="md-p">For every pound you stake on bets with this profile (assuming the model is well</p>
+<p class="md-p">calibrated), you expect to make 15.5p in profit over the long run. Not on each</p>
+<p class="md-p">individual bet -- on average, across many similar bets.</p>
+<p class="md-p"><strong>Configuring the threshold:</strong> BetVector only flags a bet when the edge exceeds</p>
+<p class="md-p">your configured minimum threshold. The default is 5%. You can adjust this on</p>
+<p class="md-p">the Settings page:</p>
+<ul class='md-list'><li><strong>Lower threshold (3%):</strong> More bets flagged, but lower average edge quality.</li></ul>
+<p class="md-p">  Good for accumulating sample size quickly.</p>
+<ul class='md-list'><li><strong>Higher threshold (10%):</strong> Fewer bets, but each one has a larger estimated</li></ul>
+<p class="md-p">  edge. Higher quality, but you might go days without a pick.</p>
+<h3 id="confidence-tiers" class="md-h3 subsection-header">Confidence Tiers</h3>
+<p class="md-p">Not all value bets are created equal. BetVector classifies each one by the size</p>
+<p class="md-p">of its edge:</p>
+<p class="md-p"><strong>HIGH confidence (edge >= 10%):</strong> The bookmaker has substantially mispriced this</p>
+<p class="md-p">outcome. These bets are rare but represent the system's strongest opportunities.</p>
+<p class="md-p">A 12% edge means the bookmaker thinks the outcome is roughly 12 percentage points</p>
+<p class="md-p">less likely than the model does -- a significant disagreement.</p>
+<p class="md-p"><strong>MEDIUM confidence (5% <= edge < 10%):</strong> Clear value, the standard betting range.</p>
+<p class="md-p">The majority of your bets will come from this tier. Edges of 5-10% are meaningful</p>
+<p class="md-p">but not dramatic. Over hundreds of bets, this is where steady profit accumulates.</p>
+<p class="md-p">Think of confidence tiers as a signal-to-noise ratio. A 3% edge might be real,</p>
+<p class="md-p">or it might be noise in the model. A 12% edge is much more likely to represent</p>
+<p class="md-p">a genuine mispricing by the bookmaker.</p>
+<hr class='md-hr'>
+<h2 id="6-bankroll-management----protecting-your-money" class="md-h2 section-header">6. Bankroll Management -- Protecting Your Money</h2>
+<h3 id="why-bankroll-management-matters" class="md-h3 subsection-header">Why Bankroll Management Matters</h3>
+<p class="md-p">Here is a truth that most bettors learn the hard way: **you can have a genuine</p>
+<p class="md-p">edge and still go broke.**</p>
+<p class="md-p">Imagine you have a real edge on every bet. Your model is perfectly calibrated.</p>
+<p class="md-p">But you bet 50% of your bankroll on each bet. After just two consecutive losses</p>
+<p class="md-p">(which will happen -- even a 70% winner loses two in a row regularly), your</p>
+<p class="md-p">bankroll has dropped to 25% of its starting value. After four losses in a row</p>
+<p class="md-p">(rare but inevitable over hundreds of bets), you are at 6.25%. Your edge is real,</p>
+<p class="md-p">but your bankroll is destroyed before the mathematics had time to work.</p>
+<p class="md-p">This is the fundamental tension in betting: you need to bet big enough to grow</p>
+<p class="md-p">your bankroll meaningfully, but small enough to survive the inevitable losing</p>
+<p class="md-p">streaks that variance guarantees.</p>
+<p class="md-p">**The goal of bankroll management is not to maximise the profit on any single</p>
+<p class="md-p">bet. It is to survive long enough for the edge to compound over hundreds of bets.**</p>
+<h3 id="staking-methods" class="md-h3 subsection-header">Staking Methods</h3>
+<p class="md-p">BetVector supports three staking strategies, listed from simplest to most</p>
+<p class="md-p">sophisticated:</p>
+<h4 id="flat-staking-recommended-for-beginners" class="md-h4">Flat Staking (Recommended for Beginners)</h4>
+<p class="md-p">The simplest approach: bet the same percentage of your bankroll every time,</p>
+<p class="md-p">regardless of the odds or how confident the model is.</p>
+<div class="code-block"><pre><code>Stake = Current Bankroll x Stake Percentage</code></pre></div>
+<p class="md-p">With a 1,000-pound bankroll and a 2% stake percentage:</p>
+<div class="code-block"><pre><code>Stake = 1,000 x 0.02 = 20 pounds per bet</code></pre></div>
+<p class="md-p">Every bet is 20 pounds. Simple, predictable, and conservative. There is no</p>
+<p class="md-p">thinking required about bet sizing, which removes one more emotional decision</p>
+<p class="md-p">from the process.</p>
+<p class="md-p"><strong>Advantages:</strong> Dead simple. Minimal variance. Easy to track. You always know</p>
+<p class="md-p">exactly how much each bet costs.</p>
+<p class="md-p"><strong>Disadvantages:</strong> Does not adjust for the strength of the edge. A bet with a 12%</p>
+<p class="md-p">edge gets the same 20-pound stake as one with a 5.5% edge, even though the first</p>
+<p class="md-p">is objectively a better opportunity.</p>
+<p class="md-p">Flat staking is the default and recommended starting point. It is boring, and in</p>
+<p class="md-p">betting, boring is good.</p>
+<h4 id="percentage-staking" class="md-h4">Percentage Staking</h4>
+<p class="md-p">Conceptually identical to flat staking, but the stake recalculates after every</p>
+<p class="md-p">bet based on your <em>current</em> bankroll rather than a fixed amount.</p>
+<div class="code-block"><pre><code>Stake = Current Bankroll x Stake Percentage</code></pre></div>
+<p class="md-p">If your bankroll grows to 1,200 pounds after a winning streak:</p>
+<div class="code-block"><pre><code>Stake = 1,200 x 0.02 = 24 pounds per bet</code></pre></div>
+<p class="md-p">If it drops to 800 pounds during a losing run:</p>
+<div class="code-block"><pre><code>Stake = 800 x 0.02 = 16 pounds per bet</code></pre></div>
+<p class="md-p">This has a beautiful natural property: when you are winning and your bankroll</p>
+<p class="md-p">grows, your stakes grow with it -- compounding your gains. When you are losing</p>
+<p class="md-p">and your bankroll shrinks, your stakes shrink automatically -- protecting your</p>
+<p class="md-p">remaining capital. It makes it mathematically impossible to reach zero, since you</p>
+<p class="md-p">are always betting a percentage of what remains.</p>
+<h4 id="kelly-criterion-advanced" class="md-h4">Kelly Criterion (Advanced)</h4>
+<p class="md-p">The Kelly Criterion is a mathematical formula developed by John Kelly at Bell Labs</p>
+<p class="md-p">in 1956. It was originally used in information theory but translates perfectly to</p>
+<p class="md-p">betting. It calculates the theoretically optimal fraction of your bankroll to bet</p>
+<p class="md-p">in order to maximise the long-term growth rate.</p>
+<p class="md-p"><strong>The formula:</strong></p>
+<div class="code-block"><pre><code>f* = (p x b - 1) / (b - 1)</code></pre></div>
+<p class="md-p">Where:</p>
+<ul class='md-list'><li><strong>f</strong>* = the fraction of your bankroll to bet</li>
+<li><strong>p</strong> = your model's probability of the outcome winning</li>
+<li><strong>b</strong> = the decimal odds offered by the bookmaker</li></ul>
+<p class="md-p"><strong>Worked example:</strong></p>
+<div class="code-block"><pre><code>Model says: 60% chance of Arsenal winning   (p = 0.60)
+Bookmaker offers: decimal odds of 2.10      (b = 2.10)
+
+f* = (0.60 x 2.10 - 1) / (2.10 - 1)
    = (1.26 - 1) / 1.10
    = 0.26 / 1.10
-   = 0.2364  (23.64% of bankroll)</code></pre></div>
-<p class="md-p">Full Kelly says bet 23.64% of your bankroll on this single match. That is extremely aggressive. If your probability estimate is even slightly wrong -- say the true probability is 52% instead of 60% -- you're massively over-staking and headed for ruin.</p>
-<p class="md-p">BetVector uses <strong>fractional Kelly</strong>, specifically <strong>quarter-Kelly</strong> (kelly_fraction = 0.25):</p>
-<div class="code-block"><pre><code>stake = f* * kelly_fraction * current_bankroll
-      = 0.2364 * 0.25 * 1,000
-      = 59.10</code></pre></div>
-<p class="md-p">Quarter-Kelly sacrifices some theoretical growth rate for dramatically reduced risk of ruin. It is only recommended after 500+ bets with confirmed good calibration, because Kelly's optimality depends entirely on the accuracy of your probability estimates.</p>
-<p class="md-p">When the expected value is negative (model_prob * odds < 1), the Kelly formula returns a negative number, meaning "don't bet." BetVector returns a stake of zero in this case.</p>
+   = 0.2364   (23.64% of your bankroll!)</code></pre></div>
+<p class="md-p">Full Kelly says to bet nearly a quarter of your bankroll on this single match.</p>
+<p class="md-p">That is <strong>extremely aggressive</strong>. If your probability estimate is even slightly</p>
+<p class="md-p">wrong -- say the true probability is 52% instead of 60% -- you are massively</p>
+<p class="md-p">over-staking and headed for ruin.</p>
+<p class="md-p">This is why BetVector uses <strong>fractional Kelly</strong>, specifically <strong>quarter-Kelly</strong></p>
+<p class="md-p">(kelly_fraction = 0.25):</p>
+<div class="code-block"><pre><code>Actual stake = f* x kelly_fraction x bankroll
+             = 0.2364 x 0.25 x 1,000
+             = 59.09 pounds</code></pre></div>
+<p class="md-p">Quarter-Kelly gives you approximately 75% of the growth rate of full Kelly but</p>
+<p class="md-p">with a fraction of the variance. It is a much safer approach that acknowledges</p>
+<p class="md-p">the reality that probability estimates are imperfect.</p>
+<p class="md-p"><strong>When Kelly says "don't bet":</strong> If model_probability x odds < 1.0 (meaning the</p>
+<p class="md-p">expected value is negative), the Kelly formula returns a negative number. This is</p>
+<p class="md-p">the mathematics telling you not to bet. BetVector returns a stake of zero in this</p>
+<p class="md-p">case. It is a natural safety mechanism built into the formula.</p>
+<p class="md-p"><strong>When to use Kelly:</strong> Only after 500+ bets with confirmed good calibration. Kelly</p>
+<p class="md-p">is optimal <em>only if</em> your probability estimates are accurate. If the model is</p>
+<p class="md-p">poorly calibrated, Kelly will oversize bets and accelerate your losses. Start with</p>
+<p class="md-p">flat staking. Move to percentage staking when comfortable. Consider Kelly only</p>
+<p class="md-p">when you have strong evidence that the model's probabilities match reality.</p>
 <h3 id="safety-limits" class="md-h3 subsection-header">Safety Limits</h3>
-<p class="md-p">Regardless of staking method, BetVector enforces four hard safety limits:</p>
-<div class='table-wrapper'><table><thead><tr><th>Limit</th><th>Threshold</th><th>What Happens</th></tr></thead><tbody><tr><td><strong>Max bet cap</strong></td><td>5% of current bankroll</td><td>No single bet can exceed this, even if Kelly says otherwise</td></tr><tr><td><strong>Daily loss limit</strong></td><td>10% of starting bankroll</td><td>If total daily losses exceed this, stop betting for the day</td></tr><tr><td><strong>Drawdown alert</strong></td><td>25% below peak bankroll</td><td>Warning flag on the dashboard (betting still allowed)</td></tr><tr><td><strong>Minimum bankroll</strong></td><td>50% of starting bankroll</td><td>Auto-switch to paper trading until bankroll recovers</td></tr></tbody></table></div>
-<p class="md-p">These limits exist because models are not perfect, bad luck is real, and the worst time to bet big is when you're already losing. The minimum bankroll limit is especially important -- it forces you to stop risking real money when something may be fundamentally wrong.</p>
+<p class="md-p">Regardless of which staking method you choose, BetVector enforces four</p>
+<p class="md-p">non-negotiable safety limits:</p>
+<p class="md-p"><strong>1. Maximum Bet Cap: 5% of bankroll</strong></p>
+<p class="md-p">No single bet ever exceeds 5% of your current bankroll. Even if the Kelly formula</p>
+<p class="md-p">calculates a 15% stake, the cap kicks in. This prevents any single losing bet from</p>
+<p class="md-p">doing catastrophic damage.</p>
+<p class="md-p">With a 1,000-pound bankroll: maximum single bet = 50 pounds.</p>
+<p class="md-p"><strong>2. Daily Loss Limit: 10% of starting bankroll</strong></p>
+<p class="md-p">If your total losses in a single day exceed 10% of your starting bankroll, the</p>
+<p class="md-p">system stops recommending bets for the rest of the day. Bad days happen -- this</p>
+<p class="md-p">limit ensures a bad day does not spiral into a catastrophic day.</p>
+<p class="md-p">With a 1,000-pound starting bankroll: if you lose 100 pounds in one day, no more</p>
+<p class="md-p">bets until tomorrow.</p>
+<p class="md-p"><strong>3. Drawdown Alert: 25% below peak</strong></p>
+<p class="md-p">If your bankroll drops 25% below its highest-ever value (the "peak"), the system</p>
+<p class="md-p">flags a visible warning on every bet. You can still bet, but the warning ensures</p>
+<p class="md-p">you are consciously aware of the situation.</p>
+<p class="md-p">If your bankroll peaked at 1,200 pounds and drops to 900 pounds, that is a 25%</p>
+<p class="md-p">drawdown. The alert fires. Drawdowns are normal even with a genuine edge --</p>
+<p class="md-p">variance causes temporary losing streaks. But awareness matters.</p>
+<p class="md-p"><strong>4. Minimum Bankroll: 50% of starting amount</strong></p>
+<p class="md-p">If your bankroll drops below 50% of your starting amount, the system switches to</p>
+<p class="md-p">paper trading only. No real-money bets are recommended until the bankroll</p>
+<p class="md-p">recovers.</p>
+<p class="md-p">Started with 1,000 pounds and dropped to 499 pounds? Paper trading only. This is</p>
+<p class="md-p">the emergency brake. If your bankroll has halved, something may be wrong -- bad</p>
+<p class="md-p">model, bad luck, or a combination -- and the system forces a pause for reflection.</p>
+<h3 id="paper-trading-mode" class="md-h3 subsection-header">Paper Trading Mode</h3>
+<p class="md-p">BetVector starts in <strong>paper trading mode</strong> by default. This is not a limitation;</p>
+<p class="md-p">it is a feature.</p>
+<p class="md-p">In paper mode, every bet is logged exactly as if you placed it. Full tracking of</p>
+<p class="md-p">P&L, ROI, Brier score, CLV, and all other metrics. The dashboard looks identical.</p>
+<p class="md-p">The emails contain the same information. The only difference is that no real money</p>
+<p class="md-p">is at risk.</p>
+<p class="md-p">Paper trading serves three purposes:</p>
+<ol class='md-list'><li><strong>Model validation:</strong> Does the system actually have an edge? Two to four weeks</li></ol>
+<p class="md-p">   of paper trading with 200+ tracked bets gives you real data to evaluate before</p>
+<p class="md-p">   committing capital.</p>
+<ol class='md-list'><li><strong>Discipline training:</strong> You learn to trust the system, understand the</li></ol>
+<p class="md-p">   dashboard, and develop the daily routine -- all without financial stress.</p>
+<ol class='md-list'><li><strong>Emotional calibration:</strong> You experience losing streaks in paper mode and</li></ol>
+<p class="md-p">   learn that they are normal. This makes it much easier to stay disciplined</p>
+<p class="md-p">   during real losing streaks later.</p>
+<p class="md-p">The recommended paper trading period is 2-4 weeks with at least 200 system picks</p>
+<p class="md-p">before considering a transition to real money.</p>
 <hr class='md-hr'>
-<h2 id="the-three-daily-pipelines" class="md-h2 section-header">The Three Daily Pipelines</h2>
-<p class="md-p">BetVector runs three automated pipelines per day, each at a specific time and with a specific purpose.</p>
-<h3 id="morning-0600-utc----preparing-todays-picks" class="md-h3 subsection-header">Morning (06:00 UTC) -- Preparing Today's Picks</h3>
-<p class="md-p">This is the main pipeline. It runs the full chain:</p>
-<div class="code-block"><pre><code>1. Scrape latest match data and odds from all sources
-2. Load scraped data into the database
-3. Compute rolling features for all teams
-4. Run the prediction model on today&#x27;s fixtures
-5. Compare model probabilities to bookmaker odds
-6. Flag value bets that exceed the edge threshold
-7. Log all value bets as system picks in the database</code></pre></div>
-<p class="md-p">By 07:00, the morning picks email lands in your inbox with today's value bets, each annotated with the model's probability, the bookmaker's implied probability, the edge, and the recommended stake.</p>
-<h3 id="midday-1300-utc----catching-odds-movements" class="md-h3 subsection-header">Midday (13:00 UTC) -- Catching Odds Movements</h3>
-<p class="md-p">Odds are not static. As bettors place money throughout the day, bookmakers adjust their prices. A value bet at 06:00 might no longer be value by 13:00 -- or a new one might have appeared.</p>
-<div class="code-block"><pre><code>1. Re-fetch current odds from API-Football
-2. Recalculate edges against existing predictions
-3. Update the value_bets table with current odds and edges</code></pre></div>
-<p class="md-p">The dashboard shows both the original odds (at prediction time) and the current odds, with a warning if the edge has eroded below your threshold.</p>
-<h3 id="evening-2200-utc----settling-the-books" class="md-h3 subsection-header">Evening (22:00 UTC) -- Settling the Books</h3>
-<p class="md-p">After the day's matches are played:</p>
-<div class="code-block"><pre><code>1. Scrape match results
-2. Resolve pending bets (pending -&gt; won / lost / void)
-3. Calculate daily profit and loss
-4. Update bankroll balances
-5. Generate updated performance metrics
-6. Run recalibration checks
-7. Check retrain triggers</code></pre></div>
-<h3 id="pipeline-resilience" class="md-h3 subsection-header">Pipeline Resilience</h3>
-<p class="md-p">Each step in each pipeline is wrapped in its own error handling. If FBref is blocked by Cloudflare (which happens), the pipeline logs the error and continues with the data it has. If odds scraping times out, predictions still run using the last available odds. If the email server is down, results are still recorded in the database.</p>
-<p class="md-p">A single failure never blocks the entire pipeline. This is critical for a system that runs unattended on a schedule.</p>
-<hr class='md-hr'>
-<h2 id="walk-forward-backtesting" class="md-h2 section-header">Walk-Forward Backtesting</h2>
-<h3 id="what-it-is-and-why-it-matters" class="md-h3 subsection-header">What It Is and Why It Matters</h3>
-<p class="md-p">Before risking real money, you want to know: does this model actually work? Backtesting answers that question by running the model on historical data and measuring its performance.</p>
-<p class="md-p">But backtesting in sports prediction is treacherous. The most common mistake is <strong>data leakage</strong> -- accidentally using future information to make past predictions. If your model trains on the full season's data and then "predicts" individual matches from that same season, it will look amazing. But it is cheating. Those results are meaningless.</p>
-<h3 id="how-betvector-prevents-data-leakage" class="md-h3 subsection-header">How BetVector Prevents Data Leakage</h3>
-<p class="md-p">BetVector uses <strong>walk-forward validation</strong>, the only honest backtesting approach for time-series data. It works like this:</p>
-<div class="code-block"><pre><code>Matchday 1:
-  Train on: pre-season data only
-  Predict:  matchday 1 fixtures
-  Record:   predictions, value bets, simulated P&amp;L
-
-Matchday 2:
-  Train on: pre-season + matchday 1 results
-  Predict:  matchday 2 fixtures
-  Record:   predictions, value bets, simulated P&amp;L
-
-Matchday 3:
-  Train on: pre-season + matchdays 1-2 results
-  Predict:  matchday 3 fixtures
-  Record:   predictions, value bets, simulated P&amp;L
-
-... continue through the entire season</code></pre></div>
-<p class="md-p">At every step, the model sees only data from before the prediction date. This is exactly how it would operate in real life. The model learns and improves as the season progresses and more data becomes available.</p>
-<p class="md-p">Early-season predictions (matchdays 1-5) will be noisy because the model has very little training data. This is realistic -- you would face the same uncertainty at the start of a real season.</p>
-<h3 id="reading-backtest-results" class="md-h3 subsection-header">Reading Backtest Results</h3>
-<p class="md-p">A backtest produces several outputs:</p>
-<ul class='md-list'><li><strong>ROI over time</strong>: A line chart showing cumulative return. You want this trending upward, though expect drawdowns along the way.</li>
-<li><strong>Brier score by matchday</strong>: How calibrated the model's probabilities were at each point in the season.</li>
-<li><strong>Total bets, win rate, P&L</strong>: The headline numbers.</li>
-<li><strong>Per-market breakdown</strong>: Which markets (1X2, Over/Under, BTTS) the model finds value in most consistently.</li></ul>
-<p class="md-p">A backtest ROI of +3% to +8% over a full season is a strong result. The Poisson model alone, without advanced features like xG (when FBref data is unavailable), typically produces a baseline ROI in the range of -5% to +5%, which is competitive given that most bettors lose 5-10% to the overround.</p>
-<hr class='md-hr'>
-<h2 id="the-self-improvement-engine" class="md-h2 section-header">The Self-Improvement Engine</h2>
-<p class="md-p">A static model degrades over time. Teams change, leagues evolve, and the bookmaker market adapts. BetVector includes a self-improvement engine that keeps the system calibrated and honest.</p>
-<h3 id="automatic-recalibration" class="md-h3 subsection-header">Automatic Recalibration</h3>
-<p class="md-p"><strong>Platt scaling</strong> and <strong>isotonic regression</strong> are techniques that adjust a model's raw probabilities to better match observed outcomes. If the model consistently says "60% chance" but those bets only win 52% of the time, recalibration learns this bias and adjusts future probabilities downward.</p>
-<p class="md-p">Recalibration runs automatically during the evening pipeline, but only when there is a sufficient sample size (minimum number of predictions to avoid overfitting to noise).</p>
-<h3 id="retrain-triggers" class="md-h3 subsection-header">Retrain Triggers</h3>
-<p class="md-p">The model monitors its own performance using a rolling Brier score. If the rolling Brier score degrades by 15% or more compared to the all-time average, the system triggers a retrain -- rebuilding the model from scratch using the most recent data.</p>
-<p class="md-p">This catches situations where something fundamental has changed (e.g., a major transfer window reshuffles multiple squads) and the old model's parameters no longer reflect reality.</p>
-<h3 id="market-feedback-loop" class="md-h3 subsection-header">Market Feedback Loop</h3>
-<p class="md-p">Not all leagues and markets are equal. BetVector tracks ROI per league and per market type. If the model consistently finds value in EPL Over/Under 2.5 but loses money on Serie A BTTS, the system can down-weight or disable underperforming market-league combinations.</p>
-<h3 id="why-guardrails-matter" class="md-h3 subsection-header">Why Guardrails Matter</h3>
-<p class="md-p">Every automatic adjustment has three safety mechanisms:</p>
-<ol class='md-list'><li><strong>Minimum sample size</strong> -- no adjustment is made until enough data has been collected to draw meaningful conclusions.</li>
-<li><strong>Maximum change rate</strong> -- no single recalibration step can shift probabilities by more than a capped amount, preventing wild overcorrections.</li>
-<li><strong>Rollback mechanism</strong> -- if an adjustment makes performance worse over the next evaluation window, it is automatically reversed.</li></ol>
-<p class="md-p">An overconfident self-improvement system that "learns" from noise is worse than no self-improvement at all. The guardrails ensure changes are gradual, evidence-based, and reversible.</p>
-<hr class='md-hr'>
-<h2 id="understanding-the-dashboard" class="md-h2 section-header">Understanding the Dashboard</h2>
-<p class="md-p">BetVector's dashboard is a Streamlit web application with a dark-theme trading terminal aesthetic. It runs on your phone's browser or laptop and is organised into seven pages.</p>
-<h3 id="todays-picks----your-daily-action-items" class="md-h3 subsection-header">Today's Picks -- Your Daily Action Items</h3>
-<p class="md-p">The landing page on match days. Shows all value bets for today, sorted by edge size. Each pick displays:</p>
-<ul class='md-list'><li>The match and league</li>
-<li>The market (1X2, Over/Under, BTTS)</li>
-<li>BetVector's probability vs. the bookmaker's implied probability</li>
-<li>The edge and confidence tier (high / medium / low)</li>
-<li>The recommended stake based on your chosen staking method</li></ul>
-<p class="md-p">You can mark bets as placed (with the actual odds and stake you got), and the system tracks your real bets alongside the model's system picks.</p>
-<p class="md-p">When there are no value bets, the page shows a reassuring empty state: the absence of value is itself useful information.</p>
-<h3 id="performance----tracking-long-term-profitability" class="md-h3 subsection-header">Performance -- Tracking Long-Term Profitability</h3>
-<p class="md-p">Your P&L over time, displayed as an interactive line chart. Includes:</p>
-<ul class='md-list'><li>Cumulative ROI</li>
-<li>Daily, weekly, and monthly P&L breakdowns</li>
-<li>Win rate across all markets</li>
-<li>Brier score trend (is the model getting more or less accurate?)</li>
-<li>Performance comparison: system picks vs. your actually placed bets</li></ul>
-<p class="md-p">The critical insight here: short-term results are dominated by variance. A losing week means nothing. Look at the 100-bet and 500-bet rolling averages.</p>
-<h3 id="leagues----per-league-breakdown" class="md-h3 subsection-header">Leagues -- Per-League Breakdown</h3>
-<p class="md-p">Shows performance metrics broken down by league. Useful for identifying which leagues the model handles well and which it struggles with. Each league shows standings, upcoming fixtures, and the model's historical accuracy.</p>
-<h3 id="match-deep-dive----under-the-hood-of-a-prediction" class="md-h3 subsection-header">Match Deep Dive -- Under the Hood of a Prediction</h3>
-<p class="md-p">Click any match to see the full prediction breakdown:</p>
-<ul class='md-list'><li>The 7x7 scoreline probability matrix as a colour-coded heatmap</li>
-<li>Derived market probabilities for all supported markets</li>
-<li>Both teams' rolling form over the last 5 and 10 matches</li>
-<li>Head-to-head record from recent meetings</li>
-<li>Feature values that went into the prediction</li></ul>
-<p class="md-p">This page is where you learn to think like a quantitative bettor. Instead of "Arsenal should win because they're playing at home," you see the specific numbers: Arsenal's rolling xG, Chelsea's away defence, the home advantage boost, and how all of that translates into a 48.2% win probability.</p>
-<h3 id="model-health----keeping-the-system-honest" class="md-h3 subsection-header">Model Health -- Keeping the System Honest</h3>
-<p class="md-p">The model health page answers: "Can I trust this model?"</p>
-<ul class='md-list'><li><strong>Calibration curve</strong>: A plot of predicted probability vs. actual win rate, bucketed. If the model says "60% chance" and those events happen 60% of the time, the points sit on the diagonal. Deviations reveal systematic biases.</li>
-<li><strong>Rolling Brier score</strong>: Tracks prediction accuracy over time. A rising Brier score means the model is getting worse.</li>
-<li><strong>Prediction volume</strong>: How many predictions and value bets the model is generating. A sudden drop might indicate a data source outage.</li></ul>
-<h3 id="bankroll-manager----protecting-your-capital" class="md-h3 subsection-header">Bankroll Manager -- Protecting Your Capital</h3>
-<p class="md-p">Your current bankroll, historical balance chart, and safety limit status:</p>
-<ul class='md-list'><li>Current balance and change from starting bankroll</li>
-<li>Drawdown from peak (with alert if above 25%)</li>
-<li>Daily loss limit status (how much runway remains today)</li>
-<li>Staking method indicator and recent bet sizes</li></ul>
-<h3 id="settings----configuration" class="md-h3 subsection-header">Settings -- Configuration</h3>
-<ul class='md-list'><li>Staking method selector (flat / percentage / Kelly)</li>
-<li>Edge threshold slider (1% to 15%)</li>
-<li>Active leagues</li>
-<li>Paper trading toggle (simulate bets without risking real money)</li>
-<li>Notification preferences</li></ul>
-<hr class='md-hr'>
-<h2 id="key-metrics-explained" class="md-h2 section-header">Key Metrics Explained</h2>
-<h3 id="roi-return-on-investment" class="md-h3 subsection-header">ROI (Return on Investment)</h3>
-<p class="md-p">The simplest question: am I making money?</p>
-<div class="code-block"><pre><code>ROI = (total_profit / total_staked) * 100</code></pre></div>
-<p class="md-p">Example: You've staked a total of 2,000 across 100 bets and your profit is 80.</p>
-<div class="code-block"><pre><code>ROI = (80 / 2,000) * 100 = 4.0%</code></pre></div>
-<p class="md-p">For context, professional sports bettors target 2-5% long-term ROI. Anything above 0% means you're beating the bookmaker. ROI is volatile in small samples -- you need 500+ bets before it stabilises into something meaningful.</p>
+<h2 id="7-performance-measurement----how-do-we-know-its-working" class="md-h2 section-header">7. Performance Measurement -- How Do We Know It's Working?</h2>
+<p class="md-p">A system that cannot measure its own performance is not a system -- it is hope</p>
+<p class="md-p">wearing a lab coat. BetVector tracks several metrics, each answering a different</p>
+<p class="md-p">question about the system's health.</p>
 <h3 id="brier-score" class="md-h3 subsection-header">Brier Score</h3>
-<p class="md-p">How accurate are the probability estimates themselves, regardless of whether you bet on them?</p>
-<div class="code-block"><pre><code>Brier score = mean of (predicted_probability - actual_outcome)^2</code></pre></div>
-<p class="md-p">For a single prediction: if you said "70% chance of Arsenal winning" and Arsenal won (outcome = 1):</p>
-<div class="code-block"><pre><code>(0.70 - 1)^2 = 0.09</code></pre></div>
-<p class="md-p">If Arsenal lost (outcome = 0):</p>
-<div class="code-block"><pre><code>(0.70 - 0)^2 = 0.49</code></pre></div>
-<p class="md-p">Averaged across all predictions:</p>
-<ul class='md-list'><li><strong>0.0</strong> = perfect (never achievable in football)</li>
-<li><strong>0.25</strong> = useless (equivalent to predicting 50/50 on everything)</li>
-<li><strong>Below 0.20</strong> for match results is good -- football is inherently random, and even perfect models can't eliminate that randomness</li></ul>
-<p class="md-p">Lower is better. The Brier score rewards both accuracy and calibration -- you get a good score by being both right and appropriately confident.</p>
+<p class="md-p"><strong>The question:</strong> "How accurate are the probability estimates?"</p>
+<p class="md-p">The Brier score measures the quality of probabilistic predictions. Unlike win</p>
+<p class="md-p">rate (which only cares about right or wrong), the Brier score rewards you for</p>
+<p class="md-p">being confident when right and penalises you for being confident when wrong.</p>
+<p class="md-p"><strong>Formula:</strong></p>
+<div class="code-block"><pre><code>Brier Score = average of (predicted_probability - actual_outcome)^2</code></pre></div>
+<p class="md-p">Where actual_outcome is 1 if the event happened and 0 if it did not.</p>
+<p class="md-p"><strong>Example across three predictions:</strong></p>
+<div class='table-wrapper'><table><thead><tr><th>Match</th><th>Model Prediction</th><th>What Happened</th><th>Squared Error</th></tr></thead><tbody><tr><td>Arsenal home win</td><td>70%</td><td>Won (1)</td><td>(0.70 - 1)^2 = 0.09</td></tr><tr><td>Chelsea home win</td><td>55%</td><td>Lost (0)</td><td>(0.55 - 0)^2 = 0.3025</td></tr><tr><td>Liverpool home win</td><td>80%</td><td>Won (1)</td><td>(0.80 - 1)^2 = 0.04</td></tr></tbody></table></div>
+<p class="md-p">Average Brier = (0.09 + 0.3025 + 0.04) / 3 = 0.144</p>
+<p class="md-p"><strong>How to interpret it:</strong></p>
+<ul class='md-list'><li><strong>0.0</strong> = perfect predictions (impossible in football due to inherent randomness).</li>
+<li><strong>0.25</strong> = no better than predicting 50/50 on everything. This is the "coin flip"</li></ul>
+<p class="md-p">  baseline.</p>
+<ul class='md-list'><li><strong>< 0.20</strong> = genuinely good for football 1X2 predictions. Football is inherently</li></ul>
+<p class="md-p">  random, and breaking below 0.20 means the model is capturing real signal.</p>
+<ul class='md-list'><li><strong>Professional range:</strong> Elite sports bettors and top prediction models typically</li></ul>
+<p class="md-p">  achieve 0.19-0.22 on 1X2 markets.</p>
+<p class="md-p"><strong>Lower is better.</strong> If you see the Brier score trending upward on the Model Health</p>
+<p class="md-p">dashboard, the model's predictions are degrading and may need recalibration.</p>
+<p class="md-p"><strong>Why Brier score matters more than win rate:</strong> Win rate is misleading. A model</p>
+<p class="md-p">that always picks the favourite will have a high win rate but terrible Brier scores</p>
+<p class="md-p">when its 85% predictions only win 60% of the time. A model that correctly</p>
+<p class="md-p">identifies 70% underdogs as having a 30% chance has a low win rate (30%) but</p>
+<p class="md-p">excellent calibration. The Brier score captures both accuracy and honesty of</p>
+<p class="md-p">probabilities.</p>
 <h3 id="calibration" class="md-h3 subsection-header">Calibration</h3>
-<p class="md-p">When BetVector says "60% chance," does that outcome happen 60% of the time?</p>
-<p class="md-p">Calibration is checked by grouping all predictions into probability buckets (e.g., 50-55%, 55-60%, 60-65%) and comparing the average predicted probability to the actual win rate within each bucket.</p>
-<div class="code-block"><pre><code>Bucket 50-55%: average prediction = 52.3%, actual win rate = 51.8%  (well calibrated)
-Bucket 60-65%: average prediction = 62.1%, actual win rate = 55.0%  (overconfident)
-Bucket 70-75%: average prediction = 72.0%, actual win rate = 73.5%  (slightly underconfident)</code></pre></div>
-<p class="md-p">Perfect calibration means all points sit on the diagonal of a calibration plot (predicted = actual). <strong>Overconfident</strong> models predict higher probabilities than reality delivers. <strong>Underconfident</strong> models predict lower. The recalibration engine fixes systematic biases over time.</p>
-<h3 id="clv-closing-line-value" class="md-h3 subsection-header">CLV (Closing Line Value)</h3>
-<p class="md-p">The single best predictor of long-term betting profitability.</p>
-<p class="md-p">The <strong>closing line</strong> is the final set of odds offered just before a match kicks off. It represents the market's most informed estimate, incorporating all available information and betting volume. If you consistently get better odds than the closing line, you are extracting value from the market.</p>
-<div class="code-block"><pre><code>CLV = (closing_implied_probability - your_implied_probability) / your_implied_probability</code></pre></div>
-<p class="md-p">Example: You bet Arsenal at 2.10 (47.6% implied). The closing odds move to 1.90 (52.6% implied).</p>
-<div class="code-block"><pre><code>CLV = (52.6% - 47.6%) / 47.6% = +10.5%</code></pre></div>
-<p class="md-p">Positive average CLV across many bets is strong evidence that you have a genuine edge -- regardless of short-term P&L fluctuations.</p>
+<p class="md-p"><strong>The question:</strong> "When the model says 60%, does that actually happen 60% of the time?"</p>
+<p class="md-p">Calibration is about whether the probabilities are trustworthy at face value.</p>
+<p class="md-p">A well-calibrated model means that the numbers mean what they say.</p>
+<p class="md-p">To check calibration, predictions are grouped into probability buckets:</p>
+<div class='table-wrapper'><table><thead><tr><th>Probability Bucket</th><th>Average Prediction</th><th>Actual Win Rate</th><th>Verdict</th></tr></thead><tbody><tr><td>50-55%</td><td>52.5%</td><td>51.0%</td><td>Well calibrated -- close match</td></tr><tr><td>55-60%</td><td>57.3%</td><td>58.2%</td><td>Well calibrated -- very close</td></tr><tr><td>60-65%</td><td>62.1%</td><td>53.0%</td><td><strong>Overconfident</strong> -- model too bullish</td></tr><tr><td>70-75%</td><td>72.0%</td><td>71.5%</td><td>Well calibrated -- spot on</td></tr></tbody></table></div>
+<p class="md-p">In the third row, the model says these outcomes have about a 62% chance, but they</p>
+<p class="md-p">only happen 53% of the time. The model is <strong>overconfident</strong> in this probability</p>
+<p class="md-p">range.</p>
+<p class="md-p">On a calibration plot, perfect calibration falls on the diagonal line (where</p>
+<p class="md-p">predicted probability = actual frequency). Points <strong>above</strong> the diagonal mean the</p>
+<p class="md-p">model is underconfident -- these outcomes happen more often than predicted, which</p>
+<p class="md-p">is actually advantageous for value betting. Points <strong>below</strong> the diagonal mean</p>
+<p class="md-p">the model is overconfident -- it is overestimating edges and may be flagging bets</p>
+<p class="md-p">that are not actually valuable.</p>
+<p class="md-p">BetVector's Model Health page shows this calibration curve so you can see at a</p>
+<p class="md-p">glance whether the probabilities are trustworthy.</p>
+<h3 id="roi-return-on-investment" class="md-h3 subsection-header">ROI (Return on Investment)</h3>
+<p class="md-p"><strong>The question:</strong> "Am I making money?"</p>
+<div class="code-block"><pre><code>ROI = (Total Profit or Loss / Total Amount Staked) x 100%</code></pre></div>
+<p class="md-p"><strong>Example:</strong> You have staked 2,000 pounds total across 100 bets and your net</p>
+<p class="md-p">profit is 80 pounds.</p>
+<div class="code-block"><pre><code>ROI = (80 / 2,000) x 100% = 4.0%</code></pre></div>
+<ul class='md-list'><li><strong>Positive ROI</strong> = making money. Your edge is working.</li>
+<li><strong>Negative ROI</strong> = losing money. The model may not have a real edge, or variance</li></ul>
+<p class="md-p">  has not been overcome yet.</p>
+<ul class='md-list'><li><strong>Professional target:</strong> 2-5% long-term ROI is considered excellent in sports</li></ul>
+<p class="md-p">  betting. Most professional syndicates would be delighted with 3%.</p>
+<p class="md-p"><strong>The variance warning:</strong> ROI is extremely noisy over small samples. Over 50 bets,</p>
+<p class="md-p">you might be at +15% ROI purely from luck, or at -10% despite having a genuine</p>
+<p class="md-p">edge. Think of it like a coin that is biased 52/48 -- you need thousands of flips</p>
+<p class="md-p">for the bias to become statistically visible. In betting, you need 500+ bets for</p>
+<p class="md-p">ROI to stabilise into a meaningful signal.</p>
+<p class="md-p">Do not draw conclusions from 50 bets. Do not celebrate after 100 winning bets or</p>
+<p class="md-p">panic after 100 losing ones. Track, measure, and wait for the sample size to speak.</p>
+<h3 id="closing-line-value-clv" class="md-h3 subsection-header">Closing Line Value (CLV)</h3>
+<p class="md-p"><strong>The question:</strong> "Am I beating the market?"</p>
+<p class="md-p">CLV is the single best predictor of long-term profitability in sports betting.</p>
+<p class="md-p">The <strong>closing line</strong> is the final set of odds offered just before kickoff. By that</p>
+<p class="md-p">point, the odds have been shaped by millions of pounds in bets from the collective</p>
+<p class="md-p">intelligence of the entire market, including the sharpest professional syndicates</p>
+<p class="md-p">in the world. The closing line is the market's best and most informed estimate of</p>
+<p class="md-p">the true probability.</p>
+<p class="md-p"><strong>Example:</strong></p>
+<ul class='md-list'><li>BetVector flags Arsenal home win at odds of <strong>2.10</strong> at 7am (implied 47.6%).</li>
+<li>By kickoff at 3pm, the odds have shortened to <strong>1.90</strong> (implied 52.6%).</li>
+<li>The market moved in the direction the model predicted.</li>
+<li>CLV = 52.6% - 47.6% = <strong>+5.0%</strong> (positive).</li></ul>
+<p class="md-p">You got odds of 2.10 on something the market eventually priced at 1.90. You were</p>
+<p class="md-p">ahead of the market. This is like buying a stock before positive news comes out --</p>
+<p class="md-p">the market moved your way.</p>
+<p class="md-p"><strong>Why CLV matters so much:</strong> Short-term P&L is dominated by luck. You can have a</p>
+<p class="md-p">genuine edge and still lose for weeks. But positive CLV over a large sample is</p>
+<p class="md-p">extremely hard to achieve by accident. If you are consistently getting better odds</p>
+<p class="md-p">than the closing line, there is strong evidence that your model is genuinely</p>
+<p class="md-p">identifying value that the wider market only catches up to later.</p>
+<p class="md-p">Positive average CLV over 200+ bets is the gold standard for validating a betting</p>
+<p class="md-p">model, even more reliable than ROI itself.</p>
 <hr class='md-hr'>
-<h2 id="data-sources-and-limitations" class="md-h2 section-header">Data Sources and Limitations</h2>
-<h3 id="where-the-data-comes-from" class="md-h3 subsection-header">Where the Data Comes From</h3>
-<p class="md-p">BetVector uses three free public data sources:</p>
-<div class='table-wrapper'><table><thead><tr><th>Source</th><th>Data</th><th>Update Frequency</th></tr></thead><tbody><tr><td><strong>Football-Data.co.uk</strong></td><td>Historical match results, bookmaker odds (20+ seasons, 50+ bookmakers)</td><td>Weekly</td></tr><tr><td><strong>FBref</strong> (via soccerdata)</td><td>Expected goals (xG), shots, possession, pass completion</td><td>After each matchday</td></tr><tr><td><strong>API-Football</strong> (RapidAPI free tier)</td><td>Live fixtures, upcoming match odds, results</td><td>2-3 times daily</td></tr></tbody></table></div>
-<h3 id="what-happens-when-fbref-is-blocked" class="md-h3 subsection-header">What Happens When FBref Is Blocked</h3>
-<p class="md-p">FBref uses Cloudflare protection that occasionally blocks automated scrapers with a 403 error. When this happens:</p>
-<ul class='md-list'><li>The scraper logs the error and continues</li>
-<li>Features that depend on FBref data (xG, shots, possession) are set to null</li>
-<li>The prediction model still runs using goals-based and form-based features</li>
-<li>Predictions will be somewhat less accurate without xG, but still functional</li></ul>
-<p class="md-p">This is by design. The pipeline never crashes because of a single data source outage.</p>
-<h3 id="api-rate-limits" class="md-h3 subsection-header">API Rate Limits</h3>
-<p class="md-p">API-Football's free tier allows 100 requests per day. BetVector tracks API usage and respects this limit. All HTTP requests to any source include a minimum 2-second delay between consecutive calls to avoid overwhelming free public services.</p>
-<h3 id="epl-only-for-now-and-how-to-expand" class="md-h3 subsection-header">EPL-Only (For Now) and How to Expand</h3>
-<p class="md-p">The MVP covers the English Premier League. Adding a new league requires only a configuration entry in <code class="inline-code">config/leagues.yaml</code> -- no code changes. The scraping, feature engineering, prediction, and value detection pipelines are all league-agnostic by design. Future expansions to La Liga, Serie A, Bundesliga, and smaller value leagues (where bookmaker inefficiencies tend to be larger) require only config updates and data availability.</p>
+<h2 id="8-the-self-improvement-engine----how-it-gets-smarter" class="md-h2 section-header">8. The Self-Improvement Engine -- How It Gets Smarter</h2>
+<p class="md-p">BetVector is not a static system. It actively monitors its own performance and</p>
+<p class="md-p">adjusts. But -- and this is a critical "but" -- every adjustment is cautious,</p>
+<p class="md-p">gradual, and transparent.</p>
+<p class="md-p"><strong>The core philosophy: inform, don't decide.</strong> Every automatic change has a</p>
+<p class="md-p">minimum sample size (never react to small data), a maximum change rate (never make</p>
+<p class="md-p">dramatic shifts in one step), and a rollback mechanism (always be able to undo a</p>
+<p class="md-p">change that made things worse). The system never makes irreversible decisions</p>
+<p class="md-p">without your knowledge and consent.</p>
+<h3 id="automatic-recalibration" class="md-h3 subsection-header">Automatic Recalibration</h3>
+<p class="md-p"><strong>What it fixes:</strong> Probability drift.</p>
+<p class="md-p">Over time, a model's probabilities can drift away from reality. Maybe the model</p>
+<p class="md-p">was well-calibrated six months ago, but since then league dynamics have shifted --</p>
+<p class="md-p">teams are scoring more, defences are playing higher lines, or the model has a</p>
+<p class="md-p">systematic bias it did not have before. When the model says "65% chance" but those</p>
+<p class="md-p">outcomes only win 55% of the time, the probabilities are no longer trustworthy.</p>
+<p class="md-p">Recalibration applies a statistical correction that maps the model's raw</p>
+<p class="md-p">probabilities to probabilities that better match observed outcomes. BetVector</p>
+<p class="md-p">supports two techniques:</p>
+<ul class='md-list'><li><strong>Platt scaling:</strong> Fits a logistic (S-shaped) curve to transform probabilities.</li></ul>
+<p class="md-p">  Works well when the drift has a consistent shape -- e.g., the model is</p>
+<p class="md-p">  uniformly overconfident. Requires fewer data points.</p>
+<ul class='md-list'><li><strong>Isotonic regression:</strong> A more flexible, non-parametric approach that can</li></ul>
+<p class="md-p">  correct different biases at different probability ranges. More powerful but</p>
+<p class="md-p">  needs more data to avoid overfitting.</p>
+<p class="md-p">Think of recalibration like tuning a guitar. The strings were in tune when you</p>
+<p class="md-p">started, but after playing for a while they have drifted slightly sharp or flat.</p>
+<p class="md-p">Recalibration tunes them back to pitch.</p>
+<p class="md-p"><strong>Guardrails (these are non-negotiable):</strong></p>
+<ul class='md-list'><li><strong>Minimum sample:</strong> Only triggers after <strong>200 or more</strong> resolved predictions.</li></ul>
+<p class="md-p">  Below that, there is not enough data to distinguish real drift from random noise.</p>
+<p class="md-p">  Making changes based on 50 predictions would be like drawing conclusions from</p>
+<p class="md-p">  50 coin flips.</p>
+<ul class='md-list'><li><strong>Significance threshold:</strong> Only applies if the mean absolute calibration error</li></ul>
+<p class="md-p">  exceeds <strong>3 percentage points</strong>. Small deviations are expected and natural.</p>
+<ul class='md-list'><li><strong>Rollback protection:</strong> Both the raw and calibrated probabilities are always</li></ul>
+<p class="md-p">  stored. If recalibration makes predictions <em>worse</em> over the next 100 predictions,</p>
+<p class="md-p">  the system automatically reverts to the previous calibration.</p>
+<ul class='md-list'><li><strong>Transparency:</strong> The Model Health dashboard shows a before/after calibration</li></ul>
+<p class="md-p">  plot whenever a recalibration is applied, with timestamps and sample sizes.</p>
+<h3 id="feature-importance-tracking" class="md-h3 subsection-header">Feature Importance Tracking</h3>
+<p class="md-p"><strong>What it monitors:</strong> Which features contribute most to predictions over time.</p>
+<p class="md-p">Not all features are equally useful. Some (like rolling goals scored) might carry</p>
+<p class="md-p">heavy weight in predictions, while others (like season progress) might contribute</p>
+<p class="md-p">almost nothing. And these importances can change -- a feature that was vital six</p>
+<p class="md-p">months ago might have become irrelevant as the league landscape shifted.</p>
+<p class="md-p">For tree-based models like XGBoost or LightGBM (planned future models), the system</p>
+<p class="md-p">logs feature importance after every training cycle and tracks how it changes over</p>
+<p class="md-p">time.</p>
+<p class="md-p"><strong>The key rule: the system NEVER automatically removes features.</strong> If a feature</p>
+<p class="md-p">has been contributing less than 1% importance for 3 or more consecutive training</p>
+<p class="md-p">cycles, the system flags it with a suggestion in the dashboard: "Consider removing</p>
+<p class="md-p">[feature name] -- it has contributed less than 1% importance for the last 3</p>
+<p class="md-p">training cycles." But the decision is always yours.</p>
+<p class="md-p">Features can have periods of low importance that reverse. Removing them prematurely</p>
+<p class="md-p">could hurt the model when conditions change. The system informs; you decide.</p>
+<h3 id="adaptive-ensemble-weights" class="md-h3 subsection-header">Adaptive Ensemble Weights</h3>
+<p class="md-p"><strong>What it adjusts:</strong> The balance between multiple prediction models.</p>
+<p class="md-p">BetVector is designed to eventually run multiple models simultaneously -- for</p>
+<p class="md-p">example, Poisson regression, an Elo-based model, and an XGBoost model. The</p>
+<p class="md-p"><strong>ensemble</strong> combines their predictions by taking a weighted average of their</p>
+<p class="md-p">scoreline matrices.</p>
+<p class="md-p">Initially, all models get equal weight (1/3 each if there are three models). Over</p>
+<p class="md-p">time, the system adjusts these weights based on which model has been performing</p>
+<p class="md-p">best recently.</p>
+<p class="md-p"><strong>How weights are calculated:</strong> Each model's weight is proportional to the inverse</p>
+<p class="md-p">of its Brier score. A model with a Brier score of 0.18 (better) gets more weight</p>
+<p class="md-p">than one with 0.22 (worse).</p>
+<p class="md-p"><strong>Guardrails:</strong></p>
+<ul class='md-list'><li><strong>Minimum sample:</strong> 300 resolved predictions per model before adaptive weighting</li></ul>
+<p class="md-p">  activates. Before that threshold, all models get equal weight. Making weight</p>
+<p class="md-p">  decisions with less data is asking for trouble.</p>
+<ul class='md-list'><li><strong>Gradual change:</strong> Weights never change by more than <strong>10 percentage points</strong></li></ul>
+<p class="md-p">  per recalculation cycle. If the system calculates that XGBoost should jump from</p>
+<p class="md-p">  33% to 55%, it only moves to 43% this cycle. It might reach 53% next cycle. This</p>
+<p class="md-p">  prevents sudden, destabilising shifts.</p>
+<ul class='md-list'><li><strong>Floor of 10%:</strong> No active model can drop below 10% weight. This preserves</li></ul>
+<p class="md-p">  ensemble diversity. Even a temporarily underperforming model adds value through</p>
+<p class="md-p">  model diversification -- its errors are often different from the other models'</p>
+<p class="md-p">  errors, and that diversity reduces overall prediction variance.</p>
+<ul class='md-list'><li><strong>Ceiling of 60%:</strong> No single model can exceed 60% weight. The ensemble should</li></ul>
+<p class="md-p">  always be a genuine ensemble, not one dominant model with decorative sidekicks.</p>
+<ul class='md-list'><li><strong>Smoothing:</strong> 70% new calculation + 30% previous weight. This prevents the</li></ul>
+<p class="md-p">  weights from overreacting to a short lucky or unlucky stretch by any model.</p>
+<h3 id="market-feedback-loop" class="md-h3 subsection-header">Market Feedback Loop</h3>
+<p class="md-p"><strong>What it reveals:</strong> Where the system has genuine edge and where it does not.</p>
+<p class="md-p">Not all markets are equally exploitable. BetVector might have a real edge on</p>
+<p class="md-p">Over/Under 2.5 Goals in the Premier League but consistently lose money on BTTS</p>
+<p class="md-p">in Serie A. The market feedback loop identifies these patterns.</p>
+<p class="md-p">Every week, the system recalculates ROI for each <strong>league x market</strong> combination</p>
+<p class="md-p">(for example, "EPL Over/Under 2.5," "La Liga 1X2," "Bundesliga BTTS") and</p>
+<p class="md-p">assigns one of four assessments:</p>
+<ul class='md-list'><li><strong>Profitable</strong> (green): ROI is positive AND the 95% confidence interval is</li></ul>
+<p class="md-p">  entirely above zero AND at least 100 bets. This is a confirmed, statistically</p>
+<p class="md-p">  significant edge.</p>
+<ul class='md-list'><li><strong>Promising</strong> (yellow): ROI is positive but the confidence interval includes</li></ul>
+<p class="md-p">  zero, or there are only 50-99 bets. More data is needed before drawing</p>
+<p class="md-p">  conclusions.</p>
+<ul class='md-list'><li><strong>Insufficient data</strong> (grey): Fewer than 50 bets. No meaningful assessment</li></ul>
+<p class="md-p">  is possible yet.</p>
+<ul class='md-list'><li><strong>Unprofitable</strong> (red): ROI is negative AND the confidence interval is entirely</li></ul>
+<p class="md-p">  below zero AND at least 100 bets. The system is confident there is no edge here.</p>
+<p class="md-p"><strong>What confidence intervals mean:</strong> When the system reports "EPL Over/Under 2.5:</p>
+<p class="md-p">ROI +7.2% (95% CI: -1.1% to +15.5%)," it is saying: "We estimate 7.2% ROI, but</p>
+<p class="md-p">given the sample size and variance, the true ROI could reasonably be anywhere from</p>
+<p class="md-p">-1.1% to +15.5%." Because the interval includes zero, we cannot be sure the edge</p>
+<p class="md-p">is real yet.</p>
+<p class="md-p">Compare that to "EPL 1X2: ROI +4.8% (95% CI: +1.2% to +8.4%)." The entire</p>
+<p class="md-p">interval is positive. The system is confident this edge is genuine.</p>
+<p class="md-p">The confidence intervals use <strong>bootstrap resampling</strong> -- a statistical technique</p>
+<p class="md-p">that simulates thousands of possible outcomes from your existing bet history to</p>
+<p class="md-p">estimate the range of plausible ROI values. It is more robust than simple</p>
+<p class="md-p">formulaic approaches for the type of data encountered in betting.</p>
+<p class="md-p"><strong>Critical rule: the system never automatically stops flagging bets in any market.</strong></p>
+<p class="md-p">If "EPL BTTS" is assessed as unprofitable, you will still see those bets on the</p>
+<p class="md-p">Today's Picks page -- but with a warning: "BetVector has historically</p>
+<p class="md-p">underperformed in EPL BTTS (ROI: -3.2% over 120 bets). Proceed with caution."</p>
+<p class="md-p">The system recommends; you decide.</p>
+<h3 id="seasonal-re-training-triggers" class="md-h3 subsection-header">Seasonal Re-training Triggers</h3>
+<p class="md-p"><strong>What it catches:</strong> A stale model that needs fresh training.</p>
+<p class="md-p">Football changes over time. Tactical trends evolve. New managers impose different</p>
+<p class="md-p">playing styles. Transfer windows reshape squads. A model trained in August may be</p>
+<p class="md-p">less accurate by March because the landscape has shifted in ways the old parameters</p>
+<p class="md-p">do not capture.</p>
+<p class="md-p">The system monitors the <strong>rolling Brier score</strong> over the last 100 predictions and</p>
+<p class="md-p">compares it to the model's all-time average Brier score. If the rolling score is</p>
+<p class="md-p">more than <strong>15% worse</strong> than the all-time average, it triggers an automatic full</p>
+<p class="md-p">retrain.</p>
+<p class="md-p"><strong>Example:</strong> The all-time Brier score is 0.200. The rolling score over the last</p>
+<p class="md-p">100 predictions has drifted to 0.231. That is a 15.5% degradation. The automatic</p>
+<p class="md-p">retrain fires.</p>
+<p class="md-p"><strong>Guardrails:</strong></p>
+<ul class='md-list'><li><strong>30-day cooldown</strong> between retrains. If the model just retrained last week and</li></ul>
+<p class="md-p">  is still underperforming, the issue might be a fundamental limitation or data</p>
+<p class="md-p">  quality problem -- not staleness. Retraining again immediately will not help.</p>
+<ul class='md-list'><li><strong>Full-history training:</strong> Retrains use all available historical data, not just</li></ul>
+<p class="md-p">  recent data. This prevents overfitting to recent trends.</p>
+<ul class='md-list'><li><strong>Performance comparison:</strong> After retraining, the system runs 50 predictions</li></ul>
+<p class="md-p">  with both the old and new model. If the new model performs worse, it</p>
+<p class="md-p">  automatically rolls back to the old one.</p>
+<ul class='md-list'><li><strong>Email notification:</strong> You receive an alert whenever an automatic retrain fires,</li></ul>
+<p class="md-p">  explaining what triggered it and what happened.</p>
+<h3 id="the-philosophy-inform-dont-decide" class="md-h3 subsection-header">The Philosophy: Inform, Don't Decide</h3>
+<p class="md-p">Every self-improvement mechanism follows the same principles:</p>
+<ol class='md-list'><li><strong>Measure</strong> over a statistically meaningful sample. Never react to small data.</li>
+<li><strong>Change gradually.</strong> Never make dramatic adjustments in a single step.</li>
+<li><strong>Be transparent.</strong> Always show what changed and why on the dashboard.</li>
+<li><strong>Provide rollback.</strong> Always be able to undo a change that made things worse.</li>
+<li><strong>Recommend, don't mandate.</strong> Surface the data. Let the human make the final</li></ol>
+<p class="md-p">   call on anything consequential.</p>
+<p class="md-p">The system never silently removes a feature, drops a market, radically shifts</p>
+<p class="md-p">model weights, or makes any irreversible change. An overconfident self-improvement</p>
+<p class="md-p">system that "learns" from noise is worse than no self-improvement at all.</p>
 <hr class='md-hr'>
-<h2 id="glossary" class="md-h2 section-header">Glossary</h2>
-<div class='table-wrapper'><table><thead><tr><th>Term</th><th>Definition</th></tr></thead><tbody><tr><td><strong>Brier score</strong></td><td>A measure of prediction accuracy. The mean squared difference between predicted probabilities and actual outcomes. Range 0 (perfect) to 1 (worst). Lower is better.</td></tr><tr><td><strong>Calibration</strong></td><td>How well predicted probabilities match observed frequencies. A calibrated model's 60% predictions happen 60% of the time.</td></tr><tr><td><strong>CLV (Closing Line Value)</strong></td><td>The difference between the odds you bet at and the final closing odds. Positive CLV indicates you're beating the market.</td></tr><tr><td><strong>Drawdown</strong></td><td>The percentage decline from your bankroll's all-time peak to its current value. A measure of how deep your current losing streak runs.</td></tr><tr><td><strong>Edge</strong></td><td>The difference between your model's probability and the bookmaker's implied probability. Positive edge = potential value bet.</td></tr><tr><td><strong>EV (Expected Value)</strong></td><td>The average profit or loss per unit staked over the long run. Positive EV (+EV) means the bet is profitable on average.</td></tr><tr><td><strong>Implied probability</strong></td><td>The probability embedded in a set of odds: <code class="inline-code">1 / decimal_odds</code>. What the bookmaker believes (or prices) the likelihood to be.</td></tr><tr><td><strong>Kelly Criterion</strong></td><td>A formula that calculates the optimal bet size to maximise long-term bankroll growth: <code class="inline-code">f<em> = (p</em>b - 1) / (b - 1)</code>.</td></tr><tr><td><strong>Lambda</strong></td><td>The expected number of goals for a team in a match. The key parameter of the Poisson distribution used in BetVector's model.</td></tr><tr><td><strong>Overround (vig)</strong></td><td>The bookmaker's built-in profit margin. The amount by which implied probabilities across all outcomes exceed 100%.</td></tr><tr><td><strong>Paper trading</strong></td><td>Simulating bets without risking real money. Used to evaluate model performance before committing capital.</td></tr><tr><td><strong>Poisson distribution</strong></td><td>A probability distribution that models the number of times a rare event occurs in a fixed interval. Used to model goals scored in football.</td></tr><tr><td><strong>Scoreline matrix</strong></td><td>A 7x7 grid of probabilities for every possible match scoreline (0-0 through 6-6). BetVector's universal model output from which all market probabilities are derived.</td></tr><tr><td><strong>Walk-forward validation</strong></td><td>A backtesting method that trains only on past data and predicts the next time step, then advances. Prevents data leakage by never using future information.</td></tr><tr><td><strong>xG (Expected Goals)</strong></td><td>A statistical measure of the quality of scoring chances created, based on factors like shot location, angle, and assist type. More predictive of future performance than actual goals scored.</td></tr></tbody></table></div>
+<h2 id="9-the-dashboard----your-command-centre" class="md-h2 section-header">9. The Dashboard -- Your Command Centre</h2>
+<p class="md-p">BetVector's dashboard is a Streamlit web application with a dark trading-terminal</p>
+<p class="md-p">aesthetic -- think Bloomberg Terminal meets football data. It is designed for</p>
+<p class="md-p">information density: every pixel earns its place. It works on both desktop and</p>
+<p class="md-p">mobile (designed for phone-in-hand Saturday afternoon use).</p>
+<p class="md-p">The dashboard has seven pages. Here is how to use each one effectively.</p>
+<h3 id="todays-picks" class="md-h3 subsection-header">Today's Picks</h3>
+<p class="md-p"><strong>What it is:</strong> Your daily action page.</p>
+<p class="md-p"><strong>When to check:</strong> Every morning on match days.</p>
+<p class="md-p">This is where you see the value bets the system has identified for today's</p>
+<p class="md-p">fixtures. Each pick displays:</p>
+<ul class='md-list'><li>The match (home team vs away team) and league.</li>
+<li>The market (Match Result, Over/Under 2.5, BTTS, etc.).</li>
+<li>The model's probability for the outcome.</li>
+<li>The bookmaker's odds and implied probability.</li>
+<li>The <strong>edge</strong> (the gap between model and bookmaker).</li>
+<li>The <strong>confidence tier</strong> (HIGH in green, MEDIUM in yellow).</li>
+<li>The <strong>recommended stake</strong> based on your staking method and current bankroll.</li></ul>
+<p class="md-p">Picks are sorted by confidence, with the strongest edges first. You can expand</p>
+<p class="md-p">any pick to see the full 7x7 scoreline matrix and a complete probability breakdown</p>
+<p class="md-p">across all markets.</p>
+<p class="md-p"><strong>How to use it:</strong> Scan the morning picks. Check any that interest you against the</p>
+<p class="md-p">League Explorer for context. For bets you place with your bookmaker, mark them as</p>
+<p class="md-p">"placed" on the dashboard with the actual odds and stake you got. This lets the</p>
+<p class="md-p">system track your real performance separately from the theoretical system picks.</p>
+<p class="md-p"><strong>Empty state:</strong> "No value bets right now. Your bankroll thanks you for your</p>
+<p class="md-p">patience." Some of the most important days in betting are the days you do nothing.</p>
+<p class="md-p">Discipline means waiting for genuine value.</p>
+<h3 id="performance-tracker" class="md-h3 subsection-header">Performance Tracker</h3>
+<p class="md-p"><strong>What it is:</strong> Your feedback loop.</p>
+<p class="md-p"><strong>When to check:</strong> Weekly. Resist checking daily.</p>
+<p class="md-p">This page shows your results over time:</p>
+<ul class='md-list'><li><strong>ROI chart:</strong> An interactive line chart showing cumulative return on investment.</li></ul>
+<p class="md-p">  Look for a consistent upward trend over months, not individual wins or losses.</p>
+<ul class='md-list'><li><strong>P&L summary:</strong> Daily, weekly, monthly, and all-time profit and loss.</li>
+<li><strong>Win rate by market:</strong> How often value bets win for each market type.</li>
+<li><strong>System picks vs your placed bets:</strong> Compares "what the model recommended" with</li></ul>
+<p class="md-p">  "what you actually bet on." This reveals whether you are improving or hurting</p>
+<p class="md-p">  your results by selectively following the system.</p>
+<p class="md-p"><strong>Key insight:</strong> Short-term results are dominated by variance. A losing week means</p>
+<p class="md-p">nothing about the model's quality. Focus on 100-bet and 500-bet rolling trends.</p>
+<h3 id="league-explorer" class="md-h3 subsection-header">League Explorer</h3>
+<p class="md-p"><strong>What it is:</strong> Context and research.</p>
+<p class="md-p"><strong>When to check:</strong> Before placing bets, to sanity-check the system's picks.</p>
+<p class="md-p">Explore any configured league in detail:</p>
+<ul class='md-list'><li>Current league standings (table).</li>
+<li>Recent results for every team.</li>
+<li>Upcoming fixtures.</li>
+<li>Team form summaries (rolling goals, xG, points per game).</li></ul>
+<p class="md-p"><strong>How to use it:</strong> After seeing a value bet on Today's Picks, come here to</p>
+<p class="md-p">sanity-check it. "The model says Over 2.5 in Everton vs Brighton, but what does</p>
+<p class="md-p">Everton's recent scoring look like?" If the data aligns with the model's view,</p>
+<p class="md-p">that increases your confidence. If something looks off (maybe a key player is</p>
+<p class="md-p">injured and you heard about it but the model does not know), you might skip that</p>
+<p class="md-p">particular bet.</p>
+<h3 id="match-deep-dive" class="md-h3 subsection-header">Match Deep Dive</h3>
+<p class="md-p"><strong>What it is:</strong> Deep analysis of any individual match.</p>
+<p class="md-p"><strong>When to check:</strong> Whenever you want the full statistical picture.</p>
+<p class="md-p">Select any upcoming or recent match and see everything:</p>
+<ul class='md-list'><li>The complete 7x7 scoreline probability matrix as a colour-coded grid.</li>
+<li>Market probability comparison: model vs bookmaker for every available market.</li>
+<li>Both teams' rolling form over the last 5 and 10 matches.</li>
+<li>Head-to-head record from recent meetings.</li>
+<li>Rest days and context factors.</li>
+<li>The specific feature values that went into the prediction.</li></ul>
+<p class="md-p"><strong>How to use it:</strong> This is your research tool for matches you want to understand</p>
+<p class="md-p">deeply. It shows the complete reasoning behind the system's prediction -- not just</p>
+<p class="md-p">"value bet on Over 2.5" but <em>why</em>: the expected goals for both sides, the</p>
+<p class="md-p">historical scoring patterns, the matchup dynamics.</p>
+<h3 id="model-health" class="md-h3 subsection-header">Model Health</h3>
+<p class="md-p"><strong>What it is:</strong> Technical monitoring of the prediction model.</p>
+<p class="md-p"><strong>When to check:</strong> Monthly, unless the system alerts you to something.</p>
+<ul class='md-list'><li><strong>Brier score trend:</strong> Is the model getting more or less accurate over time? A</li></ul>
+<p class="md-p">  rising Brier score is a warning sign that the model may need recalibration or</p>
+<p class="md-p">  retraining. The self-improvement engine handles this automatically, but this</p>
+<p class="md-p">  chart lets you see what is happening.</p>
+<ul class='md-list'><li><strong>Calibration curve:</strong> The plot of predicted probabilities vs actual frequencies.</li></ul>
+<p class="md-p">  Points should hug the diagonal line. If they consistently sit below it, the model</p>
+<p class="md-p">  is overconfident. If above, underconfident.</p>
+<ul class='md-list'><li><strong>Market edge heatmap:</strong> A grid showing league x market combinations, colour-coded</li></ul>
+<p class="md-p">  by profitability assessment (green = profitable, yellow = promising, grey =</p>
+<p class="md-p">  insufficient data, red = unprofitable). This tells you where the system has</p>
+<p class="md-p">  genuine edge.</p>
+<h3 id="bankroll-manager" class="md-h3 subsection-header">Bankroll Manager</h3>
+<p class="md-p"><strong>What it is:</strong> Your financial overview.</p>
+<p class="md-p"><strong>When to check:</strong> Weekly, or whenever you want a bankroll snapshot.</p>
+<ul class='md-list'><li>Current bankroll amount and change from starting value.</li>
+<li>Peak bankroll and current drawdown percentage.</li>
+<li>Bankroll balance chart over time.</li>
+<li>Safety limit status: all green (normal), or warnings active.</li>
+<li>Recent bet history with individual P&L.</li></ul>
+<p class="md-p"><strong>How to use it:</strong> A quick glance to confirm everything is healthy. If you see a</p>
+<p class="md-p">drawdown warning, do not panic -- drawdowns are a normal part of betting even with</p>
+<p class="md-p">a winning system. But it is worth reviewing your recent bets and the model's health</p>
+<p class="md-p">metrics to confirm nothing is fundamentally wrong.</p>
+<h3 id="settings" class="md-h3 subsection-header">Settings</h3>
+<p class="md-p"><strong>What it is:</strong> Your control panel.</p>
+<p class="md-p"><strong>When to use:</strong> During initial setup, and whenever you want to adjust parameters.</p>
+<ul class='md-list'><li><strong>Edge threshold slider:</strong> Adjust between 3% and 15%. Lower = more bets with</li></ul>
+<p class="md-p">  smaller average edges. Higher = fewer bets with larger edges.</p>
+<ul class='md-list'><li><strong>Staking method selector:</strong> Switch between flat, percentage, and Kelly. Start</li></ul>
+<p class="md-p">  with flat. Consider percentage after 200+ bets. Consider Kelly only after 500+</p>
+<p class="md-p">  bets with confirmed calibration.</p>
+<ul class='md-list'><li><strong>Bankroll adjustment:</strong> Update your current bankroll if you add or withdraw</li></ul>
+<p class="md-p">  funds externally.</p>
+<ul class='md-list'><li><strong>Notification preferences:</strong> Toggle morning picks, evening review, and weekly</li></ul>
+<p class="md-p">  summary emails.</p>
+<ul class='md-list'><li><strong>League selection:</strong> Enable or disable leagues.</li>
+<li><strong>Paper trading toggle:</strong> Switch between paper mode and live mode.</li></ul>
+<hr class='md-hr'>
+<h2 id="10-putting-it-all-together----a-typical-week" class="md-h2 section-header">10. Putting It All Together -- A Typical Week</h2>
+<p class="md-p">Here is what a typical week of using BetVector looks like once the system is</p>
+<p class="md-p">running and you have settled into the routine.</p>
+<h3 id="monday-morning" class="md-h3 subsection-header">Monday Morning</h3>
+<p class="md-p">You check your phone and see the BetVector morning email. Subject line:</p>
+<p class="md-p">"BetVector -- 3 Value Bets Today -- EPL."</p>
+<p class="md-p">Inside, three picks:</p>
+<ol class='md-list'><li><strong>Arsenal vs Fulham -- Over 2.5 Goals.</strong> Model: 68%. Bet365: 1.80 (implied</li></ol>
+<p class="md-p">   55.6%). Edge: 12.4%. Confidence: HIGH. Stake: 25 pounds. Explanation: Arsenal</p>
+<p class="md-p">   averaging 2.1 goals per game at home over last 5, Fulham conceding 1.6 away.</p>
+<p class="md-p">   Combined expected goals of 3.7 strongly favours the over.</p>
+<ol class='md-list'><li><strong>Brighton vs Brentford -- Home Win.</strong> Model: 52%. Odds: 2.15 (implied 46.5%).</li></ol>
+<p class="md-p">   Edge: 5.5%. Confidence: MEDIUM. Stake: 20 pounds.</p>
+<ol class='md-list'><li><strong>Crystal Palace vs Bournemouth -- BTTS Yes.</strong> Model: 61%. Odds: 1.75</li></ol>
+<p class="md-p">   (implied 57.1%). Edge: 3.9%. Confidence: MEDIUM. Stake: 20 pounds.</p>
+<p class="md-p">You open the dashboard for a quick check. The third pick -- Crystal Palace BTTS --</p>
+<p class="md-p">has a "promising but insufficient data" warning on EPL BTTS from the market</p>
+<p class="md-p">feedback loop. You decide to skip it and place the first two.</p>
+<p class="md-p">You mark both as "placed" on the dashboard, entering the actual odds you got from</p>
+<p class="md-p">your sportsbook (which might differ slightly from when the system ran).</p>
+<h3 id="monday-evening" class="md-h3 subsection-header">Monday Evening</h3>
+<p class="md-p">The evening email arrives. Subject: "BetVector Evening -- +20.00 Today -- 1/2</p>
+<p class="md-p">Wins."</p>
+<p class="md-p">Arsenal beat Fulham 3-1. Over 2.5 bet won. Profit: +20 pounds (25 stake at 1.80,</p>
+<p class="md-p">payout 45, minus 25 stake).</p>
+<p class="md-p">Brighton drew 1-1 with Brentford. Home win bet lost. Loss: -20 pounds.</p>
+<p class="md-p">Net daily P&L: 0 pounds. A flat day. The system notes this is within normal</p>
+<p class="md-p">variance.</p>
+<h3 id="tuesday-through-friday" class="md-h3 subsection-header">Tuesday through Friday</h3>
+<p class="md-p">The routine continues. Some days have zero value bets -- the email says "No value</p>
+<p class="md-p">bets today. The model found no edges above your 5% threshold." Other days have</p>
+<p class="md-p">1-2 picks. You place the ones you agree with after a quick check of the League</p>
+<p class="md-p">Explorer.</p>
+<ul class='md-list'><li><strong>Tuesday:</strong> 1 value bet. You place it. It loses. Running weekly P&L: -20 pounds.</li>
+<li><strong>Wednesday:</strong> No value bets. No action. Discipline, not inactivity.</li>
+<li><strong>Thursday:</strong> 2 value bets. You place both. One wins, one loses. Running P&L: -20.</li>
+<li><strong>Friday:</strong> 1 value bet with a 14% edge -- the largest you have seen this week.</li></ul>
+<p class="md-p">  HIGH confidence. You place it. It wins at odds of 2.40 for a healthy profit.</p>
+<p class="md-p">  Running P&L: +8 pounds.</p>
+<h3 id="saturday----big-matchday" class="md-h3 subsection-header">Saturday -- Big Matchday</h3>
+<p class="md-p">Six Premier League fixtures. The morning email has 4 value bets. You review them</p>
+<p class="md-p">on the dashboard, check the League Explorer for form context, and place 3 of them</p>
+<p class="md-p">(skipping one where the model's view contradicts something you know about a</p>
+<p class="md-p">recent manager change that the data has not captured yet).</p>
+<p class="md-p">Results come in throughout the afternoon. Two of your three bets win. A good day.</p>
+<p class="md-p">Running weekly P&L: +52 pounds.</p>
+<h3 id="sunday-evening" class="md-h3 subsection-header">Sunday Evening</h3>
+<p class="md-p">The weekly summary email arrives. Highlights:</p>
+<ul class='md-list'><li><strong>Bets this week:</strong> 9 system picks, 7 placed by you.</li>
+<li><strong>Your placed bet win rate:</strong> 4/7 (57.1%).</li>
+<li><strong>Weekly ROI:</strong> +3.2%.</li>
+<li><strong>Cumulative ROI:</strong> +1.8% (slowly climbing from the early weeks).</li>
+<li><strong>Model health:</strong> Brier score stable at 0.205. Calibration within normal range.</li></ul>
+<p class="md-p">  No recalibration triggered.</p>
+<ul class='md-list'><li><strong>Best pick of the week:</strong> Friday's 14% edge bet. Won at 2.40.</li>
+<li><strong>Worst pick of the week:</strong> Tuesday's loss. Edge was only 5.2%, right at the</li></ul>
+<p class="md-p">  threshold.</p>
+<p class="md-p">You open the Model Health page for a monthly check. The calibration curve is</p>
+<p class="md-p">hugging the diagonal -- the probabilities are honest. The market edge heatmap shows</p>
+<p class="md-p">"EPL 1X2" as promising and "EPL O/U 2.5" as profitable (your strongest market).</p>
+<p class="md-p">No markets are flagged as unprofitable yet (insufficient data -- you need more</p>
+<p class="md-p">bets to draw conclusions).</p>
+<h3 id="the-long-game" class="md-h3 subsection-header">The Long Game</h3>
+<p class="md-p">This weekly cycle repeats. After 3-4 weeks, you have 40-60 tracked bets and an</p>
+<p class="md-p">emerging sense of whether the system has an edge. After 3 months, you have 200+</p>
+<p class="md-p">bets and the statistical picture becomes much clearer. After 6 months with 500+</p>
+<p class="md-p">bets, you know with reasonable confidence whether BetVector generates genuine</p>
+<p class="md-p">long-term profit.</p>
+<p class="md-p">The key mental shift happens somewhere around bet 200: you stop thinking about</p>
+<p class="md-p">individual bets and start thinking about the process. A losing bet at good odds</p>
+<p class="md-p">was still a good bet. A winning bet at bad odds was still a bad bet. What matters</p>
+<p class="md-p">is the edge over hundreds of repetitions. This is the mindset of a quantitative</p>
+<p class="md-p">bettor, and it is the mindset BetVector is designed to cultivate.</p>
+<hr class='md-hr'>
+<h2 id="11-glossary" class="md-h2 section-header">11. Glossary</h2>
+<p class="md-p">An alphabetical reference for every technical term used throughout this guide and</p>
+<p class="md-p">in the BetVector system.</p>
+<hr class='md-hr'>
+<p class="md-p"><strong>Asian Handicap</strong></p>
+<p class="md-p">A betting market that applies a goal advantage or disadvantage to one team. "Arsenal</p>
+<p class="md-p">-1.5" means Arsenal must win by 2 or more goals for the bet to win. Half-goal</p>
+<p class="md-p">handicaps (like -0.5 or -1.5) eliminate draws. Whole-goal handicaps (like -1.0) can</p>
+<p class="md-p">result in a "push" where your stake is returned if the handicapped result is a draw.</p>
+<p class="md-p">Asian handicaps reduce the number of possible outcomes from three (home/draw/away) to</p>
+<p class="md-p">two, making them popular for more targeted betting.</p>
+<hr class='md-hr'>
+<p class="md-p"><strong>Bankroll</strong></p>
+<p class="md-p">The total amount of money set aside specifically for betting. It is ring-fenced</p>
+<p class="md-p">capital that you can afford to lose entirely without affecting your life. Your</p>
+<p class="md-p">bankroll is separate from living expenses, savings, and everything else. If your</p>
+<p class="md-p">bankroll goes to zero, nothing else in your life should be affected. This mental</p>
+<p class="md-p">and financial separation is a fundamental prerequisite for disciplined betting.</p>
+<hr class='md-hr'>
+<p class="md-p"><strong>Bootstrap Resampling</strong></p>
+<p class="md-p">A statistical technique for estimating how much a measurement might vary. It works</p>
+<p class="md-p">by repeatedly drawing random samples from your existing data (with replacement) and</p>
+<p class="md-p">recalculating the statistic of interest each time. After thousands of repetitions,</p>
+<p class="md-p">you get a distribution that shows the likely range of the true value. BetVector uses</p>
+<p class="md-p">bootstrap resampling to calculate 95% confidence intervals for ROI in the market</p>
+<p class="md-p">feedback loop, because it makes fewer assumptions about the data than standard</p>
+<p class="md-p">statistical formulas and handles the quirks of betting data more robustly.</p>
+<hr class='md-hr'>
+<p class="md-p"><strong>Brier Score</strong></p>
+<p class="md-p">A measure of how accurate probabilistic predictions are. Calculated as the mean of</p>
+<p class="md-p">(predicted probability - actual outcome) squared, where actual outcome is 1</p>
+<p class="md-p">(happened) or 0 (did not happen). Ranges from 0.0 (perfect) to 1.0 (perfectly</p>
+<p class="md-p">wrong). A score of 0.25 is equivalent to predicting 50/50 on everything -- the</p>
+<p class="md-p">baseline of uselessness. For football 1X2 markets, anything below 0.20 is</p>
+<p class="md-p">genuinely good. Lower is better. Named after Glenn Brier, who proposed it in 1950</p>
+<p class="md-p">for evaluating weather forecasts.</p>
+<hr class='md-hr'>
+<p class="md-p"><strong>Calibration</strong></p>
+<p class="md-p">Whether predicted probabilities match observed frequencies in reality. A model is</p>
+<p class="md-p">well-calibrated if, among all predictions it labels as "60% likely," roughly 60%</p>
+<p class="md-p">actually occur. Visualised as a calibration curve plotting predicted probability</p>
+<p class="md-p">(x-axis) against actual frequency (y-axis). A perfectly calibrated model follows</p>
+<p class="md-p">the diagonal line. Points below the diagonal indicate overconfidence (the model</p>
+<p class="md-p">predicts higher probabilities than reality delivers). Points above indicate</p>
+<p class="md-p">underconfidence (reality delivers more than the model predicts).</p>
+<hr class='md-hr'>
+<p class="md-p"><strong>CLV (Closing Line Value)</strong></p>
+<p class="md-p">The difference between the odds you got when you placed a bet and the final</p>
+<p class="md-p">("closing") odds at kickoff. The closing line represents the market's most</p>
+<p class="md-p">informed estimate, incorporating all available information and betting volume.</p>
+<p class="md-p">Positive CLV means you got better odds than the closing line -- you were ahead of</p>
+<p class="md-p">the market. Positive average CLV over a large sample (200+ bets) is the single</p>
+<p class="md-p">most reliable indicator of a genuine long-term edge in sports betting, even more</p>
+<p class="md-p">reliable than short-term ROI which can be dominated by luck.</p>
+<hr class='md-hr'>
+<p class="md-p"><strong>Confidence Interval</strong></p>
+<p class="md-p">A range of values that is likely to contain the true value of a measurement. A</p>
+<p class="md-p">"95% confidence interval of +1.2% to +8.4%" for ROI means that, based on the</p>
+<p class="md-p">data and its variability, the true long-run ROI is likely somewhere in that range.</p>
+<p class="md-p">If the entire interval is above zero, you have statistical evidence of a genuine</p>
+<p class="md-p">edge. If the interval includes zero, the edge might be real but you do not yet</p>
+<p class="md-p">have enough data to be sure.</p>
+<hr class='md-hr'>
+<p class="md-p"><strong>Drawdown</strong></p>
+<p class="md-p">The percentage decline from your bankroll's all-time peak to its current value. If</p>
+<p class="md-p">your bankroll peaked at 1,200 pounds and is now 900 pounds, your drawdown is</p>
+<p class="md-p">(1200 - 900) / 1200 = 25%. Drawdowns are a normal and inevitable part of betting,</p>
+<p class="md-p">even with a genuine edge. The question is not whether drawdowns happen, but how</p>
+<p class="md-p">deep they get and how long they last before recovery. BetVector alerts you at a</p>
+<p class="md-p">25% drawdown as a precaution.</p>
+<hr class='md-hr'>
+<p class="md-p"><strong>Edge</strong></p>
+<p class="md-p">The difference between your model's estimated probability and the bookmaker's</p>
+<p class="md-p">implied probability. Calculated as: model probability minus implied probability.</p>
+<p class="md-p">A positive edge means the bookmaker is offering better odds than the model thinks</p>
+<p class="md-p">are warranted -- the bet has value. Example: if the model says 55% and the implied</p>
+<p class="md-p">probability is 47.6%, the edge is 7.4%. This is BetVector's estimate of your</p>
+<p class="md-p">advantage on a particular bet.</p>
+<hr class='md-hr'>
+<p class="md-p"><strong>Ensemble</strong></p>
+<p class="md-p">A prediction technique that combines multiple models into a single, more robust</p>
+<p class="md-p">prediction. In BetVector, each model (Poisson, Elo, XGBoost) produces its own</p>
+<p class="md-p">7x7 scoreline matrix. The ensemble creates a weighted average of those matrices,</p>
+<p class="md-p">where the weights reflect each model's recent accuracy. Ensembles typically</p>
+<p class="md-p">outperform any individual model because different models capture different patterns,</p>
+<p class="md-p">and their errors tend to partially cancel each other out.</p>
+<hr class='md-hr'>
+<p class="md-p"><strong>Expected Value (EV)</strong></p>
+<p class="md-p">The average profit or loss per unit staked over many repetitions of the same type</p>
+<p class="md-p">of bet. Calculated as: (model probability x decimal odds) - 1.0. Positive EV</p>
+<p class="md-p">means the bet is profitable in the long run. Example: 0.55 probability x 2.10</p>
+<p class="md-p">odds = 1.155, minus 1.0 = +0.155, meaning 15.5p expected profit per pound staked.</p>
+<p class="md-p">A single bet might win or lose, but the EV tells you what happens on average</p>
+<p class="md-p">across many similar bets.</p>
+<hr class='md-hr'>
+<p class="md-p"><strong>Implied Probability</strong></p>
+<p class="md-p">The probability a bookmaker's odds suggest for an outcome. Calculated as 1 divided</p>
+<p class="md-p">by the decimal odds. Odds of 2.00 imply a 50% probability. Odds of 1.50 imply</p>
+<p class="md-p">66.7%. Odds of 4.00 imply 25%. Note that implied probabilities across all outcomes</p>
+<p class="md-p">in a market sum to more than 100% -- the excess is the overround (the bookmaker's</p>
+<p class="md-p">margin).</p>
+<hr class='md-hr'>
+<p class="md-p"><strong>Isotonic Regression</strong></p>
+<p class="md-p">A non-parametric calibration technique used in BetVector's automatic recalibration</p>
+<p class="md-p">system. It fits a non-decreasing (monotonically increasing) function to transform</p>
+<p class="md-p">predicted probabilities into calibrated probabilities. Unlike Platt scaling (which</p>
+<p class="md-p">assumes a specific logistic shape), isotonic regression makes no assumptions about</p>
+<p class="md-p">the form of the calibration curve. It is more flexible but requires more data</p>
+<p class="md-p">points to work reliably. It can correct different biases at different probability</p>
+<p class="md-p">ranges simultaneously.</p>
+<hr class='md-hr'>
+<p class="md-p"><strong>Kelly Criterion</strong></p>
+<p class="md-p">A formula from information theory that calculates the optimal bet size to maximise</p>
+<p class="md-p">the long-term growth rate of your bankroll. Formula: f* = (p x b - 1) / (b - 1),</p>
+<p class="md-p">where p is the true probability and b is the decimal odds. Full Kelly is</p>
+<p class="md-p">aggressive and assumes perfect probability estimates. BetVector uses fractional</p>
+<p class="md-p">Kelly (typically quarter-Kelly at 25% of the full amount) to account for the</p>
+<p class="md-p">inevitable imperfection in probability estimates. Named after John Kelly, who</p>
+<p class="md-p">published the formula in 1956 while working at Bell Labs.</p>
+<hr class='md-hr'>
+<p class="md-p"><strong>Lambda</strong></p>
+<p class="md-p">The rate parameter of the Poisson distribution. In BetVector, lambda represents</p>
+<p class="md-p">the expected number of goals a team will score in a specific match. A lambda of</p>
+<p class="md-p">1.5 does not mean the team will score exactly 1.5 goals -- it is the centre of a</p>
+<p class="md-p">probability distribution. The actual number of goals could be 0, 1, 2, 3, or</p>
+<p class="md-p">more, with each possibility having a specific probability determined by the</p>
+<p class="md-p">Poisson distribution with that lambda value.</p>
+<hr class='md-hr'>
+<p class="md-p"><strong>Overround (Margin / Vig / Vigorish / Juice)</strong></p>
+<p class="md-p">The bookmaker's built-in profit margin. In a fair market, the implied probabilities</p>
+<p class="md-p">for all outcomes sum to exactly 100%. Bookmakers set odds so they sum to 105-110%.</p>
+<p class="md-p">The excess is guaranteed profit for the bookmaker regardless of the match outcome.</p>
+<p class="md-p">Example: a coin flip should have each side at 50% (total 100%). A bookmaker might</p>
+<p class="md-p">price each side at 1.90 (implying 52.6% each, total 105.2%). That 5.2% is the</p>
+<p class="md-p">overround. It is the fundamental reason most bettors lose money over time.</p>
+<hr class='md-hr'>
+<p class="md-p"><strong>Paper Trading</strong></p>
+<p class="md-p">A mode where bets are tracked with full fidelity -- P&L, ROI, Brier score, CLV,</p>
+<p class="md-p">everything -- but no actual money is at risk. BetVector starts in paper trading</p>
+<p class="md-p">mode by default. All dashboard pages and email notifications work identically.</p>
+<p class="md-p">The purpose is to validate the model's edge before committing real capital. It is</p>
+<p class="md-p">the same concept as paper trading in stock markets: full simulation with no</p>
+<p class="md-p">financial exposure.</p>
+<hr class='md-hr'>
+<p class="md-p"><strong>Platt Scaling</strong></p>
+<p class="md-p">A calibration technique that fits a logistic regression model to transform raw</p>
+<p class="md-p">model probabilities into calibrated probabilities. Named after John Platt, who</p>
+<p class="md-p">proposed it in 1999. It assumes the calibration curve has a logistic (S-shaped)</p>
+<p class="md-p">form, which works well when the model has a consistent directional bias (e.g.,</p>
+<p class="md-p">uniformly overconfident or underconfident). BetVector uses Platt scaling as one</p>
+<p class="md-p">option in its automatic recalibration system.</p>
+<hr class='md-hr'>
+<p class="md-p"><strong>Poisson Distribution</strong></p>
+<p class="md-p">A probability distribution that models how many times a rare event occurs in a</p>
+<p class="md-p">fixed period, given a known average rate (lambda). In football, it models the</p>
+<p class="md-p">number of goals scored by a team in a match. If lambda = 1.5, the Poisson</p>
+<p class="md-p">distribution assigns: P(0 goals) = 22.3%, P(1 goal) = 33.5%, P(2 goals) = 25.1%,</p>
+<p class="md-p">P(3 goals) = 12.6%, P(4 goals) = 4.7%, and so on. The probabilities decrease for</p>
+<p class="md-p">higher values but never reach exactly zero. Named after Simeon Denis Poisson, the</p>
+<p class="md-p">French mathematician who published the distribution in 1837.</p>
+<hr class='md-hr'>
+<p class="md-p"><strong>ROI (Return on Investment)</strong></p>
+<p class="md-p">The total profit or loss as a percentage of total amount staked. Calculated as</p>
+<p class="md-p">(total PnL / total staked) x 100%. An ROI of +5% means you have earned 5p profit</p>
+<p class="md-p">for every pound staked. Professional sports bettors target 2-5% ROI over large</p>
+<p class="md-p">samples (500+ bets). ROI is extremely noisy over small samples and should not be</p>
+<p class="md-p">used to evaluate performance over fewer than 200 bets. A -4% ROI over 50 bets</p>
+<p class="md-p">tells you almost nothing; the same number over 1,000 bets is a meaningful signal.</p>
+<hr class='md-hr'>
+<p class="md-p"><strong>Rolling Window</strong></p>
+<p class="md-p">A method of calculating statistics using only the most recent N data points, where</p>
+<p class="md-p">the window "rolls" forward as new data arrives. In BetVector, a 5-match rolling</p>
+<p class="md-p">window for goals scored means the average goals scored over the team's last 5</p>
+<p class="md-p">completed matches. As each new match finishes, it enters the window and the oldest</p>
+<p class="md-p">match drops out. This captures recent form better than a full-season average</p>
+<p class="md-p">because football teams' performance fluctuates over a season due to injuries,</p>
+<p class="md-p">confidence, fatigue, and tactical changes.</p>
+<hr class='md-hr'>
+<p class="md-p"><strong>Scoreline Matrix</strong></p>
+<p class="md-p">A 7x7 grid of probabilities at the heart of BetVector's architecture. Each cell</p>
+<p class="md-p">(h, a) represents the probability of the match ending with the home team scoring</p>
+<p class="md-p">h goals and the away team scoring a goals. The matrix covers all scorelines from</p>
+<p class="md-p">0-0 to 6-6 (49 possibilities). All cells sum to 1.0 (100%). Every prediction</p>
+<p class="md-p">model in the system must produce this matrix as its output, and every market</p>
+<p class="md-p">probability (1X2, Over/Under, BTTS) is derived from it by summing the appropriate</p>
+<p class="md-p">cells. This makes the matrix the universal interface between models and the rest</p>
+<p class="md-p">of the system.</p>
+<hr class='md-hr'>
+<p class="md-p"><strong>Value Bet</strong></p>
+<p class="md-p">A bet where your estimated probability of the outcome exceeds the bookmaker's</p>
+<p class="md-p">implied probability. It does not mean the bet will win -- it means the price is</p>
+<p class="md-p">better than it should be relative to the true odds. Over many value bets, the law</p>
+<p class="md-p">of large numbers ensures profit if your probability estimates are well-calibrated.</p>
+<p class="md-p">The concept is analogous to a casino's house edge: individual hands of blackjack</p>
+<p class="md-p">are unpredictable, but the mathematical advantage guarantees the casino profits</p>
+<p class="md-p">over thousands of hands.</p>
+<hr class='md-hr'>
+<p class="md-p"><strong>Walk-Forward Validation</strong></p>
+<p class="md-p">The only valid backtesting method for time-series prediction like sports betting.</p>
+<p class="md-p">The process: train the model on all data up to date T, predict the next set of</p>
+<p class="md-p">matches, record the results, then advance T forward and repeat. This simulates</p>
+<p class="md-p">real-world conditions where you only have historical data when making predictions.</p>
+<p class="md-p">It is fundamentally different from random train/test splits (common in machine</p>
+<p class="md-p">learning) which would leak future information and produce artificially inflated</p>
+<p class="md-p">results that do not replicate in live betting.</p>
+<hr class='md-hr'>
+<p class="md-p"><strong>xG (Expected Goals)</strong></p>
+<p class="md-p">A statistical measure of the quality of goal-scoring chances created in a match.</p>
+<p class="md-p">Each shot is assigned a probability of being scored based on factors like distance</p>
+<p class="md-p">from goal, angle, body part used, type of assist, and game situation. A team's</p>
+<p class="md-p">match xG is the sum of all their shot probabilities. If a team had shots with</p>
+<p class="md-p">probabilities of 0.35, 0.12, 0.08, 0.04, and 0.02, their xG is 0.61. xG is more</p>
+<p class="md-p">predictive of future performance than actual goals scored because it is less</p>
+<p class="md-p">affected by the randomness of finishing. A team consistently generating 2.0 xG but</p>
+<p class="md-p">only scoring 1.2 actual goals per game is likely to start scoring more as luck</p>
+<p class="md-p">evens out.</p>
+<hr class='md-hr'>
+<p class="md-p"><em>BetVector -- putting the data on your side.</em></p>
     </main>
   </div>
 
