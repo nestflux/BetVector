@@ -1,9 +1,12 @@
 # ===== BetVector .gitignore =====
 
 # --- Database files ---
-data/*.db
+# The main database IS tracked so GitHub Actions has it.
+# WAL/SHM are temp files and should not be committed.
+!data/betvector.db
 data/*.db-wal
 data/*.db-shm
+data/backups/
 
 # --- Raw scraped data (re-downloadable, don't bloat repo) ---
 data/raw/

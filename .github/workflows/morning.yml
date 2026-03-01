@@ -61,7 +61,14 @@ jobs:
           pip install -r requirements.txt
           pip install -e .
 
-      # --- 4. Run the morning pipeline ---
+      # --- 4. Initialise database if it doesn't exist ---
+      - name: Initialise database
+        env:
+          FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
+        run: |
+          python run_pipeline.py setup
+
+      # --- 5. Run the morning pipeline ---
       - name: Run morning pipeline
         env:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}

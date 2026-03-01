@@ -56,6 +56,12 @@ jobs:
           pip install -r requirements.txt
           pip install -e .
 
+      - name: Initialise database
+        env:
+          FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
+        run: |
+          python run_pipeline.py setup
+
       - name: Run evening pipeline
         env:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
