@@ -789,6 +789,28 @@ def main():
     out_bp.write_text(bp_html, encoding="utf-8")
     print(f"Written: {out_bp}  ({len(bp_html):,} bytes)")
 
+    # --- How-To Manual ---
+    ht_path = root / "betvector_howto.md"
+    if ht_path.exists():
+        ht_md = ht_path.read_text(encoding="utf-8")
+        ht_content, ht_toc = md_to_html(ht_md, doc_type="howto")
+        ht_toc_html = build_toc_html(ht_toc)
+        ht_html = build_page("How-To Manual", "How-To Manual", ht_content, ht_toc_html)
+        out_ht = root / "betvector_howto.html"
+        out_ht.write_text(ht_html, encoding="utf-8")
+        print(f"Written: {out_ht}  ({len(ht_html):,} bytes)")
+
+    # --- How It Works ---
+    hw_path = root / "betvector_howitworks.md"
+    if hw_path.exists():
+        hw_md = hw_path.read_text(encoding="utf-8")
+        hw_content, hw_toc = md_to_html(hw_md, doc_type="howitworks")
+        hw_toc_html = build_toc_html(hw_toc)
+        hw_html = build_page("How It Works", "How It Works", hw_content, hw_toc_html)
+        out_hw = root / "betvector_howitworks.html"
+        out_hw.write_text(hw_html, encoding="utf-8")
+        print(f"Written: {out_hw}  ({len(hw_html):,} bytes)")
+
 
 if __name__ == "__main__":
     main()

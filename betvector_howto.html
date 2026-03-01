@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BetVector — How-To Manual</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #0D1117;
+      color: #E6EDF3;
+      line-height: 1.7;
+      font-size: 16px;
+    }
+
+    /* --- Top Nav --- */
+    .top-nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: #0D1117;
+      border-bottom: 1px solid #30363D;
+      padding: 0.75rem 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+      backdrop-filter: blur(12px);
+    }
+    .top-nav .logo {
+      font-size: 1.3rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #3FB950, #58a6ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-decoration: none;
+    }
+    .top-nav .page-title {
+      color: #8B949E;
+      font-size: 1rem;
+      font-weight: 500;
+    }
+    .hamburger {
+      display: none;
+      background: none;
+      border: none;
+      color: #E6EDF3;
+      font-size: 1.5rem;
+      cursor: pointer;
+      margin-left: auto;
+    }
+
+    /* --- Layout --- */
+    .layout {
+      display: flex;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    /* --- Sidebar TOC --- */
+    .sidebar {
+      width: 280px;
+      min-width: 280px;
+      position: sticky;
+      top: 52px;
+      height: calc(100vh - 52px);
+      overflow-y: auto;
+      border-right: 1px solid #30363D;
+      padding: 1.5rem 0;
+      scrollbar-width: thin;
+      scrollbar-color: #30363D transparent;
+    }
+    .sidebar::-webkit-scrollbar { width: 4px; }
+    .sidebar::-webkit-scrollbar-track { background: transparent; }
+    .sidebar::-webkit-scrollbar-thumb { background: #30363D; border-radius: 2px; }
+    .sidebar .toc-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #8B949E;
+      padding: 0 1.25rem;
+      margin-bottom: 0.75rem;
+    }
+    .toc-item {
+      display: block;
+      padding: 0.35rem 1.25rem;
+      color: #8B949E;
+      text-decoration: none;
+      font-size: 0.85rem;
+      border-left: 2px solid transparent;
+      transition: all 0.15s;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .toc-item:hover {
+      color: #E6EDF3;
+      background: #161B22;
+    }
+    .toc-item.active {
+      color: #3FB950;
+      border-left-color: #3FB950;
+    }
+    .toc-h3 { padding-left: 2.25rem; font-size: 0.8rem; }
+
+    /* --- Main Content --- */
+    .content {
+      flex: 1;
+      min-width: 0;
+      padding: 2rem 3rem;
+      max-width: 900px;
+    }
+
+    /* --- Typography --- */
+    .md-h2.section-header {
+      font-size: 1.75rem;
+      font-weight: 700;
+      margin: 2.5rem 0 1rem;
+      padding: 0.5rem 0 0.5rem 1rem;
+      border-left: 4px solid #3FB950;
+    }
+    .md-h3.subsection-header {
+      font-size: 1.3rem;
+      font-weight: 600;
+      margin: 2rem 0 0.75rem;
+      color: #58a6ff;
+    }
+    .md-h4 { font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
+    .md-h5 { font-size: 1rem; font-weight: 600; margin: 1rem 0 0.5rem; color: #8B949E; }
+    .md-p { margin-bottom: 1rem; }
+    .md-p strong { color: #fff; }
+
+    /* --- Links --- */
+    .md-link { color: #58a6ff; text-decoration: none; }
+    .md-link:hover { text-decoration: underline; }
+
+    /* --- Lists --- */
+    .md-list {
+      margin: 0.5rem 0 1rem 1.5rem;
+    }
+    .md-list li {
+      margin-bottom: 0.4rem;
+      padding-left: 0.25rem;
+    }
+
+    /* --- Checkboxes --- */
+    .checkbox {
+      font-family: 'JetBrains Mono', monospace;
+      color: #8B949E;
+      margin-right: 0.3rem;
+    }
+    .checkbox.checked { color: #3FB950; }
+
+    /* --- Code --- */
+    .inline-code {
+      font-family: 'JetBrains Mono', monospace;
+      background: #161B22;
+      border: 1px solid #30363D;
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      font-size: 0.88em;
+      color: #58a6ff;
+    }
+    .code-block {
+      position: relative;
+      background: #161B22;
+      border: 1px solid #30363D;
+      border-radius: 8px;
+      margin: 1rem 0;
+      overflow-x: auto;
+    }
+    .code-block pre {
+      padding: 1.25rem;
+      margin: 0;
+      overflow-x: auto;
+    }
+    .code-block code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      line-height: 1.6;
+      color: #E6EDF3;
+    }
+    .code-lang {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.75rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      color: #8B949E;
+      text-transform: uppercase;
+    }
+    .code-keyword { color: #ff7b72; font-weight: 500; }
+    .code-string { color: #a5d6ff; }
+    .code-comment { color: #8B949E; font-style: italic; }
+    .code-decorator { color: #D29922; }
+
+    /* --- Tables --- */
+    .table-wrapper {
+      overflow-x: auto;
+      margin: 1rem 0;
+      border-radius: 8px;
+      border: 1px solid #30363D;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    thead th {
+      background: #161B22;
+      padding: 0.75rem 1rem;
+      text-align: left;
+      font-weight: 600;
+      color: #E6EDF3;
+      border-bottom: 1px solid #30363D;
+      white-space: nowrap;
+    }
+    tbody td {
+      padding: 0.6rem 1rem;
+      border-bottom: 1px solid #30363D;
+    }
+    tbody tr:nth-child(even) {
+      background: rgba(22, 27, 34, 0.5);
+    }
+    tbody tr:hover {
+      background: rgba(63, 185, 80, 0.05);
+    }
+
+    /* --- Blockquotes --- */
+    .md-blockquote {
+      border-left: 3px solid #58a6ff;
+      padding: 0.75rem 1.25rem;
+      margin: 1rem 0;
+      background: #161B22;
+      border-radius: 0 8px 8px 0;
+      color: #8B949E;
+      font-style: italic;
+    }
+
+    /* --- Horizontal rules --- */
+    .md-hr {
+      border: none;
+      border-top: 1px solid #30363D;
+      margin: 2rem 0;
+    }
+
+    /* --- Badges --- */
+    .badge {
+      display: inline-block;
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 0.2rem 0.6rem;
+      border-radius: 12px;
+      vertical-align: middle;
+      margin-left: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .badge-completed {
+      background: rgba(63, 185, 80, 0.15);
+      color: #3FB950;
+      border: 1px solid rgba(63, 185, 80, 0.3);
+    }
+
+    /* --- Back to top --- */
+    .back-to-top {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: #3FB950;
+      color: #0D1117;
+      border: none;
+      cursor: pointer;
+      font-size: 1.25rem;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      transition: transform 0.2s;
+      z-index: 50;
+    }
+    .back-to-top:hover { transform: scale(1.1); }
+    .back-to-top.visible { display: flex; }
+
+    /* --- Mobile --- */
+    @media (max-width: 768px) {
+      .hamburger { display: block; }
+      .sidebar {
+        position: fixed;
+        top: 52px;
+        left: -300px;
+        width: 280px;
+        min-width: 280px;
+        height: calc(100vh - 52px);
+        background: #0D1117;
+        z-index: 90;
+        transition: left 0.3s ease;
+        border-right: 1px solid #30363D;
+      }
+      .sidebar.open { left: 0; }
+      .sidebar-overlay {
+        display: none;
+        position: fixed;
+        top: 52px;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 80;
+      }
+      .sidebar-overlay.open { display: block; }
+      .content {
+        padding: 1.5rem 1rem;
+      }
+      .md-h2.section-header { font-size: 1.4rem; }
+    }
+    </style>
+</head>
+<body>
+  <nav class="top-nav">
+    <a href="index.html" class="logo">BetVector</a>
+    <span class="page-title">How-To Manual</span>
+    <button class="hamburger" id="hamburger">&#9776;</button>
+  </nav>
+
+  <div class="sidebar-overlay" id="overlay"></div>
+
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="toc-title">Contents</div>
+      <a href="#table-of-contents" class="toc-item toc-h2">Table of Contents</a>
+<a href="#getting-started" class="toc-item toc-h2">Getting Started</a>
+<a href="#prerequisites" class="toc-item toc-h3">Prerequisites</a>
+<a href="#installation" class="toc-item toc-h3">Installation</a>
+<a href="#setting-up-the-env-file" class="toc-item toc-h3">Setting Up the `.env` File</a>
+<a href="#first-time-setup" class="toc-item toc-h3">First-Time Setup</a>
+<a href="#running-your-first-backtest" class="toc-item toc-h3">Running Your First Backtest</a>
+<a href="#running-the-pipeline" class="toc-item toc-h2">Running the Pipeline</a>
+<a href="#morning-pipeline-0600-utc" class="toc-item toc-h3">Morning Pipeline (06:00 UTC)</a>
+<a href="#midday-pipeline-1300-utc" class="toc-item toc-h3">Midday Pipeline (13:00 UTC)</a>
+<a href="#evening-pipeline-2200-utc" class="toc-item toc-h3">Evening Pipeline (22:00 UTC)</a>
+<a href="#verbose-mode" class="toc-item toc-h3">Verbose Mode</a>
+<a href="#pipeline-resilience" class="toc-item toc-h3">Pipeline Resilience</a>
+<a href="#using-the-dashboard" class="toc-item toc-h2">Using the Dashboard</a>
+<a href="#launching-the-dashboard" class="toc-item toc-h3">Launching the Dashboard</a>
+<a href="#password-protection" class="toc-item toc-h3">Password Protection</a>
+<a href="#onboarding" class="toc-item toc-h3">Onboarding</a>
+<a href="#todays-picks" class="toc-item toc-h3">Today's Picks</a>
+<a href="#performance-tracker" class="toc-item toc-h3">Performance Tracker</a>
+<a href="#league-explorer" class="toc-item toc-h3">League Explorer</a>
+<a href="#match-deep-dive" class="toc-item toc-h3">Match Deep Dive</a>
+<a href="#model-health" class="toc-item toc-h3">Model Health</a>
+<a href="#bankroll-manager" class="toc-item toc-h3">Bankroll Manager</a>
+<a href="#settings" class="toc-item toc-h3">Settings</a>
+<a href="#automated-operation-github-actions" class="toc-item toc-h2">Automated Operation (GitHub Actions)</a>
+<a href="#the-three-cron-workflows" class="toc-item toc-h3">The Three Cron Workflows</a>
+<a href="#how-to-enable-automated-operation" class="toc-item toc-h3">How to Enable Automated Operation</a>
+<a href="#running-workflows-manually" class="toc-item toc-h3">Running Workflows Manually</a>
+<a href="#checking-workflow-run-history" class="toc-item toc-h3">Checking Workflow Run History</a>
+<a href="#what-gets-committed-automatically" class="toc-item toc-h3">What Gets Committed Automatically</a>
+<a href="#walk-forward-backtesting" class="toc-item toc-h2">Walk-Forward Backtesting</a>
+<a href="#what-is-walk-forward-backtesting" class="toc-item toc-h3">What Is Walk-Forward Backtesting?</a>
+<a href="#running-a-backtest" class="toc-item toc-h3">Running a Backtest</a>
+<a href="#reading-the-backtest-report" class="toc-item toc-h3">Reading the Backtest Report</a>
+<a href="#interpreting-the-backtest-chart" class="toc-item toc-h3">Interpreting the Backtest Chart</a>
+<a href="#adding-new-leagues" class="toc-item toc-h2">Adding New Leagues</a>
+<a href="#step-1-edit-configleaguesyaml" class="toc-item toc-h3">Step 1: Edit `config/leagues.yaml`</a>
+<a href="#step-2-find-the-required-identifiers" class="toc-item toc-h3">Step 2: Find the Required Identifiers</a>
+<a href="#step-3-set-is_active-true" class="toc-item toc-h3">Step 3: Set `is_active: true`</a>
+<a href="#step-4-run-setup-to-seed-the-new-league" class="toc-item toc-h3">Step 4: Run Setup to Seed the New League</a>
+<a href="#step-5-run-the-morning-pipeline" class="toc-item toc-h3">Step 5: Run the Morning Pipeline</a>
+<a href="#step-6-verify" class="toc-item toc-h3">Step 6: Verify</a>
+<a href="#common-league-codes" class="toc-item toc-h3">Common League Codes</a>
+<a href="#configuration-reference" class="toc-item toc-h2">Configuration Reference</a>
+<a href="#configsettingsyaml" class="toc-item toc-h3">`config/settings.yaml`</a>
+<a href="#configleaguesyaml" class="toc-item toc-h3">`config/leagues.yaml`</a>
+<a href="#database-backup-and-maintenance" class="toc-item toc-h2">Database Backup and Maintenance</a>
+<a href="#automatic-weekly-backups" class="toc-item toc-h3">Automatic Weekly Backups</a>
+<a href="#manual-backup" class="toc-item toc-h3">Manual Backup</a>
+<a href="#restoring-from-backup" class="toc-item toc-h3">Restoring from Backup</a>
+<a href="#database-location" class="toc-item toc-h3">Database Location</a>
+<a href="#deploying-to-streamlit-cloud" class="toc-item toc-h2">Deploying to Streamlit Cloud</a>
+<a href="#step-1-create-secrets-configuration" class="toc-item toc-h3">Step 1: Create Secrets Configuration</a>
+<a href="#step-2-set-up-a-postgresql-database" class="toc-item toc-h3">Step 2: Set Up a PostgreSQL Database</a>
+<a href="#step-3-deploy" class="toc-item toc-h3">Step 3: Deploy</a>
+<a href="#step-4-configure-secrets-in-streamlit-cloud" class="toc-item toc-h3">Step 4: Configure Secrets in Streamlit Cloud</a>
+<a href="#troubleshooting" class="toc-item toc-h2">Troubleshooting</a>
+<a href="#fbref-blocked-403-forbidden" class="toc-item toc-h3">FBref Blocked (403 Forbidden)</a>
+<a href="#no-value-bets-found" class="toc-item toc-h3">No Value Bets Found</a>
+<a href="#pipeline-fails" class="toc-item toc-h3">Pipeline Fails</a>
+<a href="#database-locked" class="toc-item toc-h3">Database Locked</a>
+<a href="#email-not-sending" class="toc-item toc-h3">Email Not Sending</a>
+<a href="#backtest-shows-poor-roi" class="toc-item toc-h3">Backtest Shows Poor ROI</a>
+<a href="#dashboard-shows-database-connection-failed" class="toc-item toc-h3">Dashboard Shows "Database connection failed"</a>
+<a href="#daily-workflow-recommended" class="toc-item toc-h2">Daily Workflow (Recommended)</a>
+<a href="#morning-after-0600-utc" class="toc-item toc-h3">Morning (After 06:00 UTC)</a>
+<a href="#midday-after-1300-utc" class="toc-item toc-h3">Midday (After 13:00 UTC)</a>
+<a href="#evening-after-2200-utc" class="toc-item toc-h3">Evening (After 22:00 UTC)</a>
+<a href="#weekly-sundays" class="toc-item toc-h3">Weekly (Sundays)</a>
+<a href="#key-concepts-glossary" class="toc-item toc-h2">Key Concepts Glossary</a>
+    </aside>
+    <main class="content">
+      <h1 id="betvector----how-to-manual" class="md-h1">BetVector -- How-To Manual</h1>
+<p class="md-p">A practical guide to installing, running, and operating the BetVector football</p>
+<p class="md-p">betting system.</p>
+<p class="md-p"><strong>Version:</strong> 1.1</p>
+<p class="md-p"><strong>Last updated:</strong> February 2026</p>
+<hr class='md-hr'>
+<h2 id="table-of-contents" class="md-h2 section-header">Table of Contents</h2>
+<ol class='md-list'><li><a href="#getting-started" class="md-link">Getting Started</a></li>
+<li><a href="#running-the-pipeline" class="md-link">Running the Pipeline</a></li>
+<li><a href="#using-the-dashboard" class="md-link">Using the Dashboard</a></li>
+<li><a href="#automated-operation-github-actions" class="md-link">Automated Operation (GitHub Actions)</a></li>
+<li><a href="#walk-forward-backtesting" class="md-link">Walk-Forward Backtesting</a></li>
+<li><a href="#adding-new-leagues" class="md-link">Adding New Leagues</a></li>
+<li><a href="#configuration-reference" class="md-link">Configuration Reference</a></li>
+<li><a href="#database-backup-and-maintenance" class="md-link">Database Backup and Maintenance</a></li>
+<li><a href="#deploying-to-streamlit-cloud" class="md-link">Deploying to Streamlit Cloud</a></li>
+<li><a href="#troubleshooting" class="md-link">Troubleshooting</a></li>
+<li><a href="#daily-workflow-recommended" class="md-link">Daily Workflow (Recommended)</a></li>
+<li><a href="#key-concepts-glossary" class="md-link">Key Concepts Glossary</a></li></ol>
+<hr class='md-hr'>
+<h2 id="getting-started" class="md-h2 section-header">Getting Started</h2>
+<h3 id="prerequisites" class="md-h3 subsection-header">Prerequisites</h3>
+<div class='table-wrapper'><table><thead><tr><th>Requirement</th><th>Version</th><th>Notes</th></tr></thead><tbody><tr><td>Python</td><td>3.10 or higher</td><td>3.11 works fine. Do not use 3.8 or 3.9.</td></tr><tr><td>Git</td><td>Any recent version</td><td>For cloning the repo and version control.</td></tr><tr><td>Make</td><td>Any version</td><td>Comes preinstalled on macOS/Linux. On Windows use WSL.</td></tr><tr><td>sqlite3</td><td>Any version</td><td>Used by the backup script. Comes preinstalled on most systems.</td></tr></tbody></table></div>
+<p class="md-p"><strong>Required accounts:</strong></p>
+<div class='table-wrapper'><table><thead><tr><th>Account</th><th>Purpose</th><th>Where to sign up</th></tr></thead><tbody><tr><td>Gmail</td><td>Sending email alerts (morning picks, evening results, weekly summary)</td><td>gmail.com</td></tr><tr><td>API-Football</td><td>Live odds and fixtures (free tier: 100 requests/day)</td><td>api-football.com</td></tr></tbody></table></div>
+<p class="md-p">The Gmail account requires two-factor authentication enabled so you can</p>
+<p class="md-p">generate an App Password (your regular Gmail password will not work).</p>
+<h3 id="installation" class="md-h3 subsection-header">Installation</h3>
+<p class="md-p">Clone the repository and install all dependencies:</p>
+<div class="code-block"><span class="code-lang">BASH</span><pre><code>git clone https://github.com/nestflux/BetVector.git
+cd BetVector
+make install</code></pre></div>
+<p class="md-p">The <code class="inline-code">make install</code> command does three things:</p>
+<ol class='md-list'><li>Creates a Python virtual environment in <code class="inline-code">venv/</code></li>
+<li>Installs all 20 pinned dependencies from <code class="inline-code">requirements.txt</code></li>
+<li>Installs the project in editable mode (<code class="inline-code">pip install -e .</code>) so that</li></ol>
+<p class="md-p">   <code class="inline-code">from src.x import y</code> works from anywhere</p>
+<p class="md-p">Activate the virtual environment:</p>
+<div class="code-block"><span class="code-lang">BASH</span><pre><code>source venv/bin/activate</code></pre></div>
+<p class="md-p">You need to activate the virtual environment every time you open a new</p>
+<p class="md-p">terminal session. All commands in this manual assume it is active.</p>
+<p class="md-p">Verify the installation:</p>
+<div class="code-block"><span class="code-lang">BASH</span><pre><code>python -c &quot;import pandas, numpy, scipy, sklearn, statsmodels, requests, bs4, yaml, sqlalchemy, plotly, streamlit, xgboost, lightgbm&quot;</code></pre></div>
+<p class="md-p">If that runs without errors, all dependencies are installed correctly.</p>
+<h3 id="setting-up-the-env-file" class="md-h3 subsection-header">Setting Up the <code class="inline-code">.env</code> File</h3>
+<p class="md-p">Copy the example environment file and fill in your values:</p>
+<div class="code-block"><span class="code-lang">BASH</span><pre><code>cp .env.example .env</code></pre></div>
+<p class="md-p">Open <code class="inline-code">.env</code> in your editor and set these three variables:</p>
+<div class="code-block"><pre><code># Password to protect the Streamlit dashboard.
+# Leave empty to disable the password gate during local development.
+DASHBOARD_PASSWORD=your-secure-password
+
+# Gmail App Password for sending morning/evening/weekly email alerts.
+# Generate one at: https://myaccount.google.com/apppasswords
+# Requires 2-factor authentication enabled on your Google account.
+GMAIL_APP_PASSWORD=xxxx-xxxx-xxxx-xxxx
+
+# RapidAPI key for API-Football (free tier: 100 requests/day).
+# Sign up at: https://www.api-football.com/
+API_FOOTBALL_KEY=your-api-football-key</code></pre></div>
+<p class="md-p"><strong>Important:</strong> Never commit the <code class="inline-code">.env</code> file. It is already listed in <code class="inline-code">.gitignore</code>.</p>
+<h3 id="first-time-setup" class="md-h3 subsection-header">First-Time Setup</h3>
+<p class="md-p">Initialize the database and seed reference data (leagues, seasons, default user):</p>
+<div class="code-block"><span class="code-lang">BASH</span><pre><code>python run_pipeline.py setup</code></pre></div>
+<p class="md-p">This creates the SQLite database at <code class="inline-code">data/betvector.db</code> with all 18 tables and</p>
+<p class="md-p">populates leagues, seasons, and the owner user record. You will see:</p>
+<div class="code-block"><pre><code>BetVector Setup
+========================================
+[1/2] Initialising database...
+  -&gt; Database tables created
+[2/2] Seeding reference data...
+  -&gt; Leagues, seasons, and owner seeded
+
+Setup complete.</code></pre></div>
+<h3 id="running-your-first-backtest" class="md-h3 subsection-header">Running Your First Backtest</h3>
+<p class="md-p">Before going live, validate the model against historical data:</p>
+<div class="code-block"><span class="code-lang">BASH</span><pre><code>python run_pipeline.py backtest --league EPL --season 2024-25</code></pre></div>
+<p class="md-p">This runs a full walk-forward backtest on the 2024-25 English Premier League</p>
+<p class="md-p">season. It will:</p>
+<ol class='md-list'><li>Scrape historical match data from Football-Data.co.uk</li>
+<li>Walk through each matchday chronologically</li>
+<li>Train the Poisson model only on past data at each step</li>
+<li>Generate predictions and find value bets</li>
+<li>Simulate bankroll changes</li>
+<li>Output a report with ROI, bet count, and Brier score</li></ol>
+<p class="md-p">Results are saved to <code class="inline-code">data/predictions/backtest_report.json</code> and a chart is</p>
+<p class="md-p">written to <code class="inline-code">data/predictions/backtest_results.png</code>.</p>
+<hr class='md-hr'>
+<h2 id="running-the-pipeline" class="md-h2 section-header">Running the Pipeline</h2>
+<p class="md-p">BetVector operates on a three-run-per-day cycle. Each run serves a different</p>
+<p class="md-p">purpose and can be triggered manually from the command line.</p>
+<h3 id="morning-pipeline-0600-utc" class="md-h3 subsection-header">Morning Pipeline (06:00 UTC)</h3>
+<p class="md-p"><strong>What it does:</strong> Scrape fixtures and odds, compute features, run the Poisson</p>
+<p class="md-p">model, detect value bets, log system picks, and send the morning email alert.</p>
+<div class="code-block"><span class="code-lang">BASH</span><pre><code>python run_pipeline.py morning</code></pre></div>
+<p class="md-p">This is the core run -- it answers the question "what should we bet on today?"</p>
+<p class="md-p">Steps executed in order:</p>
+<ol class='md-list'><li>Scrape today's fixtures from Football-Data.co.uk and API-Football</li>
+<li>Scrape current bookmaker odds</li>
+<li>Compute rolling features (goals scored/conceded, form, xG if available)</li>
+<li>Run Poisson regression to produce 7x7 scoreline probability matrices</li>
+<li>Derive market probabilities (1X2, Over/Under 2.5, BTTS) from each matrix</li>
+<li>Compare model probabilities against bookmaker implied probabilities</li>
+<li>Flag fixtures where the model edge exceeds the configured threshold</li>
+<li>Log every value bet as a <code class="inline-code">system_pick</code> in the bet log</li>
+<li>Send the morning email with today's picks</li></ol>
+<p class="md-p">If no command is specified, the morning pipeline runs by default:</p>
+<div class="code-block"><span class="code-lang">BASH</span><pre><code>python run_pipeline.py</code></pre></div>
+<h3 id="midday-pipeline-1300-utc" class="md-h3 subsection-header">Midday Pipeline (13:00 UTC)</h3>
+<p class="md-p"><strong>What it does:</strong> Re-fetch odds (which move throughout the day as money comes</p>
+<p class="md-p">in), recalculate edges, and update the value bets table.</p>
+<div class="code-block"><span class="code-lang">BASH</span><pre><code>python run_pipeline.py midday</code></pre></div>
+<p class="md-p">Odds change between morning and kickoff. The midday run captures those</p>
+<p class="md-p">movements -- a bet that had 8% edge at 06:00 might now have 12% or 3%.</p>
+<h3 id="evening-pipeline-2200-utc" class="md-h3 subsection-header">Evening Pipeline (22:00 UTC)</h3>
+<p class="md-p"><strong>What it does:</strong> Scrape match results, resolve pending bets (won/lost/void),</p>
+<p class="md-p">update P&L, recalculate the bankroll, generate performance metrics, and send</p>
+<p class="md-p">the evening email.</p>
+<div class="code-block"><span class="code-lang">BASH</span><pre><code>python run_pipeline.py evening</code></pre></div>
+<p class="md-p">This is the "how did we do today?" run. It also checks self-improvement</p>
+<p class="md-p">triggers (recalibration, retrain) and runs the weekly summary on Sundays.</p>
+<h3 id="verbose-mode" class="md-h3 subsection-header">Verbose Mode</h3>
+<p class="md-p">Add <code class="inline-code">--verbose</code> (or <code class="inline-code">-v</code>) to any command for DEBUG-level logging:</p>
+<div class="code-block"><span class="code-lang">BASH</span><pre><code>python run_pipeline.py morning --verbose
+python run_pipeline.py backtest --league EPL --season 2024-25 --verbose</code></pre></div>
+<p class="md-p">This shows every HTTP request, database query, feature calculation, and model</p>
+<p class="md-p">output. Useful for diagnosing issues.</p>
+<h3 id="pipeline-resilience" class="md-h3 subsection-header">Pipeline Resilience</h3>
+<p class="md-p">Each pipeline run is wrapped in step-level error handling. If one step fails</p>
+<p class="md-p">(for example, FBref returns a 403 or the odds API times out):</p>
+<ul class='md-list'><li>The error is logged</li>
+<li>Subsequent steps still attempt to run</li>
+<li>The pipeline run record in the database records which steps succeeded and</li></ul>
+<p class="md-p">  which failed</p>
+<ul class='md-list'><li>A <code class="inline-code">PipelineResult</code> object is returned with the list of errors</li></ul>
+<p class="md-p">A single scraper failure will never prevent predictions from being made with</p>
+<p class="md-p">the data that is available. A single email failure will never prevent results</p>
+<p class="md-p">from being recorded.</p>
+<p class="md-p">Each run also creates a <code class="inline-code">pipeline_runs</code> record in the database tracking:</p>
+<ul class='md-list'><li>Run type (morning/midday/evening/manual/backtest)</li>
+<li>Status (running, completed, failed)</li>
+<li>Counts (matches scraped, predictions made, value bets found)</li>
+<li>Duration in seconds</li>
+<li>Error messages (if any step failed)</li></ul>
+<hr class='md-hr'>
+<h2 id="using-the-dashboard" class="md-h2 section-header">Using the Dashboard</h2>
+<h3 id="launching-the-dashboard" class="md-h3 subsection-header">Launching the Dashboard</h3>
+<div class="code-block"><span class="code-lang">BASH</span><pre><code>streamlit run src/delivery/dashboard.py</code></pre></div>
+<p class="md-p">Or using the Makefile shortcut:</p>
+<div class="code-block"><span class="code-lang">BASH</span><pre><code>make run</code></pre></div>
+<p class="md-p">The dashboard opens at <code class="inline-code">http://localhost:8501</code> by default.</p>
+<h3 id="password-protection" class="md-h3 subsection-header">Password Protection</h3>
+<p class="md-p">If you set <code class="inline-code">DASHBOARD_PASSWORD</code> in your <code class="inline-code">.env</code> file, the dashboard shows a</p>
+<p class="md-p">login screen. Enter the password to access the pages.</p>
+<p class="md-p">If the variable is empty or unset, the dashboard is open without a password</p>
+<p class="md-p">(convenient for local development).</p>
+<h3 id="onboarding" class="md-h3 subsection-header">Onboarding</h3>
+<p class="md-p">First-time users see a welcome wizard before the main dashboard. The</p>
+<p class="md-p">onboarding flow walks you through initial configuration (staking method,</p>
+<p class="md-p">bankroll, edge threshold). Once completed, you go straight to the dashboard</p>
+<p class="md-p">on subsequent visits.</p>
+<h3 id="todays-picks" class="md-h3 subsection-header">Today's Picks</h3>
+<p class="md-p">The default landing page. Shows every value bet the model has found for today.</p>
+<p class="md-p"><strong>Reading a pick card:</strong></p>
+<div class='table-wrapper'><table><thead><tr><th>Field</th><th>Meaning</th></tr></thead><tbody><tr><td>Match</td><td>Home vs Away team names and kickoff time</td></tr><tr><td>Market</td><td>The bet type -- 1X2 (match result), OU25 (over/under 2.5 goals), BTTS</td></tr><tr><td>Model Prob</td><td>The model's estimated probability for this outcome</td></tr><tr><td>Implied Prob</td><td>The bookmaker's implied probability (derived from the odds)</td></tr><tr><td>Edge</td><td>Model probability minus implied probability. Higher is better.</td></tr><tr><td>Confidence</td><td>High (edge >= 10%), Medium (5-10%), Low (< 5%)</td></tr><tr><td>Best Odds</td><td>The highest odds found across bookmakers</td></tr><tr><td>Suggested Stake</td><td>Based on your chosen staking method and current bankroll</td></tr></tbody></table></div>
+<p class="md-p"><strong>Placing bets:</strong> After you place a bet with a real bookmaker, click the "Log</p>
+<p class="md-p">Bet" button on the pick card to record it. This creates a <code class="inline-code">user_placed</code> entry</p>
+<p class="md-p">in the bet log, separate from the <code class="inline-code">system_pick</code> that was auto-logged. This</p>
+<p class="md-p">dual tracking lets you compare the model's theoretical performance against</p>
+<p class="md-p">your actual betting results.</p>
+<h3 id="performance-tracker" class="md-h3 subsection-header">Performance Tracker</h3>
+<p class="md-p">Tracks the system's overall performance over time.</p>
+<ul class='md-list'><li><strong>ROI</strong> -- Return on investment across all resolved bets. System picks and</li></ul>
+<p class="md-p">  user-placed bets are shown separately so you can compare the model's full</p>
+<p class="md-p">  recommendations against only the bets you actually placed.</p>
+<ul class='md-list'><li><strong>Brier Score</strong> -- Measures prediction accuracy. Lower is better. A Brier</li></ul>
+<p class="md-p">  score of 0.25 is random chance for binary outcomes; anything below that</p>
+<p class="md-p">  indicates predictive skill.</p>
+<ul class='md-list'><li><strong>P&L Chart</strong> -- Cumulative profit and loss over time, plotted as an</li></ul>
+<p class="md-p">  interactive Plotly line chart. Hover over any point to see the exact value.</p>
+<ul class='md-list'><li><strong>Win Rate</strong> -- Percentage of bets that won.</li>
+<li><strong>Bet Count</strong> -- Total resolved bets.</li></ul>
+<h3 id="league-explorer" class="md-h3 subsection-header">League Explorer</h3>
+<p class="md-p">Breaks down performance by league. Shows ROI, bet count, win rate, and Brier</p>
+<p class="md-p">score for each tracked league. Useful for identifying which leagues the model</p>
+<p class="md-p">performs best in and which might need higher edge thresholds.</p>
+<h3 id="match-deep-dive" class="md-h3 subsection-header">Match Deep Dive</h3>
+<p class="md-p">Detailed analysis of any specific match. Select a match to see:</p>
+<ul class='md-list'><li><strong>Scoreline Probability Matrix</strong> -- The 7x7 heatmap showing the probability</li></ul>
+<p class="md-p">  of every possible score from 0-0 to 6-6. This is the core model output from</p>
+<p class="md-p">  which all market probabilities are derived.</p>
+<ul class='md-list'><li><strong>Market Probabilities</strong> -- Home/Draw/Away, Over/Under 2.5, BTTS</li></ul>
+<p class="md-p">  probabilities compared against bookmaker odds.</p>
+<ul class='md-list'><li><strong>Team Form</strong> -- Recent results, goals scored/conceded rolling averages.</li>
+<li><strong>Feature Values</strong> -- The exact feature inputs the model used for this</li></ul>
+<p class="md-p">  prediction.</p>
+<h3 id="model-health" class="md-h3 subsection-header">Model Health</h3>
+<p class="md-p">Monitors whether the model is well-calibrated and performing within expected</p>
+<p class="md-p">bounds.</p>
+<ul class='md-list'><li><strong>Calibration Curve</strong> -- Plots predicted probabilities against actual</li></ul>
+<p class="md-p">  outcome frequencies. A well-calibrated model hugs the diagonal line. If the</p>
+<p class="md-p">  curve bows above the diagonal, the model is underconfident; below means</p>
+<p class="md-p">  overconfident.</p>
+<ul class='md-list'><li><strong>Brier Score Over Time</strong> -- Rolling Brier score to detect performance</li></ul>
+<p class="md-p">  degradation. If it trends upward, the model may need retraining.</p>
+<ul class='md-list'><li><strong>Prediction Distribution</strong> -- Histogram of predicted probabilities. A good</li></ul>
+<p class="md-p">  model produces a spread of probabilities, not just 50/50 for everything.</p>
+<h3 id="bankroll-manager" class="md-h3 subsection-header">Bankroll Manager</h3>
+<p class="md-p">Tracks your bankroll and staking history.</p>
+<ul class='md-list'><li><strong>Current Bankroll</strong> -- Your current balance, starting amount, and</li></ul>
+<p class="md-p">  all-time P&L.</p>
+<ul class='md-list'><li><strong>Drawdown Monitor</strong> -- Current drawdown from peak (calculated from settled</li></ul>
+<p class="md-p">  bets only), with alerts if it exceeds the configured threshold (default: 25%).</p>
+<ul class='md-list'><li><strong>Staking History</strong> -- Table of every bet placed, with stake size, odds,</li></ul>
+<p class="md-p">  outcome, and P&L.</p>
+<ul class='md-list'><li><strong>Safety Alerts</strong> -- Warnings if daily losses exceed 10% of bankroll, if</li></ul>
+<p class="md-p">  bankroll drops below 50% of starting, or if any single bet exceeds the</p>
+<p class="md-p">  max bet percentage (5%).</p>
+<h3 id="settings" class="md-h3 subsection-header">Settings</h3>
+<p class="md-p">Configure the system through the dashboard without editing YAML files directly.</p>
+<ul class='md-list'><li><strong>Staking Method</strong> -- Switch between flat (fixed amount per bet), percentage</li></ul>
+<p class="md-p">  (fixed percentage of current bankroll), or Kelly (stake proportional to edge,</p>
+<p class="md-p">  scaled by the Kelly fraction).</p>
+<ul class='md-list'><li><strong>Edge Threshold</strong> -- Minimum edge required to flag a value bet. Default is</li></ul>
+<p class="md-p">  5% (0.05). Lower it to see more bets, raise it for fewer but higher-quality</p>
+<p class="md-p">  picks.</p>
+<ul class='md-list'><li><strong>Paper Trading Mode</strong> -- When enabled, the system logs bets and tracks P&L</li></ul>
+<p class="md-p">  but marks them as simulated. Recommended for the first few weeks until you</p>
+<p class="md-p">  trust the model.</p>
+<ul class='md-list'><li><strong>Kelly Fraction</strong> -- Scaling factor for Kelly staking. Default is 0.25</li></ul>
+<p class="md-p">  (quarter-Kelly). Full Kelly is mathematically optimal but has high variance;</p>
+<p class="md-p">  fractional Kelly is more practical.</p>
+<ul class='md-list'><li><strong>Stake Percentage</strong> -- For percentage staking, what fraction of the bankroll</li></ul>
+<p class="md-p">  to bet per pick. Default is 2%.</p>
+<hr class='md-hr'>
+<h2 id="automated-operation-github-actions" class="md-h2 section-header">Automated Operation (GitHub Actions)</h2>
+<h3 id="the-three-cron-workflows" class="md-h3 subsection-header">The Three Cron Workflows</h3>
+<p class="md-p">BetVector includes three GitHub Actions workflows that automate the daily</p>
+<p class="md-p">pipeline:</p>
+<div class='table-wrapper'><table><thead><tr><th>Workflow</th><th>Schedule</th><th>File</th></tr></thead><tbody><tr><td>Morning Pipeline</td><td>06:00 UTC daily</td><td><code class="inline-code">.github/workflows/morning.yml</code></td></tr><tr><td>Midday Pipeline</td><td>13:00 UTC daily</td><td><code class="inline-code">.github/workflows/midday.yml</code></td></tr><tr><td>Evening Pipeline</td><td>22:00 UTC daily</td><td><code class="inline-code">.github/workflows/evening.yml</code></td></tr></tbody></table></div>
+<p class="md-p">Each workflow:</p>
+<ol class='md-list'><li>Checks out the repository (including the SQLite database)</li>
+<li>Sets up Python 3.10 and installs dependencies</li>
+<li>Runs the corresponding pipeline command</li>
+<li>Commits any database changes back to the repo</li>
+<li>Sends an email notification if the run fails</li></ol>
+<p class="md-p">Concurrency groups ensure that overlapping runs of the same pipeline are</p>
+<p class="md-p">prevented (e.g., a manual trigger during a scheduled run).</p>
+<h3 id="how-to-enable-automated-operation" class="md-h3 subsection-header">How to Enable Automated Operation</h3>
+<p class="md-p"><strong>Step 1: Push your repository to GitHub</strong> (if not already done):</p>
+<div class="code-block"><span class="code-lang">BASH</span><pre><code>git push origin main</code></pre></div>
+<p class="md-p"><strong>Step 2: Set repository secrets</strong> in GitHub:</p>
+<p class="md-p">Go to your repo on GitHub, then Settings > Secrets and variables > Actions,</p>
+<p class="md-p">and add these three secrets:</p>
+<div class='table-wrapper'><table><thead><tr><th>Secret Name</th><th>Value</th></tr></thead><tbody><tr><td><code class="inline-code">GMAIL_APP_PASSWORD</code></td><td>Your Gmail App Password</td></tr><tr><td><code class="inline-code">DASHBOARD_PASSWORD</code></td><td>Your dashboard password</td></tr><tr><td><code class="inline-code">API_FOOTBALL_KEY</code></td><td>Your API-Football RapidAPI key</td></tr></tbody></table></div>
+<p class="md-p"><strong>Step 3: Workflows activate automatically.</strong> The cron schedules start running</p>
+<p class="md-p">at the specified UTC times once the workflow files are on the <code class="inline-code">main</code> branch.</p>
+<h3 id="running-workflows-manually" class="md-h3 subsection-header">Running Workflows Manually</h3>
+<p class="md-p">Each workflow supports <code class="inline-code">workflow_dispatch</code>, which means you can trigger it</p>
+<p class="md-p">from the GitHub UI at any time:</p>
+<ol class='md-list'><li>Go to your repo on GitHub</li>
+<li>Click the <strong>Actions</strong> tab</li>
+<li>Select the workflow (e.g., "Morning Pipeline") from the left sidebar</li>
+<li>Click <strong>Run workflow</strong></li>
+<li>Optionally set "verbose" to "true" for debug logging</li>
+<li>Click the green <strong>Run workflow</strong> button</li></ol>
+<h3 id="checking-workflow-run-history" class="md-h3 subsection-header">Checking Workflow Run History</h3>
+<ol class='md-list'><li>Go to the <strong>Actions</strong> tab on your GitHub repo</li>
+<li>Each workflow run shows its status (success, failure, in-progress)</li>
+<li>Click a run to see the full log output for each step</li>
+<li>Failed runs send an email notification if <code class="inline-code">GMAIL_APP_PASSWORD</code> is</li></ol>
+<p class="md-p">   configured</p>
+<h3 id="what-gets-committed-automatically" class="md-h3 subsection-header">What Gets Committed Automatically</h3>
+<p class="md-p">After each pipeline run, the workflow commits the updated SQLite database</p>
+<p class="md-p">(<code class="inline-code">data/betvector.db</code>) back to the repository. The commit message indicates</p>
+<p class="md-p">which pipeline ran and the date:</p>
+<div class="code-block"><pre><code>Morning pipeline: 2025-03-15
+Midday pipeline: 2025-03-15
+Evening pipeline: 2025-03-15</code></pre></div>
+<p class="md-p">On Sunday evenings, the weekly database backup is also committed (see</p>
+<p class="md-p"><a href="#database-backup-and-maintenance" class="md-link">Database Backup and Maintenance</a>).</p>
+<hr class='md-hr'>
+<h2 id="walk-forward-backtesting" class="md-h2 section-header">Walk-Forward Backtesting</h2>
+<h3 id="what-is-walk-forward-backtesting" class="md-h3 subsection-header">What Is Walk-Forward Backtesting?</h3>
+<p class="md-p">Walk-forward validation is the only valid backtesting approach for time-series</p>
+<p class="md-p">prediction like sports betting. It simulates exactly what happens in live</p>
+<p class="md-p">operation:</p>
+<ol class='md-list'><li>Start at the first matchday of the season</li>
+<li>Train the model on all data available before that matchday</li>
+<li>Predict that matchday's matches</li>
+<li>Record predictions and find value bets</li>
+<li>Advance to the next matchday</li>
+<li>Retrain on all data up to (but not including) the current matchday</li>
+<li>Repeat through the entire season</li></ol>
+<p class="md-p"><strong>Why this matters:</strong> A random train/test split would leak future data into</p>
+<p class="md-p">training -- a match from April might train the model that then predicts a</p>
+<p class="md-p">March match. Walk-forward validation prevents this by ensuring the model only</p>
+<p class="md-p">ever sees data from before the prediction date.</p>
+<p class="md-p"><strong>Training set grows over time:</strong> Early-season predictions (matchdays 1-5)</p>
+<p class="md-p">have very little training data and will be noisy. The Poisson model requires</p>
+<p class="md-p">at least 20 matches to fit, so the first 2-3 matchdays are typically skipped.</p>
+<p class="md-p">This is realistic -- in live operation, you also have less data at the start</p>
+<p class="md-p">of a new season.</p>
+<h3 id="running-a-backtest" class="md-h3 subsection-header">Running a Backtest</h3>
+<div class="code-block"><span class="code-lang">BASH</span><pre><code>python run_pipeline.py backtest --league EPL --season 2024-25</code></pre></div>
+<p class="md-p">Available flags:</p>
+<div class='table-wrapper'><table><thead><tr><th>Flag</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code class="inline-code">--league</code></td><td><code class="inline-code">EPL</code></td><td>League short name from <code class="inline-code">config/leagues.yaml</code></td></tr><tr><td><code class="inline-code">--season</code></td><td><code class="inline-code">2024-25</code></td><td>Season to backtest</td></tr><tr><td><code class="inline-code">--verbose</code></td><td>off</td><td>Enable DEBUG-level logging</td></tr></tbody></table></div>
+<p class="md-p">For verbose output showing every matchday:</p>
+<div class="code-block"><span class="code-lang">BASH</span><pre><code>python run_pipeline.py backtest --league EPL --season 2024-25 --verbose</code></pre></div>
+<h3 id="reading-the-backtest-report" class="md-h3 subsection-header">Reading the Backtest Report</h3>
+<p class="md-p">The report is saved to <code class="inline-code">data/predictions/backtest_report.json</code> and contains:</p>
+<div class='table-wrapper'><table><thead><tr><th>Field</th><th>Meaning</th></tr></thead><tbody><tr><td><code class="inline-code">total_bets</code></td><td>Number of value bets the model would have placed</td></tr><tr><td><code class="inline-code">won</code></td><td>Number of winning bets</td></tr><tr><td><code class="inline-code">lost</code></td><td>Number of losing bets</td></tr><tr><td><code class="inline-code">roi</code></td><td>Return on investment as a percentage</td></tr><tr><td><code class="inline-code">brier_score</code></td><td>Overall prediction accuracy (lower is better)</td></tr><tr><td><code class="inline-code">total_staked</code></td><td>Sum of all stakes placed</td></tr><tr><td><code class="inline-code">total_return</code></td><td>Sum of all returns from winning bets</td></tr><tr><td><code class="inline-code">profit_loss</code></td><td>Net profit or loss</td></tr></tbody></table></div>
+<h3 id="interpreting-the-backtest-chart" class="md-h3 subsection-header">Interpreting the Backtest Chart</h3>
+<p class="md-p">The chart (<code class="inline-code">data/predictions/backtest_results.png</code>) shows cumulative P&L over</p>
+<p class="md-p">the season. Key things to look for:</p>
+<ul class='md-list'><li><strong>Upward trend</strong> -- The model is generating profit over time</li>
+<li><strong>Flat or downward</strong> -- The model is not finding consistent value</li>
+<li><strong>Sharp drops</strong> -- Extended losing runs (normal variance, but watch for</li></ul>
+<p class="md-p">  sustained declines)</p>
+<ul class='md-list'><li><strong>Recovery after drops</strong> -- The model bounces back, which is a good sign</li></ul>
+<p class="md-p">A negative ROI on the first backtest is normal. The baseline Poisson model</p>
+<p class="md-p">without xG features typically produces ROI in the -5% to +5% range. Adding</p>
+<p class="md-p">more features and leagues improves this over time.</p>
+<hr class='md-hr'>
+<h2 id="adding-new-leagues" class="md-h2 section-header">Adding New Leagues</h2>
+<h3 id="step-1-edit-configleaguesyaml" class="md-h3 subsection-header">Step 1: Edit <code class="inline-code">config/leagues.yaml</code></h3>
+<p class="md-p">Add a new league block following the existing EPL template:</p>
+<div class="code-block"><span class="code-lang">YAML</span><pre><code>  - name: &quot;La Liga&quot;
+    short_name: &quot;LaLiga&quot;
+    country: &quot;Spain&quot;
+    football_data_code: &quot;SP1&quot;
+    fbref_league_id: &quot;ESP-La Liga&quot;
+    api_football_id: 140
+    is_active: true
+    seasons:
+      - &quot;2024-25&quot;
+    total_matchdays: 38</code></pre></div>
+<h3 id="step-2-find-the-required-identifiers" class="md-h3 subsection-header">Step 2: Find the Required Identifiers</h3>
+<p class="md-p">You need three identifiers per league, one for each data source:</p>
+<div class='table-wrapper'><table><thead><tr><th>Identifier</th><th>Where to Find It</th></tr></thead><tbody><tr><td><code class="inline-code">football_data_code</code></td><td>URL path on football-data.co.uk -- look at the CSV download links (e.g., <code class="inline-code">E0</code> for EPL, <code class="inline-code">SP1</code> for La Liga, <code class="inline-code">D1</code> for Bundesliga, <code class="inline-code">I1</code> for Serie A, <code class="inline-code">F1</code> for Ligue 1)</td></tr><tr><td><code class="inline-code">fbref_league_id</code></td><td>The soccerdata package league identifier (e.g., <code class="inline-code">ENG-Premier League</code>, <code class="inline-code">ESP-La Liga</code>, <code class="inline-code">GER-Bundesliga</code>, <code class="inline-code">ITA-Serie A</code>, <code class="inline-code">FRA-Ligue 1</code>)</td></tr><tr><td><code class="inline-code">api_football_id</code></td><td>The numeric league ID from the API-Football documentation</td></tr></tbody></table></div>
+<h3 id="step-3-set-is_active-true" class="md-h3 subsection-header">Step 3: Set <code class="inline-code">is_active: true</code></h3>
+<p class="md-p">Only leagues with <code class="inline-code">is_active: true</code> are included in pipeline runs. You can</p>
+<p class="md-p">add league configurations with <code class="inline-code">is_active: false</code> and enable them later.</p>
+<h3 id="step-4-run-setup-to-seed-the-new-league" class="md-h3 subsection-header">Step 4: Run Setup to Seed the New League</h3>
+<div class="code-block"><span class="code-lang">BASH</span><pre><code>python run_pipeline.py setup</code></pre></div>
+<p class="md-p">This seeds the new league and its seasons into the database. Existing data</p>
+<p class="md-p">is not affected (the seed operations are idempotent).</p>
+<h3 id="step-5-run-the-morning-pipeline" class="md-h3 subsection-header">Step 5: Run the Morning Pipeline</h3>
+<div class="code-block"><span class="code-lang">BASH</span><pre><code>python run_pipeline.py morning</code></pre></div>
+<p class="md-p">The pipeline will scrape data for the new league, compute features, and</p>
+<p class="md-p">generate predictions. The first run may take longer as it downloads historical</p>
+<p class="md-p">match data.</p>
+<h3 id="step-6-verify" class="md-h3 subsection-header">Step 6: Verify</h3>
+<p class="md-p">Check the dashboard's League Explorer page to confirm the new league appears</p>
+<p class="md-p">with matches and predictions.</p>
+<h3 id="common-league-codes" class="md-h3 subsection-header">Common League Codes</h3>
+<div class='table-wrapper'><table><thead><tr><th>League</th><th><code class="inline-code">football_data_code</code></th><th><code class="inline-code">fbref_league_id</code></th><th><code class="inline-code">api_football_id</code></th></tr></thead><tbody><tr><td>Premier League (England)</td><td><code class="inline-code">E0</code></td><td><code class="inline-code">ENG-Premier League</code></td><td>39</td></tr><tr><td>La Liga (Spain)</td><td><code class="inline-code">SP1</code></td><td><code class="inline-code">ESP-La Liga</code></td><td>140</td></tr><tr><td>Bundesliga (Germany)</td><td><code class="inline-code">D1</code></td><td><code class="inline-code">GER-Bundesliga</code></td><td>78</td></tr><tr><td>Serie A (Italy)</td><td><code class="inline-code">I1</code></td><td><code class="inline-code">ITA-Serie A</code></td><td>135</td></tr><tr><td>Ligue 1 (France)</td><td><code class="inline-code">F1</code></td><td><code class="inline-code">FRA-Ligue 1</code></td><td>61</td></tr><tr><td>Eredivisie (Netherlands)</td><td><code class="inline-code">N1</code></td><td><code class="inline-code">NED-Eredivisie</code></td><td>88</td></tr><tr><td>Primeira Liga (Portugal)</td><td><code class="inline-code">P1</code></td><td><code class="inline-code">POR-Primeira Liga</code></td><td>94</td></tr><tr><td>Championship (England)</td><td><code class="inline-code">E1</code></td><td><code class="inline-code">ENG-Championship</code></td><td>40</td></tr></tbody></table></div>
+<hr class='md-hr'>
+<h2 id="configuration-reference" class="md-h2 section-header">Configuration Reference</h2>
+<p class="md-p">All tuneable parameters live in YAML files under <code class="inline-code">config/</code>. The system reads</p>
+<p class="md-p">them through <code class="inline-code">src/config.py</code> -- never hardcode values in application code.</p>
+<h3 id="configsettingsyaml" class="md-h3 subsection-header"><code class="inline-code">config/settings.yaml</code></h3>
+<h4 id="database" class="md-h4">Database</h4>
+<div class="code-block"><span class="code-lang">YAML</span><pre><code>database:
+  path: &quot;data/betvector.db&quot;      # SQLite file location
+  enable_wal: true               # Write-Ahead Logging for concurrent access</code></pre></div>
+<p class="md-p">When migrating to PostgreSQL, change <code class="inline-code">path</code> to a connection string and set</p>
+<p class="md-p"><code class="inline-code">enable_wal: false</code>. PostgreSQL handles concurrency differently and does not</p>
+<p class="md-p">use WAL.</p>
+<h4 id="feature-engineering" class="md-h4">Feature Engineering</h4>
+<div class="code-block"><span class="code-lang">YAML</span><pre><code>features:
+  rolling_windows:
+    - 5                          # Last 5 matches
+    - 10                         # Last 10 matches</code></pre></div>
+<p class="md-p">Rolling windows for computing averages (goals, shots, xG). Expressed in number</p>
+<p class="md-p">of matches, not calendar days.</p>
+<h4 id="value-betting" class="md-h4">Value Betting</h4>
+<div class="code-block"><span class="code-lang">YAML</span><pre><code>value_betting:
+  edge_threshold: 0.05           # Minimum 5% edge to flag a value bet
+  confidence_thresholds:
+    high: 0.10                   # Edge &gt;= 10%
+    medium: 0.05                 # 5% &lt;= edge &lt; 10%</code></pre></div>
+<p class="md-p">Lower the <code class="inline-code">edge_threshold</code> to see more bets (but with less edge). Raise it</p>
+<p class="md-p">for fewer, higher-quality picks.</p>
+<h4 id="bankroll-management" class="md-h4">Bankroll Management</h4>
+<div class="code-block"><span class="code-lang">YAML</span><pre><code>bankroll:
+  starting_amount: 1000.0        # Initial bankroll in your currency
+  staking_method: &quot;flat&quot;         # flat | percentage | kelly
+  stake_percentage: 0.02         # 2% of bankroll per bet (for percentage staking)
+  kelly_fraction: 0.25           # Quarter-Kelly (for kelly staking)
+  paper_trading_mode: true       # Simulated mode -- no real money at risk</code></pre></div>
+<p class="md-p"><strong>Staking methods explained:</strong></p>
+<div class='table-wrapper'><table><thead><tr><th>Method</th><th>How It Works</th></tr></thead><tbody><tr><td><code class="inline-code">flat</code></td><td>Same fixed stake on every bet, regardless of bankroll or edge size. Simplest approach.</td></tr><tr><td><code class="inline-code">percentage</code></td><td>Stake = <code class="inline-code">stake_percentage</code> x current bankroll. Bets grow when you're winning and shrink when you're losing.</td></tr><tr><td><code class="inline-code">kelly</code></td><td>Stake = <code class="inline-code">kelly_fraction</code> x Kelly criterion (edge / (odds - 1)). Mathematically optimal for long-term bankroll growth but volatile in practice. Quarter-Kelly (0.25) is recommended.</td></tr></tbody></table></div>
+<h4 id="safety-limits" class="md-h4">Safety Limits</h4>
+<div class="code-block"><span class="code-lang">YAML</span><pre><code>safety:
+  max_bet_percentage: 0.05       # Never stake &gt; 5% of bankroll on one bet
+  daily_loss_limit: 0.10         # Alert if daily losses &gt; 10% of bankroll
+  drawdown_alert_threshold: 0.25 # Alert if drawdown from peak &gt; 25%
+  minimum_bankroll_percentage: 0.50  # Alert if bankroll &lt; 50% of starting</code></pre></div>
+<p class="md-p">These limits apply regardless of staking method. Breaching any limit pauses</p>
+<p class="md-p">automated staking and triggers an alert on the dashboard and via email.</p>
+<h4 id="model-settings" class="md-h4">Model Settings</h4>
+<div class="code-block"><span class="code-lang">YAML</span><pre><code>models:
+  active_models:
+    - &quot;poisson_v1&quot;               # Currently active model(s)
+  ensemble_enabled: false        # Enable after each model has 300+ resolved predictions</code></pre></div>
+<p class="md-p">Additional models (XGBoost, LightGBM) can be added to <code class="inline-code">active_models</code> once</p>
+<p class="md-p">they are trained. The ensemble averages their predictions using adaptive</p>
+<p class="md-p">weights (see Self-Improvement below).</p>
+<h4 id="scoreline-matrix" class="md-h4">Scoreline Matrix</h4>
+<div class="code-block"><span class="code-lang">YAML</span><pre><code>scoreline_matrix:
+  max_goals: 7                   # 0-6 goals per side = 7x7 matrix</code></pre></div>
+<p class="md-p">Every prediction model outputs a 7x7 matrix of scoreline probabilities. All</p>
+<p class="md-p">market probabilities (1X2, Over/Under, BTTS) are derived from this matrix.</p>
+<p class="md-p">This is the universal model interface -- every model must produce this output.</p>
+<h4 id="self-improvement-engine" class="md-h4">Self-Improvement Engine</h4>
+<p class="md-p">The self-improvement engine automatically tunes the model over time, with</p>
+<p class="md-p">guardrails to prevent overcorrection. Every automatic adjustment has a minimum</p>
+<p class="md-p">sample size, a maximum change rate, and a rollback mechanism.</p>
+<p class="md-p"><strong>Recalibration</strong> (adjusts predicted probabilities to match actual outcomes):</p>
+<div class="code-block"><span class="code-lang">YAML</span><pre><code>self_improvement:
+  recalibration:
+    min_sample_size: 200         # Need 200+ resolved predictions before recalibrating
+    calibration_error_threshold: 0.03  # Trigger if mean-abs cal error &gt; 3 pp
+    rollback_window: 100         # Evaluate rollback after 100 post-cal predictions
+    calibration_methods:
+      - &quot;platt&quot;                  # Platt scaling (logistic regression on probabilities)
+      - &quot;isotonic&quot;               # Isotonic regression (non-parametric)</code></pre></div>
+<p class="md-p"><strong>Feature importance tracking</strong> (for tree-based models only):</p>
+<div class="code-block"><span class="code-lang">YAML</span><pre><code>  feature_importance:
+    enabled_for_models:
+      - &quot;xgboost&quot;
+      - &quot;lightgbm&quot;
+    importance_threshold: 0.01   # Flag features contributing &lt; 1%
+    flagging_window: 3           # Must be low for 3 consecutive cycles
+    auto_removal: false          # Never auto-drop features; human review required</code></pre></div>
+<p class="md-p"><strong>Adaptive ensemble weights:</strong></p>
+<div class="code-block"><span class="code-lang">YAML</span><pre><code>  adaptive_weights:
+    min_sample_size: 300         # Per-model minimum before adjusting weights
+    evaluation_window: 300       # Look-back window in resolved predictions
+    max_weight_change: 0.10      # Max +/-10 pp per recalculation cycle
+    weight_floor: 0.10           # No model drops below 10% weight
+    weight_ceiling: 0.60         # No model exceeds 60% weight
+    weight_method: &quot;inverse_brier&quot;  # Weight proportional to 1 / Brier score</code></pre></div>
+<p class="md-p"><strong>Retrain triggers</strong> (detects when the model needs retraining):</p>
+<div class="code-block"><span class="code-lang">YAML</span><pre><code>  retrain:
+    rolling_window: 100          # Monitor last 100 predictions
+    degradation_threshold: 0.15  # Retrain if Brier score degrades 15% vs all-time
+    cooldown_period_days: 30     # No auto-retrain within 30 days of last retrain
+    auto_rollback: true          # Roll back if new model is worse</code></pre></div>
+<p class="md-p"><strong>Market feedback</strong> (tracks which league x market combinations are profitable):</p>
+<div class="code-block"><span class="code-lang">YAML</span><pre><code>  market_feedback:
+    min_sample_size: 50          # Need 50+ resolved bets before assessing
+    profitable_min_bets: 100     # Need 100+ bets for &quot;profitable&quot; classification
+    confidence_interval: 0.95    # 95% CI for ROI estimates
+    assessment_frequency: &quot;weekly&quot;
+    assessment_day: &quot;sunday&quot;
+    assessment_time: &quot;20:00&quot;     # UTC</code></pre></div>
+<h4 id="scraping-rate-limiting" class="md-h4">Scraping / Rate Limiting</h4>
+<div class="code-block"><span class="code-lang">YAML</span><pre><code>scraping:
+  min_request_interval_seconds: 2    # Min 2 seconds between requests to same domain
+  api_football:
+    daily_request_limit: 100         # Free-tier RapidAPI cap
+  request_timeout_seconds: 30
+  max_retries: 3</code></pre></div>
+<p class="md-p">Football-Data.co.uk and FBref are free public resources. The 2-second interval</p>
+<p class="md-p">prevents overloading them. API-Football's free tier allows 100 requests per day</p>
+<p class="md-p">-- the system tracks and respects this limit.</p>
+<h4 id="pipeline-scheduling" class="md-h4">Pipeline Scheduling</h4>
+<div class="code-block"><span class="code-lang">YAML</span><pre><code>scheduling:
+  morning:
+    time: &quot;06:00&quot;
+    operations:
+      - &quot;scrape_fixtures&quot;
+      - &quot;scrape_odds&quot;
+      - &quot;compute_features&quot;
+      - &quot;generate_predictions&quot;
+      - &quot;detect_value&quot;
+      - &quot;send_morning_email&quot;
+  evening:
+    time: &quot;22:00&quot;
+    operations:
+      - &quot;scrape_results&quot;
+      - &quot;resolve_bets&quot;
+      - &quot;update_bankroll&quot;
+      - &quot;send_evening_email&quot;
+  weekly:
+    day: &quot;sunday&quot;
+    time: &quot;20:00&quot;
+    operations:
+      - &quot;market_feedback&quot;
+      - &quot;recalibrate&quot;
+      - &quot;send_weekly_email&quot;</code></pre></div>
+<h3 id="configleaguesyaml" class="md-h3 subsection-header"><code class="inline-code">config/leagues.yaml</code></h3>
+<p class="md-p">Defines which leagues are tracked, their data-source identifiers, and which</p>
+<p class="md-p">seasons to ingest. See <a href="#adding-new-leagues" class="md-link">Adding New Leagues</a> for details.</p>
+<p class="md-p">Set <code class="inline-code">is_active: false</code> to disable a league without removing its configuration.</p>
+<hr class='md-hr'>
+<h2 id="database-backup-and-maintenance" class="md-h2 section-header">Database Backup and Maintenance</h2>
+<h3 id="automatic-weekly-backups" class="md-h3 subsection-header">Automatic Weekly Backups</h3>
+<p class="md-p">The evening GitHub Actions workflow runs a database backup every Sunday. The</p>
+<p class="md-p">backup script (<code class="inline-code">scripts/backup_db.sh</code>):</p>
+<ol class='md-list'><li>Uses SQLite's <code class="inline-code">.backup</code> command for a safe, WAL-aware copy (falls back to</li></ol>
+<p class="md-p">   <code class="inline-code">cp</code> if <code class="inline-code">sqlite3</code> is not available)</p>
+<ol class='md-list'><li>Saves to <code class="inline-code">data/backups/betvector_YYYY-MM-DD_HHMMSS.db</code></li>
+<li>Keeps the last 10 backups and removes older ones automatically</li>
+<li>Commits the backup to the repository</li></ol>
+<h3 id="manual-backup" class="md-h3 subsection-header">Manual Backup</h3>
+<p class="md-p">Run the backup script at any time:</p>
+<div class="code-block"><span class="code-lang">BASH</span><pre><code>./scripts/backup_db.sh</code></pre></div>
+<p class="md-p">The backup is saved to <code class="inline-code">data/backups/</code> by default.</p>
+<p class="md-p">To use a custom backup directory:</p>
+<div class="code-block"><span class="code-lang">BASH</span><pre><code>./scripts/backup_db.sh /path/to/custom/backup/directory</code></pre></div>
+<h3 id="restoring-from-backup" class="md-h3 subsection-header">Restoring from Backup</h3>
+<p class="md-p">To restore a backup, copy it over the current database:</p>
+<div class="code-block"><span class="code-lang">BASH</span><pre><code>cp data/backups/betvector_2025-03-15_220000.db data/betvector.db</code></pre></div>
+<p class="md-p">Make sure no other process is accessing the database when you replace it</p>
+<p class="md-p">(stop any running pipeline or dashboard first).</p>
+<h3 id="database-location" class="md-h3 subsection-header">Database Location</h3>
+<p class="md-p">The SQLite database lives at <code class="inline-code">data/betvector.db</code> by default (configured in</p>
+<p class="md-p"><code class="inline-code">config/settings.yaml</code>). It is excluded from version control via <code class="inline-code">.gitignore</code></p>
+<p class="md-p">during development, but the GitHub Actions workflows commit it after each</p>
+<p class="md-p">pipeline run so the next run has the latest state.</p>
+<hr class='md-hr'>
+<h2 id="deploying-to-streamlit-cloud" class="md-h2 section-header">Deploying to Streamlit Cloud</h2>
+<h3 id="step-1-create-secrets-configuration" class="md-h3 subsection-header">Step 1: Create Secrets Configuration</h3>
+<p class="md-p">The project includes an example secrets file at</p>
+<p class="md-p"><code class="inline-code">.streamlit/secrets.toml.example</code>. On Streamlit Cloud, you configure secrets</p>
+<p class="md-p">through the web dashboard rather than a local file.</p>
+<h3 id="step-2-set-up-a-postgresql-database" class="md-h3 subsection-header">Step 2: Set Up a PostgreSQL Database</h3>
+<p class="md-p">Streamlit Cloud's filesystem is ephemeral -- SQLite files are deleted on each</p>
+<p class="md-p">deployment. You need a persistent PostgreSQL database:</p>
+<ol class='md-list'><li>Create a free project at https://supabase.com (or any PostgreSQL provider)</li>
+<li>Copy the PostgreSQL connection string from your provider's dashboard</li>
+<li>The format is: <code class="inline-code">postgresql://user:password@host:5432/dbname</code></li></ol>
+<h3 id="step-3-deploy" class="md-h3 subsection-header">Step 3: Deploy</h3>
+<ol class='md-list'><li>Go to https://share.streamlit.io</li>
+<li>Click "New app"</li>
+<li>Select your GitHub repo, branch <code class="inline-code">main</code>, and set the main file path to</li></ol>
+<p class="md-p">   <code class="inline-code">src/delivery/dashboard.py</code></p>
+<ol class='md-list'><li>Click "Deploy"</li></ol>
+<h3 id="step-4-configure-secrets-in-streamlit-cloud" class="md-h3 subsection-header">Step 4: Configure Secrets in Streamlit Cloud</h3>
+<ol class='md-list'><li>Once deployed, go to your app's Settings in the Streamlit Cloud dashboard</li>
+<li>Click "Secrets"</li>
+<li>Enter your secrets in TOML format:</li></ol>
+<div class="code-block"><span class="code-lang">TOML</span><pre><code>DASHBOARD_PASSWORD = &quot;your-dashboard-password&quot;
+GMAIL_APP_PASSWORD = &quot;xxxx-xxxx-xxxx-xxxx&quot;
+API_FOOTBALL_KEY = &quot;your-api-football-key&quot;
+
+[database]
+connection_string = &quot;postgresql://user:password@host:5432/dbname&quot;</code></pre></div>
+<ol class='md-list'><li>Save and reboot the app</li></ol>
+<p class="md-p">The dashboard code automatically checks <code class="inline-code">st.secrets</code> when environment variables</p>
+<p class="md-p">are not set, so no code changes are needed for cloud deployment.</p>
+<hr class='md-hr'>
+<h2 id="troubleshooting" class="md-h2 section-header">Troubleshooting</h2>
+<h3 id="fbref-blocked-403-forbidden" class="md-h3 subsection-header">FBref Blocked (403 Forbidden)</h3>
+<p class="md-p"><strong>Symptom:</strong> The FBref scraper logs a 403 error.</p>
+<p class="md-p"><strong>Cause:</strong> Cloudflare protection blocks automated requests to FBref.</p>
+<p class="md-p"><strong>Impact:</strong> xG, shots, and possession features will be <code class="inline-code">None</code>. The model</p>
+<p class="md-p">continues to work using goals-based and form-based features. Predictions are</p>
+<p class="md-p">still generated, just without xG data.</p>
+<p class="md-p"><strong>Fix:</strong> No action needed. The system handles this gracefully and logs a</p>
+<p class="md-p">warning. FBref blocks are often temporary and may resolve on their own.</p>
+<h3 id="no-value-bets-found" class="md-h3 subsection-header">No Value Bets Found</h3>
+<p class="md-p"><strong>Symptom:</strong> The morning pipeline runs successfully but finds zero value bets.</p>
+<p class="md-p"><strong>Possible causes and fixes:</strong></p>
+<div class='table-wrapper'><table><thead><tr><th>Cause</th><th>Fix</th></tr></thead><tbody><tr><td>Edge threshold too high</td><td>Lower <code class="inline-code">value_betting.edge_threshold</code> in <code class="inline-code">config/settings.yaml</code> from 0.05 to 0.03</td></tr><tr><td>No matches today</td><td>Check if there are actually fixtures scheduled for today</td></tr><tr><td>Odds data missing</td><td>Run with <code class="inline-code">--verbose</code> to check if odds scraping succeeded</td></tr><tr><td>Model and bookmakers agree</td><td>No action needed -- sometimes there is genuinely no value</td></tr></tbody></table></div>
+<h3 id="pipeline-fails" class="md-h3 subsection-header">Pipeline Fails</h3>
+<p class="md-p"><strong>Symptom:</strong> <code class="inline-code">python run_pipeline.py morning</code> exits with a non-zero code.</p>
+<p class="md-p"><strong>Debugging steps:</strong></p>
+<ol class='md-list'><li>Run with <code class="inline-code">--verbose</code> to get full debug output</li>
+<li>Check for network issues (internet connectivity)</li>
+<li>Check for rate limiting (API-Football: 100 requests/day on free tier)</li>
+<li>Check that the database exists (<code class="inline-code">python run_pipeline.py setup</code>)</li>
+<li>Check <code class="inline-code">data/betvector.db</code> is not locked by another process</li></ol>
+<p class="md-p">Remember that pipeline steps are independent -- a failure in one step (e.g.,</p>
+<p class="md-p">odds scraping) does not prevent other steps from running.</p>
+<h3 id="database-locked" class="md-h3 subsection-header">Database Locked</h3>
+<p class="md-p"><strong>Symptom:</strong> <code class="inline-code">sqlite3.OperationalError: database is locked</code></p>
+<p class="md-p"><strong>Cause:</strong> Multiple processes trying to write to the database simultaneously.</p>
+<p class="md-p"><strong>Fix:</strong> WAL mode is enabled by default and handles most concurrent access</p>
+<p class="md-p">scenarios. If you still see this error:</p>
+<ol class='md-list'><li>Make sure only one pipeline process is running at a time</li>
+<li>Close any SQLite browser tools (DB Browser for SQLite, etc.) that might</li></ol>
+<p class="md-p">   have a write lock</p>
+<ol class='md-list'><li>The GitHub Actions workflows use concurrency groups to prevent overlapping</li></ol>
+<p class="md-p">   runs</p>
+<h3 id="email-not-sending" class="md-h3 subsection-header">Email Not Sending</h3>
+<p class="md-p"><strong>Symptom:</strong> Pipeline completes but no email arrives.</p>
+<p class="md-p"><strong>Checklist:</strong></p>
+<ol class='md-list'><li>Verify <code class="inline-code">GMAIL_APP_PASSWORD</code> is set in <code class="inline-code">.env</code> -- this must be a Gmail App</li></ol>
+<p class="md-p">   Password, not your regular Gmail password</p>
+<ol class='md-list'><li>Ensure 2-factor authentication is enabled on your Google account</li>
+<li>Generate a new App Password at https://myaccount.google.com/apppasswords</li>
+<li>Check your spam/junk folder</li>
+<li>Run with <code class="inline-code">--verbose</code> to see SMTP connection details in the logs</li></ol>
+<h3 id="backtest-shows-poor-roi" class="md-h3 subsection-header">Backtest Shows Poor ROI</h3>
+<p class="md-p"><strong>Symptom:</strong> Walk-forward backtest returns negative ROI.</p>
+<p class="md-p"><strong>Context:</strong> This is expected for the baseline Poisson model, especially</p>
+<p class="md-p">without xG features. The EPL 2024-25 baseline is approximately -4% ROI.</p>
+<p class="md-p"><strong>What to expect going forward:</strong></p>
+<ul class='md-list'><li>The Poisson v1 model is a starting point, not the final product</li>
+<li>Adding xG features (when FBref data is available) improves accuracy</li>
+<li>Adding more seasons of historical training data improves the model</li>
+<li>The self-improvement engine (recalibration, retrain triggers) tunes the</li></ul>
+<p class="md-p">  model over time as it accumulates resolved predictions</p>
+<ul class='md-list'><li>Adding more leagues provides more training data across football in general</li>
+<li>Positive ROI comes from the combination of model improvements, feature</li></ul>
+<p class="md-p">  additions, and disciplined bankroll management</p>
+<h3 id="dashboard-shows-database-connection-failed" class="md-h3 subsection-header">Dashboard Shows "Database connection failed"</h3>
+<p class="md-p"><strong>Symptom:</strong> The dashboard displays an error about database connection.</p>
+<p class="md-p"><strong>Fix for local development:</strong> Run <code class="inline-code">python run_pipeline.py setup</code> to create</p>
+<p class="md-p">the database.</p>
+<p class="md-p"><strong>Fix for Streamlit Cloud:</strong> Configure a PostgreSQL connection string in</p>
+<p class="md-p">Settings > Secrets under <code class="inline-code">[database]</code>.</p>
+<hr class='md-hr'>
+<h2 id="daily-workflow-recommended" class="md-h2 section-header">Daily Workflow (Recommended)</h2>
+<h3 id="morning-after-0600-utc" class="md-h3 subsection-header">Morning (After 06:00 UTC)</h3>
+<ol class='md-list'><li>Open the dashboard and go to <strong>Today's Picks</strong></li>
+<li>Review the pick cards -- focus on high-confidence picks with edges above 8%</li>
+<li>Cross-reference with your own knowledge (injuries, team news, motivation)</li>
+<li>Place bets with your bookmaker for the picks you agree with</li>
+<li>Log each bet on the dashboard so the system tracks your actual performance</li></ol>
+<h3 id="midday-after-1300-utc" class="md-h3 subsection-header">Midday (After 13:00 UTC)</h3>
+<ol class='md-list'><li>Check the dashboard for updated edges -- odds may have moved since morning</li>
+<li>Look for new value bets that appeared after line movement</li>
+<li>Check if any of your morning picks now have significantly different edges</li>
+<li>Place additional bets if new value has appeared</li></ol>
+<h3 id="evening-after-2200-utc" class="md-h3 subsection-header">Evening (After 22:00 UTC)</h3>
+<ol class='md-list'><li>Open <strong>Performance Tracker</strong> to review today's results</li>
+<li>Check the P&L chart for your cumulative trajectory</li>
+<li>Open <strong>Bankroll Manager</strong> to monitor drawdown and safety limits</li>
+<li>Review any safety alerts (daily loss limit, drawdown threshold)</li></ol>
+<h3 id="weekly-sundays" class="md-h3 subsection-header">Weekly (Sundays)</h3>
+<ol class='md-list'><li>Open <strong>Model Health</strong> and check the calibration curve:</li></ol>
+<ul class='md-list'><li>Hugging the diagonal? The model is well-calibrated.</li>
+<li>Bowing above the diagonal? The model is underconfident (could stake more).</li>
+<li>Bowing below the diagonal? The model is overconfident (edges may be</li></ul>
+<p class="md-p">     overstated).</p>
+<ol class='md-list'><li>Check the rolling Brier score -- is it stable or trending upward?</li>
+<li>Open <strong>Performance Tracker</strong> and review ROI by market type:</li></ol>
+<ul class='md-list'><li>Which markets are profitable? (1X2? Over/Under? BTTS?)</li>
+<li>Consider raising the edge threshold for unprofitable markets.</li></ul>
+<ol class='md-list'><li>Review the weekly email summary for a consolidated view.</li>
+<li>Open <strong>League Explorer</strong> and compare performance across leagues.</li>
+<li>The database backup runs automatically on Sunday evening -- no action</li></ol>
+<p class="md-p">   needed.</p>
+<hr class='md-hr'>
+<h2 id="key-concepts-glossary" class="md-h2 section-header">Key Concepts Glossary</h2>
+<div class='table-wrapper'><table><thead><tr><th>Term</th><th>Definition</th></tr></thead><tbody><tr><td><strong>Edge</strong></td><td>The difference between the model's probability and the bookmaker's implied probability. A 7% edge means the model thinks the outcome is 7 percentage points more likely than the odds suggest.</td></tr><tr><td><strong>Implied Probability</strong></td><td>The probability of an outcome as implied by the bookmaker's odds. Calculated as 1 / decimal odds.</td></tr><tr><td><strong>Value Bet</strong></td><td>A bet where the model's estimated probability exceeds the bookmaker's implied probability by more than the configured edge threshold.</td></tr><tr><td><strong>Brier Score</strong></td><td>A scoring rule that measures prediction accuracy. Ranges from 0 (perfect) to 1 (worst). For binary outcomes, 0.25 is random chance.</td></tr><tr><td><strong>Scoreline Matrix</strong></td><td>A 7x7 grid of probabilities for every possible match score (0-0 through 6-6). All market probabilities are derived from this matrix.</td></tr><tr><td><strong>Walk-Forward Validation</strong></td><td>A backtesting method where the model is trained only on data available before each prediction date, simulating live operation.</td></tr><tr><td><strong>Temporal Integrity</strong></td><td>The principle that no feature, prediction, or training step ever uses data from the future. This is the system's most important constraint.</td></tr><tr><td><strong>Poisson Regression</strong></td><td>A statistical model that predicts the number of goals each team will score, assuming goals follow a Poisson distribution (a probability distribution for count data).</td></tr><tr><td><strong>Kelly Criterion</strong></td><td>A staking formula that sizes bets proportional to the edge. Mathematically optimal for long-term bankroll growth, but volatile in practice.</td></tr><tr><td><strong>Quarter-Kelly</strong></td><td>Staking 25% of what full Kelly suggests. Reduces variance significantly while retaining most of the growth benefit.</td></tr><tr><td><strong>Paper Trading</strong></td><td>Running the system with simulated bets -- no real money at risk. Useful for validating the model before going live.</td></tr><tr><td><strong>Drawdown</strong></td><td>The decline from a peak bankroll value to a subsequent trough. A 25% drawdown means the bankroll dropped 25% from its highest point.</td></tr><tr><td><strong>Recalibration</strong></td><td>Adjusting model probabilities (via Platt scaling or isotonic regression) so they better match actual outcome frequencies.</td></tr><tr><td><strong>1X2</strong></td><td>The match result market: 1 = home win, X = draw, 2 = away win.</td></tr><tr><td><strong>OU25</strong></td><td>Over/Under 2.5 goals. "Over" means 3 or more total goals in the match.</td></tr><tr><td><strong>BTTS</strong></td><td>Both Teams To Score. "Yes" means both teams score at least one goal.</td></tr><tr><td><strong>ROI</strong></td><td>Return on Investment. Calculated as (total returns - total staked) / total staked, expressed as a percentage.</td></tr><tr><td><strong>System Pick</strong></td><td>A value bet that the model automatically logged. Every value bet is logged as a system pick regardless of whether you actually place the bet.</td></tr><tr><td><strong>User-Placed Bet</strong></td><td>A bet you manually recorded after placing it with a bookmaker. Tracked separately so you can compare your actual results against the model's full recommendations.</td></tr><tr><td><strong>WAL Mode</strong></td><td>Write-Ahead Logging -- an SQLite journaling mode that allows concurrent reads while writing, preventing most database lock issues.</td></tr><tr><td><strong>xG (Expected Goals)</strong></td><td>A metric that measures the quality of chances created, based on historical shot data. An xG of 1.5 means the chances created were equivalent to scoring 1.5 goals on average.</td></tr></tbody></table></div>
+    </main>
+  </div>
+
+  <button class="back-to-top" id="backToTop" title="Back to top">&uarr;</button>
+
+  <script>
+    // Hamburger toggle
+    const hamburger = document.getElementById('hamburger');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('overlay');
+
+    if (hamburger) {
+      hamburger.addEventListener('click', () => {
+        sidebar.classList.toggle('open');
+        overlay.classList.toggle('open');
+      });
+    }
+    if (overlay) {
+      overlay.addEventListener('click', () => {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('open');
+      });
+    }
+
+    // Close sidebar on link click (mobile)
+    document.querySelectorAll('.toc-item').forEach(link => {
+      link.addEventListener('click', () => {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('open');
+      });
+    });
+
+    // Back to top
+    const btt = document.getElementById('backToTop');
+    window.addEventListener('scroll', () => {
+      if (window.scrollY > 400) {
+        btt.classList.add('visible');
+      } else {
+        btt.classList.remove('visible');
+      }
+    });
+    btt.addEventListener('click', () => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    // Active TOC highlighting
+    const tocLinks = document.querySelectorAll('.toc-item');
+    const headings = [];
+    tocLinks.forEach(link => {
+      const id = link.getAttribute('href').substring(1);
+      const el = document.getElementById(id);
+      if (el) headings.push({ el, link });
+    });
+
+    function updateActiveToc() {
+      let current = null;
+      for (const h of headings) {
+        if (h.el.getBoundingClientRect().top <= 100) {
+          current = h;
+        }
+      }
+      tocLinks.forEach(l => l.classList.remove('active'));
+      if (current) current.link.classList.add('active');
+    }
+    window.addEventListener('scroll', updateActiveToc);
+    updateActiveToc();
+    </script>
+</body>
+</html>

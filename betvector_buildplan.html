@@ -773,7 +773,7 @@ E13-01 → E13-02 → E13-03</code></pre></div>
 <li><span class="checkbox">☐</span> Stored <code class="inline-code">prob_home_win + prob_draw + prob_away_win</code> = 1.0 for every prediction in the database</li></ul>
 <hr class='md-hr'>
 <h2 id="e6-value-detection-bankroll" class="md-h2 section-header">E6 &mdash; Value Detection & Bankroll</h2>
-<h3 id="e6-01-value-finder" class="md-h3 subsection-header">E6-01 &mdash; Value Finder <span class="badge badge-completed">Completed</span></h3>
+<h3 id="e6-01-value-finder" class="md-h3 subsection-header">E6-01 &mdash; Value Finder</h3>
 <p class="md-p"><strong>Type:</strong> Backend</p>
 <p class="md-p"><strong>Depends on:</strong> E5-03, E2-03</p>
 <p class="md-p"><strong>Master Plan:</strong> MP §4 Feature Set → Value Detection, MP §7 Value Finder Interface, MP §12 Glossary (value bet, edge, implied probability)</p>
@@ -796,7 +796,7 @@ E13-01 → E13-02 → E13-03</code></pre></div>
 <li><span class="checkbox">☐</span> Each ValueBet has a non-empty explanation string containing team names and market type</li>
 <li><span class="checkbox">☐</span> Value bets are stored in the <code class="inline-code">value_bets</code> table with all fields populated</li></ul>
 <hr class='md-hr'>
-<h3 id="e6-02-bankroll-manager" class="md-h3 subsection-header">E6-02 &mdash; Bankroll Manager <span class="badge badge-completed">Completed</span></h3>
+<h3 id="e6-02-bankroll-manager" class="md-h3 subsection-header">E6-02 &mdash; Bankroll Manager</h3>
 <p class="md-p"><strong>Type:</strong> Backend</p>
 <p class="md-p"><strong>Depends on:</strong> E6-01, E2-04</p>
 <p class="md-p"><strong>Master Plan:</strong> MP §4 Feature Set → Bankroll Management, MP §7 Bankroll Manager Interface, MP §12 Glossary (bankroll, flat staking, Kelly)</p>
@@ -824,7 +824,7 @@ E13-01 → E13-02 → E13-03</code></pre></div>
 <li><span class="checkbox">☐</span> Kelly stake returns 0 when model_prob × odds < 1 (negative edge &mdash; no bet)</li>
 <li><span class="checkbox">☐</span> Code comments include a worked Kelly Criterion example with actual numbers</li></ul>
 <hr class='md-hr'>
-<h3 id="e6-03-bet-tracker" class="md-h3 subsection-header">E6-03 &mdash; Bet Tracker <span class="badge badge-completed">Completed</span></h3>
+<h3 id="e6-03-bet-tracker" class="md-h3 subsection-header">E6-03 &mdash; Bet Tracker</h3>
 <p class="md-p"><strong>Type:</strong> Backend</p>
 <p class="md-p"><strong>Depends on:</strong> E6-02</p>
 <p class="md-p"><strong>Master Plan:</strong> MP §4 Feature Set → Bet Tracking, MP §6 bet_log table, MP §3 Flow 5</p>
@@ -846,7 +846,7 @@ E13-01 → E13-02 → E13-03</code></pre></div>
 <li><span class="checkbox">☐</span> CLV is calculated when closing_odds are available: clv = (1/closing_odds) - (1/odds_at_placement)</li></ul>
 <hr class='md-hr'>
 <h2 id="e7-evaluation-backtesting" class="md-h2 section-header">E7 &mdash; Evaluation & Backtesting</h2>
-<h3 id="e7-01-metrics-module" class="md-h3 subsection-header">E7-01 &mdash; Metrics Module <span class="badge badge-completed">Completed</span></h3>
+<h3 id="e7-01-metrics-module" class="md-h3 subsection-header">E7-01 &mdash; Metrics Module</h3>
 <p class="md-p"><strong>Type:</strong> Backend</p>
 <p class="md-p"><strong>Depends on:</strong> E6-03</p>
 <p class="md-p"><strong>Master Plan:</strong> MP §4 Feature Set → Evaluation, MP §7 Pipeline Orchestrator, MP §12 Glossary (ROI, Brier score, CLV, calibration)</p>
@@ -868,7 +868,7 @@ E13-01 → E13-02 → E13-03</code></pre></div>
 <li><span class="checkbox">☐</span> <code class="inline-code">generate_performance_report()</code> stores results in <code class="inline-code">model_performance</code> table</li>
 <li><span class="checkbox">☐</span> Code comments explain what each metric means and what ranges indicate good performance</li></ul>
 <hr class='md-hr'>
-<h3 id="e7-02-walk-forward-backtester" class="md-h3 subsection-header">E7-02 &mdash; Walk-Forward Backtester <span class="badge badge-completed">Completed</span></h3>
+<h3 id="e7-02-walk-forward-backtester" class="md-h3 subsection-header">E7-02 &mdash; Walk-Forward Backtester</h3>
 <p class="md-p"><strong>Type:</strong> Backend</p>
 <p class="md-p"><strong>Depends on:</strong> E7-01, E5-02, E4-03, E6-01, E6-02</p>
 <p class="md-p"><strong>Master Plan:</strong> MP §4 Feature Set → Evaluation, MP §12 Glossary (walk-forward validation)</p>
@@ -891,7 +891,7 @@ E13-01 → E13-02 → E13-03</code></pre></div>
 <li><span class="checkbox">☐</span> Progress messages print to console during backtest</li>
 <li><span class="checkbox">☐</span> A full-season EPL backtest completes in under 10 minutes</li></ul>
 <hr class='md-hr'>
-<h3 id="e7-03-backtest-reporting" class="md-h3 subsection-header">E7-03 &mdash; Backtest Reporting <span class="badge badge-completed">Completed</span></h3>
+<h3 id="e7-03-backtest-reporting" class="md-h3 subsection-header">E7-03 &mdash; Backtest Reporting</h3>
 <p class="md-p"><strong>Type:</strong> Backend</p>
 <p class="md-p"><strong>Depends on:</strong> E7-02</p>
 <p class="md-p"><strong>Master Plan:</strong> MP §4 Feature Set → Evaluation</p>
@@ -909,7 +909,7 @@ E13-01 → E13-02 → E13-03</code></pre></div>
 <li><span class="checkbox">☐</span> Report includes a per-market breakdown (1X2, O/U, BTTS) if bets span multiple markets</li></ul>
 <hr class='md-hr'>
 <h2 id="e8-pipeline-orchestrator" class="md-h2 section-header">E8 &mdash; Pipeline Orchestrator</h2>
-<h3 id="e8-01-pipeline-runner" class="md-h3 subsection-header">E8-01 &mdash; Pipeline Runner <span class="badge badge-completed">Completed</span></h3>
+<h3 id="e8-01-pipeline-runner" class="md-h3 subsection-header">E8-01 &mdash; Pipeline Runner</h3>
 <p class="md-p"><strong>Type:</strong> Integration</p>
 <p class="md-p"><strong>Depends on:</strong> E7-02, E6-03</p>
 <p class="md-p"><strong>Master Plan:</strong> MP §5 Architecture → Scheduling, MP §7 Pipeline Orchestrator Interface</p>
@@ -932,7 +932,7 @@ E13-01 → E13-02 → E13-03</code></pre></div>
 <li><span class="checkbox">☐</span> Duration is recorded in seconds in the pipeline_runs table</li>
 <li><span class="checkbox">☐</span> Step-by-step progress messages print to console</li></ul>
 <hr class='md-hr'>
-<h3 id="e8-02-cli-interface" class="md-h3 subsection-header">E8-02 &mdash; CLI Interface <span class="badge badge-completed">Completed</span></h3>
+<h3 id="e8-02-cli-interface" class="md-h3 subsection-header">E8-02 &mdash; CLI Interface</h3>
 <p class="md-p"><strong>Type:</strong> Integration</p>
 <p class="md-p"><strong>Depends on:</strong> E8-01</p>
 <p class="md-p"><strong>Master Plan:</strong> MP §5 Architecture</p>
@@ -952,7 +952,7 @@ E13-01 → E13-02 → E13-03</code></pre></div>
 <li><span class="checkbox">☐</span> Running with no arguments defaults to the morning pipeline</li></ul>
 <hr class='md-hr'>
 <h2 id="e9-dashboard-core" class="md-h2 section-header">E9 &mdash; Dashboard &mdash; Core</h2>
-<h3 id="e9-01-streamlit-app-shell-and-theme" class="md-h3 subsection-header">E9-01 &mdash; Streamlit App Shell and Theme <span class="badge badge-completed">Completed</span></h3>
+<h3 id="e9-01-streamlit-app-shell-and-theme" class="md-h3 subsection-header">E9-01 &mdash; Streamlit App Shell and Theme</h3>
 <p class="md-p"><strong>Type:</strong> Frontend</p>
 <p class="md-p"><strong>Depends on:</strong> E8-01</p>
 <p class="md-p"><strong>Master Plan:</strong> MP §8 Design System, MP §3 Flow 4 (navigation)</p>
@@ -974,7 +974,7 @@ E13-01 → E13-02 → E13-03</code></pre></div>
 <li><span class="checkbox">☐</span> Password gate blocks access until correct password is entered</li>
 <li><span class="checkbox">☐</span> App renders correctly on a 375px-wide viewport (mobile)</li></ul>
 <hr class='md-hr'>
-<h3 id="e9-02-todays-picks-page" class="md-h3 subsection-header">E9-02 &mdash; Today's Picks Page <span class="badge badge-completed">Completed</span></h3>
+<h3 id="e9-02-todays-picks-page" class="md-h3 subsection-header">E9-02 &mdash; Today's Picks Page</h3>
 <p class="md-p"><strong>Type:</strong> Frontend</p>
 <p class="md-p"><strong>Depends on:</strong> E9-01, E6-01</p>
 <p class="md-p"><strong>Master Plan:</strong> MP §3 Flow 1 (Morning Picks Review), MP §8 Design System</p>
@@ -998,7 +998,7 @@ E13-01 → E13-02 → E13-03</code></pre></div>
 <li><span class="checkbox">☐</span> Empty state message shows when no value bets exist</li>
 <li><span class="checkbox">☐</span> FanDuel odds are highlighted if available</li></ul>
 <hr class='md-hr'>
-<h3 id="e9-03-performance-tracker-page" class="md-h3 subsection-header">E9-03 &mdash; Performance Tracker Page <span class="badge badge-completed">Completed</span></h3>
+<h3 id="e9-03-performance-tracker-page" class="md-h3 subsection-header">E9-03 &mdash; Performance Tracker Page</h3>
 <p class="md-p"><strong>Type:</strong> Frontend</p>
 <p class="md-p"><strong>Depends on:</strong> E9-01, E7-01</p>
 <p class="md-p"><strong>Master Plan:</strong> MP §3 Flow 2 (Evening Results Review), MP §8 Design System</p>
@@ -1019,7 +1019,7 @@ E13-01 → E13-02 → E13-03</code></pre></div>
 <li><span class="checkbox">☐</span> Monthly bar chart displays with green/red bars</li>
 <li><span class="checkbox">☐</span> All numbers use JetBrains Mono font</li></ul>
 <hr class='md-hr'>
-<h3 id="e9-04-league-explorer-page" class="md-h3 subsection-header">E9-04 &mdash; League Explorer Page <span class="badge badge-completed">Completed</span></h3>
+<h3 id="e9-04-league-explorer-page" class="md-h3 subsection-header">E9-04 &mdash; League Explorer Page</h3>
 <p class="md-p"><strong>Type:</strong> Frontend</p>
 <p class="md-p"><strong>Depends on:</strong> E9-01, E4-03</p>
 <p class="md-p"><strong>Master Plan:</strong> MP §3 Flow 4 (Dashboard Exploration), MP §8 Design System</p>
@@ -1041,7 +1041,7 @@ E13-01 → E13-02 → E13-03</code></pre></div>
 <li><span class="checkbox">☐</span> Form badges show correct W/D/L sequence for each team's last 5 matches</li>
 <li><span class="checkbox">☐</span> Clicking an upcoming match navigates to the Match Deep Dive view</li></ul>
 <hr class='md-hr'>
-<h3 id="e9-05-match-deep-dive-view" class="md-h3 subsection-header">E9-05 &mdash; Match Deep Dive View <span class="badge badge-completed">Completed</span></h3>
+<h3 id="e9-05-match-deep-dive-view" class="md-h3 subsection-header">E9-05 &mdash; Match Deep Dive View</h3>
 <p class="md-p"><strong>Type:</strong> Frontend</p>
 <p class="md-p"><strong>Depends on:</strong> E9-04, E5-03, E4-03</p>
 <p class="md-p"><strong>Master Plan:</strong> MP §3 Flow 1 Step 8, MP §8 Design System</p>
@@ -1067,7 +1067,7 @@ E13-01 → E13-02 → E13-03</code></pre></div>
 <li><span class="checkbox">☐</span> Back navigation returns to the previous page (Picks or League Explorer)</li></ul>
 <hr class='md-hr'>
 <h2 id="e10-dashboard-advanced" class="md-h2 section-header">E10 &mdash; Dashboard &mdash; Advanced</h2>
-<h3 id="e10-01-model-health-page" class="md-h3 subsection-header">E10-01 &mdash; Model Health Page <span class="badge badge-completed">Completed</span></h3>
+<h3 id="e10-01-model-health-page" class="md-h3 subsection-header">E10-01 &mdash; Model Health Page</h3>
 <p class="md-p"><strong>Type:</strong> Frontend</p>
 <p class="md-p"><strong>Depends on:</strong> E9-01, E7-01</p>
 <p class="md-p"><strong>Master Plan:</strong> MP §3 Flow 4 (Model Health), MP §8 Design System, MP §11 Self-Improvement Engine</p>
@@ -1093,7 +1093,7 @@ E13-01 → E13-02 → E13-03</code></pre></div>
 <li><span class="checkbox">☐</span> Market Edge Map heatmap is colour-coded by assessment (green/yellow/white/red)</li>
 <li><span class="checkbox">☐</span> All charts use dark theme styling from MP §8</li></ul>
 <hr class='md-hr'>
-<h3 id="e10-02-bankroll-manager-page" class="md-h3 subsection-header">E10-02 &mdash; Bankroll Manager Page <span class="badge badge-completed">Completed</span></h3>
+<h3 id="e10-02-bankroll-manager-page" class="md-h3 subsection-header">E10-02 &mdash; Bankroll Manager Page</h3>
 <p class="md-p"><strong>Type:</strong> Frontend</p>
 <p class="md-p"><strong>Depends on:</strong> E9-01, E6-02</p>
 <p class="md-p"><strong>Master Plan:</strong> MP §3 Flow 4 (Bankroll Manager), MP §8 Design System</p>
@@ -1114,7 +1114,7 @@ E13-01 → E13-02 → E13-03</code></pre></div>
 <li><span class="checkbox">☐</span> Bankroll chart shows historical bankroll with peak annotated</li>
 <li><span class="checkbox">☐</span> Monthly breakdown table calculates correctly from bet_log data</li></ul>
 <hr class='md-hr'>
-<h3 id="e10-03-settings-page" class="md-h3 subsection-header">E10-03 &mdash; Settings Page <span class="badge badge-completed">Completed</span></h3>
+<h3 id="e10-03-settings-page" class="md-h3 subsection-header">E10-03 &mdash; Settings Page</h3>
 <p class="md-p"><strong>Type:</strong> Frontend</p>
 <p class="md-p"><strong>Depends on:</strong> E9-01, E1-03</p>
 <p class="md-p"><strong>Master Plan:</strong> MP §3 Flow 6 (First-Time Setup), MP §3 Flow 7 (Adding a Friend)</p>
@@ -1134,7 +1134,7 @@ E13-01 → E13-02 → E13-03</code></pre></div>
 <li><span class="checkbox">☐</span> User management section is visible only to users with role='owner'</li>
 <li><span class="checkbox">☐</span> "Invite User" creates a new user record with role='viewer'</li></ul>
 <hr class='md-hr'>
-<h3 id="e10-04-onboarding-flow" class="md-h3 subsection-header">E10-04 &mdash; Onboarding Flow <span class="badge badge-completed">Completed</span></h3>
+<h3 id="e10-04-onboarding-flow" class="md-h3 subsection-header">E10-04 &mdash; Onboarding Flow</h3>
 <p class="md-p"><strong>Type:</strong> Frontend</p>
 <p class="md-p"><strong>Depends on:</strong> E10-03</p>
 <p class="md-p"><strong>Master Plan:</strong> MP §3 Flow 6 (First-Time Setup)</p>
@@ -1155,7 +1155,7 @@ E13-01 → E13-02 → E13-03</code></pre></div>
 <li><span class="checkbox">☐</span> Returning users skip onboarding and go directly to the dashboard</li></ul>
 <hr class='md-hr'>
 <h2 id="e11-email-notifications" class="md-h2 section-header">E11 &mdash; Email Notifications</h2>
-<h3 id="e11-01-email-templates" class="md-h3 subsection-header">E11-01 &mdash; Email Templates <span class="badge badge-completed">Completed</span></h3>
+<h3 id="e11-01-email-templates" class="md-h3 subsection-header">E11-01 &mdash; Email Templates</h3>
 <p class="md-p"><strong>Type:</strong> Backend</p>
 <p class="md-p"><strong>Depends on:</strong> E7-01, E6-03</p>
 <p class="md-p"><strong>Master Plan:</strong> MP §3 Flows 1–3 (email content), MP §5 Architecture → Email</p>
@@ -1177,7 +1177,7 @@ E13-01 → E13-02 → E13-03</code></pre></div>
 <li><span class="checkbox">☐</span> All templates include a "Open Dashboard" link</li>
 <li><span class="checkbox">☐</span> Templates render correctly when opened in a browser</li></ul>
 <hr class='md-hr'>
-<h3 id="e11-02-email-sender" class="md-h3 subsection-header">E11-02 &mdash; Email Sender <span class="badge badge-completed">Completed</span></h3>
+<h3 id="e11-02-email-sender" class="md-h3 subsection-header">E11-02 &mdash; Email Sender</h3>
 <p class="md-p"><strong>Type:</strong> Backend</p>
 <p class="md-p"><strong>Depends on:</strong> E11-01</p>
 <p class="md-p"><strong>Master Plan:</strong> MP §5 Architecture → Email (Gmail SMTP)</p>
@@ -1201,7 +1201,7 @@ E13-01 → E13-02 → E13-03</code></pre></div>
 <li><span class="checkbox">☐</span> Failed sends are retried 3 times before raising an error</li>
 <li><span class="checkbox">☐</span> Sent emails are logged in pipeline_runs (emails_sent count)</li></ul>
 <hr class='md-hr'>
-<h3 id="e11-03-email-integration-with-pipeline" class="md-h3 subsection-header">E11-03 &mdash; Email Integration with Pipeline <span class="badge badge-completed">Completed</span></h3>
+<h3 id="e11-03-email-integration-with-pipeline" class="md-h3 subsection-header">E11-03 &mdash; Email Integration with Pipeline</h3>
 <p class="md-p"><strong>Type:</strong> Integration</p>
 <p class="md-p"><strong>Depends on:</strong> E11-02, E8-01</p>
 <p class="md-p"><strong>Master Plan:</strong> MP §5 Architecture → Scheduling</p>
@@ -1221,7 +1221,7 @@ E13-01 → E13-02 → E13-03</code></pre></div>
 <li><span class="checkbox">☐</span> <code class="inline-code">pipeline_runs.emails_sent</code> is correctly incremented</li></ul>
 <hr class='md-hr'>
 <h2 id="e12-self-improvement-engine" class="md-h2 section-header">E12 &mdash; Self-Improvement Engine</h2>
-<h3 id="e12-01-automatic-recalibration" class="md-h3 subsection-header">E12-01 &mdash; Automatic Recalibration <span class="badge badge-completed">Completed</span></h3>
+<h3 id="e12-01-automatic-recalibration" class="md-h3 subsection-header">E12-01 &mdash; Automatic Recalibration</h3>
 <p class="md-p"><strong>Type:</strong> Backend</p>
 <p class="md-p"><strong>Depends on:</strong> E7-01, E5-03</p>
 <p class="md-p"><strong>Master Plan:</strong> MP §11.1 Automatic Recalibration</p>
@@ -1243,7 +1243,7 @@ E13-01 → E13-02 → E13-03</code></pre></div>
 <li><span class="checkbox">☐</span> Rollback activates if calibrated predictions perform worse than raw over 100 post-calibration predictions</li>
 <li><span class="checkbox">☐</span> Rolled-back calibrations have <code class="inline-code">rolled_back=1</code> and <code class="inline-code">is_active=0</code> in the database</li></ul>
 <hr class='md-hr'>
-<h3 id="e12-02-feature-importance-tracking" class="md-h3 subsection-header">E12-02 &mdash; Feature Importance Tracking <span class="badge badge-completed">Completed</span></h3>
+<h3 id="e12-02-feature-importance-tracking" class="md-h3 subsection-header">E12-02 &mdash; Feature Importance Tracking</h3>
 <p class="md-p"><strong>Type:</strong> Backend</p>
 <p class="md-p"><strong>Depends on:</strong> E5-02</p>
 <p class="md-p"><strong>Master Plan:</strong> MP §11.2 Dynamic Feature Importance Tracking</p>
@@ -1262,7 +1262,7 @@ E13-01 → E13-02 → E13-03</code></pre></div>
 <li><span class="checkbox">☐</span> Features below 1% importance for 3+ consecutive cycles are flagged with a warning message</li>
 <li><span class="checkbox">☐</span> No features are automatically removed &mdash; the module is read-only on model configuration</li></ul>
 <hr class='md-hr'>
-<h3 id="e12-03-adaptive-ensemble-weights" class="md-h3 subsection-header">E12-03 &mdash; Adaptive Ensemble Weights <span class="badge badge-completed">Completed</span></h3>
+<h3 id="e12-03-adaptive-ensemble-weights" class="md-h3 subsection-header">E12-03 &mdash; Adaptive Ensemble Weights</h3>
 <p class="md-p"><strong>Type:</strong> Backend</p>
 <p class="md-p"><strong>Depends on:</strong> E7-01, E5-03</p>
 <p class="md-p"><strong>Master Plan:</strong> MP §11.3 Adaptive Ensemble Weights</p>
@@ -1288,7 +1288,7 @@ E13-01 → E13-02 → E13-03</code></pre></div>
 <li><span class="checkbox">☐</span> <code class="inline-code">get_current_weights()</code> returns a dict of model_name → weight that sums to 1.0</li>
 <li><span class="checkbox">☐</span> With only one active model, weight is 1.0 (ensemble degrades gracefully to single model)</li></ul>
 <hr class='md-hr'>
-<h3 id="e12-04-market-feedback-loop" class="md-h3 subsection-header">E12-04 &mdash; Market Feedback Loop <span class="badge badge-completed">Completed</span></h3>
+<h3 id="e12-04-market-feedback-loop" class="md-h3 subsection-header">E12-04 &mdash; Market Feedback Loop</h3>
 <p class="md-p"><strong>Type:</strong> Backend</p>
 <p class="md-p"><strong>Depends on:</strong> E7-01, E6-03</p>
 <p class="md-p"><strong>Master Plan:</strong> MP §11.4 Odds Market Feedback Loop</p>
@@ -1313,7 +1313,7 @@ E13-01 → E13-02 → E13-03</code></pre></div>
 <li><span class="checkbox">☐</span> No value bets are automatically filtered or suppressed based on market performance</li>
 <li><span class="checkbox">☐</span> Warning text is generated for 'unprofitable' combinations for use in the dashboard</li></ul>
 <hr class='md-hr'>
-<h3 id="e12-05-seasonal-re-training-triggers" class="md-h3 subsection-header">E12-05 &mdash; Seasonal Re-training Triggers <span class="badge badge-completed">Completed</span></h3>
+<h3 id="e12-05-seasonal-re-training-triggers" class="md-h3 subsection-header">E12-05 &mdash; Seasonal Re-training Triggers</h3>
 <p class="md-p"><strong>Type:</strong> Backend</p>
 <p class="md-p"><strong>Depends on:</strong> E7-01, E5-02</p>
 <p class="md-p"><strong>Master Plan:</strong> MP §11.5 Seasonal Re-training Triggers</p>
@@ -1338,7 +1338,7 @@ E13-01 → E13-02 → E13-03</code></pre></div>
 <li><span class="checkbox">☐</span> Rolled-back retrains have <code class="inline-code">was_rolled_back=1</code> in the database</li></ul>
 <hr class='md-hr'>
 <h2 id="e13-automation-deployment" class="md-h2 section-header">E13 &mdash; Automation & Deployment</h2>
-<h3 id="e13-01-github-actions-workflows" class="md-h3 subsection-header">E13-01 &mdash; GitHub Actions Workflows <span class="badge badge-completed">Completed</span></h3>
+<h3 id="e13-01-github-actions-workflows" class="md-h3 subsection-header">E13-01 &mdash; GitHub Actions Workflows</h3>
 <p class="md-p"><strong>Type:</strong> Setup</p>
 <p class="md-p"><strong>Depends on:</strong> E11-03</p>
 <p class="md-p"><strong>Master Plan:</strong> MP §5 Architecture → Scheduling (GitHub Actions)</p>
@@ -1360,7 +1360,7 @@ E13-01 → E13-02 → E13-03</code></pre></div>
 <li><span class="checkbox">☐</span> Workflow commits database changes back to repo (if using SQLite strategy)</li>
 <li><span class="checkbox">☐</span> A manual trigger (<code class="inline-code">workflow_dispatch</code>) is available for each workflow</li></ul>
 <hr class='md-hr'>
-<h3 id="e13-02-streamlit-cloud-deployment" class="md-h3 subsection-header">E13-02 &mdash; Streamlit Cloud Deployment <span class="badge badge-completed">Completed</span></h3>
+<h3 id="e13-02-streamlit-cloud-deployment" class="md-h3 subsection-header">E13-02 &mdash; Streamlit Cloud Deployment</h3>
 <p class="md-p"><strong>Type:</strong> Setup</p>
 <p class="md-p"><strong>Depends on:</strong> E10-04</p>
 <p class="md-p"><strong>Master Plan:</strong> MP §5 Architecture → Frontend (Streamlit Cloud)</p>
@@ -1380,7 +1380,7 @@ E13-01 → E13-02 → E13-03</code></pre></div>
 <li><span class="checkbox">☐</span> README includes step-by-step Streamlit Cloud deployment instructions</li>
 <li><span class="checkbox">☐</span> App handles missing database gracefully (shows error message, not a crash)</li></ul>
 <hr class='md-hr'>
-<h3 id="e13-03-security-hardening" class="md-h3 subsection-header">E13-03 &mdash; Security Hardening <span class="badge badge-completed">Completed</span></h3>
+<h3 id="e13-03-security-hardening" class="md-h3 subsection-header">E13-03 &mdash; Security Hardening</h3>
 <p class="md-p"><strong>Type:</strong> Polish</p>
 <p class="md-p"><strong>Depends on:</strong> E13-01, E13-02</p>
 <p class="md-p"><strong>Master Plan:</strong> MP §5 Architecture → Authentication</p>

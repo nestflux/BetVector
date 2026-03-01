@@ -2,7 +2,7 @@
 
 Quantitative edge detection system for football betting. Combines Poisson regression modelling, walk-forward backtesting, and automated bankroll management to identify value bets across bookmaker markets.
 
-**Status:** Active development (Epic 12 of 13 complete)
+**Status:** All 45 issues complete (13 epics)
 
 ## Documentation
 
@@ -17,6 +17,8 @@ Full project documentation is hosted on Surge:
 | [Two-Pager](https://betvector.surge.sh/betvector_twopager.html) | Executive summary |
 | [Master Plan](https://betvector.surge.sh/betvector_masterplan.html) | Product vision, architecture, database schema |
 | [Build Plan](https://betvector.surge.sh/betvector_buildplan.html) | 13 epics, 45 issues - sequenced implementation roadmap |
+| [How-To Manual](https://betvector.surge.sh/betvector_howto.html) | Setup, daily usage, dashboard guide, configuration reference |
+| [How It Works](https://betvector.surge.sh/betvector_howitworks.html) | Learn the maths, models, and betting concepts behind BetVector |
 
 ## Quick Start
 
