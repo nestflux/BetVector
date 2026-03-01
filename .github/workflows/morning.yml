@@ -72,10 +72,32 @@ jobs:
           echo "=== Database check ==="
           ls -la data/betvector.db 2>/dev/null && echo "DB exists" || echo "DB missing"
           echo ""
-          echo "=== Running setup (idempotent) ==="
+          echo "=== Running setup + migration ==="
           python -c "
-          from src.database.db import init_db
+          import sqlite3
+          from src.database.db import init_db, get_session
+          from src.config import PROJECT_ROOT
+
+          # Create tables if DB is brand new
           init_db()
+
+          # Migrate: add columns that may be missing from older DB versions
+          db_path = str(PROJECT_ROOT / 'data' / 'betvector.db')
+          conn = sqlite3.connect(db_path)
+          cols = [r[1] for r in conn.execute('PRAGMA table_info(users)').fetchall()]
+          migrations = {
+              'notify_morning': 'ALTER TABLE users ADD COLUMN notify_morning INTEGER DEFAULT 1',
+              'notify_evening': 'ALTER TABLE users ADD COLUMN notify_evening INTEGER DEFAULT 1',
+              'notify_weekly': 'ALTER TABLE users ADD COLUMN notify_weekly INTEGER DEFAULT 1',
+              'has_onboarded': 'ALTER TABLE users ADD COLUMN has_onboarded INTEGER DEFAULT 0',
+          }
+          for col, sql in migrations.items():
+              if col not in cols:
+                  conn.execute(sql)
+                  print(f'  Added missing column: {col}')
+          conn.commit()
+          conn.close()
+
           from src.database.seed import seed_all
           seed_all()
           print('Setup complete')

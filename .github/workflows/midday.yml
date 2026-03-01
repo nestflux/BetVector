@@ -53,8 +53,19 @@ jobs:
       - name: Run midday pipeline
         run: |
           python -c "
+          import sqlite3
           from src.database.db import init_db
+          from src.config import PROJECT_ROOT
           init_db()
+          db_path = str(PROJECT_ROOT / 'data' / 'betvector.db')
+          conn = sqlite3.connect(db_path)
+          cols = [r[1] for r in conn.execute('PRAGMA table_info(users)').fetchall()]
+          for col, sql in {'notify_morning': 'ALTER TABLE users ADD COLUMN notify_morning INTEGER DEFAULT 1', 'notify_evening': 'ALTER TABLE users ADD COLUMN notify_evening INTEGER DEFAULT 1', 'notify_weekly': 'ALTER TABLE users ADD COLUMN notify_weekly INTEGER DEFAULT 1', 'has_onboarded': 'ALTER TABLE users ADD COLUMN has_onboarded INTEGER DEFAULT 0'}.items():
+              if col not in cols:
+                  conn.execute(sql)
+                  print(f'  Added missing column: {col}')
+          conn.commit()
+          conn.close()
           from src.database.seed import seed_all
           seed_all()
           print('Setup complete')
