@@ -596,6 +596,20 @@ class Feature(Base):
     ref_avg_goals = Column(Float, nullable=True)     # avg total goals/game
     ref_home_win_pct = Column(Float, nullable=True)  # % home wins (0.0-1.0)
 
+    # --- Fixture congestion features (E21-03) ---
+    # European football congestion threshold: teams playing every 3 days
+    # (midweek + weekend) suffer fatigue effects — reduced pressing intensity,
+    # higher injury risk, more rotation.  This is especially pronounced for
+    # teams competing in Champions League / Europa League alongside the EPL.
+    # Carling et al. (2015) found significant performance drops at <4 days rest.
+    #
+    # days_since_last_match overlaps with rest_days (both measure the same
+    # thing).  We keep both because rest_days feeds into context features
+    # (continuous value) while is_congested is a binary threshold flag that
+    # makes the congestion signal more explicit to the model.
+    days_since_last_match = Column(Integer, nullable=True)
+    is_congested = Column(Integer, nullable=True)  # 1 if <4 days rest, else 0
+
     # --- Market-implied features (E20-01, E20-02) ---
     # Pinnacle implied probabilities with overround removed.  Pinnacle is the
     # sharpest bookmaker — their closing line is widely considered the best

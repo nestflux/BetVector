@@ -444,6 +444,10 @@ class PoissonModel(BaseModel):
             # produce higher-scoring matches.  Home bias refs amplify home advantage.
             f"{attack_prefix}ref_avg_goals",
             f"{attack_prefix}ref_home_win_pct",
+            # --- Fixture congestion features (E21-03) ---
+            # Binary flag for <4-day rest.  Congested teams press less,
+            # rotate more, and score fewer goals on average.
+            f"{attack_prefix}is_congested",
         ]
 
         # Only include columns that exist in the DataFrame

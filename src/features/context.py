@@ -880,3 +880,99 @@ def calculate_referee_features(
         )
 
     return result
+
+
+# ============================================================================
+# Fixture Congestion Features (E21-03)
+# ============================================================================
+# Teams playing multiple matches in quick succession (midweek + weekend)
+# suffer measurable performance drops:
+#   - Reduced pressing intensity (less energy for high-press systems)
+#   - Higher injury risk (fatigue-related muscle injuries spike)
+#   - More squad rotation (weaker lineups, less cohesion)
+#
+# The <4-day threshold is the widely accepted congestion boundary in
+# European football (Carling et al. 2015, Bengtsson et al. 2013):
+#   - 3 days rest (e.g., Wednesday → Saturday): congested
+#   - 4+ days rest: normal recovery window
+#
+# This is especially impactful for teams competing in European competitions
+# alongside the EPL — they play midweek Champions League/Europa League
+# followed by a weekend EPL match with only 3 days between them.
+#
+# days_since_last_match: integer days (same as rest_days but stored as
+# a separate feature column for explicit model access)
+# is_congested: binary flag (1 if <4 days, 0 otherwise)
+#
+# Expected Brier improvement: 2-3% for European competitors.
+# ============================================================================
+
+# Congestion threshold — fewer than this many days between matches
+# signals significant fatigue effects.
+CONGESTION_THRESHOLD_DAYS = 4
+
+
+def calculate_congestion_features(
+    team_id: int,
+    match_date: str,
+    league_id: int,
+) -> Dict[str, Any]:
+    """Calculate fixture congestion features for a team.
+
+    Determines how many days since the team's last match and whether
+    they're in a congested fixture period (<4 days between matches).
+
+    This function reuses the same logic as ``calculate_rest_days()`` but
+    returns both the raw days value and a binary congestion flag.
+
+    Parameters
+    ----------
+    team_id : int
+        Database ID of the team.
+    match_date : str
+        ISO date of the match (YYYY-MM-DD).
+    league_id : int
+        Database ID of the league.
+
+    Returns
+    -------
+    dict
+        Keys: days_since_last_match, is_congested.
+        Returns None for days_since_last_match if this is the team's first
+        match (no prior match).  is_congested defaults to 0 in that case.
+    """
+    # Reuse the existing rest_days calculation which handles all edge cases
+    # (first match of season → DEFAULT_REST_DAYS).
+    rest = calculate_rest_days(team_id, match_date, league_id)
+
+    # rest_days returns DEFAULT_REST_DAYS (7) for first match of season.
+    # In that case, days_since_last_match should be None (we genuinely
+    # don't know when they last played) and is_congested should be 0
+    # (7 days is definitely not congested).
+    if rest == DEFAULT_REST_DAYS:
+        # Check if this is genuinely 7 days rest or the default
+        with get_session() as session:
+            last_match = session.query(Match).filter(
+                Match.league_id == league_id,
+                Match.date < match_date,
+                Match.status == "finished",
+                (
+                    (Match.home_team_id == team_id) |
+                    (Match.away_team_id == team_id)
+                ),
+            ).order_by(Match.date.desc()).first()
+
+        if last_match is None:
+            # First match of season — no prior data
+            return {
+                "days_since_last_match": None,
+                "is_congested": 0,  # Not congested (no prior match)
+            }
+
+    # Normal case: we have a real rest days value
+    is_congested = 1 if rest < CONGESTION_THRESHOLD_DAYS else 0
+
+    return {
+        "days_since_last_match": rest,
+        "is_congested": is_congested,
+    }

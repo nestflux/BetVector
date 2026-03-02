@@ -2258,11 +2258,11 @@ Compute referee-level statistics as model features. Impact: 1-2% Brier improveme
 
 ---
 
-### E21-03 — Fixture Congestion Flag
+### E21-03 — Fixture Congestion Flag ✅
 
 **Type:** Backend — Features
 **Depends on:** E4-01 (Feature engineering)
-**Status:** PENDING
+**Status:** COMPLETED
 
 Add fixture congestion features — impact: 2-3% Brier improvement for European competitors.
 
@@ -2270,19 +2270,20 @@ Add fixture congestion features — impact: 2-3% Brier improvement for European 
 - `days_since_last_match` (Integer, nullable) — days since team's most recent match
 - `is_congested` (Integer, nullable) — binary: 1 if <4 days since last match
 
-**Implementation approach:**
-1. New function in context.py: `calculate_congestion_features(match_id, team_id)`
-2. Query matches for this team ordered by date DESC before this match
-3. Calculate days between this match and previous match
-4. is_congested = 1 if days < 4 else 0
-5. Note: `rest_days` already exists in Features — `is_congested` adds binary signal for <4-day European football threshold (Carling et al. 2015)
+**Implementation notes:**
+- CONGESTION_THRESHOLD_DAYS = 4 (Carling et al. 2015 standard)
+- Reuses `calculate_rest_days()` internally for consistency
+- 1,520/1,520 Features populated (100% coverage)
+- 155/1,520 Feature rows flagged as congested (10%) — concentrated in Dec/Jan
+- First match of season: returns None for days + 0 for is_congested
+- Only `is_congested` added to poisson.py (binary signal more useful than raw days)
 
 **Acceptance Criteria:**
-- [ ] Two new columns on Feature model
-- [ ] `calculate_congestion_features()` computes from match history
-- [ ] Only uses matches BEFORE the prediction date (temporal integrity)
-- [ ] Features added to engineer.py and poisson.py
-- [ ] Handles first match of season gracefully (no previous match → NULL)
+- [x] Two new columns on Feature model
+- [x] `calculate_congestion_features()` computes from match history
+- [x] Only uses matches BEFORE the prediction date (temporal integrity)
+- [x] Features added to engineer.py and poisson.py
+- [x] Handles first match of season gracefully (no previous match → NULL)
 
 ---
 

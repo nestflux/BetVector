@@ -33,6 +33,7 @@ from src.config import config
 from src.database.db import get_session
 from src.database.models import Feature, Match, Team
 from src.features.context import (
+    calculate_congestion_features,
     calculate_context_features,
     calculate_elo_features,
     calculate_market_odds_features,
@@ -172,6 +173,19 @@ def compute_features(match_id: int, league_id: int) -> Dict[str, Dict[str, Any]]
     ref_features = calculate_referee_features(match_id)
     home_features.update(ref_features)
     away_features.update(ref_features)
+
+    # --- Fixture congestion features (E21-03) ---
+    # Binary signal for <4-day rest periods.  Teams in European competitions
+    # (Champions League, Europa League) often play midweek + weekend with
+    # only 3 days between matches, causing measurable performance drops.
+    home_congestion = calculate_congestion_features(
+        home_team_id, match_date, league_id,
+    )
+    away_congestion = calculate_congestion_features(
+        away_team_id, match_date, league_id,
+    )
+    home_features.update(home_congestion)
+    away_features.update(away_congestion)
 
     # --- Save to database ---
     save_features(match_id, home_team_id, is_home=1, features=home_features)
@@ -389,6 +403,8 @@ def _read_existing_features(
         "elo_rating", "elo_diff",
         # Referee features (E21-02)
         "ref_avg_fouls", "ref_avg_yellows", "ref_avg_goals", "ref_home_win_pct",
+        # Fixture congestion features (E21-03)
+        "days_since_last_match", "is_congested",
     ]
 
     for col in feature_cols:
