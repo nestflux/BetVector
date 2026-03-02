@@ -2188,15 +2188,15 @@ Run walk-forward backtest comparing base Poisson (current features) vs market-au
 
 ---
 
-### E21-01 — ClubElo Scraper + Elo Features
+### E21-01 — ClubElo Scraper + Elo Features ✅
 
 **Type:** Backend — Scraper + Features
 **Depends on:** E3-01 (BaseScraper)
-**Status:** PENDING
+**Status:** COMPLETED
 
 Integrate ClubElo ratings — free API, no auth, CSV response. Impact: 1-8% Brier improvement (especially early season for promoted teams).
 
-**New file:** `src/scrapers/clubelo_scraper.py` (~100 lines)
+**New file:** `src/scrapers/clubelo_scraper.py` (~270 lines)
 
 **New ORM model:** `ClubElo` table with team_id (FK), elo_rating, rank, rating_date, UniqueConstraint("team_id", "rating_date")
 
@@ -2206,21 +2206,23 @@ Integrate ClubElo ratings — free API, no auth, CSV response. Impact: 1-8% Brie
 
 **API:** `http://api.clubelo.com/{YYYY-MM-DD}` → CSV of all club Elo ratings for that date
 
-**Implementation approach:**
-1. New scraper inheriting BaseScraper, fetches today's ratings daily in morning pipeline
-2. Team name mapping (ClubElo uses short names like "ManCity")
-3. For backfill, fetch match-date ratings for historical matches
-4. Store in ClubElo table, compute features in context.py
-5. Add features to engineer.py + poisson.py
+**Implementation notes:**
+- ClubElo API uses space-separated names (e.g., "Man City", "Forest", "West Ham")
+- TEAM_NAME_MAP verified against live API data + DB team names
+- 4,738 Elo records backfilled (206 dates × ~23 teams)
+- 1,520/1,520 Feature rows have Elo data (100% coverage for 2024-25 + 2025-26)
+- `_save_raw_text()` helper since API returns CSV text not DataFrame
+- Loader: `load_clubelo_ratings()` with idempotent upsert
+- Features: `calculate_elo_features()` uses <= match_date for temporal integrity
 
 **Acceptance Criteria:**
-- [ ] ClubElo ORM model created with proper constraints
-- [ ] Scraper fetches and parses CSV from api.clubelo.com
-- [ ] Team name normalisation maps to canonical DB names
-- [ ] Elo features (elo_rating, elo_diff) computed for matches
-- [ ] Features added to engineer.py and poisson.py
-- [ ] Integrated into morning pipeline
-- [ ] Graceful degradation when API unavailable
+- [x] ClubElo ORM model created with proper constraints
+- [x] Scraper fetches and parses CSV from api.clubelo.com
+- [x] Team name normalisation maps to canonical DB names
+- [x] Elo features (elo_rating, elo_diff) computed for matches
+- [x] Features added to engineer.py and poisson.py
+- [x] Integrated into morning pipeline
+- [x] Graceful degradation when API unavailable
 
 ---
 

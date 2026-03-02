@@ -22,6 +22,8 @@ Loader functions (each independent and idempotent):
     with results from API-Football (goals, status).
   - ``backfill_closing_odds()`` — populates BetLog.closing_odds and
     BetLog.clv from Pinnacle closing odds in the Odds table.
+  - ``load_clubelo_ratings(df, league_id)`` — loads ClubElo Elo ratings
+    into the club_elo table with team name matching and idempotency.
 
 All loaders use explicit duplicate checks before inserting.  Running
 any loader twice with the same data produces zero new records.
@@ -38,7 +40,8 @@ import pandas as pd
 
 from src.database.db import get_session
 from src.database.models import (
-    BetLog, League, Match, MatchStat, Odds, Team, TeamMarketValue, Weather,
+    BetLog, ClubElo, League, Match, MatchStat, Odds, Team, TeamMarketValue,
+    Weather,
 )
 
 logger = logging.getLogger(__name__)
@@ -1437,5 +1440,129 @@ def backfill_closing_odds() -> Dict[str, int]:
     logger.info(
         "backfill_closing_odds: %d updated, %d missing closing odds, %d total",
         updated, no_closing_odds, updated + no_closing_odds,
+    )
+    return summary
+
+
+# ============================================================================
+# ClubElo Ratings Loader (E21-01)
+# ============================================================================
+# Elo ratings are a strength-of-schedule-adjusted measure of team quality.
+# Unlike rolling form stats which only reflect the last N matches, Elo ratings
+# incorporate the FULL history of a team's results, weighted by opponent strength.
+#
+# A team that beats strong opponents gains more rating points than one that
+# beats weak opponents — this makes Elo especially valuable for:
+#   - Early season: when rolling stats are sparse (only 1-3 matches played)
+#   - Promoted teams: their lower Championship Elo automatically signals
+#     they're weaker than established EPL teams, even before any EPL results
+#   - Predicting upsets: a high-Elo team in poor recent form is still dangerous
+#
+# Data source: ClubElo API (http://api.clubelo.com) — free, no auth required.
+# The loader maps club names to BetVector teams and stores one rating per
+# team per date, with UNIQUE(team_id, rating_date) for idempotency.
+# ============================================================================
+
+
+def load_clubelo_ratings(
+    df: pd.DataFrame,
+    league_id: int,
+) -> Dict[str, int]:
+    """Load ClubElo ratings into the club_elo table.
+
+    Takes the DataFrame returned by ClubEloScraper and matches each
+    club_name to a Team record, then inserts or updates the rating.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Columns: club_name, elo_rating, rank, rating_date.
+        Produced by ``ClubEloScraper.fetch_ratings_for_date()`` or
+        ``ClubEloScraper.scrape()``.
+    league_id : int
+        Database ID of the league (used for team lookup scope).
+
+    Returns
+    -------
+    dict
+        Keys: new (inserted), skipped (duplicate/existing), errors, total.
+    """
+    if df is None or df.empty:
+        logger.warning("load_clubelo_ratings: empty DataFrame, nothing to load")
+        return {"new": 0, "skipped": 0, "errors": 0, "total": 0}
+
+    new = 0
+    skipped = 0
+    errors = 0
+
+    with get_session() as session:
+        # Build a lookup of canonical team names → team_id
+        teams = session.query(Team).all()
+        name_to_id: Dict[str, int] = {t.name: t.id for t in teams}
+
+        for _, row in df.iterrows():
+            try:
+                club_name = str(row.get("club_name", "")).strip()
+                elo_rating = row.get("elo_rating")
+                rank = row.get("rank")
+                rating_date = str(row.get("rating_date", "")).strip()
+
+                if not club_name or elo_rating is None or not rating_date:
+                    logger.debug(
+                        "ClubElo: skipping incomplete row: %s", dict(row),
+                    )
+                    errors += 1
+                    continue
+
+                # Map canonical club name to team_id
+                team_id = name_to_id.get(club_name)
+                if team_id is None:
+                    logger.debug(
+                        "ClubElo: team '%s' not found in DB — skipping",
+                        club_name,
+                    )
+                    errors += 1
+                    continue
+
+                # Check for existing record (idempotent — UNIQUE constraint)
+                existing = session.query(ClubElo).filter_by(
+                    team_id=team_id,
+                    rating_date=rating_date,
+                ).first()
+
+                if existing is not None:
+                    # Update rating if it changed (API may revise ratings)
+                    if abs(existing.elo_rating - float(elo_rating)) > 0.01:
+                        existing.elo_rating = float(elo_rating)
+                        existing.rank = int(rank) if pd.notna(rank) else None
+                        logger.debug(
+                            "ClubElo: updated %s rating on %s to %.1f",
+                            club_name, rating_date, float(elo_rating),
+                        )
+                    skipped += 1
+                    continue
+
+                # Insert new rating
+                record = ClubElo(
+                    team_id=team_id,
+                    elo_rating=float(elo_rating),
+                    rank=int(rank) if pd.notna(rank) else None,
+                    rating_date=rating_date,
+                )
+                session.add(record)
+                new += 1
+
+            except Exception as e:
+                logger.error(
+                    "ClubElo: error loading row %s: %s", dict(row), e,
+                )
+                errors += 1
+
+        session.commit()
+
+    summary = {"new": new, "skipped": skipped, "errors": errors, "total": new + skipped + errors}
+    logger.info(
+        "load_clubelo_ratings: %d new, %d skipped, %d errors",
+        new, skipped, errors,
     )
     return summary

@@ -34,6 +34,7 @@ from src.database.db import get_session
 from src.database.models import Feature, Match, Team
 from src.features.context import (
     calculate_context_features,
+    calculate_elo_features,
     calculate_market_odds_features,
     calculate_market_value_features,
     calculate_weather_features,
@@ -148,6 +149,20 @@ def compute_features(match_id: int, league_id: int) -> Dict[str, Dict[str, Any]]
     away_market = calculate_market_odds_features(match_id, is_home=0)
     home_features.update(home_market)
     away_features.update(away_market)
+
+    # --- Elo rating features (E21-01) ---
+    # ClubElo ratings capture long-term team quality beyond rolling form.
+    # Especially valuable early in the season when rolling stats are sparse,
+    # and for promoted teams whose lower Elo encodes "newly promoted" signal.
+    # Each team gets its own elo_rating and elo_diff (team Elo minus opponent Elo).
+    home_elo = calculate_elo_features(
+        home_team_id, away_team_id, match_date,
+    )
+    away_elo = calculate_elo_features(
+        away_team_id, home_team_id, match_date,
+    )
+    home_features.update(home_elo)
+    away_features.update(away_elo)
 
     # --- Save to database ---
     save_features(match_id, home_team_id, is_home=1, features=home_features)
@@ -361,6 +376,8 @@ def _read_existing_features(
         # Market-implied features (E20-01, E20-02)
         "pinnacle_home_prob", "pinnacle_draw_prob", "pinnacle_away_prob",
         "pinnacle_overround", "ah_line",
+        # Elo rating features (E21-01)
+        "elo_rating", "elo_diff",
     ]
 
     for col in feature_cols:

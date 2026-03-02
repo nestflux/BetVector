@@ -41,7 +41,7 @@ from typing import Any, Dict, Optional
 from sqlalchemy.orm import Session
 
 from src.database.db import get_session
-from src.database.models import Match, Odds, TeamMarketValue, Weather
+from src.database.models import ClubElo, Match, Odds, TeamMarketValue, Weather
 
 logger = logging.getLogger(__name__)
 
@@ -605,3 +605,107 @@ def calculate_market_odds_features(
             )
 
     return result
+
+
+# ============================================================================
+# Elo Rating Features (E21-01)
+# ============================================================================
+# Elo ratings from ClubElo capture LONG-TERM team quality — unlike rolling form
+# which only looks at the last 5-10 matches.  The key insight is that a team
+# losing 3 in a row doesn't suddenly become weak — their Elo barely changes.
+# Conversely, a newly promoted team may have a winning run early on, but their
+# Elo correctly reflects they're still weaker than established EPL teams.
+#
+# The Elo DIFFERENCE between teams is especially predictive:
+#   - Elo diff > 200: heavy favourite (e.g., Man City vs newly promoted)
+#   - Elo diff ~0: evenly matched teams
+#   - Elo diff < -200: heavy underdog
+#
+# Expected Brier improvement: 1-8% (larger for promoted teams, early season).
+#
+# TEMPORAL INTEGRITY: Uses the most recent Elo rating BEFORE the match date.
+# ClubElo updates ratings after each round, so using ratings "on or before"
+# the match date is safe — those ratings were known before kickoff.
+# ============================================================================
+
+
+def calculate_elo_features(
+    team_id: int,
+    opponent_id: int,
+    match_date: str,
+) -> Dict[str, Any]:
+    """Calculate Elo rating features for a team in a specific match.
+
+    Looks up the most recent ClubElo rating for both the team and its
+    opponent on or before the match date, then computes the Elo difference.
+
+    Parameters
+    ----------
+    team_id : int
+        Database ID of the team whose features we're computing.
+    opponent_id : int
+        Database ID of the opposing team.
+    match_date : str
+        ISO date of the match (YYYY-MM-DD).  Only ratings on or before
+        this date are considered (temporal integrity).
+
+    Returns
+    -------
+    dict
+        Keys: elo_rating, elo_diff.
+        - elo_rating: this team's Elo rating on match date
+        - elo_diff: this team's Elo minus opponent's Elo
+          (positive = this team is stronger)
+        Returns None for both if no Elo data exists.
+    """
+    with get_session() as session:
+        # Get the most recent Elo rating for THIS team on or before match date.
+        # ClubElo publishes daily snapshots; the most recent one reflects all
+        # results up to that date and is temporally safe to use.
+        team_elo = (
+            session.query(ClubElo)
+            .filter(
+                ClubElo.team_id == team_id,
+                ClubElo.rating_date <= match_date,
+            )
+            .order_by(ClubElo.rating_date.desc())
+            .first()
+        )
+
+        # Get the most recent Elo rating for the OPPONENT on or before match date
+        opp_elo = (
+            session.query(ClubElo)
+            .filter(
+                ClubElo.team_id == opponent_id,
+                ClubElo.rating_date <= match_date,
+            )
+            .order_by(ClubElo.rating_date.desc())
+            .first()
+        )
+
+    # No Elo data for this team — return None (graceful degradation)
+    if team_elo is None:
+        return {
+            "elo_rating": None,
+            "elo_diff": None,
+        }
+
+    team_rating = round(team_elo.elo_rating, 1)
+
+    # Compute Elo difference if opponent data exists
+    if opp_elo is not None:
+        elo_diff = round(team_elo.elo_rating - opp_elo.elo_rating, 1)
+    else:
+        # No opponent Elo — can't compute difference
+        elo_diff = None
+
+    logger.debug(
+        "Elo features for team %d vs %d on %s: rating=%.1f, diff=%s",
+        team_id, opponent_id, match_date,
+        team_rating, elo_diff,
+    )
+
+    return {
+        "elo_rating": team_rating,
+        "elo_diff": elo_diff,
+    }

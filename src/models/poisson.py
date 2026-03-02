@@ -432,6 +432,13 @@ class PoissonModel(BaseModel):
             # difference.  AH = -1.5 means market expects home to win by ~1.5.
             # Negative = stronger team, positive = weaker team.
             f"{attack_prefix}ah_line",
+            # --- Elo rating features (E21-01) ---
+            # Elo captures long-term team quality beyond rolling form.
+            # elo_rating: absolute team strength (higher = better).
+            # elo_diff: this team's Elo minus opponent's Elo (positive = stronger).
+            # Especially valuable early season and for promoted teams.
+            f"{attack_prefix}elo_rating",
+            f"{attack_prefix}elo_diff",
         ]
 
         # Only include columns that exist in the DataFrame

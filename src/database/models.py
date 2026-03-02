@@ -431,6 +431,50 @@ class Odds(Base):
 
 
 # ============================================================================
+# 7b. CLUB ELO RATINGS (E21-01)
+# ============================================================================
+# Historical Elo ratings from ClubElo (http://api.clubelo.com).
+#
+# Elo ratings capture long-term team strength, adjusted for opponent quality.
+# Unlike rolling form (which is noisy with 5-10 matches), Elo uses the entire
+# historical record.  This makes it especially valuable:
+#   - Early season: rolling stats are sparse, Elo provides a stable signal
+#   - Promoted teams: start with low Elo — encodes "newly promoted" quality
+#   - After transfers: market knows more than stats — Elo reflects this via results
+#
+# Ratings are fetched daily in the morning pipeline and stored per-team per-date.
+# Feature computation looks up the most recent rating BEFORE the match date
+# (temporal integrity).
+
+class ClubElo(Base):
+    __tablename__ = "club_elo"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
+    elo_rating = Column(Float, nullable=False)
+    rank = Column(Integer, nullable=True)  # Global rank (may not always be available)
+    rating_date = Column(String, nullable=False)  # ISO date (YYYY-MM-DD)
+    created_at = Column(
+        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+    )
+
+    # Relationships
+    team = relationship("Team")
+
+    __table_args__ = (
+        UniqueConstraint("team_id", "rating_date", name="uq_club_elo_team_date"),
+        Index("idx_club_elo_team", "team_id"),
+        Index("idx_club_elo_date", "rating_date"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"ClubElo(team={self.team_id}, elo={self.elo_rating}, "
+            f"rank={self.rank}, date={self.rating_date})"
+        )
+
+
+# ============================================================================
 # 8. FEATURES
 # ============================================================================
 # Computed features for each team in a match, used as model input.
@@ -528,6 +572,16 @@ class Feature(Base):
     # Log of squad total value — normalises the massive range (€50M to €1.5B)
     # and provides a continuous quality signal even when opponent data is missing.
     squad_value_log = Column(Float, nullable=True)
+
+    # --- Elo rating features (E21-01) ---
+    # ClubElo Elo rating captures long-term team quality, adjusted for
+    # strength of schedule.  More stable than rolling form (which is noisy
+    # over 5-10 matches).  Especially valuable early season and for promoted teams.
+    elo_rating = Column(Float, nullable=True)
+    # Elo difference: this team's Elo minus opponent's Elo.
+    # Positive = this team is stronger.  A 100-point Elo gap corresponds
+    # to roughly a 64% expected win probability.
+    elo_diff = Column(Float, nullable=True)
 
     # --- Market-implied features (E20-01, E20-02) ---
     # Pinnacle implied probabilities with overround removed.  Pinnacle is the

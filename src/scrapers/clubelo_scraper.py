@@ -1,0 +1,285 @@
+"""
+BetVector — ClubElo Scraper (E21-01)
+====================================
+Fetches Elo ratings from the free ClubElo API (http://api.clubelo.com).
+
+ClubElo provides daily Elo ratings for football clubs worldwide.  Elo ratings
+are a strength-of-schedule-adjusted measure of team quality — a team that
+beats strong opponents gains more rating points than one that beats weak ones.
+
+**Why Elo matters for prediction:**
+  - Captures long-term team quality (rolling form is short-term noise)
+  - Especially valuable early in the season when rolling stats are sparse
+  - Promoted teams start with lower Elo — this encodes "newly promoted" signal
+  - Elo difference between teams is a strong predictor of match outcome
+  - Expected Brier improvement: 1-8% (larger for promoted teams, early season)
+
+**API endpoints:**
+  - ``GET /YYYY-MM-DD`` → CSV of all clubs' ratings for that date
+  - ``GET /ClubName`` → full rating history for a single club
+
+**CSV columns:** Rank, Club, Country, Level, Elo, From, To
+
+**Rate limiting:** 2-second minimum between requests (inherited from BaseScraper).
+No API key required — the API is completely free and public.
+
+Master Plan refs: MP §5 Architecture → Data Sources
+"""
+
+from __future__ import annotations
+
+import logging
+from datetime import date, datetime, timedelta
+from io import StringIO
+from typing import Any, Dict, List, Optional
+
+import pandas as pd
+
+from pathlib import Path
+
+from src.config import PROJECT_ROOT
+from src.scrapers.base_scraper import BaseScraper, ScraperError
+
+logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# Domain & API Configuration
+# ============================================================================
+
+DOMAIN = "api.clubelo.com"
+BASE_URL = "http://api.clubelo.com"
+
+# ClubElo uses short team names — map them to BetVector canonical names.
+# This covers all EPL 2024-25 and 2025-26 teams + common historical teams.
+# ClubElo names are case-sensitive and use abbreviated forms.
+TEAM_NAME_MAP: Dict[str, str] = {
+    # Maps ClubElo club names → BetVector canonical DB names.
+    # BetVector DB uses full official names (e.g., "AFC Bournemouth",
+    # "Wolverhampton Wanderers").  ClubElo uses shorter forms.
+    # Verified against actual API response for 2026-03-02 and DB teams table.
+    #
+    # Current EPL 2025-26 (20 teams)
+    "Arsenal": "Arsenal",
+    "Aston Villa": "Aston Villa",
+    "Bournemouth": "AFC Bournemouth",
+    "Brentford": "Brentford",
+    "Brighton": "Brighton & Hove Albion",
+    "Burnley": "Burnley",
+    "Chelsea": "Chelsea",
+    "Crystal Palace": "Crystal Palace",
+    "Everton": "Everton",
+    "Fulham": "Fulham",
+    "Forest": "Nottingham Forest",
+    "Leeds": "Leeds United",
+    "Liverpool": "Liverpool",
+    "Man City": "Manchester City",
+    "Man United": "Manchester United",
+    "Newcastle": "Newcastle United",
+    "Sunderland": "Sunderland",
+    "Tottenham": "Tottenham Hotspur",
+    "West Ham": "West Ham United",
+    "Wolves": "Wolverhampton Wanderers",
+    # Recent EPL teams (2020-2025) — may appear in historical Elo lookups
+    "Leicester": "Leicester City",
+    "Southampton": "Southampton",
+    "Ipswich": "Ipswich Town",
+    "Sheffield United": "Sheffield United",
+    "Luton": "Luton Town",
+    "West Brom": "West Brom",
+    "Watford": "Watford",
+    "Norwich": "Norwich City",
+    # Legacy ClubElo names (older API data may use concatenated forms)
+    "AstonVilla": "Aston Villa",
+    "CrystalPalace": "Crystal Palace",
+    "ManCity": "Manchester City",
+    "ManUtd": "Manchester United",
+    "NottmForest": "Nottingham Forest",
+    "WestHam": "West Ham United",
+    "SheffieldUtd": "Sheffield United",
+    "WestBrom": "West Brom",
+}
+
+
+class ClubEloScraper(BaseScraper):
+    """Fetches Elo ratings from the ClubElo API.
+
+    Two modes of operation:
+
+    1. **Daily fetch** (morning pipeline): fetch today's ratings for all clubs.
+       Used for upcoming match predictions.
+
+    2. **Historical backfill** (one-time): fetch ratings for specific dates
+       to populate Elo features on historical matches.
+    """
+
+    @property
+    def source_name(self) -> str:
+        return "clubelo"
+
+    def scrape(
+        self,
+        league_config: object = None,
+        season: str = "",
+    ) -> pd.DataFrame:
+        """Fetch today's Elo ratings for all clubs.
+
+        Parameters
+        ----------
+        league_config : object, optional
+            Not used — ClubElo returns all clubs regardless of league.
+        season : str, optional
+            Not used — ratings are date-based, not season-based.
+
+        Returns
+        -------
+        pd.DataFrame
+            Columns: club_name (canonical), elo_rating, rank, country, level,
+            rating_date (ISO string).
+        """
+        today = date.today().isoformat()
+        return self.fetch_ratings_for_date(today)
+
+    def fetch_ratings_for_date(self, date_str: str) -> pd.DataFrame:
+        """Fetch Elo ratings for a specific date.
+
+        Parameters
+        ----------
+        date_str : str
+            Date in ISO format (YYYY-MM-DD).
+
+        Returns
+        -------
+        pd.DataFrame
+            Columns: club_name, elo_rating, rank, country, level, rating_date.
+            Empty DataFrame if the API is unavailable.
+        """
+        url = f"{BASE_URL}/{date_str}"
+
+        try:
+            response = self._request_with_retry(url, DOMAIN)
+        except ScraperError as e:
+            logger.warning(
+                "ClubElo API unavailable for %s: %s", date_str, e,
+            )
+            return pd.DataFrame()
+
+        if not response.text or response.text.strip() == "":
+            logger.warning("ClubElo returned empty response for %s", date_str)
+            return pd.DataFrame()
+
+        # Parse CSV response
+        try:
+            df = pd.read_csv(StringIO(response.text), sep=",")
+        except Exception as e:
+            logger.error("Failed to parse ClubElo CSV for %s: %s", date_str, e)
+            return pd.DataFrame()
+
+        if df.empty:
+            logger.warning("ClubElo returned empty DataFrame for %s", date_str)
+            return pd.DataFrame()
+
+        # Validate expected columns
+        expected_cols = {"Club", "Elo", "Rank"}
+        if not expected_cols.issubset(set(df.columns)):
+            logger.error(
+                "ClubElo CSV missing expected columns. Got: %s",
+                list(df.columns),
+            )
+            return pd.DataFrame()
+
+        # Save raw CSV text for reproducibility.
+        # ClubElo returns raw CSV text (not a DataFrame), so we write directly
+        # instead of using BaseScraper.save_raw() which expects a DataFrame.
+        self._save_raw_text(response.text, date_str)
+
+        # Map club names to canonical BetVector names
+        records: List[Dict[str, Any]] = []
+        for _, row in df.iterrows():
+            clubelo_name = str(row["Club"]).strip()
+            canonical = TEAM_NAME_MAP.get(clubelo_name)
+
+            if canonical is None:
+                # Skip non-EPL clubs (ClubElo returns ALL clubs worldwide)
+                continue
+
+            records.append({
+                "club_name": canonical,
+                "elo_rating": float(row["Elo"]) if pd.notna(row["Elo"]) else None,
+                "rank": int(row["Rank"]) if pd.notna(row["Rank"]) else None,
+                "country": str(row.get("Country", "")) if pd.notna(row.get("Country")) else None,
+                "level": int(row["Level"]) if pd.notna(row.get("Level")) else None,
+                "rating_date": date_str,
+            })
+
+        result_df = pd.DataFrame(records)
+        logger.info(
+            "ClubElo: %d EPL teams fetched for %s", len(result_df), date_str,
+        )
+        return result_df
+
+    def _save_raw_text(self, text: str, date_str: str) -> Path:
+        """Save raw CSV text to data/raw/ for reproducibility.
+
+        ClubElo returns plain CSV text, not a DataFrame, so we override the
+        standard save_raw pattern to write the text directly.
+
+        Parameters
+        ----------
+        text : str
+            Raw CSV text from the ClubElo API.
+        date_str : str
+            Date for which the ratings were fetched (used in filename).
+
+        Returns
+        -------
+        Path
+            Absolute path to the saved file.
+        """
+        raw_dir = PROJECT_ROOT / "data" / "raw"
+        raw_dir.mkdir(parents=True, exist_ok=True)
+
+        filepath = raw_dir / f"clubelo_{date_str}.csv"
+        filepath.write_text(text, encoding="utf-8")
+        logger.info(
+            "[%s] Saved raw data → %s",
+            self.source_name, filepath,
+        )
+        return filepath
+
+    def fetch_ratings_for_dates(
+        self,
+        dates: List[str],
+    ) -> pd.DataFrame:
+        """Fetch Elo ratings for multiple dates (for historical backfill).
+
+        Deduplicates dates and fetches each one with rate limiting.
+
+        Parameters
+        ----------
+        dates : list[str]
+            List of dates in ISO format.
+
+        Returns
+        -------
+        pd.DataFrame
+            Combined DataFrame with ratings for all dates.
+        """
+        unique_dates = sorted(set(dates))
+        all_dfs: List[pd.DataFrame] = []
+
+        for i, d in enumerate(unique_dates):
+            if (i + 1) % 50 == 0:
+                logger.info(
+                    "ClubElo backfill: %d/%d dates fetched",
+                    i + 1, len(unique_dates),
+                )
+
+            df = self.fetch_ratings_for_date(d)
+            if not df.empty:
+                all_dfs.append(df)
+
+        if not all_dfs:
+            return pd.DataFrame()
+
+        return pd.concat(all_dfs, ignore_index=True)

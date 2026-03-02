@@ -160,12 +160,13 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E20-03 (Backtest Market-Augmented vs Base Poisson)
-Currently working: E21-01 (ClubElo Scraper + Elo Features)
-Next up: E21-02 (Referee Features)
+Last completed: E21-01 (ClubElo Scraper + Elo Features)
+Currently working: E21-02 (Referee Features)
+Next up: E21-03 (Fixture Congestion Flag)
 
 E19 complete: All 4 issues done ✅
 E20 complete: All 3 issues done ✅ (Brier 0.6105, ROI -4.15% → -3.50%)
+E21 progress: 1 of 3 issues done (E21-01 ✅, E21-02 pending, E21-03 pending)
 Total issues: 77 (45 original + 20 post-launch + 12 odds/model improvement)
 
 ---

@@ -291,6 +291,24 @@ class Pipeline:
                 errors.append(err)
                 print(f"  → The Odds API: FAILED ({e})")
 
+            # 1f. ClubElo ratings (daily Elo ratings for all clubs)
+            # Elo captures long-term team quality beyond rolling form.
+            # Free API, no auth — one request returns all clubs' ratings.
+            clubelo_df = None
+            try:
+                from src.scrapers.clubelo_scraper import ClubEloScraper
+                elo_scraper = ClubEloScraper()
+                clubelo_df = elo_scraper.scrape()
+                if clubelo_df is not None and not clubelo_df.empty:
+                    print(f"  → ClubElo: {len(clubelo_df)} team ratings fetched")
+                else:
+                    print("  → ClubElo: No ratings returned")
+            except Exception as e:
+                err = f"ClubElo scrape failed: {e}"
+                logger.error(err)
+                errors.append(err)
+                print(f"  → ClubElo: FAILED ({e})")
+
             # --- Step 2: Load into database ---
             print(f"[Step 2/7] Loading data into database...")
             try:
@@ -365,6 +383,12 @@ class Pipeline:
                 if understat_df is not None and not understat_df.empty:
                     us_result = load_understat_stats(understat_df, league_id)
                     print(f"  → xG stats (Understat): {us_result}")
+
+                # ClubElo ratings (long-term team quality via Elo system)
+                if clubelo_df is not None and not clubelo_df.empty:
+                    from src.scrapers.loader import load_clubelo_ratings
+                    elo_result = load_clubelo_ratings(clubelo_df, league_id)
+                    print(f"  → ClubElo ratings: {elo_result}")
 
             except Exception as e:
                 err = f"Data loading failed for {league_name}: {e}"
