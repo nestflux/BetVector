@@ -160,9 +160,9 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E18-02 (Kickoff Time Fix)
-Currently working: ALL 61 ISSUES COMPLETE (45 original + 16 post-launch)
-Next up: XGBoost Model (E19)
+Last completed: E18-06 (Today's Picks Glossary + TBD Cleanup)
+Currently working: ALL 65 ISSUES COMPLETE (45 original + 20 post-launch)
+Next up: Odds API Integration + XGBoost Model
 
 ---
 

@@ -31,9 +31,9 @@ This document breaks the BetVector masterplan into sequenced epics and issues th
 | E15 | Data Freshness & Feature Expansion | 3 | Football-Data.org API scraper, Understat expansion, Transfermarkt datasets |
 | E16 | Advanced Feature Engineering | 3 | Rolling advanced stats (NPxG, PPDA, deep), market value & weather features, recomputation & validation |
 | E17 | Dashboard Feature Surfacing | 4 | Match Deep Dive enhancements, Today's Picks indicators, League Explorer NPxG rankings, Fixtures page |
-| E18 | Match Narrative & Data Quality | 2 | Algorithmic match analysis narrative, kickoff time fix |
+| E18 | Match Narrative & Data Quality | 6 | Algorithmic match analysis narrative, kickoff time fix, scheduled match predictions, glossaries, UX improvements |
 
-**Total: 18 epics, 61 issues** (45 original + 16 post-launch)
+**Total: 18 epics, 65 issues** (45 original + 20 post-launch)
 
 ---
 
@@ -1845,3 +1845,102 @@ All fixtures showed "TBD" for kickoff times because the Football-Data.org API pr
 - [x] New matches get kickoff_time on initial load
 - [x] Existing matches with NULL kickoff_time get backfilled on re-scrape
 - [x] No breaking changes to existing scraper functionality
+
+---
+
+### E18-03 — Scheduled Match Feature Computation
+
+**Type:** Bug Fix — Pipeline
+**Depends on:** E4-03
+**Master Plan:** MP §4 Feature Set
+**Status:** COMPLETED
+
+`compute_all_features()` in `src/features/engineer.py` filtered to `status == "finished"` only, which meant upcoming scheduled matches never got features → never got predictions → never appeared as value bets. Since all features (form, xG, venue, H2H, rest days) are based on data *before* the match, scheduled matches can be computed safely.
+
+**Implementation Notes:**
+- Changed filter from `Match.status == "finished"` to `Match.status.in_(("finished", "scheduled"))` in `compute_all_features()`
+- Ran pipeline to backfill: 99 scheduled matches now have features and Poisson predictions
+- 10 previously-missed finished matches (Feb 27 – Mar 1) also backfilled with predictions
+- Value bets still require odds data (Football-Data.co.uk CSV delayed past Feb 23)
+
+**Acceptance Criteria:**
+- [x] `compute_all_features()` includes scheduled matches
+- [x] Features computed for all 380 matches (281 finished + 99 scheduled)
+- [x] Predictions generated for all matches with features
+- [x] No temporal integrity violations (features use only pre-match data)
+
+---
+
+### E18-04 — Match Deep Dive Glossary
+
+**Type:** Enhancement — Dashboard UX
+**Depends on:** E9-05, E18-01
+**Master Plan:** MP §12 Glossary, MP §8 Design System
+**Status:** COMPLETED
+
+Collapsible glossary at the bottom of the Match Deep Dive page explaining every advanced stat, betting term, and model concept shown on the page. 28 definitions across 7 categories.
+
+**Implementation Notes:**
+- Added `render_glossary` section at bottom of `match_detail.py` (~257 lines)
+- Uses `st.expander("Glossary — What do these stats mean?")`, collapsed by default
+- Custom CSS (`.gloss-section`, `.gloss-title`, `.gloss-term`, `.gloss-def`) matching design system
+- Categories: Form & Performance, Expected Goals (xG), Pressing & Penetration, Model & Predictions, Market Probabilities, Value Betting, Squad & Context, Analysis Icons
+- Definitions adapted from MP §12 Glossary with plain-English explanations
+
+**Acceptance Criteria:**
+- [x] Glossary visible on every Deep Dive page (collapsed by default)
+- [x] All advanced stats explained (xG, NPxG, PPDA, Deep Comps, etc.)
+- [x] All betting terms explained (edge, implied probability, value bet, confidence)
+- [x] Model concepts explained (Poisson, lambda, scoreline matrix)
+- [x] Narrative icons explained (▲ green, ▼ red, — grey)
+- [x] Design system compliance (JetBrains Mono for terms, Inter for definitions)
+
+---
+
+### E18-05 — Deep Dive from Today's Picks
+
+**Type:** Enhancement — Dashboard UX
+**Depends on:** E9-02, E9-05
+**Master Plan:** MP §3 Flow 1, MP §8 Design System
+**Status:** COMPLETED
+
+Added a "Deep Dive" button on every pick card in Today's Picks so users can jump directly to the full match analysis for any recommended bet.
+
+**Implementation Notes:**
+- Added `st.button("🔍 Deep Dive")` in `render_value_bet_card()` in `picks.py`
+- Uses `st.query_params["match_id"]` + `st.switch_page("views/match_detail.py")` — same pattern as Fixtures page
+- Button appears between the pick card and the "Mark as Placed" expander
+
+**Acceptance Criteria:**
+- [x] Deep Dive button visible on every pick card
+- [x] Clicking navigates to Match Deep Dive with correct match_id
+- [x] Works for both today's picks and fallback (recent) picks
+
+---
+
+### E18-06 — Today's Picks Glossary + TBD Cleanup
+
+**Type:** Enhancement — Dashboard UX
+**Depends on:** E9-02, E18-04
+**Master Plan:** MP §12 Glossary, MP §8 Design System
+**Status:** COMPLETED
+
+Collapsible glossary at the bottom of Today's Picks page, plus cleanup of "TBD" display on both Picks and Fixtures pages when kickoff times are unavailable.
+
+**Implementation Notes:**
+- Added glossary (~152 lines) to `picks.py` with 5 categories tailored to picks context:
+  - The Pick Card (value bet, market, selection)
+  - Key Numbers (model prob, odds, edge, suggested stake)
+  - Confidence Levels (HIGH/MEDIUM/LOW with colour coding)
+  - Context Badges (weather, squad value)
+  - Summary Metrics (value bets count, avg edge, high confidence)
+- Glossary always appears (outside if/else block) whether picks exist or not
+- Fixtures page: kickoff time column hidden when NULL instead of showing "TBD"
+- Picks page: kickoff time omitted from date line when NULL
+
+**Acceptance Criteria:**
+- [x] Glossary visible on picks page (collapsed by default)
+- [x] All pick-specific terms explained (edge, model prob, odds, confidence, etc.)
+- [x] No "TBD" displayed on Fixtures page when kickoff unknown
+- [x] No "TBD" displayed on Picks page when kickoff unknown
+- [x] Kickoff times appear automatically once Football-Data.org backfill runs
