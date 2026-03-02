@@ -63,6 +63,14 @@ BOOKMAKER_1X2_MAP: Dict[str, Tuple[str, Dict[str, str]]] = {
     "Avg": ("market_avg", {"H": "home", "D": "draw", "A": "away"}),
 }
 
+# Pinnacle CLOSING odds (E19-03) — the final odds available before kickoff.
+# These are stored as separate Odds records with is_opening=0.
+# Used for CLV (Closing Line Value) calculation: if we consistently bet at
+# better odds than Pinnacle's closing line, we have genuine predictive edge.
+BOOKMAKER_CLOSING_1X2_MAP: Dict[str, Tuple[str, Dict[str, str]]] = {
+    "PSC": ("Pinnacle", {"H": "home", "D": "draw", "A": "away"}),
+}
+
 BOOKMAKER_OU25_MAP: Dict[str, Tuple[str, Dict[str, str]]] = {
     "Avg": ("market_avg", {">2.5": "over", "<2.5": "under"}),
 }
@@ -128,18 +136,27 @@ def load_matches(
                 kickoff = row.get("kickoff_time")
                 if kickoff and pd.notna(kickoff) and not existing.kickoff_time:
                     existing.kickoff_time = str(kickoff)
+
+                # Backfill referee name (E19-03) — fill only if currently NULL
+                referee = row.get("referee")
+                if referee and pd.notna(referee) and not existing.referee:
+                    existing.referee = str(referee).strip()
+
                 skipped_count += 1
                 continue
 
-            # Insert new match — include kickoff_time if available
+            # Insert new match — include kickoff_time and referee if available
             kickoff = row.get("kickoff_time")
             kickoff_str = str(kickoff) if kickoff and pd.notna(kickoff) else None
+            referee = row.get("referee")
+            referee_str = str(referee).strip() if referee and pd.notna(referee) else None
 
             match = Match(
                 league_id=league_id,
                 season=season,
                 date=row["date"],
                 kickoff_time=kickoff_str,
+                referee=referee_str,
                 home_team_id=home_team.id,
                 away_team_id=away_team.id,
                 home_goals=_safe_int(row.get("home_goals")),
@@ -243,6 +260,101 @@ def load_odds(
                         new_count += 1
                     else:
                         skipped_count += 1
+
+            # Load Pinnacle CLOSING 1X2 odds (E19-03)
+            # These are the final odds available before kickoff — used for
+            # CLV (Closing Line Value) calculation.  Stored separately from
+            # opening odds so we can track line movement.
+            for prefix, (bookie_name, suffix_map) in BOOKMAKER_CLOSING_1X2_MAP.items():
+                for suffix, selection in suffix_map.items():
+                    col_name = f"{prefix}{suffix}"
+                    if col_name not in row.index:
+                        continue
+                    odds_val = row[col_name]
+                    if pd.isna(odds_val) or odds_val <= 1.0:
+                        continue
+
+                    # Check if closing odds already exist for this selection
+                    existing_closing = session.query(Odds).filter_by(
+                        match_id=match.id,
+                        bookmaker=bookie_name,
+                        market_type="1X2",
+                        selection=selection,
+                        is_opening=0,
+                    ).first()
+                    if existing_closing:
+                        skipped_count += 1
+                        continue
+
+                    # Insert closing odds with is_opening=0
+                    implied_prob = 1.0 / float(odds_val)
+                    closing_odds = Odds(
+                        match_id=match.id,
+                        bookmaker=bookie_name,
+                        market_type="1X2",
+                        selection=selection,
+                        odds_decimal=float(odds_val),
+                        implied_prob=implied_prob,
+                        is_opening=0,  # Closing odds — not opening
+                        source="football_data",
+                    )
+                    session.add(closing_odds)
+                    new_count += 1
+
+            # Load Asian Handicap line (E19-03)
+            # The AH line is the sharpest market-implied assessment of team
+            # strength difference.  AHh is the home team handicap line
+            # (e.g., -0.5 means home is favoured by 0.5 goals).
+            ah_col = "AHh"
+            if ah_col in row.index and pd.notna(row[ah_col]):
+                ah_val = float(row[ah_col])
+                # Store as an AH odds record with the line value as odds
+                # (not a traditional odds format — the line itself is the data)
+                existing_ah = session.query(Odds).filter_by(
+                    match_id=match.id,
+                    bookmaker="Pinnacle",
+                    market_type="AH",
+                    selection="home_line",
+                ).first()
+                if not existing_ah:
+                    ah_odds = Odds(
+                        match_id=match.id,
+                        bookmaker="Pinnacle",
+                        market_type="AH",
+                        selection="home_line",
+                        odds_decimal=ah_val,  # Line value, not odds
+                        implied_prob=0.0,     # N/A for AH line
+                        source="football_data",
+                    )
+                    session.add(ah_odds)
+                    new_count += 1
+                else:
+                    skipped_count += 1
+
+            # Betbrain AH market average
+            bb_ah_col = "BbAHh"
+            if bb_ah_col in row.index and pd.notna(row[bb_ah_col]):
+                bb_ah_val = float(row[bb_ah_col])
+                existing_bb_ah = session.query(Odds).filter_by(
+                    match_id=match.id,
+                    bookmaker="market_avg",
+                    market_type="AH",
+                    selection="home_line",
+                ).first()
+                if not existing_bb_ah:
+                    bb_ah_odds = Odds(
+                        match_id=match.id,
+                        bookmaker="market_avg",
+                        market_type="AH",
+                        selection="home_line",
+                        odds_decimal=bb_ah_val,
+                        implied_prob=0.0,
+                        source="football_data",
+                    )
+                    session.add(bb_ah_odds)
+                    new_count += 1
+                else:
+                    skipped_count += 1
 
     summary = {"new": new_count, "skipped": skipped_count, "total_odds": new_count + skipped_count}
     logger.info(
@@ -589,6 +701,113 @@ def load_odds_api_football(
     logger.info(
         "load_odds_api_football: %d new, %d skipped, %d no match (of %d total)",
         new_count, skipped_count, no_match_count, len(odds_records),
+    )
+    return summary
+
+
+# ============================================================================
+# The Odds API Loader (E19-02)
+# ============================================================================
+
+def load_odds_the_odds_api(
+    df: pd.DataFrame,
+    league_id: int,
+) -> Dict[str, int]:
+    """Load bookmaker odds from The Odds API into the database.
+
+    Accepts a DataFrame from ``TheOddsAPIScraper.scrape()`` with columns:
+    date, home_team, away_team, bookmaker, market_type, selection, odds_decimal.
+
+    The Odds API provides live pre-match odds from 50+ bookmakers including
+    Pinnacle (the sharpest bookmaker) and FanDuel (the user's betting venue).
+    Unlike Football-Data.co.uk which only provides closing odds after the match,
+    The Odds API gives us current pre-match odds for upcoming fixtures.
+
+    Match lookup uses date + team names (same as other loaders).  Each odds
+    record is stored with ``source="the_odds_api"`` for provenance tracking.
+
+    **Duplicate handling:** Uses ``_insert_odds()`` which checks for existing
+    records by (match_id, bookmaker, market_type, selection).  First capture
+    of each match's odds is effectively the opening odds.  Subsequent refreshes
+    (midday pipeline) are skipped if odds haven't changed, or inserted with
+    a new captured_at timestamp if the unique constraint allows it.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame from ``TheOddsAPIScraper.scrape()`` with columns:
+        date, home_team, away_team, bookmaker, market_type, selection,
+        odds_decimal.
+    league_id : int
+        Database ID of the league.
+
+    Returns
+    -------
+    dict
+        Summary with keys: "new", "skipped", "no_match", "total".
+    """
+    if df.empty:
+        return {"new": 0, "skipped": 0, "no_match": 0, "total": 0}
+
+    new_count = 0
+    skipped_count = 0
+    no_match_count = 0
+
+    # Group by (date, home_team, away_team) to batch match lookups
+    grouped = df.groupby(["date", "home_team", "away_team"])
+
+    for (match_date, home_name, away_name), group_df in grouped:
+        with get_session() as session:
+            # Find the match in our database
+            match = _find_match(
+                session, league_id, match_date, home_name, away_name,
+            )
+
+            if match is None:
+                # Match not in our DB — could be a different league or
+                # a newly announced fixture not yet in the database
+                no_match_count += len(group_df)
+                logger.debug(
+                    "load_odds_the_odds_api: No match for %s %s vs %s "
+                    "— skipping %d odds records",
+                    match_date, home_name, away_name, len(group_df),
+                )
+                continue
+
+            # Insert each odds record for this match
+            for _, row in group_df.iterrows():
+                bookmaker = row["bookmaker"]
+                market_type = row["market_type"]
+                selection = row["selection"]
+                odds_decimal = row["odds_decimal"]
+
+                # Validate — skip invalid records
+                if (
+                    not bookmaker
+                    or not market_type
+                    or not selection
+                    or odds_decimal <= 1.0
+                ):
+                    continue
+
+                inserted = _insert_odds(
+                    session, match.id, bookmaker, market_type,
+                    selection, odds_decimal, source="the_odds_api",
+                )
+                if inserted:
+                    new_count += 1
+                else:
+                    skipped_count += 1
+
+    summary = {
+        "new": new_count,
+        "skipped": skipped_count,
+        "no_match": no_match_count,
+        "total": len(df),
+    }
+    logger.info(
+        "load_odds_the_odds_api: %d new, %d skipped, %d no match (of %d total)",
+        new_count, skipped_count, no_match_count, len(df),
     )
     return summary
 

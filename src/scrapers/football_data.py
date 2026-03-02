@@ -92,16 +92,32 @@ EPL_TEAM_NAME_MAP: Dict[str, str] = {
 # Columns we always expect in the CSV (results)
 RESULT_COLUMNS = ["Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG", "HTHG", "HTAG"]
 
+# Optional context columns — not present in every season
+# Referee is available in most EPL CSVs and useful for referee features (E21-02)
+OPTIONAL_CONTEXT_COLUMNS = ["Referee"]
+
 # Odds columns we want — grouped by bookmaker and market.
 # Not all are present in every season; missing ones become NaN.
 ODDS_COLUMNS: Dict[str, List[str]] = {
-    # 1X2 (match result) odds from key bookmakers
+    # 1X2 (match result) OPENING odds from key bookmakers
     "bet365_1x2": ["B365H", "B365D", "B365A"],
     "pinnacle_1x2": ["PSH", "PSD", "PSA"],
     "william_hill_1x2": ["WHH", "WHD", "WHA"],
     "market_avg_1x2": ["AvgH", "AvgD", "AvgA"],
+    # 1X2 CLOSING odds from Pinnacle (E19-03)
+    # Closing odds are the final odds before kickoff — used for CLV (Closing
+    # Line Value) calculation.  If our model consistently beats Pinnacle's
+    # closing line, we have genuine predictive edge (not just lucky variance).
+    "pinnacle_closing_1x2": ["PSCH", "PSCD", "PSCA"],
     # Over/Under 2.5 goals (market average)
     "market_avg_ou25": ["Avg>2.5", "Avg<2.5"],
+    # Asian Handicap line (E19-03)
+    # The AH market is the sharpest market in football betting — sharper than
+    # 1X2.  The handicap line (e.g., -0.5, -1.0) is a direct market-implied
+    # assessment of the strength difference between two teams.
+    "ah_pinnacle": ["AHh"],
+    # Betbrain Asian Handicap market average
+    "ah_market_avg": ["BbAHh"],
 }
 
 # Flat list of all desired odds columns
@@ -116,6 +132,7 @@ RENAME_MAP = {
     "FTAG": "away_goals",
     "HTHG": "home_ht_goals",
     "HTAG": "away_ht_goals",
+    "Referee": "referee",
 }
 
 
@@ -264,6 +281,10 @@ class FootballDataScraper(BaseScraper):
         # Start with result columns (always required)
         keep_cols = list(RESULT_COLUMNS)
 
+        # Add optional context columns (Referee, etc.) if present
+        available_context = [c for c in OPTIONAL_CONTEXT_COLUMNS if c in df.columns]
+        keep_cols.extend(available_context)
+
         # Add odds columns that exist in this season's CSV
         available_odds = [c for c in ALL_ODDS_COLUMNS if c in df.columns]
         missing_odds = [c for c in ALL_ODDS_COLUMNS if c not in df.columns]
@@ -280,6 +301,11 @@ class FootballDataScraper(BaseScraper):
         # Add missing odds columns as NaN so downstream code always sees them
         for col in missing_odds:
             clean[col] = float("nan")
+
+        # Add missing optional context columns as NaN
+        for col in OPTIONAL_CONTEXT_COLUMNS:
+            if col not in clean.columns:
+                clean[col] = None
 
         # --- 2. Rename result columns -----------------------------------------
         clean = clean.rename(columns=RENAME_MAP)

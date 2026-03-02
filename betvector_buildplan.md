@@ -32,8 +32,12 @@ This document breaks the BetVector masterplan into sequenced epics and issues th
 | E16 | Advanced Feature Engineering | 3 | Rolling advanced stats (NPxG, PPDA, deep), market value & weather features, recomputation & validation |
 | E17 | Dashboard Feature Surfacing | 4 | Match Deep Dive enhancements, Today's Picks indicators, League Explorer NPxG rankings, Fixtures page |
 | E18 | Match Narrative & Data Quality | 6 | Algorithmic match analysis narrative, kickoff time fix, scheduled match predictions, glossaries, UX improvements |
+| E19 | Live Odds Pipeline | 4 | The Odds API scraper, loader + pipeline integration, CSV closing odds + AH + referee extraction, CLV tracking |
+| E20 | Market-Augmented Poisson | 3 | Pinnacle opening odds as features, Asian Handicap line as feature, backtest comparison |
+| E21 | External Ratings & Context | 3 | ClubElo scraper + Elo features, referee features, fixture congestion flag |
+| E22 | Advanced Features | 2 | Set-piece xG breakdown, injury impact flags (manual input) |
 
-**Total: 18 epics, 65 issues** (45 original + 20 post-launch)
+**Total: 22 epics, 77 issues** (45 original + 20 post-launch + 12 odds/model improvement)
 
 ---
 
@@ -1944,3 +1948,121 @@ Collapsible glossary at the bottom of Today's Picks page, plus cleanup of "TBD" 
 - [x] No "TBD" displayed on Fixtures page when kickoff unknown
 - [x] No "TBD" displayed on Picks page when kickoff unknown
 - [x] Kickoff times appear automatically once Football-Data.org backfill runs
+
+---
+
+## Epic 19 — Live Odds Pipeline (E19)
+
+**Objective:** Solve the stale odds problem by integrating The Odds API (50+ bookmakers, free tier), extracting closing odds + AH + referee from Football-Data.co.uk CSVs, and completing the CLV tracking pipeline.
+
+**Based on:** User's odds research report (`betvector_odds_and_model_improvement_report.md`)
+
+---
+
+### E19-01 — The Odds API Scraper
+
+**Type:** Backend — Scraper
+**Depends on:** E3-01 (BaseScraper)
+**Status:** COMPLETED
+
+New scraper for The Odds API — fetches pre-match odds from 50+ bookmakers in a single API call.
+
+**Implementation Notes:**
+- New file: `src/scrapers/odds_api.py` (~520 lines)
+- Inherits from `BaseScraper` — rate limiting, retry, raw file saving all inherited
+- API endpoint: `GET /v4/sports/soccer_epl/odds?apiKey={key}&regions=uk,us,eu&markets=h2h,totals&oddsFormat=decimal`
+- Team name mapping: `TEAM_NAME_MAP` dict with fuzzy fallback via `difflib.get_close_matches()`
+- Bookmaker mapping: `DEFAULT_BOOKMAKER_MAP` (34 entries) + config-loaded overrides
+- Markets: h2h (→ 1X2), totals (→ OU15/OU25/OU35 based on point value)
+- Budget tracking via response headers (`x-requests-remaining`, `x-requests-used`)
+- Config section added to `config/settings.yaml` under `scraping.the_odds_api`
+- Env var: `THE_ODDS_API_KEY` added to `.env.example`
+- Free tier: 500 req/month — single-league EPL at 3x/day uses ~90/month
+
+**Acceptance Criteria:**
+- [x] Scraper inherits BaseScraper, implements scrape() and source_name
+- [x] Parses h2h (3 outcomes for soccer) and totals markets correctly
+- [x] Team names map to canonical DB names (all 20 EPL teams + promoted)
+- [x] Bookmaker keys map to display names (Pinnacle, FanDuel, DraftKings, etc.)
+- [x] API budget tracking from response headers with warning/hard-stop thresholds
+- [x] Raw JSON saved to data/raw/ for reproducibility
+- [x] All tests pass (mock event parsing, team mapping, date parsing)
+
+---
+
+### E19-02 — Odds Loader + Pipeline Integration
+
+**Type:** Backend — Loader + Pipeline
+**Depends on:** E19-01
+**Status:** COMPLETED
+
+New loader function and pipeline integration for The Odds API.
+
+**Implementation Notes:**
+- New function `load_odds_the_odds_api(df, league_id)` in `loader.py` (~110 lines)
+- Groups by (date, home_team, away_team) for efficient batch match lookups
+- Reuses `_find_match()` and `_insert_odds()` with `source="the_odds_api"`
+- Pipeline: added to both morning scrape (step 1e-pre) and midday refresh (step 1c)
+- Wrapped in try/except — if API fails, pipeline continues with existing odds
+- Returns summary dict: {"new", "skipped", "no_match", "total"}
+
+**Acceptance Criteria:**
+- [x] Loader function imports and runs without error
+- [x] Handles empty DataFrame gracefully
+- [x] Match lookup by date + team names works
+- [x] Odds stored with source="the_odds_api"
+- [x] Integrated into morning pipeline (before prediction generation)
+- [x] Integrated into midday pipeline (odds refresh)
+- [x] Pipeline module imports and initializes cleanly
+
+---
+
+### E19-03 — Extract Closing Odds + AH + Referee from CSV
+
+**Type:** Backend — Scraper + Loader + Model
+**Depends on:** E3-02, E2-02
+**Status:** COMPLETED
+
+Extract columns that Football-Data.co.uk already provides but BetVector was ignoring.
+
+**Implementation Notes:**
+- `football_data.py`: Added to ODDS_COLUMNS dict:
+  - `pinnacle_closing_1x2: [PSCH, PSCD, PSCA]` — Pinnacle closing odds
+  - `ah_pinnacle: [AHh]` — Asian Handicap home line
+  - `ah_market_avg: [BbAHh]` — Betbrain AH market average
+- `football_data.py`: Added OPTIONAL_CONTEXT_COLUMNS = ["Referee"], added "Referee" → "referee" to RENAME_MAP
+- `models.py`: Added `referee = Column(String, nullable=True)` to Match model
+- `models.py`: Added `'home_line'` to ck_odds_selection CHECK constraint
+- `loader.py`: Added BOOKMAKER_CLOSING_1X2_MAP for Pinnacle closing odds
+- `loader.py`: In `load_odds()` — inserts closing odds with is_opening=0, AH line records with market_type="AH"
+- `loader.py`: In `load_matches()` — stores referee on new matches, backfills on existing
+- DB migration: `ALTER TABLE matches ADD COLUMN referee TEXT`
+
+**Acceptance Criteria:**
+- [x] Pinnacle closing odds (PSCH/PSCD/PSCA) extracted from CSV
+- [x] Asian Handicap line (AHh, BbAHh) extracted from CSV
+- [x] Referee column extracted and stored on Match records
+- [x] Closing odds stored with is_opening=0 (distinct from opening odds)
+- [x] AH line stored with market_type="AH", selection="home_line"
+- [x] All new columns have proper NaN handling for missing data
+- [x] DB migration applied successfully
+
+---
+
+### E19-04 — CLV Tracking Pipeline
+
+**Type:** Backend — Evaluation
+**Depends on:** E19-03
+**Status:** PENDING
+
+Complete the CLV (Closing Line Value) pipeline. Infrastructure is 90% built — needs closing odds to flow into BetLog entries.
+
+**What exists:**
+- `BetLog.closing_odds` and `BetLog.clv` columns (always NULL)
+- `ModelPerformance.avg_clv` column (always NULL)
+- `metrics.py calculate_clv()` — fully implemented
+- Model Health dashboard CLV section — shows empty state
+
+**What's needed:**
+- New function `backfill_closing_odds()` in loader.py
+- Evening pipeline call after CSV odds are loaded

@@ -231,6 +231,10 @@ class Match(Base):
     matchday = Column(Integer, nullable=True)              # 1–38 for EPL
     date = Column(String, nullable=False)                  # ISO YYYY-MM-DD
     kickoff_time = Column(String, nullable=True)           # HH:MM (24hr)
+    # Referee name — extracted from Football-Data.co.uk CSV (E19-03).
+    # Used to compute referee-specific features (avg fouls, avg yellows,
+    # avg goals per game) for the prediction model (E21-02).
+    referee = Column(String, nullable=True)
     home_team_id = Column(
         Integer, ForeignKey("teams.id"), nullable=False,
     )
@@ -402,6 +406,7 @@ class Odds(Base):
         CheckConstraint(
             "selection IN ("
             "'home', 'draw', 'away', 'over', 'under', 'yes', 'no', "
+            "'home_line', "  # AH line value (E19-03)
             "'home_-0.5', 'home_-1.0', 'home_-1.5', "
             "'home_+0.5', 'home_+1.0', 'home_+1.5', "
             "'away_-0.5', 'away_-1.0', 'away_-1.5', "

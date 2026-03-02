@@ -268,12 +268,36 @@ class Pipeline:
                 errors.append(err)
                 print(f"  → Understat: FAILED ({e})")
 
+            # 1e-pre. The Odds API (live pre-match odds from 50+ bookmakers)
+            # Fetched here so odds are available for value bet detection.
+            # One API call returns all upcoming EPL matches with all bookmaker odds.
+            the_odds_api_df = None
+            try:
+                from src.scrapers.odds_api import TheOddsAPIScraper
+                odds_api_scraper = TheOddsAPIScraper()
+                the_odds_api_df = odds_api_scraper.scrape(
+                    league_config=league_cfg, season=current_season,
+                )
+                if the_odds_api_df is not None and not the_odds_api_df.empty:
+                    print(
+                        f"  → The Odds API: {len(the_odds_api_df)} odds records "
+                        f"from {the_odds_api_df['bookmaker'].nunique()} bookmakers"
+                    )
+                else:
+                    print("  → The Odds API: No odds data returned (check API key)")
+            except Exception as e:
+                err = f"The Odds API scrape failed for {league_name}: {e}"
+                logger.error(err)
+                errors.append(err)
+                print(f"  → The Odds API: FAILED ({e})")
+
             # --- Step 2: Load into database ---
             print(f"[Step 2/7] Loading data into database...")
             try:
                 from src.scrapers.loader import (
                     load_matches, load_odds, load_match_stats,
-                    load_odds_api_football, load_understat_stats,
+                    load_odds_api_football, load_odds_the_odds_api,
+                    load_understat_stats,
                     update_match_results, update_team_api_names,
                 )
 
@@ -324,6 +348,13 @@ class Pipeline:
                         api_football_odds, league_id,
                     )
                     print(f"  → Odds (API-Football): {af_odds_result}")
+
+                # The Odds API — live pre-match odds (50+ bookmakers)
+                if the_odds_api_df is not None and not the_odds_api_df.empty:
+                    oa_odds_result = load_odds_the_odds_api(
+                        the_odds_api_df, league_id,
+                    )
+                    print(f"  → Odds (The Odds API): {oa_odds_result}")
 
                 # FBref match stats
                 if fbref_df is not None and not fbref_df.empty:
@@ -594,6 +625,27 @@ class Pipeline:
                 logger.error(err)
                 errors.append(err)
                 print(f"  → API-Football odds: FAILED ({e})")
+
+            # 1c. The Odds API — refresh live pre-match odds (50+ bookmakers)
+            # Midday refresh captures line movements since the morning fetch.
+            try:
+                from src.scrapers.odds_api import TheOddsAPIScraper
+                from src.scrapers.loader import load_odds_the_odds_api
+
+                odds_api_scraper = TheOddsAPIScraper()
+                oa_df = odds_api_scraper.scrape(
+                    league_config=league_cfg, season=current_season,
+                )
+                if oa_df is not None and not oa_df.empty:
+                    oa_result = load_odds_the_odds_api(oa_df, league_id)
+                    print(f"  → Odds (The Odds API): {oa_result}")
+                else:
+                    print("  → The Odds API: No odds data returned")
+            except Exception as e:
+                err = f"The Odds API refresh failed for {league_name}: {e}"
+                logger.error(err)
+                errors.append(err)
+                print(f"  → The Odds API odds: FAILED ({e})")
 
             # --- Step 2: Recalculate edges ---
             print(f"[Step 2/3] Recalculating value bets for {league_name}...")

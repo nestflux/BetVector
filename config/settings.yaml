@@ -170,6 +170,45 @@ scraping:
       "12": "Betway"
       "15": "888sport"
       "16": "Ladbrokes"
+  the_odds_api:
+    base_url: "https://api.the-odds-api.com/v4"
+    # Free tier: 500 requests/month.  EPL 3x/day = ~90/month (well within limit).
+    # Each request returns all upcoming EPL matches with odds from all bookmakers.
+    monthly_request_limit: 500
+    warning_threshold: 50                 # Warn when remaining drops below this
+    hard_stop_threshold: 10               # Stop non-critical requests below this
+    # Regions determine which bookmakers are included in the response:
+    #   uk = UK books (Bet365, William Hill, Ladbrokes)
+    #   us = US sportsbooks (FanDuel, DraftKings, BetMGM)
+    #   eu = European books (Pinnacle, Unibet, Betway)
+    regions: "uk,us,eu"
+    # Markets to fetch:
+    #   h2h = match result (1X2 — home/draw/away)
+    #   totals = over/under goals (1.5, 2.5, 3.5)
+    markets: "h2h,totals"
+    # Bookmaker key → display name mapping
+    # Keys are lowercase string identifiers used by The Odds API
+    bookmaker_map:
+      "pinnacle": "Pinnacle"
+      "bet365": "Bet365"
+      "fanduel": "FanDuel"
+      "draftkings": "DraftKings"
+      "betmgm": "BetMGM"
+      "williamhill_us": "William Hill"
+      "williamhill": "William Hill"
+      "unibet_eu": "Unibet"
+      "unibet_uk": "Unibet"
+      "unibet": "Unibet"
+      "betway": "Betway"
+      "ladbrokes_uk": "Ladbrokes"
+      "ladbrokes": "Ladbrokes"
+      "betfair_ex_eu": "Betfair"
+      "betfair_ex_uk": "Betfair"
+      "betfair": "Betfair"
+      "bwin": "Bwin"
+      "888sport": "888sport"
+      "betrivers": "BetRivers"
+      "marathonbet": "Marathonbet"
   understat:
     min_request_interval_seconds: 3       # Extra polite — scraping a free site
   football_data_org:
