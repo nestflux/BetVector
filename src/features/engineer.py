@@ -36,6 +36,7 @@ from src.features.context import (
     calculate_congestion_features,
     calculate_context_features,
     calculate_elo_features,
+    calculate_injury_features,
     calculate_market_odds_features,
     calculate_market_value_features,
     calculate_referee_features,
@@ -186,6 +187,19 @@ def compute_features(match_id: int, league_id: int) -> Dict[str, Dict[str, Any]]
     )
     home_features.update(home_congestion)
     away_features.update(away_congestion)
+
+    # --- Injury impact features (E22-02) ---
+    # Manual injury flags from the Settings page.  Teams missing key players
+    # (impact_rating >= 0.7) perform measurably worse.  injury_impact is the
+    # total "damage" from all absences; key_player_out is a binary signal.
+    # NOTE: Unlike other features, injury flags are current-state data (not
+    # match-date-specific).  They reflect the owner's latest input about
+    # who is injured NOW — suitable for upcoming match predictions only.
+    # For historical matches, these will be 0/0 (no flags entered for past).
+    home_injury = calculate_injury_features(home_team_id)
+    away_injury = calculate_injury_features(away_team_id)
+    home_features.update(home_injury)
+    away_features.update(away_injury)
 
     # --- Save to database ---
     save_features(match_id, home_team_id, is_home=1, features=home_features)
@@ -407,6 +421,8 @@ def _read_existing_features(
         "days_since_last_match", "is_congested",
         # Set-piece xG breakdown (E22-01)
         "set_piece_xg_5", "open_play_xg_5",
+        # Injury impact features (E22-02)
+        "injury_impact", "key_player_out",
     ]
 
     for col in feature_cols:

@@ -41,7 +41,9 @@ from typing import Any, Dict, Optional
 from sqlalchemy.orm import Session
 
 from src.database.db import get_session
-from src.database.models import ClubElo, Match, Odds, TeamMarketValue, Weather
+from src.database.models import (
+    ClubElo, InjuryFlag, Match, Odds, TeamMarketValue, Weather,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -975,4 +977,74 @@ def calculate_congestion_features(
     return {
         "days_since_last_match": rest,
         "is_congested": is_congested,
+    }
+
+
+# ============================================================================
+# Injury Impact Features (E22-02)
+# ============================================================================
+
+# Threshold for "key player" status.  Players with impact_rating >= this
+# value trigger the key_player_out binary flag.  0.7 corresponds to the
+# "key player" tier in the impact rating scale.
+KEY_PLAYER_THRESHOLD = 0.7
+
+
+def calculate_injury_features(team_id: int) -> Dict[str, Any]:
+    """Calculate injury impact features for a team.
+
+    Reads active injury flags (status='out' or 'suspended') from the
+    injury_flags table and computes:
+
+    - **injury_impact**: sum of impact_ratings for all "out"/"suspended"
+      players.  Higher value = more players missing = weaker squad.
+      A team missing Haaland (1.0) + De Bruyne (0.9) would have
+      injury_impact = 1.9, while a full-strength team has 0.0.
+
+    - **key_player_out**: binary flag, 1 if ANY absent player has
+      impact_rating >= 0.7.  Captures the "star player missing" signal
+      that most affects match outcomes — losing a rotation player
+      matters less than losing the team's best.
+
+    Note on "doubt" status: players with status="doubt" are NOT included
+    in the injury_impact sum.  Pre-match doubt is too noisy — many
+    "doubtful" players end up playing.  Only confirmed absences count.
+
+    Parameters
+    ----------
+    team_id : int
+        Database ID of the team.
+
+    Returns
+    -------
+    dict
+        ``{"injury_impact": float, "key_player_out": int}``
+        Returns 0.0 / 0 if no injury flags exist (full squad available).
+    """
+    with get_session() as session:
+        # Get all "out" or "suspended" flags for this team.
+        # "doubt" flags are excluded — too noisy for prediction.
+        active_flags = session.query(InjuryFlag).filter(
+            InjuryFlag.team_id == team_id,
+            InjuryFlag.status.in_(("out", "suspended")),
+        ).all()
+
+    if not active_flags:
+        # Full squad available — no injury impact
+        return {
+            "injury_impact": 0.0,
+            "key_player_out": 0,
+        }
+
+    # Sum impact ratings for all absent players
+    total_impact = sum(f.impact_rating for f in active_flags)
+
+    # Check if any absent player is a "key player" (impact >= 0.7)
+    has_key_player_out = any(
+        f.impact_rating >= KEY_PLAYER_THRESHOLD for f in active_flags
+    )
+
+    return {
+        "injury_impact": round(total_impact, 2),
+        "key_player_out": 1 if has_key_player_out else 0,
     }

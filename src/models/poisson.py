@@ -456,6 +456,13 @@ class PoissonModel(BaseModel):
             # Binary flag for <4-day rest.  Congested teams press less,
             # rotate more, and score fewer goals on average.
             f"{attack_prefix}is_congested",
+            # --- Injury impact features (E22-02) ---
+            # injury_impact = sum of impact ratings for absent players.
+            # Higher value = more/better players missing = fewer goals expected.
+            f"{attack_prefix}injury_impact",
+            # key_player_out = binary flag for star player absence.
+            # Losing a 1.0-rated player (Haaland, Salah) has outsized impact.
+            f"{attack_prefix}key_player_out",
         ]
 
         # Only include columns that exist in the DataFrame

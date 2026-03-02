@@ -663,6 +663,20 @@ class Feature(Base):
     # unpredictable.  Both reduce goal-scoring rates on average.
     is_heavy_weather = Column(Integer, nullable=True)
 
+    # --- Injury impact features (E22-02) ---
+    # Manual injury flags from the Settings page allow the owner to signal
+    # key absences before a match.  Teams missing star players (e.g., Arsenal
+    # without Saka, Man City without Haaland) perform measurably worse.
+    # Impact: 3-6% Brier improvement for matches with key absences at top-6.
+    #
+    # injury_impact = sum of impact_ratings for players with status="out".
+    # Higher value = more key players missing = weaker expected performance.
+    # 0.0 means full squad available; 2.0+ means multiple key players out.
+    injury_impact = Column(Float, nullable=True)
+    # Binary flag: 1 if ANY player with impact_rating >= 0.7 is out.
+    # Captures the "star player absent" signal that most affects predictions.
+    key_player_out = Column(Integer, nullable=True)
+
     computed_at = Column(
         String, nullable=False, server_default=sa_text("(datetime('now'))"),
     )
@@ -1409,4 +1423,85 @@ class TeamInjury(Base):
             f"player='{self.player_name}', "
             f"status='{self.status}', "
             f"reported='{self.reported_at}')"
+        )
+
+
+# ============================================================================
+# INJURY FLAGS — Manual Input (E22-02)
+# ============================================================================
+# User-entered injury/absence data for upcoming match predictions.
+#
+# Unlike TeamInjury (scraped from Transfermarkt with limited data), InjuryFlag
+# is the owner's manual input via the Settings page.  Each flag represents a
+# player known to be injured, doubtful, or suspended, with a user-assigned
+# "impact rating" that captures how important the player is to the team.
+#
+# Impact ratings are subjective but follow a consistent scale:
+#   0.1-0.3  Rotation player (minimal impact, easily replaced by squad depth)
+#   0.4-0.5  Regular starter (noticeable drop in team quality when absent)
+#   0.6-0.7  Key player (team significantly weakened, tactical changes needed)
+#   0.8-1.0  Star player (team's best — absence fundamentally changes team)
+#
+# Examples:
+#   Haaland (Man City): 1.0  — irreplaceable goalscorer
+#   Saka (Arsenal): 0.9      — primary creative outlet on right wing
+#   Van Dijk (Liverpool): 0.8 — defensive leader + aerial dominance
+#   Ward-Prowse (any club): 0.5 — set-piece specialist, replaceable otherwise
+#
+# Future: when API-Football Pro is activated, auto-populate from their
+# injuries endpoint (E22-02 acceptance criteria, last bullet).
+
+class InjuryFlag(Base):
+    """Manual injury/absence flag entered by the owner via the Settings page.
+
+    Each record represents one player's absence status.  Active flags
+    (status='out' or 'doubt') are summed into ``injury_impact`` and
+    ``key_player_out`` features for each team in upcoming matches.
+    """
+    __tablename__ = "injury_flags"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
+    player_name = Column(String, nullable=False)
+    # Status of the player's availability:
+    #   "out"       — confirmed absent (included in injury_impact sum)
+    #   "doubt"     — uncertain (NOT included in injury_impact — too noisy)
+    #   "suspended" — red card / accumulation suspension (included in sum)
+    status = Column(String, nullable=False)
+    # Free-text estimated return date or description (e.g., "2 weeks",
+    # "after international break", "end of season")
+    estimated_return = Column(String, nullable=True)
+    # Impact rating: 0.0 to 1.0 (see scale above).  Controls how much
+    # this player's absence weakens the team in the model's features.
+    impact_rating = Column(Float, nullable=False)
+
+    created_at = Column(
+        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+    )
+    updated_at = Column(
+        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+    )
+
+    # Relationships
+    team = relationship("Team")
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('out', 'doubt', 'suspended')",
+            name="ck_injury_flags_status",
+        ),
+        CheckConstraint(
+            "impact_rating >= 0.0 AND impact_rating <= 1.0",
+            name="ck_injury_flags_impact",
+        ),
+        Index("idx_injury_flags_team", "team_id"),
+        Index("idx_injury_flags_status", "status"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"InjuryFlag(team={self.team_id}, "
+            f"player='{self.player_name}', "
+            f"status='{self.status}', "
+            f"impact={self.impact_rating})"
         )

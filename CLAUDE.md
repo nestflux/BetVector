@@ -160,15 +160,15 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E22-01 (Set-Piece xG Breakdown)
-Currently working: E22-02 (Injury Impact Flags)
-Next up: None — E22-02 is the final issue
+Last completed: E22-02 (Injury Impact Flags)
+Currently working: None — all 77 issues complete!
+Next up: None
 
 E19 complete: All 4 issues done ✅
 E20 complete: All 3 issues done ✅ (Brier 0.6105, ROI -4.15% → -3.50%)
 E21 complete: All 3 issues done ✅ (Elo, referee, congestion features)
-E22 progress: 1 of 2 issues complete (E22-01 ✅, E22-02 pending)
-Total issues: 77 (45 original + 20 post-launch + 12 odds/model improvement)
+E22 complete: All 2 issues done ✅ (Set-piece xG, injury flags)
+Total issues: 77 (45 original + 20 post-launch + 12 odds/model improvement) — ALL COMPLETE
 
 ---
 

@@ -21,7 +21,7 @@ from typing import Dict, List, Optional
 import streamlit as st
 
 from src.database.db import get_session
-from src.database.models import League, User
+from src.database.models import InjuryFlag, League, Team, User
 
 
 # ============================================================================
@@ -213,6 +213,110 @@ def reactivate_user(user_id: int) -> bool:
                 return False
             user.is_active = 1
             user.updated_at = datetime.utcnow().isoformat()
+            session.commit()
+        return True
+    except Exception:
+        return False
+
+
+# ============================================================================
+# Injury Flags — Data Loading & CRUD (E22-02)
+# ============================================================================
+
+def load_teams() -> List[Dict]:
+    """Load all teams for the injury flags team dropdown."""
+    with get_session() as session:
+        teams = session.query(Team).order_by(Team.name).all()
+        return [
+            {"id": t.id, "name": t.name}
+            for t in teams
+        ]
+
+
+def load_injury_flags() -> List[Dict]:
+    """Load all injury flags with team names for display."""
+    with get_session() as session:
+        flags = (
+            session.query(InjuryFlag)
+            .order_by(InjuryFlag.team_id, InjuryFlag.impact_rating.desc())
+            .all()
+        )
+        results = []
+        for f in flags:
+            team = session.get(Team, f.team_id)
+            results.append({
+                "id": f.id,
+                "team_id": f.team_id,
+                "team_name": team.name if team else f"Team {f.team_id}",
+                "player_name": f.player_name,
+                "status": f.status,
+                "estimated_return": f.estimated_return or "—",
+                "impact_rating": f.impact_rating,
+                "updated_at": f.updated_at,
+            })
+        return results
+
+
+def create_injury_flag(
+    team_id: int,
+    player_name: str,
+    status: str,
+    impact_rating: float,
+    estimated_return: Optional[str] = None,
+) -> Optional[int]:
+    """Create a new injury flag.  Returns the new flag's ID on success."""
+    try:
+        with get_session() as session:
+            flag = InjuryFlag(
+                team_id=team_id,
+                player_name=player_name.strip(),
+                status=status,
+                impact_rating=round(impact_rating, 2),
+                estimated_return=estimated_return.strip() if estimated_return else None,
+                created_at=datetime.utcnow().isoformat(),
+                updated_at=datetime.utcnow().isoformat(),
+            )
+            session.add(flag)
+            session.commit()
+            session.refresh(flag)
+            return flag.id
+    except Exception:
+        return None
+
+
+def update_injury_flag(
+    flag_id: int,
+    status: Optional[str] = None,
+    impact_rating: Optional[float] = None,
+    estimated_return: Optional[str] = None,
+) -> bool:
+    """Update an existing injury flag.  Returns True on success."""
+    try:
+        with get_session() as session:
+            flag = session.get(InjuryFlag, flag_id)
+            if not flag:
+                return False
+            if status is not None:
+                flag.status = status
+            if impact_rating is not None:
+                flag.impact_rating = round(impact_rating, 2)
+            if estimated_return is not None:
+                flag.estimated_return = estimated_return.strip() if estimated_return else None
+            flag.updated_at = datetime.utcnow().isoformat()
+            session.commit()
+        return True
+    except Exception:
+        return False
+
+
+def delete_injury_flag(flag_id: int) -> bool:
+    """Delete an injury flag (player has returned).  Returns True on success."""
+    try:
+        with get_session() as session:
+            flag = session.get(InjuryFlag, flag_id)
+            if not flag:
+                return False
+            session.delete(flag)
             session.commit()
         return True
     except Exception:
@@ -473,7 +577,212 @@ else:
     st.divider()
 
     # ==================================================================
-    # Section 4: User Management (owner only)
+    # Section 4: Injury Flags (E22-02)
+    # ==================================================================
+    st.markdown(
+        '<div class="bv-section-header">Injury Flags</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f'<p style="font-family: Inter, sans-serif; font-size: 13px; '
+        f'color: {COLOURS["text_secondary"]}; margin-bottom: 12px;">'
+        f'Flag injured, doubtful, or suspended players to adjust predictions. '
+        f'Only "out" and "suspended" players affect the model. '
+        f'Remove flags when players return to fitness.'
+        f'</p>',
+        unsafe_allow_html=True,
+    )
+
+    # Impact rating guidance
+    st.markdown(
+        f'<div style="background: {COLOURS["surface"]}; border: 1px solid {COLOURS["border"]}; '
+        f'border-radius: 6px; padding: 12px; margin-bottom: 16px;">'
+        f'<p style="font-family: Inter, sans-serif; font-size: 12px; '
+        f'color: {COLOURS["text_secondary"]}; margin: 0;">'
+        f'<b style="color: {COLOURS["text"]};">Impact Rating Guide:</b>&ensp;'
+        f'<span style="color: {COLOURS["text_secondary"]};">0.1–0.3</span> Rotation player&ensp;·&ensp;'
+        f'<span style="color: {COLOURS["yellow"]};">0.4–0.5</span> Regular starter&ensp;·&ensp;'
+        f'<span style="color: {COLOURS["red"]};">0.6–0.7</span> Key player&ensp;·&ensp;'
+        f'<span style="color: {COLOURS["red"]}; font-weight: 600;">0.8–1.0</span> Star player'
+        f'</p></div>',
+        unsafe_allow_html=True,
+    )
+
+    # --- Add new injury flag form ---
+    teams = load_teams()
+    team_names = [t["name"] for t in teams]
+    team_id_map = {t["name"]: t["id"] for t in teams}
+
+    with st.expander("Add Injury Flag", expanded=False):
+        add_cols = st.columns([2, 2, 1, 1])
+        with add_cols[0]:
+            selected_team = st.selectbox(
+                "Team",
+                options=team_names,
+                key="injury_team_select",
+                placeholder="Select team...",
+            )
+        with add_cols[1]:
+            player_name = st.text_input(
+                "Player Name",
+                placeholder="e.g., Erling Haaland",
+                key="injury_player_input",
+            )
+        with add_cols[2]:
+            injury_status = st.selectbox(
+                "Status",
+                options=["out", "doubt", "suspended"],
+                key="injury_status_select",
+                help="Only 'out' and 'suspended' affect predictions.",
+            )
+        with add_cols[3]:
+            impact = st.slider(
+                "Impact",
+                min_value=0.1,
+                max_value=1.0,
+                value=0.5,
+                step=0.1,
+                key="injury_impact_slider",
+                help="How important is this player to the team?",
+            )
+
+        est_return = st.text_input(
+            "Estimated Return (optional)",
+            placeholder="e.g., 2 weeks, after international break",
+            key="injury_return_input",
+        )
+
+        if st.button("Add Injury Flag", key="add_injury_btn", type="primary"):
+            if not player_name or not selected_team:
+                st.warning("Please enter a team and player name.")
+            else:
+                team_id = team_id_map.get(selected_team)
+                if team_id:
+                    new_id = create_injury_flag(
+                        team_id=team_id,
+                        player_name=player_name,
+                        status=injury_status,
+                        impact_rating=impact,
+                        estimated_return=est_return if est_return else None,
+                    )
+                    if new_id:
+                        st.toast(
+                            f"Added injury flag: {player_name} ({selected_team})",
+                            icon="🏥",
+                        )
+                        st.rerun()
+                    else:
+                        st.error("Failed to create injury flag.")
+
+    # --- Display current injury flags ---
+    flags = load_injury_flags()
+
+    if not flags:
+        st.markdown(
+            f'<div style="background: {COLOURS["surface"]}; border: 1px solid {COLOURS["border"]}; '
+            f'border-radius: 6px; padding: 20px; text-align: center;">'
+            f'<p style="font-family: Inter, sans-serif; font-size: 14px; '
+            f'color: {COLOURS["text_secondary"]}; margin: 0;">'
+            f'No injury flags set — all squads assumed fully fit.'
+            f'</p></div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        # Group flags by team for cleaner display
+        teams_with_flags: Dict[str, List[Dict]] = {}
+        for f in flags:
+            team = f["team_name"]
+            if team not in teams_with_flags:
+                teams_with_flags[team] = []
+            teams_with_flags[team].append(f)
+
+        for team_name, team_flags in sorted(teams_with_flags.items()):
+            # Team header with total impact
+            total_impact = sum(
+                f["impact_rating"] for f in team_flags
+                if f["status"] in ("out", "suspended")
+            )
+            impact_colour = (
+                COLOURS["red"] if total_impact >= 0.7
+                else COLOURS["yellow"] if total_impact >= 0.3
+                else COLOURS["text_secondary"]
+            )
+            st.markdown(
+                f'<div style="margin-top: 8px; padding: 4px 0;">'
+                f'<span style="font-family: Inter, sans-serif; font-size: 14px; '
+                f'font-weight: 600; color: {COLOURS["text"]};">{team_name}</span>'
+                f' <span style="font-family: JetBrains Mono, monospace; font-size: 12px; '
+                f'color: {impact_colour};">impact: {total_impact:.1f}</span>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+            for f in team_flags:
+                # Status colour coding
+                status_colour = {
+                    "out": COLOURS["red"],
+                    "suspended": COLOURS["red"],
+                    "doubt": COLOURS["yellow"],
+                }.get(f["status"], COLOURS["text_secondary"])
+
+                # Impact bar (visual indicator)
+                bar_width = int(f["impact_rating"] * 100)
+                bar_colour = (
+                    COLOURS["red"] if f["impact_rating"] >= 0.7
+                    else COLOURS["yellow"] if f["impact_rating"] >= 0.4
+                    else COLOURS["text_secondary"]
+                )
+
+                flag_cols = st.columns([3, 1, 1, 1, 1])
+                with flag_cols[0]:
+                    st.markdown(
+                        f'<div style="padding: 4px 0;">'
+                        f'<span style="font-family: Inter, sans-serif; font-size: 13px; '
+                        f'color: {COLOURS["text"]};">{f["player_name"]}</span>'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
+                with flag_cols[1]:
+                    st.markdown(
+                        f'<span style="font-family: JetBrains Mono, monospace; font-size: 12px; '
+                        f'color: {status_colour}; text-transform: uppercase;">{f["status"]}</span>',
+                        unsafe_allow_html=True,
+                    )
+                with flag_cols[2]:
+                    st.markdown(
+                        f'<div style="padding: 4px 0;">'
+                        f'<div style="background: {COLOURS["border"]}; border-radius: 3px; '
+                        f'height: 8px; width: 100%; overflow: hidden;">'
+                        f'<div style="background: {bar_colour}; width: {bar_width}%; '
+                        f'height: 100%; border-radius: 3px;"></div></div>'
+                        f'<span style="font-family: JetBrains Mono, monospace; font-size: 11px; '
+                        f'color: {bar_colour};">{f["impact_rating"]:.1f}</span>'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
+                with flag_cols[3]:
+                    st.markdown(
+                        f'<span style="font-family: Inter, sans-serif; font-size: 12px; '
+                        f'color: {COLOURS["text_secondary"]};">{f["estimated_return"]}</span>',
+                        unsafe_allow_html=True,
+                    )
+                with flag_cols[4]:
+                    if st.button(
+                        "Remove",
+                        key=f"remove_injury_{f['id']}",
+                        type="secondary",
+                    ):
+                        if delete_injury_flag(f["id"]):
+                            st.toast(
+                                f"Removed {f['player_name']}",
+                                icon="✅",
+                            )
+                            st.rerun()
+
+    st.divider()
+
+    # ==================================================================
+    # Section 5: User Management (owner only)
     # ==================================================================
     # AC5: Only visible to users with role='owner'
     if user_data["role"] == "owner":

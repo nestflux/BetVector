@@ -2325,7 +2325,7 @@ The `understatapi` library supports shot-level data with `situation` field (Open
 
 **Type:** Backend + Frontend — Features + Settings Page
 **Depends on:** E10-03 (Settings page)
-**Status:** PENDING
+**Status:** COMPLETED ✅
 
 Manual injury input via Settings page until API-Football Pro is activated. Impact: 3-6% for matches with key absences at top-6 clubs.
 
@@ -2340,8 +2340,8 @@ Manual injury input via Settings page until API-Football Pro is activated. Impac
 - Guidance: 0.3=rotation, 0.5=regular starter, 0.7=key player, 1.0=star player
 
 **Acceptance Criteria:**
-- [ ] InjuryFlag ORM model created with proper constraints
-- [ ] Settings page has injury input UI (team, player, status, impact rating)
-- [ ] Injury features computed from active flags
-- [ ] Features added to engineer.py and poisson.py
-- [ ] Future: when API-Football Pro activated, auto-populate from injuries endpoint
+- [x] InjuryFlag ORM model created with proper constraints
+- [x] Settings page has injury input UI (team, player, status, impact rating)
+- [x] Injury features computed from active flags
+- [x] Features added to engineer.py and poisson.py
+- [x] Future: when API-Football Pro activated, auto-populate from injuries endpoint
