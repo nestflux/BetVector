@@ -935,3 +935,260 @@ else:
                 f'in favour of {favoured}</p>',
                 unsafe_allow_html=True,
             )
+
+    # ========================================================================
+    # Glossary / Key — explains every stat and betting term on this page
+    # ========================================================================
+    # The owner is learning (MP §12).  This section gives short, plain-English
+    # definitions so anyone can understand the deep dive without prior knowledge.
+
+    st.divider()
+    with st.expander("Glossary — What do these stats mean?", expanded=False):
+        # CSS for the glossary — consistent with the design system
+        st.markdown(
+            '<style>'
+            '.gloss-section { margin-bottom: 18px; }'
+            '.gloss-title {'
+            '  font-family: Inter, sans-serif; font-size: 14px; font-weight: 700;'
+            '  color: #3FB950; text-transform: uppercase; letter-spacing: 0.5px;'
+            '  margin-bottom: 8px; border-bottom: 1px solid #21262D; padding-bottom: 4px;'
+            '}'
+            '.gloss-row {'
+            '  display: flex; gap: 8px; margin-bottom: 6px; line-height: 1.45;'
+            '}'
+            '.gloss-term {'
+            '  font-family: "JetBrains Mono", monospace; font-size: 12px;'
+            '  font-weight: 600; color: #E6EDF3; min-width: 130px; flex-shrink: 0;'
+            '}'
+            '.gloss-def {'
+            '  font-family: Inter, sans-serif; font-size: 12px; color: #8B949E;'
+            '}'
+            '</style>',
+            unsafe_allow_html=True,
+        )
+
+        # --- Form & Performance ---
+        st.markdown(
+            '<div class="gloss-section">'
+            '<div class="gloss-title">Form &amp; Performance</div>'
+            '<div class="gloss-row">'
+            '  <span class="gloss-term">Form (5 / 10)</span>'
+            '  <span class="gloss-def">Points per game (PPG) over the last 5 or 10 matches. '
+            '3.0 = won every game, 0.0 = lost every game. A gap of 0.5+ PPG is significant.</span>'
+            '</div>'
+            '<div class="gloss-row">'
+            '  <span class="gloss-term">Goals Scored</span>'
+            '  <span class="gloss-def">Average goals scored per match in the rolling window. '
+            'Higher = more attacking output.</span>'
+            '</div>'
+            '<div class="gloss-row">'
+            '  <span class="gloss-term">Goals Conceded</span>'
+            '  <span class="gloss-def">Average goals allowed per match. '
+            'Lower = better defensive record.</span>'
+            '</div>'
+            '<div class="gloss-row">'
+            '  <span class="gloss-term">Rest Days</span>'
+            '  <span class="gloss-def">Days since the team\'s last competitive match. '
+            'A gap of 2+ days between teams gives the rested side an edge.</span>'
+            '</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+
+        # --- Expected Goals (xG) ---
+        st.markdown(
+            '<div class="gloss-section">'
+            '<div class="gloss-title">Expected Goals (xG)</div>'
+            '<div class="gloss-row">'
+            '  <span class="gloss-term">xG</span>'
+            '  <span class="gloss-def">Expected Goals \u2014 the sum of the probability of each shot '
+            'going in, based on shot position, angle, and type. '
+            'Measures chance quality, not luck. If a team has xG 2.1 but scored 0, '
+            'they were unlucky.</span>'
+            '</div>'
+            '<div class="gloss-row">'
+            '  <span class="gloss-term">xGA</span>'
+            '  <span class="gloss-def">Expected Goals Against \u2014 how many quality chances '
+            'opponents created against this team. Lower = harder to break down.</span>'
+            '</div>'
+            '<div class="gloss-row">'
+            '  <span class="gloss-term">NPxG</span>'
+            '  <span class="gloss-def">Non-Penalty Expected Goals \u2014 same as xG but excludes penalty kicks. '
+            'A cleaner measure of open-play attacking quality.</span>'
+            '</div>'
+            '<div class="gloss-row">'
+            '  <span class="gloss-term">NPxGA</span>'
+            '  <span class="gloss-def">Non-Penalty xG Against \u2014 defensive quality excluding penalties conceded.</span>'
+            '</div>'
+            '<div class="gloss-row">'
+            '  <span class="gloss-term">NPxG Diff</span>'
+            '  <span class="gloss-def">NPxG minus NPxGA. Positive = team creates better chances than they allow. '
+            'The single best measure of overall open-play quality.</span>'
+            '</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+
+        # --- Pressing & Penetration ---
+        st.markdown(
+            '<div class="gloss-section">'
+            '<div class="gloss-title">Pressing &amp; Penetration</div>'
+            '<div class="gloss-row">'
+            '  <span class="gloss-term">PPDA</span>'
+            '  <span class="gloss-def">Passes Per Defensive Action \u2014 how many passes the '
+            'opponent completes before the team wins the ball. '
+            'Lower = aggressive pressing (e.g. Liverpool \u2248 8). '
+            'Higher = deep block / counter-attack style (e.g. Burnley \u2248 18).</span>'
+            '</div>'
+            '<div class="gloss-row">'
+            '  <span class="gloss-term">PPDA Allowed</span>'
+            '  <span class="gloss-def">The reverse: how many passes this team makes before '
+            'the opponent wins it back. Reflects how much pressing this team faces.</span>'
+            '</div>'
+            '<div class="gloss-row">'
+            '  <span class="gloss-term">Deep Comps</span>'
+            '  <span class="gloss-def">Deep Completions \u2014 passes that reach the opponent\'s '
+            'penalty area. Measures how often a team creates danger in the final third.</span>'
+            '</div>'
+            '<div class="gloss-row">'
+            '  <span class="gloss-term">Deep Allowed</span>'
+            '  <span class="gloss-def">How many deep completions the opponent achieves against this team. '
+            'Lower = better at keeping opponents away from the box.</span>'
+            '</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+
+        # --- Model & Predictions ---
+        st.markdown(
+            '<div class="gloss-section">'
+            '<div class="gloss-title">Model &amp; Predictions</div>'
+            '<div class="gloss-row">'
+            '  <span class="gloss-term">Poisson Model</span>'
+            '  <span class="gloss-def">A statistical model that predicts how many goals each team '
+            'will score using historical performance data. Outputs a lambda (\u03BB) value '
+            'for each team \u2014 the expected goals in this match.</span>'
+            '</div>'
+            '<div class="gloss-row">'
+            '  <span class="gloss-term">Lambda (\u03BB)</span>'
+            '  <span class="gloss-def">The model\'s expected goals for a team in this specific match. '
+            'E.g. \u03BB = 1.8 means the model expects roughly 1\u20132 goals, '
+            'with 3+ possible but less likely.</span>'
+            '</div>'
+            '<div class="gloss-row">'
+            '  <span class="gloss-term">Scoreline Matrix</span>'
+            '  <span class="gloss-def">A 7\u00D77 grid showing the probability of every possible scoreline '
+            '(0\u20130 through 6\u20136). Darker green = higher probability. The model derives '
+            'all market probabilities (1X2, O/U, BTTS) from this matrix.</span>'
+            '</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+
+        # --- Market Probabilities ---
+        st.markdown(
+            '<div class="gloss-section">'
+            '<div class="gloss-title">Market Probabilities</div>'
+            '<div class="gloss-row">'
+            '  <span class="gloss-term">1X2</span>'
+            '  <span class="gloss-def">The three possible match outcomes: '
+            'Home Win (1), Draw (X), Away Win (2). The most common betting market.</span>'
+            '</div>'
+            '<div class="gloss-row">'
+            '  <span class="gloss-term">Over / Under 2.5</span>'
+            '  <span class="gloss-def">Whether total goals will be 3 or more (Over) or 2 or fewer (Under). '
+            'The 2.5 threshold is the most popular goals line in betting.</span>'
+            '</div>'
+            '<div class="gloss-row">'
+            '  <span class="gloss-term">BTTS</span>'
+            '  <span class="gloss-def">Both Teams to Score \u2014 will each team get at least one goal? '
+            'Derived from the scoreline matrix by summing all cells where both scores > 0.</span>'
+            '</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+
+        # --- Value Betting ---
+        st.markdown(
+            '<div class="gloss-section">'
+            '<div class="gloss-title">Value Betting</div>'
+            '<div class="gloss-row">'
+            '  <span class="gloss-term">Edge</span>'
+            '  <span class="gloss-def">The difference between the model\'s probability and the bookmaker\'s '
+            'implied probability. <span style="color: #3FB950;">Positive edge = the bet is '
+            'underpriced</span> (model thinks it\'s more likely than the odds suggest). '
+            'This is the core concept behind profitable betting.</span>'
+            '</div>'
+            '<div class="gloss-row">'
+            '  <span class="gloss-term">Implied Probability</span>'
+            '  <span class="gloss-def">What the bookmaker\'s odds suggest the true probability is: '
+            '1 \u00F7 decimal odds. E.g. odds of 2.50 imply a 40% probability.</span>'
+            '</div>'
+            '<div class="gloss-row">'
+            '  <span class="gloss-term">Value Bet</span>'
+            '  <span class="gloss-def">A bet where the model thinks the outcome is more likely than '
+            'the bookmaker does. Over time, consistently finding value bets is how '
+            'the model aims to be profitable.</span>'
+            '</div>'
+            '<div class="gloss-row">'
+            '  <span class="gloss-term">Confidence</span>'
+            '  <span class="gloss-def">How strong the edge is. '
+            'HIGH = large edge with high model certainty, '
+            'LOW = marginal edge. Higher confidence bets are more reliable.</span>'
+            '</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+
+        # --- Squad & Context ---
+        st.markdown(
+            '<div class="gloss-section">'
+            '<div class="gloss-title">Squad &amp; Context</div>'
+            '<div class="gloss-row">'
+            '  <span class="gloss-term">Squad Value</span>'
+            '  <span class="gloss-def">Total market value of all squad players (from Transfermarkt). '
+            'A proxy for long-term quality \u2014 a \u20AC800m squad is generally deeper '
+            'and more talented than a \u20AC200m squad. A ratio above 1.5x is significant.</span>'
+            '</div>'
+            '<div class="gloss-row">'
+            '  <span class="gloss-term">H2H Record</span>'
+            '  <span class="gloss-def">Head-to-Head \u2014 historical results between these two teams. '
+            'Some teams consistently struggle against specific opponents regardless of form.</span>'
+            '</div>'
+            '<div class="gloss-row">'
+            '  <span class="gloss-term">Venue Form</span>'
+            '  <span class="gloss-def">A team\'s record specifically at home or away, which can differ '
+            'significantly from their overall form. Some teams are '
+            '"fortress" at home but weak on the road.</span>'
+            '</div>'
+            '<div class="gloss-row">'
+            '  <span class="gloss-term">Weather Impact</span>'
+            '  <span class="gloss-def">Heavy rain, strong wind, or snow can reduce passing accuracy '
+            'and goal-scoring. The model flags these as contextual factors when conditions are extreme.</span>'
+            '</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+
+        # --- Narrative Icons ---
+        st.markdown(
+            '<div class="gloss-section">'
+            '<div class="gloss-title">Analysis Icons</div>'
+            '<div class="gloss-row">'
+            '  <span class="gloss-term" style="color: #3FB950;">\u25B2 Green</span>'
+            '  <span class="gloss-def">Factor supports the model\'s prediction '
+            '(e.g. strong form for the favoured team).</span>'
+            '</div>'
+            '<div class="gloss-row">'
+            '  <span class="gloss-term" style="color: #F85149;">\u25BC Red</span>'
+            '  <span class="gloss-def">Factor works against the prediction '
+            '(e.g. poor away form for the team expected to win).</span>'
+            '</div>'
+            '<div class="gloss-row">'
+            '  <span class="gloss-term" style="color: #8B949E;">\u2014 Grey</span>'
+            '  <span class="gloss-def">Neutral context \u2014 worth knowing but doesn\'t clearly '
+            'favour either side (e.g. even H2H record).</span>'
+            '</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
