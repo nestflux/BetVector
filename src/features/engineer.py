@@ -175,12 +175,16 @@ def compute_all_features(
         Training-ready DataFrame with one row per match.  Columns follow
         the pattern ``home_form_5, home_form_10, ..., away_form_5, ...``.
     """
-    # Get all matches in chronological order
+    # Get all matches in chronological order.
+    # Include both finished and scheduled matches — scheduled matches
+    # can have features computed because all features are based on data
+    # BEFORE the match date (rolling form, xG, H2H, rest days, etc.).
+    # This allows the model to generate predictions for upcoming fixtures.
     with get_session() as session:
         matches = session.query(Match).filter(
             Match.league_id == league_id,
             Match.season == season,
-            Match.status == "finished",
+            Match.status.in_(("finished", "scheduled")),
         ).order_by(Match.date).all()
 
         # Collect match info (detach from session)
