@@ -359,6 +359,11 @@ def get_pages() -> list:
             icon="🏟️",
         ),
         st.Page(
+            "pages/fixtures.py",
+            title="Fixtures",
+            icon="📅",
+        ),
+        st.Page(
             "pages/model_health.py",
             title="Model Health",
             icon="🔬",

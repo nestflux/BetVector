@@ -32,7 +32,9 @@ from src.database.models import (
     Match,
     Prediction,
     Team,
+    TeamMarketValue,
     ValueBet,
+    Weather,
 )
 
 
@@ -133,6 +135,27 @@ def load_match_data(match_id: int) -> Optional[Dict]:
             .first()
         )
 
+        # Weather data for this match
+        weather = (
+            session.query(Weather)
+            .filter_by(match_id=match_id)
+            .first()
+        )
+
+        # Market value data for both teams (most recent snapshot)
+        home_market_value = (
+            session.query(TeamMarketValue)
+            .filter(TeamMarketValue.team_id == home_team.id)
+            .order_by(TeamMarketValue.evaluated_at.desc())
+            .first()
+        )
+        away_market_value = (
+            session.query(TeamMarketValue)
+            .filter(TeamMarketValue.team_id == away_team.id)
+            .order_by(TeamMarketValue.evaluated_at.desc())
+            .first()
+        )
+
         # Head-to-head: last 5 meetings between these teams
         h2h_matches = (
             session.query(Match, HomeTeam.name.label("hn"), AwayTeam.name.label("an"))
@@ -189,6 +212,22 @@ def load_match_data(match_id: int) -> Optional[Dict]:
         ],
         "home_features": home_features,
         "away_features": away_features,
+        "weather": {
+            "temperature_c": weather.temperature_c,
+            "wind_speed_kmh": weather.wind_speed_kmh,
+            "precipitation_mm": weather.precipitation_mm,
+            "weather_category": weather.weather_category,
+        } if weather else None,
+        "home_market_value": {
+            "squad_total_value": home_market_value.squad_total_value,
+            "avg_player_value": home_market_value.avg_player_value,
+            "squad_size": home_market_value.squad_size,
+        } if home_market_value else None,
+        "away_market_value": {
+            "squad_total_value": away_market_value.squad_total_value,
+            "avg_player_value": away_market_value.avg_player_value,
+            "squad_size": away_market_value.squad_size,
+        } if away_market_value else None,
         "h2h": [
             {
                 "date": m.date,
@@ -375,6 +414,54 @@ else:
     </div>
     """, unsafe_allow_html=True)
 
+    # --- Weather Badge (shown only for notable conditions) ---
+    weather = data.get("weather")
+    if weather:
+        category = (weather.get("weather_category") or "").lower()
+        precip = weather.get("precipitation_mm") or 0
+        wind = weather.get("wind_speed_kmh") or 0
+        temp = weather.get("temperature_c")
+
+        # Only show badge for notable weather: rain, heavy rain, snow, storm, or strong wind
+        notable = category in ("rain", "heavy_rain", "snow", "storm") or wind > 30
+
+        if notable:
+            badges = []
+            if category in ("rain", "heavy_rain"):
+                badges.append(
+                    f'<span class="bv-badge" style="background-color: {COLOURS["blue"]}; '
+                    f'color: #fff; margin-right: 6px;">'
+                    f'\U0001F327\uFE0F Rain {precip:.1f}mm</span>'
+                )
+            elif category == "snow":
+                badges.append(
+                    f'<span class="bv-badge" style="background-color: #A5D6FF; '
+                    f'color: #0D1117; margin-right: 6px;">'
+                    f'\u2744\uFE0F Snow</span>'
+                )
+            elif category == "storm":
+                badges.append(
+                    f'<span class="bv-badge" style="background-color: {COLOURS["yellow"]}; '
+                    f'color: #0D1117; margin-right: 6px;">'
+                    f'\u26A1 Storm</span>'
+                )
+            if wind > 30:
+                badges.append(
+                    f'<span class="bv-badge" style="background-color: {COLOURS["border"]}; '
+                    f'color: {COLOURS["text"]}; margin-right: 6px;">'
+                    f'\U0001F4A8 Wind {wind:.0f} km/h</span>'
+                )
+            if temp is not None:
+                badges.append(
+                    f'<span class="bv-badge" style="background-color: {COLOURS["border"]}; '
+                    f'color: {COLOURS["text_secondary"]};">'
+                    f'\U0001F321\uFE0F {temp:.0f}\u00B0C</span>'
+                )
+            st.markdown(
+                f'<div style="text-align: center; margin-bottom: 16px;">{"".join(badges)}</div>',
+                unsafe_allow_html=True,
+            )
+
     st.divider()
 
     # --- Section 2: Scoreline Matrix ---
@@ -547,8 +634,8 @@ else:
         </div>
         """, unsafe_allow_html=True)
 
-        # Stats rows
-        stat_pairs = [
+        # Stats rows — basic form metrics
+        basic_stats = [
             ("Form (5)", getattr(hf, "form_5", None), getattr(af, "form_5", None)),
             ("Form (10)", getattr(hf, "form_10", None), getattr(af, "form_10", None)),
             ("Goals Scored", getattr(hf, "goals_scored_5", None), getattr(af, "goals_scored_5", None)),
@@ -560,10 +647,48 @@ else:
             ("Rest Days", getattr(hf, "rest_days", None), getattr(af, "rest_days", None), ".0f"),
         ]
 
-        for item in stat_pairs:
+        for item in basic_stats:
             label, hv, av = item[0], item[1], item[2]
             fmt = item[3] if len(item) > 3 else ".2f"
             render_stat_row(label, hv, av, fmt)
+
+        # --- Advanced Stats sub-header (NPxG, PPDA, Deep Completions from E16) ---
+        # Check if any advanced stat data exists for either team
+        has_advanced = any([
+            getattr(hf, "npxg_5", None), getattr(af, "npxg_5", None),
+            getattr(hf, "ppda_5", None), getattr(af, "ppda_5", None),
+            getattr(hf, "deep_5", None), getattr(af, "deep_5", None),
+        ])
+
+        if has_advanced:
+            st.markdown(
+                f'<div style="font-family: Inter, sans-serif; font-size: 13px; '
+                f'font-weight: 600; color: {COLOURS["text_secondary"]}; '
+                f'text-transform: uppercase; letter-spacing: 0.5px; '
+                f'margin-top: 16px; margin-bottom: 8px;">Advanced Stats</div>',
+                unsafe_allow_html=True,
+            )
+
+            advanced_stats = [
+                # NPxG: Non-penalty expected goals — strips out penalty xG for a
+                # truer measure of open-play attacking quality
+                ("NPxG (5)", getattr(hf, "npxg_5", None), getattr(af, "npxg_5", None)),
+                ("NPxGA (5)", getattr(hf, "npxga_5", None), getattr(af, "npxga_5", None)),
+                ("NPxG Diff", getattr(hf, "npxg_diff_5", None), getattr(af, "npxg_diff_5", None)),
+                # PPDA: Passes Per Defensive Action — lower means more aggressive
+                # pressing (e.g., Liverpool ~8, Burnley ~18)
+                ("PPDA (5)", getattr(hf, "ppda_5", None), getattr(af, "ppda_5", None), ".1f"),
+                ("PPDA Allowed", getattr(hf, "ppda_allowed_5", None), getattr(af, "ppda_allowed_5", None), ".1f"),
+                # Deep completions: passes reaching the opponent penalty area —
+                # measures attacking penetration quality
+                ("Deep Comps (5)", getattr(hf, "deep_5", None), getattr(af, "deep_5", None)),
+                ("Deep Allowed", getattr(hf, "deep_allowed_5", None), getattr(af, "deep_allowed_5", None)),
+            ]
+
+            for item in advanced_stats:
+                label, hv, av = item[0], item[1], item[2]
+                fmt = item[3] if len(item) > 3 else ".2f"
+                render_stat_row(label, hv, av, fmt)
 
     else:
         st.markdown(
@@ -572,3 +697,93 @@ else:
             "</div>",
             unsafe_allow_html=True,
         )
+
+    # --- Section 7: Market Value Comparison ---
+    # Shows squad values from Transfermarkt when available — richer squads
+    # generally outperform poorer ones beyond what recent form shows
+    home_mv = data.get("home_market_value")
+    away_mv = data.get("away_market_value")
+
+    if home_mv or away_mv:
+        st.divider()
+        st.markdown(
+            '<div class="bv-section-header">Squad Value</div>',
+            unsafe_allow_html=True,
+        )
+
+        def _fmt_eur(value: float) -> str:
+            """Format a euro value into a readable string (e.g. €253.4m)."""
+            if value is None:
+                return "—"
+            if value >= 1_000_000_000:
+                return f"\u20AC{value / 1_000_000_000:.1f}b"
+            if value >= 1_000_000:
+                return f"\u20AC{value / 1_000_000:.0f}m"
+            return f"\u20AC{value:,.0f}"
+
+        col_h, col_a = st.columns(2)
+        with col_h:
+            if home_mv:
+                st.markdown(
+                    f'<div class="bv-card" style="text-align: center;">'
+                    f'<div style="font-family: Inter, sans-serif; font-size: 14px; '
+                    f'font-weight: 600; color: {COLOURS["text"]}; margin-bottom: 8px;">'
+                    f'{data["home_team"]}</div>'
+                    f'<div style="font-family: JetBrains Mono, monospace; font-size: 22px; '
+                    f'font-weight: 700; color: {COLOURS["text"]};">'
+                    f'{_fmt_eur(home_mv["squad_total_value"])}</div>'
+                    f'<div style="font-family: Inter, sans-serif; font-size: 12px; '
+                    f'color: {COLOURS["text_secondary"]}; margin-top: 4px;">'
+                    f'{home_mv["squad_size"]} players</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(
+                    f'<div class="bv-card" style="text-align: center;">'
+                    f'<div style="font-family: Inter, sans-serif; font-size: 14px; '
+                    f'font-weight: 600; color: {COLOURS["text"]};">{data["home_team"]}</div>'
+                    f'<div style="color: {COLOURS["text_secondary"]}; margin-top: 8px;">—</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+
+        with col_a:
+            if away_mv:
+                st.markdown(
+                    f'<div class="bv-card" style="text-align: center;">'
+                    f'<div style="font-family: Inter, sans-serif; font-size: 14px; '
+                    f'font-weight: 600; color: {COLOURS["text"]}; margin-bottom: 8px;">'
+                    f'{data["away_team"]}</div>'
+                    f'<div style="font-family: JetBrains Mono, monospace; font-size: 22px; '
+                    f'font-weight: 700; color: {COLOURS["text"]};">'
+                    f'{_fmt_eur(away_mv["squad_total_value"])}</div>'
+                    f'<div style="font-family: Inter, sans-serif; font-size: 12px; '
+                    f'color: {COLOURS["text_secondary"]}; margin-top: 4px;">'
+                    f'{away_mv["squad_size"]} players</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(
+                    f'<div class="bv-card" style="text-align: center;">'
+                    f'<div style="font-family: Inter, sans-serif; font-size: 14px; '
+                    f'font-weight: 600; color: {COLOURS["text"]};">{data["away_team"]}</div>'
+                    f'<div style="color: {COLOURS["text_secondary"]}; margin-top: 8px;">—</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+
+        # Show market value ratio if available from the feature model
+        if hf and getattr(hf, "market_value_ratio", None):
+            ratio = hf.market_value_ratio
+            ratio_text = f"{ratio:.2f}x" if ratio >= 1 else f"{1/ratio:.2f}x"
+            favoured = data["home_team"] if ratio >= 1 else data["away_team"]
+            st.markdown(
+                f'<p style="text-align: center; font-family: Inter, sans-serif; '
+                f'font-size: 13px; color: {COLOURS["text_secondary"]}; margin-top: 8px;">'
+                f'Value ratio: <span style="font-family: JetBrains Mono, monospace; '
+                f'color: {COLOURS["text"]};">{ratio_text}</span> '
+                f'in favour of {favoured}</p>',
+                unsafe_allow_html=True,
+            )

@@ -25,7 +25,7 @@ from sqlalchemy.orm import aliased
 
 from src.config import config
 from src.database.db import get_session
-from src.database.models import League, Match, Team
+from src.database.models import Feature, League, Match, Team
 
 
 # ============================================================================
@@ -46,6 +46,18 @@ COLOURS = {
 # ============================================================================
 # Data Loading
 # ============================================================================
+
+def _get_current_season() -> str:
+    """Get the most recent season from leagues config.
+
+    Reads the last entry in the ``seasons`` list of the first active league.
+    Falls back to "2025-26" if config is missing.
+    """
+    for lg in config.leagues:
+        if getattr(lg, "is_active", False) and getattr(lg, "seasons", None):
+            return lg.seasons[-1]
+    return "2025-26"
+
 
 def get_active_leagues() -> List[Dict]:
     """Get active leagues from config.
@@ -69,7 +81,7 @@ def get_league_id(short_name: str) -> Optional[int]:
         return league.id if league else None
 
 
-def calculate_standings(league_id: int, season: str = "2024-25") -> pd.DataFrame:
+def calculate_standings(league_id: int, season: str = "") -> pd.DataFrame:
     """Calculate league standings from match results.
 
     Queries all finished matches for the given league/season, then
@@ -82,13 +94,14 @@ def calculate_standings(league_id: int, season: str = "2024-25") -> pd.DataFrame
     league_id : int
         Database ID of the league.
     season : str
-        Season string (e.g., "2024-25").
+        Season string (e.g., "2025-26"). Defaults to current season from config.
 
     Returns
     -------
     pd.DataFrame
         Columns: Pos, Team, P, W, D, L, GF, GA, GD, Pts
     """
+    season = season or _get_current_season()
     HomeTeam = aliased(Team)
     AwayTeam = aliased(Team)
 
@@ -174,12 +187,13 @@ def calculate_standings(league_id: int, season: str = "2024-25") -> pd.DataFrame
 
 
 def get_recent_results(
-    league_id: int, season: str = "2024-25", limit: int = 10,
+    league_id: int, season: str = "", limit: int = 10,
 ) -> List[Dict]:
     """Get the most recent completed matches in a league.
 
     Returns matches in reverse chronological order (newest first).
     """
+    season = season or _get_current_season()
     HomeTeam = aliased(Team)
     AwayTeam = aliased(Team)
 
@@ -255,7 +269,7 @@ def get_upcoming_fixtures(
 
 
 def calculate_team_form(
-    league_id: int, season: str = "2024-25", last_n: int = 5,
+    league_id: int, season: str = "", last_n: int = 5,
 ) -> pd.DataFrame:
     """Calculate each team's form over their last N matches.
 
@@ -276,6 +290,7 @@ def calculate_team_form(
     pd.DataFrame
         Columns: Team, Form (list of 'W'/'D'/'L' strings), Pts (form points)
     """
+    season = season or _get_current_season()
     HomeTeam = aliased(Team)
     AwayTeam = aliased(Team)
 
@@ -330,6 +345,72 @@ def calculate_team_form(
         df = df.sort_values("Pts", ascending=False).reset_index(drop=True)
 
     return df
+
+
+def calculate_npxg_rankings(
+    league_id: int, season: str = "",
+) -> pd.DataFrame:
+    """Calculate NPxG-based team rankings for a league.
+
+    Non-penalty expected goals (NPxG) strips out penalty xG — which converts
+    at ~76% regardless of team quality — to give a truer measure of open-play
+    attacking quality.  Each team's most recent Feature row already contains
+    the rolling 5-match averages, so we just need the latest row per team.
+
+    Parameters
+    ----------
+    league_id : int
+        Database ID of the league.
+    season : str
+        Season string. Defaults to current season from config.
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: Rank, Team, NPxG, NPxGA, NPxG Diff, PPDA, Deep Comps
+        Sorted by NPxG Diff descending (best attacking advantage first).
+    """
+    season = season or _get_current_season()
+
+    with get_session() as session:
+        # Query the most recent Feature row per team for this league/season
+        # that has NPxG data.  The Feature.npxg_5 column already contains
+        # the rolling 5-match average — no need to re-aggregate.
+        features = (
+            session.query(
+                Feature.team_id,
+                Team.name,
+                Feature.npxg_5,
+                Feature.npxga_5,
+                Feature.npxg_diff_5,
+                Feature.ppda_5,
+                Feature.deep_5,
+            )
+            .join(Team, Feature.team_id == Team.id)
+            .join(Match, Feature.match_id == Match.id)
+            .filter(
+                Match.league_id == league_id,
+                Match.season == season,
+                Feature.npxg_5.isnot(None),
+            )
+            .order_by(Match.date.desc())
+            .all()
+        )
+
+    if not features:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(features, columns=[
+        "team_id", "Team", "NPxG", "NPxGA", "NPxG Diff", "PPDA", "Deep Comps",
+    ])
+
+    # Take the most recent Feature row per team (it already has the
+    # rolling 5-match average baked in from the feature engineering pipeline)
+    latest = df.drop_duplicates(subset=["team_id"], keep="first")
+    latest = latest.sort_values("NPxG Diff", ascending=False).reset_index(drop=True)
+    latest.insert(0, "Rank", range(1, len(latest) + 1))
+
+    return latest[["Rank", "Team", "NPxG", "NPxGA", "NPxG Diff", "PPDA", "Deep Comps"]]
 
 
 # ============================================================================
@@ -449,6 +530,46 @@ else:
                     f'</div>',
                     unsafe_allow_html=True,
                 )
+
+        st.divider()
+
+        # --- NPxG Performance Rankings (E17-03) ---
+        # Shows teams ranked by non-penalty expected goals difference, which
+        # is the most predictive offensive metric.  Data comes from Understat
+        # via the E16 feature engineering pipeline.
+        st.markdown(
+            '<div class="bv-section-header">NPxG Performance Rankings</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f'<p style="font-family: Inter, sans-serif; font-size: 13px; '
+            f'color: {COLOURS["text_secondary"]}; margin-bottom: 12px;">'
+            f'Teams ranked by non-penalty expected goals difference (last 5 matches). '
+            f'NPxG strips out penalty luck for a truer measure of attacking quality. '
+            f'PPDA = pressing intensity (lower = more aggressive).</p>',
+            unsafe_allow_html=True,
+        )
+
+        npxg_df = calculate_npxg_rankings(league_id)
+        if npxg_df.empty:
+            st.info(
+                "NPxG data not yet available. Understat data may not be loaded "
+                "for this season."
+            )
+        else:
+            st.dataframe(
+                npxg_df,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "NPxG": st.column_config.NumberColumn(format="%.2f"),
+                    "NPxGA": st.column_config.NumberColumn(format="%.2f"),
+                    "NPxG Diff": st.column_config.NumberColumn(format="%+.2f"),
+                    "PPDA": st.column_config.NumberColumn(format="%.1f"),
+                    "Deep Comps": st.column_config.NumberColumn(format="%.1f"),
+                },
+                height=min(38 * len(npxg_df) + 40, 800),
+            )
 
         st.divider()
 

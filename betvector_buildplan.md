@@ -30,8 +30,9 @@ This document breaks the BetVector masterplan into sequenced epics and issues th
 | E14 | Real-Time Data Sources | 4 | Understat xG scraper, Open-Meteo weather scraper, API-Football scraper, pipeline integration |
 | E15 | Data Freshness & Feature Expansion | 3 | Football-Data.org API scraper, Understat expansion, Transfermarkt datasets |
 | E16 | Advanced Feature Engineering | 3 | Rolling advanced stats (NPxG, PPDA, deep), market value & weather features, recomputation & validation |
+| E17 | Dashboard Feature Surfacing | 4 | Match Deep Dive enhancements, Today's Picks indicators, League Explorer NPxG rankings, Fixtures page |
 
-**Total: 16 epics, 55 issues** (45 original + 10 post-launch)
+**Total: 17 epics, 59 issues** (45 original + 14 post-launch)
 
 ---
 
@@ -59,7 +60,8 @@ E12-01 → E12-02 → E12-03 → E12-04 → E12-05 →
 E13-01 → E13-02 → E13-03 →
 E14-01 → E14-02 → E14-03 → E14-04 →
 E15-01 → E15-02 → E15-03 →
-E16-01 → E16-02 → E16-03
+E16-01 → E16-02 → E16-03 →
+E17-01 → E17-02 → E17-03 → E17-04
 ```
 
 ---
@@ -1667,3 +1669,114 @@ Recompute features for all historical matches to populate the new columns, then 
 - [x] No temporal integrity violations in recomputed features
 - [x] Build plan updated with E16 epic and completion status
 - [x] Master plan §4 updated to document new features
+
+---
+
+## E17 — Dashboard Feature Surfacing
+
+> **Context:** E16 (Advanced Feature Engineering) added 20 new feature columns — NPxG, PPDA, deep completions, market value ratio, squad value log, and weather data. All this data sits in the database but is invisible in the dashboard. This epic surfaces the E16 features across existing pages and adds a new Fixtures page showing all upcoming matches with value picks highlighted. No new scrapers, no new models, no DB migrations — purely UI work using data already queryable. See MP §3 Flow 4 (Dashboard Exploration), MP §8 Design System.
+
+### E17-01 — Match Deep Dive Enhancements
+
+**Type:** Frontend — Dashboard
+**Depends on:** E16-03, E9-05
+**Master Plan:** MP §3 Flow 1, MP §8 Design System
+**Status:** COMPLETED
+
+Enhance the Match Deep Dive page to surface advanced stats (NPxG, PPDA, deep completions), market value comparison, and weather conditions.
+
+**Implementation Notes:**
+- Extended `load_match_data()` in `match_detail.py` to query `Weather` and `TeamMarketValue` tables
+- Added "Advanced Stats" sub-section to Team Form with NPxG, NPxGA, NPxG Diff, PPDA, PPDA Allowed, Deep Completions
+- Added Weather badge (rain/snow/storm/wind) between match header and scoreline matrix — only shown for notable conditions
+- Added Squad Value section with EUR-formatted squad total values and market value ratio
+- All sections degrade gracefully when data is NULL
+
+**Acceptance Criteria:**
+- [x] NPxG, NPxGA, NPxG Diff displayed in Team Form (5-match rolling)
+- [x] PPDA displayed with directional context (lower = more aggressive pressing)
+- [x] Deep completions displayed in Team Form
+- [x] Market value comparison shows squad values for both teams
+- [x] Weather badge rendered for notable conditions only
+- [x] All sections degrade gracefully when data is NULL/missing
+- [x] Design system compliance (colours, fonts, spacing)
+
+---
+
+### E17-02 — Today's Picks Weather & Market Value Indicators
+
+**Type:** Frontend — Dashboard
+**Depends on:** E16-03, E9-02
+**Master Plan:** MP §3 Flow 1, MP §8 Design System
+**Status:** COMPLETED
+
+Add lightweight weather and market value indicators to Today's Picks cards.
+
+**Implementation Notes:**
+- Extended `get_todays_value_bets()` in `picks.py` to query `Weather` and `Feature` for each value bet
+- Added weather badge (blue, shows weather category) when `is_heavy_weather` is True
+- Added market value badge (muted, shows "SQUAD VALUE Xx OPPONENT") when ratio > 2.0
+- Badges inserted between match info line and stats grid in the card HTML
+
+**Acceptance Criteria:**
+- [x] Weather indicator appears on picks with heavy weather conditions
+- [x] No weather badge for normal conditions or missing data
+- [x] Market value badge shows when ratio exceeds 2.0
+- [x] No market value badge when ratio is near 1.0 or data is missing
+- [x] Uses existing `bv-badge` CSS classes
+- [x] No performance regression
+
+---
+
+### E17-03 — League Explorer NPxG Rankings
+
+**Type:** Frontend — Dashboard
+**Depends on:** E16-03, E9-04
+**Master Plan:** MP §3 Flow 4, MP §8 Design System
+**Status:** COMPLETED
+
+Add NPxG-based team rankings section to League Explorer.
+
+**Implementation Notes:**
+- Added `calculate_npxg_rankings()` function that queries the most recent Feature row per team with NPxG data
+- New "NPxG Performance Rankings" section between Team Form and Recent Results
+- Columns: Rank, Team, NPxG, NPxGA, NPxG Diff, PPDA, Deep Comps — formatted with `st.dataframe()` and `column_config`
+- Fixed hardcoded `season="2024-25"` default in `calculate_standings()`, `get_recent_results()`, `calculate_team_form()` — now uses `_get_current_season()` helper that reads from config
+
+**Acceptance Criteria:**
+- [x] NPxG Performance Rankings section appears with correct data
+- [x] Teams ranked by NPxG difference descending
+- [x] Numbers properly formatted (2dp for NPxG, 1dp for PPDA, signed for diff)
+- [x] Empty state for missing data
+- [x] Season default fixed (uses config, not hardcoded)
+- [x] Design system compliance
+
+---
+
+### E17-04 — Fixtures Page
+
+**Type:** Frontend — Dashboard (New Page)
+**Depends on:** E17-01, E9-01
+**Master Plan:** MP §3 Flow 4, MP §8 Design System
+**Status:** COMPLETED
+
+New page showing all upcoming scheduled matches with value picks highlighted.
+
+**Implementation Notes:**
+- Created `src/delivery/pages/fixtures.py` with `get_all_upcoming_fixtures()` function
+- Queries Match (status="scheduled") + teams + league, counts ValueBet records per match
+- Page layout: days-ahead slider (7/14/28), summary metrics, fixtures grouped by date
+- Each fixture card shows kickoff, teams, league badge; green left border + "VALUE BET(S)" badge when model has flagged value
+- "Deep Dive" button navigates to Match Deep Dive via `st.switch_page()` with `st.query_params`
+- Registered in `dashboard.py` `get_pages()` between League Explorer and Model Health
+
+**Acceptance Criteria:**
+- [x] New `fixtures.py` created in `src/delivery/pages/`
+- [x] Page registered in `dashboard.py` and appears in sidebar navigation
+- [x] All upcoming scheduled matches displayed, grouped by date
+- [x] Each fixture shows: kickoff time, home team, away team, league
+- [x] Value bet matches highlighted with green indicator
+- [x] Click-through to Match Deep Dive works
+- [x] Days ahead slider controls time window
+- [x] Empty state handled
+- [x] Design system compliance

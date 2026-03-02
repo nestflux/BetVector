@@ -28,11 +28,13 @@ import streamlit as st
 from src.database.db import get_session
 from src.database.models import (
     BetLog,
+    Feature,
     League,
     Match,
     Team,
     User,
     ValueBet,
+    Weather,
 )
 
 
@@ -135,11 +137,30 @@ def get_todays_value_bets(edge_threshold: float = 0.0) -> List[Dict]:
 
             rows = query.order_by(ValueBet.edge.desc()).limit(50).all()
 
-        # Enrich with team names
+        # Enrich with team names, weather, and market value data
         results = []
         for vb, match, league in rows:
             home_team = session.query(Team).filter_by(id=match.home_team_id).first()
             away_team = session.query(Team).filter_by(id=match.away_team_id).first()
+
+            # Weather conditions for this match (E17-02)
+            weather = session.query(Weather).filter_by(match_id=match.id).first()
+            weather_category = weather.weather_category if weather else None
+            is_heavy_weather = False
+            if weather:
+                cat = (weather.weather_category or "").lower()
+                is_heavy_weather = (
+                    cat in ("rain", "heavy_rain", "snow", "storm")
+                    or (weather.wind_speed_kmh or 0) > 30
+                )
+
+            # Market value ratio from the home team's features (E17-02)
+            home_feature = (
+                session.query(Feature)
+                .filter_by(match_id=match.id, team_id=match.home_team_id)
+                .first()
+            )
+            mv_ratio = getattr(home_feature, "market_value_ratio", None) if home_feature else None
 
             results.append({
                 "id": vb.id,
@@ -160,6 +181,9 @@ def get_todays_value_bets(edge_threshold: float = 0.0) -> List[Dict]:
                 "confidence": vb.confidence,
                 "explanation": vb.explanation,
                 "detected_at": vb.detected_at,
+                "is_heavy_weather": is_heavy_weather,
+                "weather_summary": weather_category,
+                "market_value_ratio": mv_ratio,
             })
 
     return results
@@ -231,6 +255,32 @@ def render_value_bet_card(vb: Dict, idx: int) -> None:
     edge_pct = vb["edge"] * 100
     edge_colour = "#3FB950" if edge_pct >= 10 else "#D29922" if edge_pct >= 5 else "#E6EDF3"
 
+    # Context badges — weather and market value indicators (E17-02)
+    context_badges_html = ""
+    badge_parts = []
+    if vb.get("is_heavy_weather"):
+        summary = (vb.get("weather_summary") or "adverse").upper()
+        badge_parts.append(
+            '<span class="bv-badge" style="background-color: #58A6FF; color: #fff; '
+            f'margin-right: 6px;">\U0001F327\uFE0F {summary}</span>'
+        )
+    ratio = vb.get("market_value_ratio")
+    if ratio and ratio > 2.0:
+        badge_parts.append(
+            '<span class="bv-badge" style="background-color: #30363D; color: #8B949E; '
+            f'margin-right: 6px;">SQUAD VALUE {ratio:.0f}\u00D7 OPPONENT</span>'
+        )
+    elif ratio and ratio < 0.5 and ratio > 0:
+        inv_ratio = 1.0 / ratio
+        badge_parts.append(
+            '<span class="bv-badge" style="background-color: #30363D; color: #8B949E; '
+            f'margin-right: 6px;">OPPONENT SQUAD {inv_ratio:.0f}\u00D7 VALUE</span>'
+        )
+    if badge_parts:
+        context_badges_html = (
+            f'<div style="margin-bottom: 8px;">{"".join(badge_parts)}</div>'
+        )
+
     # Card HTML
     st.markdown(f"""
     <div class="bv-card">
@@ -246,6 +296,7 @@ def render_value_bet_card(vb: Dict, idx: int) -> None:
             </div>
             <div>{confidence_badge}</div>
         </div>
+        {context_badges_html}
         <div style="display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 8px;">
             <div>
                 <span style="font-size: 11px; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px;">Market</span><br>

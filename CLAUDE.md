@@ -77,7 +77,8 @@ E12-01 → E12-02 → E12-03 → E12-04 → E12-05 →
 E13-01 → E13-02 → E13-03 →
 E14-01 → E14-02 → E14-03 → E14-04 →
 E15-01 → E15-02 → E15-03 →
-E16-01 → E16-02 → E16-03
+E16-01 → E16-02 → E16-03 →
+E17-01 → E17-02 → E17-03 → E17-04
 ```
 
 If you think you should jump ahead, ask first.
@@ -159,9 +160,9 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E16-03 (Feature Recomputation and Model Validation)
-Currently working: ALL 55 ISSUES COMPLETE (45 original + 10 post-launch)
-Next up: Launch!
+Last completed: E17-04 (Fixtures Page)
+Currently working: ALL 59 ISSUES COMPLETE (45 original + 14 post-launch)
+Next up: XGBoost Model (E18)
 
 ---
 
