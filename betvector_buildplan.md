@@ -2053,7 +2053,7 @@ Extract columns that Football-Data.co.uk already provides but BetVector was igno
 
 **Type:** Backend — Evaluation
 **Depends on:** E19-03
-**Status:** PENDING
+**Status:** COMPLETED
 
 Complete the CLV (Closing Line Value) pipeline. Infrastructure is 90% built — needs closing odds to flow into BetLog entries.
 
@@ -2074,13 +2074,13 @@ Complete the CLV (Closing Line Value) pipeline. Infrastructure is 90% built — 
 4. Call from evening pipeline after Football-Data.co.uk CSV is scraped and odds loaded
 
 **Acceptance Criteria:**
-- [ ] `backfill_closing_odds()` function exists in loader.py
-- [ ] Finds BetLog entries with NULL closing_odds and settled status
-- [ ] Looks up Pinnacle closing odds from Odds table correctly
-- [ ] Computes CLV and stores on BetLog entries
-- [ ] Called in evening pipeline after CSV odds loading
-- [ ] Model Health dashboard CLV section auto-populates with data
-- [ ] No errors when no closing odds are available (graceful skip)
+- [x] `backfill_closing_odds()` function exists in loader.py
+- [x] Finds BetLog entries with NULL closing_odds and settled status
+- [x] Looks up Pinnacle closing odds from Odds table correctly
+- [x] Computes CLV and stores on BetLog entries
+- [x] Called in evening pipeline after CSV odds loading
+- [x] Model Health dashboard CLV section auto-populates with data
+- [x] No errors when no closing odds are available (graceful skip)
 
 ---
 

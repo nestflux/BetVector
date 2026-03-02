@@ -907,6 +907,34 @@ class Pipeline:
                 errors.append(err)
                 print(f"  → Metrics: FAILED ({e})")
 
+        # --- CLV Backfill (E19-04) ---
+        # Now that all leagues have had their closing odds loaded (step 1b)
+        # and bets resolved (step 2), backfill CLV on any BetLog entries
+        # that are settled but still missing closing_odds.
+        #
+        # CLV = (1/closing_odds) - (1/placement_odds)
+        # This is the single best predictor of long-term profitability (MP §12).
+        # The Model Health dashboard CLV section auto-populates once data exists.
+        print(f"\n[CLV] Backfilling closing odds and CLV...")
+        try:
+            from src.scrapers.loader import backfill_closing_odds
+
+            clv_result = backfill_closing_odds()
+            clv_updated = clv_result.get("updated", 0)
+            clv_missing = clv_result.get("no_closing_odds", 0)
+            clv_total = clv_result.get("total_checked", 0)
+
+            if clv_total > 0:
+                print(f"  → CLV backfilled: {clv_updated}/{clv_total} entries updated "
+                      f"({clv_missing} missing closing odds)")
+            else:
+                print("  → CLV: No entries need backfilling")
+        except Exception as e:
+            err = f"CLV backfill failed: {e}"
+            logger.error(err)
+            errors.append(err)
+            print(f"  → CLV: FAILED ({e})")
+
         # --- Step 4: Automatic recalibration check (MP §11.1) ---
         # After resolving bets, check if any model's probabilities have
         # drifted and need recalibration.  Also checks whether an existing

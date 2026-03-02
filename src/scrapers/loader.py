@@ -20,6 +20,8 @@ Loader functions (each independent and idempotent):
     from Transfermarkt into the team_market_values table.
   - ``update_match_results(df, league_id)`` — updates scheduled matches
     with results from API-Football (goals, status).
+  - ``backfill_closing_odds()`` — populates BetLog.closing_odds and
+    BetLog.clv from Pinnacle closing odds in the Odds table.
 
 All loaders use explicit duplicate checks before inserting.  Running
 any loader twice with the same data produces zero new records.
@@ -36,7 +38,7 @@ import pandas as pd
 
 from src.database.db import get_session
 from src.database.models import (
-    League, Match, MatchStat, Odds, Team, TeamMarketValue, Weather,
+    BetLog, League, Match, MatchStat, Odds, Team, TeamMarketValue, Weather,
 )
 
 logger = logging.getLogger(__name__)
@@ -1280,5 +1282,160 @@ def load_market_values(
         "load_market_values: %d new snapshots, %d skipped (duplicates), "
         "%d teams not found",
         new_count, skipped_count, not_found,
+    )
+    return summary
+
+
+# ============================================================================
+# CLV Backfill — Closing Line Value Tracking (E19-04)
+# ============================================================================
+# CLV (Closing Line Value) is the single best predictor of long-term betting
+# profitability (MP §12).  It measures whether you got better odds than the
+# closing line — the final odds available just before kickoff.
+#
+# Formula:
+#   CLV = (1 / closing_odds) - (1 / odds_at_placement)
+#
+# A NEGATIVE CLV means you got BETTER odds than the market settled at (good!).
+# Example: you bet at 2.10, market closed at 1.95
+#   CLV = (1/1.95) - (1/2.10) = 0.5128 - 0.4762 = +0.0366 (bad — you paid more)
+# Example: you bet at 1.95, market closed at 2.10
+#   CLV = (1/2.10) - (1/1.95) = 0.4762 - 0.5128 = -0.0366 (good — you got a bargain)
+#
+# This function runs in the evening pipeline AFTER Football-Data.co.uk CSV
+# odds are loaded, because the CSV contains Pinnacle closing odds (PSCH/PSCD/PSCA)
+# that we stored with is_opening=0 in E19-03.
+# ============================================================================
+
+
+def backfill_closing_odds() -> Dict[str, int]:
+    """Populate BetLog.closing_odds and BetLog.clv from Pinnacle closing odds.
+
+    For each resolved BetLog entry that still has ``closing_odds IS NULL``,
+    looks up the corresponding Pinnacle closing odds from the ``odds`` table
+    (bookmaker='Pinnacle', is_opening=0) and computes CLV.
+
+    This is idempotent — entries that already have closing_odds are skipped.
+    Entries where no Pinnacle closing odds exist are also skipped (they'll
+    be retried next time the pipeline runs after more CSV data is loaded).
+
+    Returns
+    -------
+    dict
+        Summary with keys: "updated", "no_closing_odds", "total_checked".
+    """
+    updated = 0
+    no_closing_odds = 0
+
+    with get_session() as session:
+        # Find resolved BetLog entries missing closing_odds.
+        # We only look at settled bets (won/lost/void) — pending bets
+        # haven't happened yet, so closing odds aren't meaningful.
+        pending_entries = (
+            session.query(BetLog)
+            .filter(
+                BetLog.closing_odds.is_(None),
+                BetLog.status.in_(["won", "lost", "void"]),
+            )
+            .all()
+        )
+
+        if not pending_entries:
+            logger.info("backfill_closing_odds: No entries need closing odds")
+            return {"updated": 0, "no_closing_odds": 0, "total_checked": 0}
+
+        logger.info(
+            "backfill_closing_odds: Checking %d bet_log entries for closing odds",
+            len(pending_entries),
+        )
+
+        for bet in pending_entries:
+            # Map BetLog selection to Odds selection for the closing lookup.
+            # BetLog stores: "home", "draw", "away", "over", "under", "yes", "no"
+            # Odds 1X2 stores: "home", "draw", "away"  (same for 1X2)
+            # Odds OU25 stores: "over", "under"  (same for O/U)
+            # Odds BTTS stores: "yes", "no"  (same for BTTS)
+            # So the selection maps directly — no conversion needed.
+            closing_selection = bet.selection
+
+            # Look up Pinnacle closing odds for this match, market, selection.
+            # Pinnacle closing odds were inserted in E19-03 from Football-Data
+            # CSV columns PSCH/PSCD/PSCA with is_opening=0.
+            closing_odds_row = (
+                session.query(Odds)
+                .filter(
+                    Odds.match_id == bet.match_id,
+                    Odds.bookmaker == "Pinnacle",
+                    Odds.market_type == bet.market_type,
+                    Odds.selection == closing_selection,
+                    Odds.is_opening == 0,  # Closing odds specifically
+                )
+                .first()
+            )
+
+            if closing_odds_row is None:
+                # Try market_avg as fallback — Betbrain average closing odds
+                # may exist when Pinnacle-specific closing odds don't.
+                closing_odds_row = (
+                    session.query(Odds)
+                    .filter(
+                        Odds.match_id == bet.match_id,
+                        Odds.bookmaker == "market_avg",
+                        Odds.market_type == bet.market_type,
+                        Odds.selection == closing_selection,
+                        Odds.is_opening == 0,
+                    )
+                    .first()
+                )
+
+            if closing_odds_row is None or closing_odds_row.odds_decimal is None:
+                no_closing_odds += 1
+                continue
+
+            closing_decimal = closing_odds_row.odds_decimal
+
+            # Determine the odds that were used when the bet was placed/detected.
+            # For system_pick entries, odds_at_placement is NULL — use
+            # odds_at_detection instead.
+            placement_odds = bet.odds_at_placement or bet.odds_at_detection
+
+            if placement_odds is None or placement_odds <= 1.0:
+                # Can't compute CLV without valid placement odds
+                no_closing_odds += 1
+                continue
+
+            if closing_decimal <= 1.0:
+                # Invalid closing odds (shouldn't happen, but guard against it)
+                no_closing_odds += 1
+                continue
+
+            # Compute CLV:
+            #   CLV = implied_prob(closing) - implied_prob(placement)
+            #   = (1/closing_odds) - (1/placement_odds)
+            #
+            # A negative value means you got BETTER odds than closing (good!).
+            # This matches the formula in metrics.calculate_clv().
+            clv = (1.0 / closing_decimal) - (1.0 / placement_odds)
+
+            # Update the BetLog entry
+            bet.closing_odds = round(closing_decimal, 4)
+            bet.clv = round(clv, 6)
+            updated += 1
+
+            logger.debug(
+                "CLV backfilled for bet_log %d: match=%d %s/%s, "
+                "placed=%.2f, closing=%.2f, clv=%.6f",
+                bet.id, bet.match_id, bet.market_type, bet.selection,
+                placement_odds, closing_decimal, clv,
+            )
+
+    summary = {
+        "updated": updated,
+        "no_closing_odds": no_closing_odds,
+        "total_checked": updated + no_closing_odds,
+    }
+    logger.info(
+        "backfill_closing_odds: %d updated, %d missing closing odds, %d total",
+        updated, no_closing_odds, updated + no_closing_odds,
     )
     return summary

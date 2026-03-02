@@ -160,11 +160,11 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E19-03 (Extract Closing Odds + AH + Referee from CSV)
-Currently working: E19-04 (CLV Tracking Pipeline)
-Next up: E20-01 (Pinnacle Opening Odds as Features)
+Last completed: E19-04 (CLV Tracking Pipeline)
+Currently working: E20-01 (Pinnacle Opening Odds as Features)
+Next up: E20-02 (Asian Handicap Line as Feature)
 
-E19 progress: 3 of 4 issues complete (E19-01 → E19-02 → E19-03 ✅, E19-04 pending)
+E19 complete: All 4 issues done ✅ (E19-01 → E19-02 → E19-03 → E19-04)
 Total issues: 77 (45 original + 20 post-launch + 12 odds/model improvement)
 
 ---
