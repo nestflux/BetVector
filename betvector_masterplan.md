@@ -172,11 +172,14 @@ This is the most important flow — it's what happens every match day.
 
 **Feature Engineering**
 - Rolling features over configurable windows (default: 5 and 10 matches): points per game, goals scored/conceded per game, xG/xGA per game, xG difference, shots per game, shots on target, possession average.
+- Advanced rolling features (E16-01): NPxG/NPxGA per game (non-penalty expected goals — strips out penalty xG for purer open-play signal), NPxG difference, PPDA/PPDA allowed (passes per defensive action — pressing intensity), deep completions/deep completions allowed (passes into the penalty area — attacking penetration quality). All computed over the same 5 and 10-match rolling windows.
 - Home/away split features: all rolling stats calculated separately for home and away matches, because teams perform differently at home.
 - Head-to-head features: historical record between the two teams over last 5 meetings, including goals scored, xG, and results.
 - Rest days: days since each team's last match, capturing fatigue effects.
 - Season context: matchday number, normalised to account for early-season instability.
-- Strict temporal ordering: no feature ever uses data from after the match it's predicting.
+- Market value features (E16-02): squad market value ratio (team ÷ opponent, from Transfermarkt weekly snapshots) captures long-term squad quality advantage — richer squads generally outperform poorer ones beyond what recent form shows. Squad value log provides absolute quality signal.
+- Weather features (E16-02): match-day temperature, wind speed, precipitation, and a binary heavy-weather flag (precipitation > 2mm OR wind > 30km/h). Heavy weather reduces scoring rates and affects playing style.
+- Strict temporal ordering: no feature ever uses data from after the match it's predicting. Market values use the most recent weekly snapshot on or before the match date.
 
 **Prediction Models**
 - Poisson regression model: predicts expected goals (lambda) for home and away teams. Generates a full scoreline probability matrix (0-0 through 6-6). From the matrix, derives probabilities for 1X2, Over/Under 2.5, BTTS, and Asian Handicap markets. This is the MVP model and the foundation for all market probabilities.
@@ -1267,13 +1270,13 @@ Two bugs were discovered and fixed during E14 work:
 
 - **ConfigNamespace integer key TypeError.** YAML config with integer keys (e.g., `1: "Bet365"` in the API-Football bookmaker map) caused a `TypeError` because Python's `setattr()` requires string attribute names. BetVector's `ConfigNamespace` class uses `setattr()` to convert YAML dicts into attribute-accessible objects. Fixed by quoting all numeric keys as strings in `config/settings.yaml` (e.g., `"1": "Bet365"`).
 
-### 13.4 — Planned Next: E15 — Data Freshness and Feature Expansion
+### 13.4 — E15 — Data Freshness and Feature Expansion (Completed)
 
-**E15-01: Football-Data.org API Scraper.** A free REST API (separate from Football-Data.co.uk) providing current-season EPL fixtures and results in near real-time. 10 requests/minute on the free tier, authentication via `X-Auth-Token` header, EPL competition code `PL`. This closes the freshness gap left by Football-Data.co.uk's twice-weekly CSV updates. Requires a free API key from football-data.org (registration only, no payment).
+**E15-01: Football-Data.org API Scraper.** Built `src/scrapers/football_data_org.py` using the free REST API (separate from Football-Data.co.uk). Provides current-season EPL fixtures and results in near real-time. 10 requests/minute on the free tier, authentication via `X-Auth-Token` header. Closes the freshness gap left by Football-Data.co.uk's twice-weekly CSV updates.
 
-**E15-02: Understat Scraper Expansion.** The existing Understat scraper fetches basic xG/xGA but the API already returns richer data — NPxG (non-penalty expected goals, more predictive than raw xG), PPDA (passes per defensive action, a pressing intensity metric), shots, and deep completions — that is not yet parsed. Small expansion of the existing scraper.
+**E15-02: Understat Scraper Expansion.** Extended the existing Understat scraper to parse the richer data already available in the API response — NPxG (non-penalty expected goals), NPxGA, PPDA (pressing intensity), PPDA allowed, shots, key passes, deep completions, and deep completions allowed. Added corresponding columns to the `UnderstatTeamStats` model. All stored per-match per-team in `match_stats`.
 
-**E15-03: Transfermarkt Datasets Integration.** Weekly CSV dumps from a public GitHub repository (CC0 license). Provides two unique data dimensions: (1) injury data — which key players are out, aggregated to team level, and (2) squad market values — a strong proxy for team quality. No scraping of transfermarkt.com required — uses pre-built, community-maintained datasets.
+**E15-03: Transfermarkt Datasets Integration.** Built `src/scrapers/transfermarkt.py` using public CSV dumps from `dcaribou/transfermarkt-datasets` on Cloudflare R2 CDN (CC0 license). Downloads `players.csv.gz`, filters to EPL, aggregates player-level data to team-level snapshots: squad total value, average player value, squad size, contract expiring count. Stored in the `team_market_values` table. Team name mapping with fuzzy fallback handles Transfermarkt → canonical name differences.
 
 ### 13.5 — Lessons Learned
 
@@ -1284,3 +1287,20 @@ Two bugs were discovered and fixed during E14 work:
 3. **Free tier APIs are marketing funnels, not infrastructure.** API-Football's free tier is deliberately limited to historical seasons to drive upgrades. Building the scraper was still worthwhile (the code is ready when the budget allows), but free tiers should never be the sole source for critical pipeline functionality.
 
 4. **Pipeline resilience was the right bet.** The standing constraint in CLAUDE.md Rule 6 — *"If one step in the pipeline fails, log the error and continue to the next step"* — meant that FBref dying, API-Football returning empty, and even Understat having occasional timeouts never prevented predictions from being generated with whatever data was available. Defensive programming at the scraper level prevented cascading failures.
+
+### 13.6 — E16 — Advanced Feature Engineering (Completed)
+
+E14 and E15 added four new data sources — Understat advanced stats (NPxG, PPDA, deep completions), Open-Meteo weather, Football-Data.org API, and Transfermarkt squad market values. All were scraped and stored in the database, but none reached the prediction model. The feature engineering layer only computed rolling averages for basic stats (goals, xG, shots, possession). This was the largest untapped improvement available.
+
+**E16-01: Rolling Advanced Stats Features.** Extended `src/features/rolling.py` to read NPxG, NPxGA, PPDA coefficient, PPDA allowed coefficient, deep completions, and deep completions allowed from `match_stats`. Added 14 new columns to the `Feature` model (7 per rolling window): `npxg_5/10`, `npxga_5/10`, `npxg_diff_5/10`, `ppda_5/10`, `ppda_allowed_5/10`, `deep_5/10`, `deep_allowed_5/10`. Updated the Poisson model to include `npxg_5` (attack) and `npxga_5` (defence) — NPxG is strictly more predictive than raw xG because it strips out penalty xG which converts at ~76% regardless of team quality.
+
+**E16-02: Market Value and Weather Features.** Added two new functions to `src/features/context.py`: `calculate_market_value_features()` queries the most recent Transfermarkt snapshot on or before the match date (temporal integrity) and returns market value ratio (capped at 10.0) and squad value log; `calculate_weather_features()` queries the weather table and returns temperature, wind speed, precipitation, and a binary heavy-weather flag. Added 6 new columns to the Feature model. Updated the Poisson model to include `market_value_ratio` and `is_heavy_weather` as context features.
+
+**E16-03: Feature Recomputation and Validation.** Added `force_recompute` parameter to `compute_all_features()` to re-run feature computation for all matches even when feature rows already exist. Recomputed all 281 EPL 2025-26 matches: 271/281 have NPxG/PPDA/deep data (from Understat), 35/281 have weather data, 4/281 have market value data. Walk-forward backtest on 2025-26: ROI -7.2%, Brier score 0.6903, 705 value bets from £10,704 staked. The model now has access to up to 17 candidate features per GLM (up from 12). Feature coverage will improve as more weather and market value data accumulates.
+
+**Key design decisions:**
+- NPxG over raw xG in the model — strips out penalty xG for purer open-play signal
+- Market value ratio (not raw value) — the relative advantage matters more than absolute wealth
+- Weather as binary flag — complex non-linear weather effects simplified to a clean signal
+- `evaluated_at <= match_date` for market values — weekly snapshots are static and independent of match results, making same-day comparisons temporally safe
+- Graceful degradation everywhere — all 20 new features default to None, model handles via `fillna(mean).fillna(0.0)` and constant-column dropping

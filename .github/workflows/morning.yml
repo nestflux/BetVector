@@ -116,6 +116,23 @@ jobs:
               created_at TEXT NOT NULL DEFAULT (datetime('now'))
           )''')
 
+          # Features table: add advanced stats columns (E16 — NPxG, PPDA, deep)
+          feat_cols = [r[1] for r in conn.execute('PRAGMA table_info(features)').fetchall()]
+          e16_feature_cols = [
+              'npxg_5', 'npxga_5', 'npxg_diff_5', 'ppda_5', 'ppda_allowed_5', 'deep_5', 'deep_allowed_5',
+              'npxg_10', 'npxga_10', 'npxg_diff_10', 'ppda_10', 'ppda_allowed_10', 'deep_10', 'deep_allowed_10',
+              'market_value_ratio', 'squad_value_log',
+              'temperature_c', 'wind_speed_kmh', 'precipitation_mm',
+          ]
+          # is_heavy_weather is INTEGER, not REAL
+          if 'is_heavy_weather' not in feat_cols:
+              conn.execute('ALTER TABLE features ADD COLUMN is_heavy_weather INTEGER')
+              print(f'  Added missing column: features.is_heavy_weather')
+          for col in e16_feature_cols:
+              if col not in feat_cols:
+                  conn.execute(f'ALTER TABLE features ADD COLUMN {col} REAL')
+                  print(f'  Added missing column: features.{col}')
+
           conn.commit()
           conn.close()
 

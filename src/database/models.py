@@ -457,6 +457,22 @@ class Feature(Base):
     shots_5 = Column(Float, nullable=True)
     shots_on_target_5 = Column(Float, nullable=True)
     possession_5 = Column(Float, nullable=True)
+    # --- Advanced rolling features: 5-match window (E16-01) ---
+    # NPxG (non-penalty xG) — strips penalty xG (~76% conversion regardless
+    # of team quality).  More predictive of future performance than raw xG
+    # because penalties are essentially random events.  Source: Understat.
+    npxg_5 = Column(Float, nullable=True)
+    npxga_5 = Column(Float, nullable=True)
+    npxg_diff_5 = Column(Float, nullable=True)              # NPxG - NPxGA
+    # PPDA (Passes Per Defensive Action) — measures pressing intensity.
+    # Lower PPDA = more aggressive pressing (Liverpool ~8, Burnley ~18).
+    # High-pressing teams create more turnovers and chances.
+    ppda_5 = Column(Float, nullable=True)
+    ppda_allowed_5 = Column(Float, nullable=True)
+    # Deep completions — passes reaching the area near the opponent's box.
+    # Measures attacking penetration quality beyond just shots/xG.
+    deep_5 = Column(Float, nullable=True)
+    deep_allowed_5 = Column(Float, nullable=True)
 
     # --- Rolling features: 10-match window ---
     form_10 = Column(Float, nullable=True)
@@ -468,6 +484,14 @@ class Feature(Base):
     shots_10 = Column(Float, nullable=True)
     shots_on_target_10 = Column(Float, nullable=True)
     possession_10 = Column(Float, nullable=True)
+    # --- Advanced rolling features: 10-match window (E16-01) ---
+    npxg_10 = Column(Float, nullable=True)
+    npxga_10 = Column(Float, nullable=True)
+    npxg_diff_10 = Column(Float, nullable=True)
+    ppda_10 = Column(Float, nullable=True)
+    ppda_allowed_10 = Column(Float, nullable=True)
+    deep_10 = Column(Float, nullable=True)
+    deep_allowed_10 = Column(Float, nullable=True)
 
     # --- Venue-specific rolling features (5-match, home or away only) ---
     venue_form_5 = Column(Float, nullable=True)
@@ -488,6 +512,28 @@ class Feature(Base):
     matchday = Column(Integer, nullable=True)              # Matchday number in season
     # season_progress: 0.0 (season start) to 1.0 (season end)
     season_progress = Column(Float, nullable=True)
+
+    # --- Market value features (E16-02) ---
+    # Market value ratio = this team's squad value ÷ opponent's squad value.
+    # A ratio > 1.0 means this team has a richer squad.  Market value is a
+    # strong proxy for long-term squad quality — captures transfer spending,
+    # talent retention, and depth in a single number.
+    # Uses most recent Transfermarkt snapshot BEFORE the match date (temporal integrity).
+    market_value_ratio = Column(Float, nullable=True)
+    # Log of squad total value — normalises the massive range (€50M to €1.5B)
+    # and provides a continuous quality signal even when opponent data is missing.
+    squad_value_log = Column(Float, nullable=True)
+
+    # --- Weather features (E16-02) ---
+    # Match-day conditions from Open-Meteo.  Same value for both teams in a
+    # match (weather doesn't change between home and away).
+    temperature_c = Column(Float, nullable=True)
+    wind_speed_kmh = Column(Float, nullable=True)
+    precipitation_mm = Column(Float, nullable=True)
+    # Binary flag: 1 if conditions significantly affect play.  Heavy rain
+    # (>2mm) reduces passing accuracy; strong wind (>30km/h) makes long balls
+    # unpredictable.  Both reduce goal-scoring rates on average.
+    is_heavy_weather = Column(Integer, nullable=True)
 
     computed_at = Column(
         String, nullable=False, server_default=sa_text("(datetime('now'))"),

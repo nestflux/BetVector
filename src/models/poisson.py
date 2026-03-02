@@ -352,11 +352,21 @@ class PoissonModel(BaseModel):
         """Select feature columns for home or away goals prediction.
 
         For home goals, we use:
-          - Home team's attacking features (form, goals scored, xG, shots)
-          - Away team's defensive features (goals conceded, xGA)
+          - Home team's attacking features (form, goals scored, xG, shots, NPxG, deep)
+          - Away team's defensive features (goals conceded, xGA, NPxGA, PPDA allowed)
           - Context features (rest days, H2H)
 
         For away goals, the mirror: away attacking + home defensive.
+
+        Feature selection rationale (E16-01):
+          - NPxG (non-penalty xG) is more predictive than raw xG because it
+            strips penalty xG (~76% conversion regardless of team).  We add
+            npxg_5 as an attack feature and npxga_5 as a defence feature.
+          - PPDA measures pressing intensity — teams with low PPDA create more
+            turnovers and chances.  We add ppda_5 to attack (pressing teams
+            score more) and ppda_allowed_5 to defence.
+          - Deep completions measure quality of attacking buildup — passes
+            reaching the opponent's penalty area.  We add deep_5 to attack.
         """
         if target == "home":
             # Home attack features
@@ -375,6 +385,14 @@ class PoissonModel(BaseModel):
             f"{attack_prefix}shots_on_target_5",
             f"{attack_prefix}venue_form_5",
             f"{attack_prefix}venue_goals_scored_5",
+            # --- Advanced attack features (E16-01) ---
+            # NPxG is strictly more predictive than raw xG — strips penalty
+            # randomness.  Using 5-match window for responsiveness.
+            f"{attack_prefix}npxg_5",
+            # Deep completions measure quality of attacking buildup — passes
+            # reaching the opponent's penalty area.  High deep = dangerous
+            # team that penetrates defences.
+            f"{attack_prefix}deep_5",
         ]
 
         # Defensive features: how bad is the opponent at defending?
@@ -382,12 +400,26 @@ class PoissonModel(BaseModel):
             f"{defence_prefix}goals_conceded_5",
             f"{defence_prefix}goals_conceded_10",
             f"{defence_prefix}venue_goals_conceded_5",
+            # --- Advanced defence features (E16-01) ---
+            # NPxGA: non-penalty xG allowed.  Measures the quality of chances
+            # the opponent concedes in open play (excluding penalties).
+            f"{defence_prefix}npxga_5",
+            # PPDA allowed: how much pressing does the opponent face?  Teams
+            # that face high pressing (low ppda_allowed) struggle to build up.
+            f"{defence_prefix}ppda_allowed_5",
         ]
 
         # Context features
         context_cols = [
             f"{attack_prefix}rest_days",
             f"{attack_prefix}h2h_goals_scored",
+            # --- Market value & weather features (E16-02) ---
+            # Market value ratio: richer squads score more — a €1B squad
+            # vs a €200M squad has a structural quality advantage.
+            f"{attack_prefix}market_value_ratio",
+            # Heavy weather (rain >2mm or wind >30km/h) reduces scoring rates
+            # on average — wet pitch and unpredictable long balls.
+            f"{attack_prefix}is_heavy_weather",
         ]
 
         # Only include columns that exist in the DataFrame

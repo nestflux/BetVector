@@ -76,7 +76,8 @@ E11-01 → E11-02 → E11-03 →
 E12-01 → E12-02 → E12-03 → E12-04 → E12-05 →
 E13-01 → E13-02 → E13-03 →
 E14-01 → E14-02 → E14-03 → E14-04 →
-E15-01 → E15-02 → E15-03
+E15-01 → E15-02 → E15-03 →
+E16-01 → E16-02 → E16-03
 ```
 
 If you think you should jump ahead, ask first.
@@ -158,9 +159,9 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E15-03 (Transfermarkt Datasets Integration)
-Currently working: E15 COMPLETE — All 3 data source issues done
-Next up: Feature engineering for new stats (NPxG, PPDA, market values)
+Last completed: E16-03 (Feature Recomputation and Model Validation)
+Currently working: ALL 55 ISSUES COMPLETE (45 original + 10 post-launch)
+Next up: Launch!
 
 ---
 

@@ -32,7 +32,11 @@ from sqlalchemy import and_
 from src.config import config
 from src.database.db import get_session
 from src.database.models import Feature, Match, Team
-from src.features.context import calculate_context_features
+from src.features.context import (
+    calculate_context_features,
+    calculate_market_value_features,
+    calculate_weather_features,
+)
 from src.features.rolling import (
     calculate_rolling_features,
     save_features,
@@ -113,6 +117,27 @@ def compute_features(match_id: int, league_id: int) -> Dict[str, Dict[str, Any]]
     home_features.update(home_context)
     away_features.update(away_context)
 
+    # --- Market value features (E16-02) ---
+    # Market value ratio captures long-term squad quality — richer squads
+    # generally outperform poorer ones.  Uses most recent Transfermarkt
+    # snapshot before the match date (temporal integrity).
+    home_mv = calculate_market_value_features(
+        home_team_id, away_team_id, match_date,
+    )
+    away_mv = calculate_market_value_features(
+        away_team_id, home_team_id, match_date,
+    )
+    home_features.update(home_mv)
+    away_features.update(away_mv)
+
+    # --- Weather features (E16-02) ---
+    # Match-day conditions affect scoring rates — heavy rain reduces passing
+    # accuracy, strong wind makes long balls unpredictable.  Same weather
+    # for both teams (it's the same match).
+    weather = calculate_weather_features(match_id)
+    home_features.update(weather)
+    away_features.update(weather)
+
     # --- Save to database ---
     save_features(match_id, home_team_id, is_home=1, features=home_features)
     save_features(match_id, away_team_id, is_home=0, features=away_features)
@@ -123,12 +148,14 @@ def compute_features(match_id: int, league_id: int) -> Dict[str, Dict[str, Any]]
 def compute_all_features(
     league_id: int,
     season: str,
+    force_recompute: bool = False,
 ) -> pd.DataFrame:
     """Compute and store features for every match in a league-season.
 
     Iterates through matches in chronological order, computes features
     for each, and stores them in the ``features`` table.  Matches that
-    already have features are skipped (idempotent).
+    already have features are skipped (idempotent) unless
+    ``force_recompute=True``.
 
     Parameters
     ----------
@@ -136,6 +163,11 @@ def compute_all_features(
         Database ID of the league.
     season : str
         Season identifier, e.g. ``"2024-25"``.
+    force_recompute : bool
+        If True, recompute features for ALL matches even if they already
+        have feature rows.  The existing rows are updated (upsert) with
+        the new values.  Use this after adding new feature columns
+        (E16-01/E16-02) to populate them for historical matches.
 
     Returns
     -------
@@ -188,8 +220,8 @@ def compute_all_features(
             home_name = home_team.name if home_team else "?"
             away_name = away_team.name if away_team else "?"
 
-        if existing_count >= 2:
-            # Both home and away features exist — skip
+        if existing_count >= 2 and not force_recompute:
+            # Both home and away features exist — skip (unless force_recompute)
             skipped += 1
             # Still read existing features for the DataFrame
             row = _read_existing_features(match_id, m)
@@ -293,14 +325,24 @@ def _read_existing_features(
         "form_5", "goals_scored_5", "goals_conceded_5",
         "xg_5", "xga_5", "xg_diff_5", "shots_5", "shots_on_target_5",
         "possession_5",
+        # Advanced stats — 5-match window (E16-01)
+        "npxg_5", "npxga_5", "npxg_diff_5",
+        "ppda_5", "ppda_allowed_5", "deep_5", "deep_allowed_5",
         "form_10", "goals_scored_10", "goals_conceded_10",
         "xg_10", "xga_10", "xg_diff_10", "shots_10", "shots_on_target_10",
         "possession_10",
+        # Advanced stats — 10-match window (E16-01)
+        "npxg_10", "npxga_10", "npxg_diff_10",
+        "ppda_10", "ppda_allowed_10", "deep_10", "deep_allowed_10",
         "venue_form_5", "venue_goals_scored_5", "venue_goals_conceded_5",
         "venue_xg_5", "venue_xga_5",
         "h2h_wins", "h2h_draws", "h2h_losses",
         "h2h_goals_scored", "h2h_goals_conceded",
         "rest_days",
+        # Market value + weather features (E16-02)
+        "market_value_ratio", "squad_value_log",
+        "temperature_c", "wind_speed_kmh", "precipitation_mm",
+        "is_heavy_weather",
     ]
 
     for col in feature_cols:

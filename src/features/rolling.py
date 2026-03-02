@@ -1,6 +1,6 @@
 """
-BetVector — Rolling Feature Calculator (E4-01)
-================================================
+BetVector — Rolling Feature Calculator (E4-01, extended E16-01)
+================================================================
 Computes rolling team performance features over configurable match windows.
 
 For each team entering a match, we look back at their most recent N
@@ -12,6 +12,9 @@ completed matches (where N comes from ``config/settings.yaml``, default
   - **Defence:** Goals conceded per game, xGA per game
   - **Style:** Possession average
   - **xG difference:** xG minus xGA — measures overall performance quality
+  - **NPxG / NPxGA:** Non-penalty expected goals (more predictive than raw xG)
+  - **PPDA:** Passes Per Defensive Action (pressing intensity metric)
+  - **Deep completions:** Passes reaching the opponent's penalty area
 
 Additionally, **venue-specific** features use only matches at the same
 venue (home or away) over a 5-match window, capturing the well-documented
@@ -290,6 +293,19 @@ def _get_recent_matches(
             "shots": stat.shots if stat else None,
             "shots_on_target": stat.shots_on_target if stat else None,
             "possession": stat.possession if stat else None,
+            # --- Advanced stats from Understat (E16-01) ---
+            # NPxG strips penalty xG (penalties convert at ~76% regardless of
+            # team) making it more predictive of future open-play performance.
+            "npxg": stat.npxg if stat else None,
+            "npxga": stat.npxga if stat else None,
+            # PPDA = opponent passes / team defensive actions.  Lower values
+            # mean more aggressive pressing (Liverpool ~8, Burnley ~18).
+            "ppda": stat.ppda_coeff if stat else None,
+            "ppda_allowed": stat.ppda_allowed_coeff if stat else None,
+            # Deep completions = passes reaching near the opponent's box.
+            # Measures attacking penetration quality beyond just shots/xG.
+            "deep": stat.deep if stat else None,
+            "deep_allowed": stat.deep_allowed if stat else None,
         })
 
     return pd.DataFrame(rows)
@@ -321,6 +337,14 @@ def _compute_rolling_stats(
             f"shots{suffix}": None,
             f"shots_on_target{suffix}": None,
             f"possession{suffix}": None,
+            # Advanced stats (E16-01)
+            f"npxg{suffix}": None,
+            f"npxga{suffix}": None,
+            f"npxg_diff{suffix}": None,
+            f"ppda{suffix}": None,
+            f"ppda_allowed{suffix}": None,
+            f"deep{suffix}": None,
+            f"deep_allowed{suffix}": None,
         }
 
     n = len(df)  # Actual matches available (may be < window)
@@ -350,6 +374,30 @@ def _compute_rolling_stats(
     # Possession (already stored as 0.0–1.0 proportion)
     possession = _safe_mean(df["possession"])
 
+    # --- Advanced stats from Understat (E16-01) ---
+    # NPxG = non-penalty expected goals.  Strips penalty xG which converts
+    # at ~76% regardless of team, making NPxG a purer measure of open-play
+    # chance creation.  NPxGA is the defensive counterpart.
+    npxg = _safe_mean(df["npxg"])
+    npxga = _safe_mean(df["npxga"])
+    if npxg is not None and npxga is not None:
+        npxg_diff = round(npxg - npxga, 4)
+    else:
+        npxg_diff = None
+
+    # PPDA = Passes Per Defensive Action.  A pressing intensity metric:
+    # how many passes does the opponent complete before the team wins the
+    # ball?  Lower = more aggressive pressing.  Teams with low PPDA tend
+    # to create more turnovers in dangerous areas.
+    ppda = _safe_mean(df["ppda"])
+    ppda_allowed = _safe_mean(df["ppda_allowed"])
+
+    # Deep completions = passes that reach the opponent's penalty area.
+    # Measures quality of attacking buildup — a team can have high
+    # possession but low deep completions if they just pass sideways.
+    deep = _safe_mean(df["deep"])
+    deep_allowed = _safe_mean(df["deep_allowed"])
+
     return {
         f"form{suffix}": form,
         f"goals_scored{suffix}": goals_scored,
@@ -360,6 +408,14 @@ def _compute_rolling_stats(
         f"shots{suffix}": shots,
         f"shots_on_target{suffix}": shots_on_target,
         f"possession{suffix}": possession,
+        # Advanced stats (E16-01)
+        f"npxg{suffix}": npxg,
+        f"npxga{suffix}": npxga,
+        f"npxg_diff{suffix}": npxg_diff,
+        f"ppda{suffix}": ppda,
+        f"ppda_allowed{suffix}": ppda_allowed,
+        f"deep{suffix}": deep,
+        f"deep_allowed{suffix}": deep_allowed,
     }
 
 

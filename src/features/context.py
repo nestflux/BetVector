@@ -1,6 +1,6 @@
 """
-BetVector — Head-to-Head and Context Features (E4-02)
-======================================================
+BetVector — Head-to-Head and Context Features (E4-02, extended E16-02)
+======================================================================
 Computes contextual features that go beyond rolling team form:
 
   - **Head-to-head (H2H):** Historical record between two specific teams
@@ -17,6 +17,15 @@ Computes contextual features that go beyond rolling team form:
     late-season matches may have motivational effects (relegation battles,
     title races, "dead rubber" matches with nothing to play for).
 
+  - **Market value ratio (E16-02):** Ratio of this team's squad value to
+    the opponent's.  Uses the most recent Transfermarkt snapshot before the
+    match date.  Richer squads generally outperform poorer ones — a €1B
+    squad facing a €200M squad has a 5:1 structural advantage.
+
+  - **Weather conditions (E16-02):** Match-day temperature, wind speed,
+    precipitation from Open-Meteo.  Heavy rain and strong wind reduce
+    goal-scoring rates and favour direct-play teams.
+
 TEMPORAL INTEGRITY: All features use only data from before the match date.
 
 Master Plan refs: MP §4 Feature Set, MP §6 features table schema
@@ -25,13 +34,14 @@ Master Plan refs: MP §4 Feature Set, MP §6 features table schema
 from __future__ import annotations
 
 import logging
+import math
 from datetime import datetime
 from typing import Any, Dict, Optional
 
 from sqlalchemy.orm import Session
 
 from src.database.db import get_session
-from src.database.models import Match
+from src.database.models import Match, TeamMarketValue, Weather
 
 logger = logging.getLogger(__name__)
 
@@ -283,4 +293,151 @@ def calculate_context_features(
         "rest_days": rest,
         "matchday": matchday,
         "season_progress": progress,
+    }
+
+
+# ============================================================================
+# Market Value Features (E16-02)
+# ============================================================================
+
+# Maximum market value ratio — caps extreme outliers (e.g., Man City vs newly
+# promoted team) to prevent a single feature from dominating the model.
+MAX_MV_RATIO = 10.0
+
+
+def calculate_market_value_features(
+    team_id: int,
+    opponent_id: int,
+    match_date: str,
+) -> Dict[str, Any]:
+    """Calculate market value features from Transfermarkt squad value data.
+
+    Uses the most recent Transfermarkt snapshot **on or before** the match
+    date for each team.  Market value snapshots are static weekly snapshots
+    of player valuations — they are NOT influenced by match results on the
+    same date, so ``<=`` is temporally safe (unlike match stats which use
+    ``<`` to avoid including the predicted match).
+
+    The market value ratio captures long-term squad quality.  A team with a
+    €1B squad facing a €200M squad has a 5:1 structural advantage that goes
+    beyond recent form — it reflects transfer spending, talent retention,
+    squad depth, and the overall quality ceiling of the roster.
+
+    Parameters
+    ----------
+    team_id : int
+        The team whose features we're computing.
+    opponent_id : int
+        The opposing team.
+    match_date : str
+        ISO date of the match (YYYY-MM-DD).
+
+    Returns
+    -------
+    dict
+        Keys: market_value_ratio, squad_value_log.
+        Returns None for both if no market value data exists.
+    """
+    with get_session() as session:
+        # Get most recent snapshot for this team BEFORE match date
+        team_mv = session.query(TeamMarketValue).filter(
+            TeamMarketValue.team_id == team_id,
+            TeamMarketValue.evaluated_at <= match_date,
+        ).order_by(TeamMarketValue.evaluated_at.desc()).first()
+
+        # Get most recent snapshot for opponent BEFORE match date
+        opp_mv = session.query(TeamMarketValue).filter(
+            TeamMarketValue.team_id == opponent_id,
+            TeamMarketValue.evaluated_at <= match_date,
+        ).order_by(TeamMarketValue.evaluated_at.desc()).first()
+
+    # No data for this team — return None (graceful degradation)
+    if team_mv is None or team_mv.squad_total_value is None:
+        return {
+            "market_value_ratio": None,
+            "squad_value_log": None,
+        }
+
+    # Compute log of squad value (natural log, normalises the massive range)
+    squad_value = team_mv.squad_total_value
+    squad_value_log = round(math.log(max(squad_value, 1.0)), 4)
+
+    # Compute ratio: team value / opponent value
+    if opp_mv is not None and opp_mv.squad_total_value and opp_mv.squad_total_value > 0:
+        ratio = squad_value / opp_mv.squad_total_value
+        # Cap at MAX_MV_RATIO to prevent extreme outliers
+        ratio = min(ratio, MAX_MV_RATIO)
+        ratio = round(ratio, 4)
+    else:
+        # No opponent data — use 1.0 (neutral assumption)
+        ratio = None
+
+    return {
+        "market_value_ratio": ratio,
+        "squad_value_log": squad_value_log,
+    }
+
+
+# ============================================================================
+# Weather Features (E16-02)
+# ============================================================================
+
+# Thresholds for "heavy weather" conditions that affect match outcomes.
+# These are based on football analytics research:
+#   - Precipitation > 2mm: wet pitch reduces passing accuracy, increases
+#     turnovers, and slightly reduces overall goals scored.
+#   - Wind > 30 km/h: strong wind makes long balls unpredictable, favours
+#     direct-play teams over possession-based ones.
+HEAVY_RAIN_THRESHOLD_MM = 2.0
+STRONG_WIND_THRESHOLD_KMH = 30.0
+
+
+def calculate_weather_features(
+    match_id: int,
+) -> Dict[str, Any]:
+    """Calculate weather features for a specific match.
+
+    Reads weather data from the ``weather`` table (populated by the
+    Open-Meteo scraper in E14-02).  Weather is per-match, not per-team
+    — both teams experience the same conditions.
+
+    Parameters
+    ----------
+    match_id : int
+        Database ID of the match.
+
+    Returns
+    -------
+    dict
+        Keys: temperature_c, wind_speed_kmh, precipitation_mm, is_heavy_weather.
+        Returns None for all if no weather data exists for this match.
+    """
+    with get_session() as session:
+        weather = session.query(Weather).filter_by(match_id=match_id).first()
+
+    if weather is None:
+        return {
+            "temperature_c": None,
+            "wind_speed_kmh": None,
+            "precipitation_mm": None,
+            "is_heavy_weather": None,
+        }
+
+    # Extract raw values
+    temp = weather.temperature_c
+    wind = weather.wind_speed_kmh
+    precip = weather.precipitation_mm
+
+    # Determine if conditions significantly affect play
+    is_heavy = 0
+    if precip is not None and precip > HEAVY_RAIN_THRESHOLD_MM:
+        is_heavy = 1
+    if wind is not None and wind > STRONG_WIND_THRESHOLD_KMH:
+        is_heavy = 1
+
+    return {
+        "temperature_c": round(temp, 2) if temp is not None else None,
+        "wind_speed_kmh": round(wind, 2) if wind is not None else None,
+        "precipitation_mm": round(precip, 2) if precip is not None else None,
+        "is_heavy_weather": is_heavy,
     }

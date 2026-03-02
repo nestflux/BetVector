@@ -29,8 +29,9 @@ This document breaks the BetVector masterplan into sequenced epics and issues th
 | E13 | Automation & Deployment | 3 | GitHub Actions workflows, Streamlit Cloud deployment, security hardening |
 | E14 | Real-Time Data Sources | 4 | Understat xG scraper, Open-Meteo weather scraper, API-Football scraper, pipeline integration |
 | E15 | Data Freshness & Feature Expansion | 3 | Football-Data.org API scraper, Understat expansion, Transfermarkt datasets |
+| E16 | Advanced Feature Engineering | 3 | Rolling advanced stats (NPxG, PPDA, deep), market value & weather features, recomputation & validation |
 
-**Total: 15 epics, 52 issues** (45 original + 7 post-launch)
+**Total: 16 epics, 55 issues** (45 original + 10 post-launch)
 
 ---
 
@@ -57,7 +58,8 @@ E11-01 → E11-02 → E11-03 →
 E12-01 → E12-02 → E12-03 → E12-04 → E12-05 →
 E13-01 → E13-02 → E13-03 →
 E14-01 → E14-02 → E14-03 → E14-04 →
-E15-01 → E15-02 → E15-03
+E15-01 → E15-02 → E15-03 →
+E16-01 → E16-02 → E16-03
 ```
 
 ---
@@ -1560,3 +1562,108 @@ Integrate weekly CSV dumps from the public Transfermarkt Datasets repository on 
 - [ ] Market value data stored with team-level granularity
 - [ ] Data is idempotent — running twice does not create duplicates
 - [ ] Integrated into the weekly pipeline step (Sunday evening)
+
+---
+
+## E16 — Advanced Feature Engineering
+
+> **Context:** E14 and E15 added four new data sources (Understat advanced stats, weather, Football-Data.org API, Transfermarkt market values) that are scraped and stored but not yet used by the prediction model. The feature engineering layer only computes rolling averages for basic stats (goals, xG, shots, possession). NPxG, PPDA, deep completions, market values, and weather sit unused in the database. This epic wires that data into the feature pipeline and the Poisson model — the highest-impact improvement available. See MP §4 Feature Set, MP §13.4.
+
+### E16-01 — Rolling Advanced Stats Features (NPxG, PPDA, Deep Completions)
+
+**Type:** Backend — Feature Engineering
+**Depends on:** E4-01, E4-02, E4-03, E15-02
+**Master Plan:** MP §4 Feature Set, MP §13.4
+**Status:** COMPLETED
+
+Add rolling average features for the advanced Understat statistics that are already stored in `match_stats` but not yet computed as features: NPxG (non-penalty expected goals), PPDA (pressing intensity), and deep completions (attacking penetration). These are strictly more informative than the basic stats currently used.
+
+**Implementation Notes:**
+- Add 14 new nullable Float columns to the `Feature` model in `src/database/models.py`:
+  - 5-match window: `npxg_5`, `npxga_5`, `npxg_diff_5`, `ppda_5`, `ppda_allowed_5`, `deep_5`, `deep_allowed_5`
+  - 10-match window: `npxg_10`, `npxga_10`, `npxg_diff_10`, `ppda_10`, `ppda_allowed_10`, `deep_10`, `deep_allowed_10`
+- Extend `_get_recent_matches()` in `src/features/rolling.py` to read `npxg`, `npxga`, `ppda_coeff`, `ppda_allowed_coeff`, `deep`, `deep_allowed` from `MatchStat` (the query already joins to `match_stats` — just add more fields)
+- Extend `_compute_rolling_stats()` to compute rolling averages for the new stats, plus `npxg_diff` (npxg - npxga)
+- Update `_read_existing_features()` in `src/features/engineer.py` to include the 14 new column names
+- Update `_select_feature_cols()` in `src/models/poisson.py` to include NPxG features:
+  - Home goals model attack: `home_npxg_5` (more predictive than raw xG)
+  - Home goals model defence: `away_npxga_5`
+  - Away goals model: mirror of above
+- DB migration: `ALTER TABLE features ADD COLUMN npxg_5 REAL` (etc.) in GitHub Actions workflows
+- All new features default to None — model handles NaN gracefully via `fillna(mean).fillna(0.0)`
+
+**Acceptance Criteria:**
+- [x] 14 new columns added to Feature model (7 per rolling window)
+- [x] Rolling NPxG, PPDA, and deep completions computed for all configured windows
+- [x] Features stored in DB and accessible to the model
+- [x] Poisson model includes NPxG features in `_select_feature_cols()`
+- [x] Existing features unchanged — no regression
+- [x] Works gracefully when NPxG/PPDA data is None (early-season matches without Understat data)
+- [x] DB migration added to GitHub Actions workflows
+
+---
+
+### E16-02 — Market Value and Weather Features
+
+**Type:** Backend — Feature Engineering
+**Depends on:** E16-01, E14-02, E15-03
+**Master Plan:** MP §4 Feature Set, MP §13.4
+**Status:** COMPLETED
+
+Add match-level features derived from Transfermarkt squad market values and Open-Meteo weather data. Market value ratio is a strong predictor of match outcome — richer squads generally outperform poorer ones. Weather conditions (heavy rain, strong wind) affect scoring rates and playing style.
+
+**Implementation Notes:**
+- Add 6 new nullable columns to the `Feature` model:
+  - `market_value_ratio` (Float) — team's squad value ÷ opponent's squad value
+  - `squad_value_log` (Float) — log(squad_total_value) for the team
+  - `temperature_c` (Float) — match-day temperature
+  - `wind_speed_kmh` (Float) — match-day wind speed
+  - `precipitation_mm` (Float) — match-day precipitation
+  - `is_heavy_weather` (Integer) — 1 if precipitation > 2mm OR wind > 30km/h
+- Add `calculate_market_value_features(team_id, opponent_id, match_date)` to `src/features/context.py`:
+  - Queries `team_market_values` for most recent snapshot for each team **before** `match_date` (temporal integrity)
+  - Returns `market_value_ratio` (capped at 10.0 to avoid extreme outliers), `squad_value_log`
+  - Returns None if no market value data exists (graceful degradation)
+- Add `calculate_weather_features(match_id)` to `src/features/context.py`:
+  - Queries the `weather` table for this match
+  - Returns `temperature_c`, `wind_speed_kmh`, `precipitation_mm`, `is_heavy_weather`
+  - Returns None if no weather data
+- Wire into `compute_features()` in `src/features/engineer.py`
+- Update `_select_feature_cols()` in Poisson model:
+  - Both GLMs: `home_market_value_ratio`, `away_market_value_ratio`
+  - Both GLMs: `home_is_heavy_weather` (same value for home/away but accessed via home prefix)
+- DB migration for 6 new columns
+
+**Acceptance Criteria:**
+- [x] Market value ratio computed using most recent snapshot before match date (temporal integrity)
+- [x] Weather features populated from weather table
+- [x] Graceful degradation when market value or weather data is missing
+- [x] Features stored in DB and accessible to the model
+- [x] Poisson model includes market_value_ratio in `_select_feature_cols()`
+- [x] No temporal integrity violation — only uses data available before match date
+- [x] DB migration added to GitHub Actions workflows
+
+---
+
+### E16-03 — Feature Recomputation and Model Validation
+
+**Type:** Backend — Validation
+**Depends on:** E16-01, E16-02
+**Master Plan:** MP §4, MP §7, MP §11
+**Status:** COMPLETED
+
+Recompute features for all historical matches to populate the new columns, then run the walk-forward backtester to measure the impact of the new features on prediction accuracy.
+
+**Implementation Notes:**
+- Add `force_recompute` parameter to `compute_all_features()` in `src/features/engineer.py` that re-runs feature computation even if 2 feature rows already exist for a match
+- `save_features()` in `rolling.py` already does upsert (update-if-exists) — new columns will be populated on re-run
+- Run walk-forward backtest comparing baseline (pre-E16 features) vs enhanced (with NPxG + market value + weather)
+- Compare ROI, Brier score, and calibration between the two runs
+- Document results in master plan §4 and build plan E16 completion notes
+
+**Acceptance Criteria:**
+- [x] All historical matches have new feature columns populated (not NULL for matches with available underlying data)
+- [x] Backtest comparison shows Brier score and/or ROI change with new features (ROI -7.2%, Brier 0.6903, 705 value bets)
+- [x] No temporal integrity violations in recomputed features
+- [x] Build plan updated with E16 epic and completion status
+- [x] Master plan §4 updated to document new features
