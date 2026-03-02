@@ -208,7 +208,7 @@ def render_step_1_bankroll() -> None:
     )
 
     bankroll = st.number_input(
-        "Starting Bankroll (£)",
+        "Starting Bankroll ($)",
         min_value=50.0,
         max_value=100000.0,
         value=st.session_state.get("ob_bankroll", 500.0),

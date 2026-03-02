@@ -48,7 +48,7 @@
                             <h1 style="margin: 0 0 4px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 22px; font-weight: 700; color: #E6EDF3;">
                                 BetVector Evening —
                                 <span style="color: {% if daily_pnl >= 0 %}#3FB950{% else %}#F85149{% endif %};">
-                                    {% if daily_pnl >= 0 %}+&pound;{{ '%.2f' | format(daily_pnl) }}{% else %}-&pound;{{ '%.2f' | format(daily_pnl | abs) }}{% endif %} Today
+                                    {% if daily_pnl >= 0 %}+${{ '%.2f' | format(daily_pnl) }}{% else %}-${{ '%.2f' | format(daily_pnl | abs) }}{% endif %} Today
                                 </span>
                                 &middot; {{ daily_wins }}/{{ daily_wins + daily_losses }} Wins
                             </h1>
@@ -101,7 +101,7 @@
                                     </td>
                                     <td style="padding: 10px; font-family: 'Courier New', Courier, monospace; font-size: 13px; font-weight: 700; border-bottom: 1px solid #21262D; text-align: right;
                                         {% if r.pnl and r.pnl > 0 %}color: #3FB950;{% elif r.pnl and r.pnl < 0 %}color: #F85149;{% else %}color: #8B949E;{% endif %}">
-                                        {% if r.pnl and r.pnl >= 0 %}+&pound;{{ '%.2f' | format(r.pnl) }}{% elif r.pnl %}-&pound;{{ '%.2f' | format(r.pnl | abs) }}{% else %}&mdash;{% endif %}
+                                        {% if r.pnl and r.pnl >= 0 %}+${{ '%.2f' | format(r.pnl) }}{% elif r.pnl %}-${{ '%.2f' | format(r.pnl | abs) }}{% else %}&mdash;{% endif %}
                                     </td>
                                 </tr>
                                 {% endfor %}
@@ -121,7 +121,7 @@
                                         </p>
                                         <p style="margin: 0; font-family: 'Courier New', Courier, monospace; font-size: 18px; font-weight: 700;
                                             {% if daily_pnl >= 0 %}color: #3FB950;{% else %}color: #F85149;{% endif %}">
-                                            {% if daily_pnl >= 0 %}+&pound;{{ '%.2f' | format(daily_pnl) }}{% else %}-&pound;{{ '%.2f' | format(daily_pnl | abs) }}{% endif %}
+                                            {% if daily_pnl >= 0 %}+${{ '%.2f' | format(daily_pnl) }}{% else %}-${{ '%.2f' | format(daily_pnl | abs) }}{% endif %}
                                         </p>
                                     </td>
                                     <td width="4%"></td>
@@ -131,7 +131,7 @@
                                         </p>
                                         <p style="margin: 0; font-family: 'Courier New', Courier, monospace; font-size: 18px; font-weight: 700;
                                             {% if weekly_pnl >= 0 %}color: #3FB950;{% else %}color: #F85149;{% endif %}">
-                                            {% if weekly_pnl >= 0 %}+&pound;{{ '%.2f' | format(weekly_pnl) }}{% else %}-&pound;{{ '%.2f' | format(weekly_pnl | abs) }}{% endif %}
+                                            {% if weekly_pnl >= 0 %}+${{ '%.2f' | format(weekly_pnl) }}{% else %}-${{ '%.2f' | format(weekly_pnl | abs) }}{% endif %}
                                         </p>
                                     </td>
                                     <td width="4%"></td>

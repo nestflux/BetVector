@@ -179,7 +179,7 @@ def check_safety_limits(user_data: Dict, peak: float, daily_losses: float) -> Li
     return [
         {
             "name": "Daily Loss Limit",
-            "detail": f"£{daily_losses:.2f} / £{daily_limit:.2f}",
+            "detail": f"${daily_losses:.2f} / ${daily_limit:.2f}",
             "status": daily_status,
             "label": daily_label,
         },
@@ -191,7 +191,7 @@ def check_safety_limits(user_data: Dict, peak: float, daily_losses: float) -> Li
         },
         {
             "name": "Minimum Bankroll",
-            "detail": f"£{current:.2f} / £{min_threshold:.2f} floor",
+            "detail": f"${current:.2f} / ${min_threshold:.2f} floor",
             "status": min_status,
             "label": min_label,
         },
@@ -238,12 +238,12 @@ def load_bet_history(
             "Market": MARKET_LABELS.get(b.market_type, b.market_type),
             "Selection": b.selection,
             "Odds": f"{odds:.2f}" if odds else "—",
-            "Stake": f"£{b.stake:.2f}" if b.stake else "—",
+            "Stake": f"${b.stake:.2f}" if b.stake else "—",
             "Result": {"won": "✅ Won", "lost": "❌ Lost", "pending": "⏳ Pending",
                        "void": "⚪ Void", "half_won": "✅ Half", "half_lost": "❌ Half"
                        }.get(b.status, b.status),
-            "P&L": f"+£{b.pnl:.2f}" if b.pnl and b.pnl >= 0 else (
-                f"-£{abs(b.pnl):.2f}" if b.pnl else "—"
+            "P&L": f"+${b.pnl:.2f}" if b.pnl and b.pnl >= 0 else (
+                f"-${abs(b.pnl):.2f}" if b.pnl else "—"
             ),
             "Type": b.bet_type,
         })
@@ -314,9 +314,9 @@ def load_monthly_breakdown(user_id: int = 1) -> pd.DataFrame:
 
     monthly.rename(columns={"month": "Month"}, inplace=True)
     monthly["ROI %"] = (monthly["PnL"] / monthly["Staked"] * 100).round(1)
-    monthly["Staked"] = monthly["Staked"].apply(lambda x: f"£{x:.2f}")
+    monthly["Staked"] = monthly["Staked"].apply(lambda x: f"${x:.2f}")
     monthly["PnL"] = monthly["PnL"].apply(
-        lambda x: f"+£{x:.2f}" if x >= 0 else f"-£{abs(x):.2f}"
+        lambda x: f"+${x:.2f}" if x >= 0 else f"-${abs(x):.2f}"
     )
     monthly["ROI %"] = monthly["ROI %"].apply(lambda x: f"{x:+.1f}%")
 
@@ -355,14 +355,14 @@ def create_bankroll_chart(df: pd.DataFrame, peak: float, starting: float) -> go.
         line=dict(color=COLOURS["blue"], width=2),
         fill="tozeroy",
         fillcolor="rgba(88, 166, 255, 0.05)",
-        hovertemplate="Date: %{x}<br>Bankroll: £%{y:.2f}<extra></extra>",
+        hovertemplate="Date: %{x}<br>Bankroll: $%{y:.2f}<extra></extra>",
     ))
 
     # Starting bankroll reference line
     fig.add_hline(
         y=starting, line_dash="dash",
         line_color=COLOURS["border"], line_width=1,
-        annotation_text=f"Starting (£{starting:.0f})",
+        annotation_text=f"Starting (${starting:.0f})",
         annotation_position="top left",
         annotation_font=dict(color=COLOURS["text_secondary"], size=10),
     )
@@ -375,7 +375,7 @@ def create_bankroll_chart(df: pd.DataFrame, peak: float, starting: float) -> go.
         peak_val = df.loc[peak_idx, "bankroll"]
         fig.add_annotation(
             x=peak_date, y=peak_val,
-            text=f"Peak: £{peak:.2f}",
+            text=f"Peak: ${peak:.2f}",
             showarrow=True,
             arrowhead=2,
             arrowcolor=COLOURS["green"],
@@ -402,8 +402,8 @@ def create_bankroll_chart(df: pd.DataFrame, peak: float, starting: float) -> go.
         yaxis=dict(
             gridcolor=COLOURS["border"],
             showgrid=True,
-            title="Bankroll (£)",
-            tickprefix="£",
+            title="Bankroll ($)",
+            tickprefix="$",
         ),
         margin=dict(l=60, r=20, t=10, b=40),
         height=350,
@@ -456,13 +456,13 @@ else:
             <span style="font-family: 'Inter', sans-serif; font-size: 12px; color: #8B949E;
                          text-transform: uppercase; letter-spacing: 0.5px;">Current Bankroll</span><br>
             <span style="font-family: 'JetBrains Mono', monospace; font-size: 28px; font-weight: 700;
-                         color: {bankroll_colour};">£{current:.2f}</span>
+                         color: {bankroll_colour};">${current:.2f}</span>
         </div>
         """, unsafe_allow_html=True)
     with col2:
-        st.metric("Starting Bankroll", f"£{starting:.2f}")
+        st.metric("Starting Bankroll", f"${starting:.2f}")
     with col3:
-        st.metric("Peak Bankroll", f"£{peak:.2f}")
+        st.metric("Peak Bankroll", f"${peak:.2f}")
     with col4:
         dd_colour = COLOURS["green"] if drawdown_pct < 15 else (
             COLOURS["yellow"] if drawdown_pct < 25 else COLOURS["red"]

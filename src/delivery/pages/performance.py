@@ -209,7 +209,7 @@ def create_cumulative_pnl_chart(df: pd.DataFrame) -> go.Figure:
         line=dict(color=COLOURS["green"], width=2),
         fill="tozeroy",
         fillcolor="rgba(63, 185, 80, 0.1)",
-        hovertemplate="Date: %{x}<br>P&L: £%{y:.2f}<extra></extra>",
+        hovertemplate="Date: %{x}<br>P&L: $%{y:.2f}<extra></extra>",
     ))
 
     # Zero line for reference
@@ -237,8 +237,8 @@ def create_cumulative_pnl_chart(df: pd.DataFrame) -> go.Figure:
             gridcolor=COLOURS["border"],
             showgrid=True,
             gridwidth=1,
-            title="P&L (£)",
-            tickprefix="£",
+            title="P&L ($)",
+            tickprefix="$",
         ),
         margin=dict(l=60, r=20, t=10, b=40),
         height=350,
@@ -274,7 +274,7 @@ def create_monthly_pnl_chart(df: pd.DataFrame) -> go.Figure:
         x=monthly["month"],
         y=monthly["pnl"],
         marker_color=colours,
-        hovertemplate="Month: %{x}<br>P&L: £%{y:.2f}<extra></extra>",
+        hovertemplate="Month: %{x}<br>P&L: $%{y:.2f}<extra></extra>",
     ))
 
     # Zero line
@@ -301,8 +301,8 @@ def create_monthly_pnl_chart(df: pd.DataFrame) -> go.Figure:
             gridcolor=COLOURS["border"],
             showgrid=True,
             gridwidth=1,
-            title="P&L (£)",
-            tickprefix="£",
+            title="P&L ($)",
+            tickprefix="$",
         ),
         margin=dict(l=60, r=20, t=10, b=40),
         height=300,
@@ -337,10 +337,10 @@ def create_bets_table(df: pd.DataFrame, limit: int = 50) -> pd.DataFrame:
     recent["Match"] = recent["home_team"] + " vs " + recent["away_team"]
     recent["Market"] = recent["market_type"].map(MARKET_LABELS).fillna(recent["market_type"])
     recent["Odds"] = recent["odds"].apply(lambda x: f"{x:.2f}")
-    recent["Stake"] = recent["stake"].apply(lambda x: f"£{x:.2f}")
+    recent["Stake"] = recent["stake"].apply(lambda x: f"${x:.2f}")
     recent["Result"] = recent["status"].map({"won": "✅ Won", "lost": "❌ Lost"})
     recent["P&L"] = recent["pnl"].apply(
-        lambda x: f"+£{x:.2f}" if x >= 0 else f"-£{abs(x):.2f}"
+        lambda x: f"+${x:.2f}" if x >= 0 else f"-${abs(x):.2f}"
     )
     recent["Date"] = recent["date"]
 
@@ -433,7 +433,7 @@ else:
             <span style="font-family: 'Inter', sans-serif; font-size: 12px; color: #8B949E;
                          text-transform: uppercase; letter-spacing: 0.5px;">Total P&L</span><br>
             <span style="font-family: 'JetBrains Mono', monospace; font-size: 28px; font-weight: 700;
-                         color: {pnl_colour};">{pnl_sign}£{abs(metrics['total_pnl']):.2f}</span>
+                         color: {pnl_colour};">{pnl_sign}${abs(metrics['total_pnl']):.2f}</span>
         </div>
         """, unsafe_allow_html=True)
     with col2:

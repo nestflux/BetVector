@@ -21,7 +21,7 @@
       losses             - int: number of losing bets
       pending            - int: number still pending
       win_rate           - float: 0-1 win rate
-      weekly_pnl         - float: P&L for the week (£)
+      weekly_pnl         - float: P&L for the week ($)
       weekly_roi         - float: ROI for the week (0-1)
       cumulative_roi     - float: all-time ROI (0-1)
       bankroll_start     - float: bankroll at start of week
@@ -79,7 +79,7 @@
                             <h1 style="margin: 0 0 4px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 22px; font-weight: 700; color: #E6EDF3;">
                                 &#128202; BetVector Weekly —
                                 <span style="color: {% if weekly_pnl >= 0 %}#3FB950{% else %}#F85149{% endif %};">
-                                    {% if weekly_pnl >= 0 %}+&pound;{{ '%.2f' | format(weekly_pnl) }}{% else %}-&pound;{{ '%.2f' | format(weekly_pnl | abs) }}{% endif %}
+                                    {% if weekly_pnl >= 0 %}+${{ '%.2f' | format(weekly_pnl) }}{% else %}-${{ '%.2f' | format(weekly_pnl | abs) }}{% endif %}
                                 </span>
                                 &middot; {{ wins }}/{{ total_bets }} Wins
                             </h1>
@@ -109,7 +109,7 @@
                                         </p>
                                         <p style="margin: 0; font-family: 'Courier New', Courier, monospace; font-size: 18px; font-weight: 700;
                                             {% if weekly_pnl >= 0 %}color: #3FB950;{% else %}color: #F85149;{% endif %}">
-                                            {% if weekly_pnl >= 0 %}+&pound;{{ '%.2f' | format(weekly_pnl) }}{% else %}-&pound;{{ '%.2f' | format(weekly_pnl | abs) }}{% endif %}
+                                            {% if weekly_pnl >= 0 %}+${{ '%.2f' | format(weekly_pnl) }}{% else %}-${{ '%.2f' | format(weekly_pnl | abs) }}{% endif %}
                                         </p>
                                     </td>
                                     <td width="5%"></td>
@@ -145,11 +145,11 @@
                                             Bankroll
                                         </p>
                                         <p style="margin: 0; font-family: 'Courier New', Courier, monospace; font-size: 18px; font-weight: 700; color: #E6EDF3;">
-                                            &pound;{{ '%.2f' | format(bankroll_end) }}
+                                            ${{ '%.2f' | format(bankroll_end) }}
                                         </p>
                                         <p style="margin: 2px 0 0; font-family: 'Courier New', Courier, monospace; font-size: 11px;
                                             {% if bankroll_change >= 0 %}color: #3FB950;{% else %}color: #F85149;{% endif %}">
-                                            {% if bankroll_change >= 0 %}&#9650; +&pound;{{ '%.2f' | format(bankroll_change) }}{% else %}&#9660; -&pound;{{ '%.2f' | format(bankroll_change | abs) }}{% endif %}
+                                            {% if bankroll_change >= 0 %}&#9650; +${{ '%.2f' | format(bankroll_change) }}{% else %}&#9660; -${{ '%.2f' | format(bankroll_change | abs) }}{% endif %}
                                         </p>
                                     </td>
                                     <td width="5%"></td>
@@ -227,7 +227,7 @@
                                             <span style="color: #58A6FF;">{{ best_pick.selection }}</span>
                                             @ {{ '%.2f' | format(best_pick.odds) }} &middot;
                                             Edge: +{{ '%.1f' | format(best_pick.edge * 100) }}% &middot;
-                                            <span style="color: #3FB950; font-family: 'Courier New', Courier, monospace; font-weight: 700;">+&pound;{{ '%.2f' | format(best_pick.pnl) }}</span>
+                                            <span style="color: #3FB950; font-family: 'Courier New', Courier, monospace; font-weight: 700;">+${{ '%.2f' | format(best_pick.pnl) }}</span>
                                         </p>
                                     </td>
                                 </tr>
@@ -247,7 +247,7 @@
                                             <span style="color: #58A6FF;">{{ worst_pick.selection }}</span>
                                             @ {{ '%.2f' | format(worst_pick.odds) }} &middot;
                                             Edge: +{{ '%.1f' | format(worst_pick.edge * 100) }}% &middot;
-                                            <span style="color: #F85149; font-family: 'Courier New', Courier, monospace; font-weight: 700;">-&pound;{{ '%.2f' | format(worst_pick.pnl | abs) }}</span>
+                                            <span style="color: #F85149; font-family: 'Courier New', Courier, monospace; font-weight: 700;">-${{ '%.2f' | format(worst_pick.pnl | abs) }}</span>
                                         </p>
                                     </td>
                                 </tr>

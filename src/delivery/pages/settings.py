@@ -339,7 +339,7 @@ else:
 
     # --- 1d: Starting Bankroll ---
     new_starting = st.number_input(
-        "Starting Bankroll (£)",
+        "Starting Bankroll ($)",
         min_value=50.0,
         max_value=100000.0,
         value=user_data["starting_bankroll"],
@@ -350,7 +350,7 @@ else:
     )
     if abs(new_starting - user_data["starting_bankroll"]) > 0.01:
         if save_user_setting(user_data["id"], "starting_bankroll", new_starting):
-            st.toast(f"Starting bankroll updated to £{new_starting:.2f}", icon="✅")
+            st.toast(f"Starting bankroll updated to ${new_starting:.2f}", icon="✅")
 
     st.divider()
 

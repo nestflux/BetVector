@@ -24,7 +24,7 @@
         .implied_prob - float: implied probability from odds (0-1)
         .edge         - float: edge percentage (0-1)
         .confidence   - str: "high" | "medium" | "low"
-        .stake        - float: suggested stake in £
+        .stake        - float: suggested stake in $
         .explanation  - str: one-sentence reasoning
       pick_count      - int: number of picks
       no_picks_msg    - str|None: message when no picks found
@@ -109,7 +109,7 @@
                                         +{{ '%.1f' | format(pick.edge * 100) }}%
                                     </td>
                                     <td style="padding: 10px; font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #E6EDF3; border-bottom: 1px solid #21262D; text-align: right;">
-                                        &pound;{{ '%.2f' | format(pick.stake) }}
+                                        ${{ '%.2f' | format(pick.stake) }}
                                     </td>
                                 </tr>
                                 <!-- Explanation row -->

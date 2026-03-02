@@ -765,7 +765,7 @@ def send_evening_review(user_id: int = 1) -> bool:
 
     # Format subject line
     pnl = data["daily_pnl"]
-    pnl_str = f"+£{pnl:.2f}" if pnl >= 0 else f"-£{abs(pnl):.2f}"
+    pnl_str = f"+${pnl:.2f}" if pnl >= 0 else f"-${abs(pnl):.2f}"
     wins = data["daily_wins"]
     total = data["daily_wins"] + data["daily_losses"]
 
@@ -830,7 +830,7 @@ def send_weekly_summary(user_id: int = 1) -> bool:
 
     # Format subject line
     weekly_pnl = data["weekly_pnl"]
-    pnl_str = f"+£{weekly_pnl:.2f}" if weekly_pnl >= 0 else f"-£{abs(weekly_pnl):.2f}"
+    pnl_str = f"+${weekly_pnl:.2f}" if weekly_pnl >= 0 else f"-${abs(weekly_pnl):.2f}"
     roi = data["weekly_roi"] * 100
 
     subject_tpl = config.email.schedule.weekly_summary.subject_template

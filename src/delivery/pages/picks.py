@@ -71,6 +71,14 @@ CONFIDENCE_COLOURS = {
     "low": "#484F58",     # Muted
 }
 
+# Bookmaker display names — clean up raw internal values
+BOOKMAKER_DISPLAY = {
+    "market_avg": "Market Avg",
+    "Bet365": "Bet365",
+    "Pinnacle": "Pinnacle",
+    "William Hill": "William Hill",
+}
+
 
 # ============================================================================
 # Data Loading
@@ -193,7 +201,7 @@ def get_suggested_stake(model_prob: float, odds: float) -> float:
     """Calculate a suggested stake for display purposes.
 
     Uses the default user's bankroll settings. Falls back to a simple
-    2% of £1000 if no user is configured.
+    2% of $1000 if no user is configured.
     """
     try:
         from src.betting.bankroll import BankrollManager
@@ -206,7 +214,7 @@ def get_suggested_stake(model_prob: float, odds: float) -> float:
     except Exception:
         pass
 
-    # Fallback: 2% of £1000
+    # Fallback: 2% of $1000
     return 20.00
 
 
@@ -245,11 +253,13 @@ def render_value_bet_card(vb: Dict, idx: int) -> None:
     confidence_badge = render_confidence_badge(vb["confidence"])
     suggested_stake = get_suggested_stake(vb["model_prob"], vb["bookmaker_odds"])
 
-    # Highlight FanDuel bookmaker if available
-    bookmaker_display = vb["bookmaker"]
-    is_fanduel = "fanduel" in vb["bookmaker"].lower()
+    # Clean bookmaker name for display — raw values like "market_avg"
+    # become "Market Avg", known bookmakers keep their proper names
+    bookmaker_raw = vb["bookmaker"]
+    bookmaker_display = BOOKMAKER_DISPLAY.get(bookmaker_raw, bookmaker_raw)
+    is_fanduel = "fanduel" in bookmaker_raw.lower()
     if is_fanduel:
-        bookmaker_display = f'<span style="color: #58A6FF; font-weight: 600;">{vb["bookmaker"]}</span>'
+        bookmaker_display = f'<span style="color: #58A6FF; font-weight: 600;">{bookmaker_display}</span>'
 
     # Edge colour
     edge_pct = vb["edge"] * 100
@@ -316,7 +326,7 @@ def render_value_bet_card(vb: Dict, idx: int) -> None:
             </div>
             <div>
                 <span style="font-size: 11px; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px;">Suggested Stake</span><br>
-                <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #E6EDF3;">&pound;{suggested_stake:.2f}</span>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #E6EDF3;">${suggested_stake:.2f}</span>
             </div>
         </div>
     </div>
@@ -336,7 +346,7 @@ def render_value_bet_card(vb: Dict, idx: int) -> None:
             )
         with col2:
             actual_stake = st.number_input(
-                "Actual stake (£)",
+                "Actual stake ($)",
                 min_value=0.01,
                 value=suggested_stake,
                 step=1.0,
@@ -362,7 +372,7 @@ def render_value_bet_card(vb: Dict, idx: int) -> None:
                             f"Bet logged (ID: {bet_id}). "
                             f"{vb['home_team']} vs {vb['away_team']} — "
                             f"{selection_label} @ {actual_odds:.2f}, "
-                            f"£{actual_stake:.2f} staked."
+                            f"${actual_stake:.2f} staked."
                         )
                     else:
                         st.warning("Bet may already be logged (duplicate).")
