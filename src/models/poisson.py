@@ -393,6 +393,14 @@ class PoissonModel(BaseModel):
             # reaching the opponent's penalty area.  High deep = dangerous
             # team that penetrates defences.
             f"{attack_prefix}deep_5",
+            # --- Set-piece xG breakdown (E22-01) ---
+            # set_piece_xg_5: rolling average set-piece xG.  Teams with tall
+            # squads or specialist set-piece takers produce consistently high
+            # values — a persistent attacking "skill" separate from open play.
+            f"{attack_prefix}set_piece_xg_5",
+            # open_play_xg_5: rolling average open-play xG.  Pure measure of
+            # live-ball attacking quality, independent of dead-ball situations.
+            f"{attack_prefix}open_play_xg_5",
         ]
 
         # Defensive features: how bad is the opponent at defending?

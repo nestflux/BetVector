@@ -405,6 +405,8 @@ def _read_existing_features(
         "ref_avg_fouls", "ref_avg_yellows", "ref_avg_goals", "ref_home_win_pct",
         # Fixture congestion features (E21-03)
         "days_since_last_match", "is_congested",
+        # Set-piece xG breakdown (E22-01)
+        "set_piece_xg_5", "open_play_xg_5",
     ]
 
     for col in feature_cols:

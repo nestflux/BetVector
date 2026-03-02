@@ -326,6 +326,14 @@ class MatchStat(Base):
     # Measures attacking penetration quality.  Source: Understat.
     deep = Column(Integer, nullable=True)
     deep_allowed = Column(Integer, nullable=True)
+    # Set-piece vs open-play xG breakdown (E22-01).
+    # Set-piece xG includes: SetPiece, FromCorner, DirectFreekick situations.
+    # Open-play xG includes: OpenPlay situations.
+    # The split matters because set-piece threat is more predictable and
+    # team-specific (tall squad, specialist taker) while open-play xG
+    # reflects general attacking quality.  Source: Understat shot-level data.
+    set_piece_xg = Column(Float, nullable=True)
+    open_play_xg = Column(Float, nullable=True)
     shots = Column(Integer, nullable=True)
     shots_on_target = Column(Integer, nullable=True)
     # Possession as a proportion (0.0–1.0), not percentage
@@ -522,6 +530,13 @@ class Feature(Base):
     # Measures attacking penetration quality beyond just shots/xG.
     deep_5 = Column(Float, nullable=True)
     deep_allowed_5 = Column(Float, nullable=True)
+    # Set-piece vs open-play xG averages (E22-01) — 5-match rolling window.
+    # Set-piece threat is more predictable than open-play quality — teams
+    # with tall squads and specialist set-piece takers consistently generate
+    # higher set-piece xG.  Separating the two helps the model identify
+    # set-piece-dependent teams vs open-play creators.
+    set_piece_xg_5 = Column(Float, nullable=True)
+    open_play_xg_5 = Column(Float, nullable=True)
 
     # --- Rolling features: 10-match window ---
     form_10 = Column(Float, nullable=True)

@@ -2297,7 +2297,7 @@ Add fixture congestion features — impact: 2-3% Brier improvement for European 
 
 **Type:** Backend — Scraper + Features
 **Depends on:** E14-01 (Understat scraper)
-**Status:** PENDING
+**Status:** COMPLETED ✅
 
 Break down xG by situation (open play vs set piece) using Understat shot-level data. Impact: 1-3% Brier improvement.
 
@@ -2313,11 +2313,11 @@ The `understatapi` library supports shot-level data with `situation` field (Open
 4. Add to Feature model, engineer.py, poisson.py
 
 **Acceptance Criteria:**
-- [ ] Shot-level data fetched from Understat with situation breakdown
-- [ ] `set_piece_xg` and `open_play_xg` stored on MatchStat
-- [ ] 5-match rolling features computed in rolling.py
-- [ ] Features added to engineer.py and poisson.py
-- [ ] Graceful degradation when shot data unavailable
+- [x] Shot-level data fetched from Understat with situation breakdown
+- [x] `set_piece_xg` and `open_play_xg` stored on MatchStat
+- [x] 5-match rolling features computed in rolling.py
+- [x] Features added to engineer.py and poisson.py
+- [x] Graceful degradation when shot data unavailable
 
 ---
 

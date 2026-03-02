@@ -1053,6 +1053,126 @@ def load_understat_stats(
 
 
 # ============================================================================
+# Understat Shot xG Loader (E22-01)
+# ============================================================================
+
+def load_understat_shot_xg(
+    df: pd.DataFrame,
+    league_id: int,
+) -> Dict[str, int]:
+    """Load set-piece and open-play xG breakdown onto existing MatchStat rows.
+
+    This backfills ``set_piece_xg`` and ``open_play_xg`` on MatchStat records
+    that already have basic xG data from Understat.  Shot-level xG is fetched
+    separately (per-match API call) and provides a granular breakdown of WHERE
+    the expected goals came from:
+
+    - **set_piece_xg** — xG from corners, free kicks, throw-in situations.
+      Teams with tall squads or specialist set-piece takers generate high
+      set-piece xG consistently.  This is a "skill" feature, not noise.
+    - **open_play_xg** — xG from open-play attacks.  Reflects general
+      attacking quality independent of dead-ball situations.
+
+    Separating the two helps the model identify set-piece-dependent teams
+    (e.g., Burnley) vs open-play creators (e.g., Manchester City).
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame from ``UnderstatScraper.fetch_shot_xg_for_season()`` with
+        columns: date, home_team, away_team, home_set_piece_xg,
+        away_set_piece_xg, home_open_play_xg, away_open_play_xg.
+    league_id : int
+        Database ID of the league.
+
+    Returns
+    -------
+    dict
+        Summary with keys: "updated", "skipped", "not_found".
+    """
+    if df.empty:
+        return {"updated": 0, "skipped": 0, "not_found": 0}
+
+    updated_count = 0
+    skipped_count = 0
+    not_found = 0
+
+    for _, row in df.iterrows():
+        with get_session() as session:
+            # Find the match in our DB
+            match = _find_match(
+                session, league_id, row["date"],
+                row["home_team"], row["away_team"],
+            )
+
+            if match is None:
+                not_found += 1
+                continue
+
+            # Find team IDs
+            home_team = session.query(Team).filter_by(
+                name=row["home_team"], league_id=league_id,
+            ).first()
+            away_team = session.query(Team).filter_by(
+                name=row["away_team"], league_id=league_id,
+            ).first()
+
+            if home_team is None or away_team is None:
+                not_found += 1
+                continue
+
+            # --- Update home team MatchStat ---
+            home_stat = session.query(MatchStat).filter_by(
+                match_id=match.id, team_id=home_team.id,
+            ).first()
+
+            if home_stat and home_stat.set_piece_xg is None:
+                home_stat.set_piece_xg = _safe_float(
+                    row.get("home_set_piece_xg"),
+                )
+                home_stat.open_play_xg = _safe_float(
+                    row.get("home_open_play_xg"),
+                )
+                updated_count += 1
+            elif home_stat and home_stat.set_piece_xg is not None:
+                skipped_count += 1
+            else:
+                # No MatchStat row exists — can't attach shot xG without
+                # base stats.  This is fine — shot xG is only available
+                # for matches that already have basic Understat data.
+                not_found += 1
+
+            # --- Update away team MatchStat ---
+            away_stat = session.query(MatchStat).filter_by(
+                match_id=match.id, team_id=away_team.id,
+            ).first()
+
+            if away_stat and away_stat.set_piece_xg is None:
+                away_stat.set_piece_xg = _safe_float(
+                    row.get("away_set_piece_xg"),
+                )
+                away_stat.open_play_xg = _safe_float(
+                    row.get("away_open_play_xg"),
+                )
+                updated_count += 1
+            elif away_stat and away_stat.set_piece_xg is not None:
+                skipped_count += 1
+            else:
+                not_found += 1
+
+    summary = {
+        "updated": updated_count,
+        "skipped": skipped_count,
+        "not_found": not_found,
+    }
+    logger.info(
+        "load_understat_shot_xg: %d updated, %d skipped, %d not found",
+        updated_count, skipped_count, not_found,
+    )
+    return summary
+
+
+# ============================================================================
 # Weather Loader
 # ============================================================================
 

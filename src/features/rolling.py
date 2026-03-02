@@ -306,6 +306,14 @@ def _get_recent_matches(
             # Measures attacking penetration quality beyond just shots/xG.
             "deep": stat.deep if stat else None,
             "deep_allowed": stat.deep_allowed if stat else None,
+            # --- Set-piece vs open-play xG breakdown (E22-01) ---
+            # set_piece_xg = xG from corners + free kicks + throw-ins.
+            # Teams with tall squads or specialist takers consistently produce
+            # high set-piece xG.  This is a "skill" feature, not random noise.
+            "set_piece_xg": stat.set_piece_xg if stat else None,
+            # open_play_xg = xG from live-ball attacks only.  Reflects general
+            # attacking quality independent of dead-ball situations.
+            "open_play_xg": stat.open_play_xg if stat else None,
         })
 
     return pd.DataFrame(rows)
@@ -345,6 +353,15 @@ def _compute_rolling_stats(
             f"ppda_allowed{suffix}": None,
             f"deep{suffix}": None,
             f"deep_allowed{suffix}": None,
+            # Set-piece xG breakdown — 5-match window only (E22-01)
+            **(
+                {
+                    f"set_piece_xg{suffix}": None,
+                    f"open_play_xg{suffix}": None,
+                }
+                if window == 5
+                else {}
+            ),
         }
 
     n = len(df)  # Actual matches available (may be < window)
@@ -398,7 +415,14 @@ def _compute_rolling_stats(
     deep = _safe_mean(df["deep"])
     deep_allowed = _safe_mean(df["deep_allowed"])
 
-    return {
+    # --- Set-piece vs open-play xG breakdown (E22-01) ---
+    # Only computed for the 5-match window — separating set-piece xG from
+    # open-play xG helps the model distinguish teams that rely on dead-ball
+    # situations (Burnley, Newcastle) from pure open-play creators (Man City).
+    set_piece_xg = _safe_mean(df["set_piece_xg"]) if window == 5 else None
+    open_play_xg = _safe_mean(df["open_play_xg"]) if window == 5 else None
+
+    result = {
         f"form{suffix}": form,
         f"goals_scored{suffix}": goals_scored,
         f"goals_conceded{suffix}": goals_conceded,
@@ -417,6 +441,13 @@ def _compute_rolling_stats(
         f"deep{suffix}": deep,
         f"deep_allowed{suffix}": deep_allowed,
     }
+
+    # Set-piece xG breakdown — 5-match window only (E22-01)
+    if window == 5:
+        result[f"set_piece_xg{suffix}"] = set_piece_xg
+        result[f"open_play_xg{suffix}"] = open_play_xg
+
+    return result
 
 
 def _compute_venue_stats(

@@ -575,6 +575,229 @@ class UnderstatScraper(BaseScraper):
                 return date_str[:10]
             return None
 
+    def fetch_shot_xg_for_match(
+        self,
+        understat_match_id: int,
+    ) -> Optional[Dict[str, Dict[str, float]]]:
+        """Fetch shot-level data for a match and aggregate xG by situation.
+
+        Uses ``understatapi.match(id).get_shot_data()`` which returns every
+        individual shot in the match, each tagged with a ``situation`` field:
+
+        - **OpenPlay**: Goals from open-play attacks (most common, ~75% of goals)
+        - **SetPiece**: Goals from set-piece situations (throw-ins, free kicks
+          played into the box, etc.)
+        - **FromCorner**: Goals from corner kicks (a subset of set pieces in
+          Understat's taxonomy — separated because corners are their own skill)
+        - **DirectFreekick**: Goals scored directly from free kicks (rare, ~2%)
+        - **Penalty**: Penalty kicks (~76% conversion regardless of team)
+
+        We aggregate into two categories:
+        - **set_piece_xg** = SetPiece + FromCorner + DirectFreekick
+          (all "dead-ball" situations where team composition matters)
+        - **open_play_xg** = OpenPlay xG only
+          (live-ball attacking quality, more predictive of future form)
+
+        Penalties are excluded from both categories — penalty xG is random
+        noise that doesn't reflect attacking quality.  NPxG already captures
+        this correction at the team level; here we split the non-penalty xG
+        into set-piece vs open-play for more granular features.
+
+        Parameters
+        ----------
+        understat_match_id : int
+            Understat's internal match ID (different from our DB match_id).
+
+        Returns
+        -------
+        dict or None
+            ``{"home": {"set_piece_xg": 0.3, "open_play_xg": 1.2},
+               "away": {"set_piece_xg": 0.1, "open_play_xg": 0.8}}``
+            Returns None if the API call fails or no shot data is available.
+        """
+        try:
+            from understatapi import UnderstatClient
+
+            client = UnderstatClient()
+            self.rate_limiter.wait("understat.com")
+            shot_data = client.match(match=str(understat_match_id)).get_shot_data()
+
+        except ImportError:
+            logger.warning(
+                "[understat] understatapi not installed — "
+                "cannot fetch shot data"
+            )
+            return None
+        except Exception as e:
+            logger.warning(
+                "[understat] Failed to fetch shot data for match %d: %s",
+                understat_match_id, e,
+            )
+            return None
+
+        if not shot_data:
+            return None
+
+        # shot_data is a dict with keys 'h' (home shots) and 'a' (away shots)
+        # Each value is a list of shot dicts with fields:
+        #   xG (str/float), situation (str), player, minute, result, etc.
+        result: Dict[str, Dict[str, float]] = {}
+
+        for side, label in [("h", "home"), ("a", "away")]:
+            shots = shot_data.get(side, [])
+            if not isinstance(shots, list):
+                shots = []
+
+            set_piece_xg = 0.0
+            open_play_xg = 0.0
+
+            for shot in shots:
+                xg_val = self._safe_float(shot.get("xG", 0))
+                if xg_val is None:
+                    continue
+
+                situation = str(shot.get("situation", "")).strip()
+
+                # Categorize by situation type
+                if situation in ("SetPiece", "FromCorner", "DirectFreekick"):
+                    # Dead-ball situations — team composition and training matter
+                    set_piece_xg += xg_val
+                elif situation == "OpenPlay":
+                    # Live-ball attacking — reflects general attacking quality
+                    open_play_xg += xg_val
+                # "Penalty" is excluded — random noise (~76% conversion)
+                # Any unknown situation is also excluded to be safe
+
+            result[label] = {
+                "set_piece_xg": round(set_piece_xg, 4),
+                "open_play_xg": round(open_play_xg, 4),
+            }
+
+        return result
+
+    def fetch_shot_xg_for_season(
+        self,
+        league_config: object,
+        season: str,
+    ) -> pd.DataFrame:
+        """Fetch shot-level xG breakdown for all matches in a league-season.
+
+        This method first calls ``get_match_data()`` to get Understat match IDs
+        for the season, then fetches shot-level data for each finished match
+        and aggregates set-piece vs open-play xG.
+
+        Parameters
+        ----------
+        league_config : ConfigNamespace
+            League config with ``understat_league`` attribute.
+        season : str
+            Season string, e.g. ``"2025-26"``.
+
+        Returns
+        -------
+        pd.DataFrame
+            Columns: date, home_team, away_team, home_set_piece_xg,
+            away_set_piece_xg, home_open_play_xg, away_open_play_xg.
+            Empty DataFrame if scraping fails.
+        """
+        understat_league = getattr(league_config, "understat_league", None)
+        if understat_league is None:
+            return pd.DataFrame()
+
+        api_season = self._convert_season(season)
+        league_name = getattr(league_config, "short_name", "unknown")
+
+        logger.info(
+            "[understat] Fetching shot-level xG breakdown for %s %s",
+            league_name, season,
+        )
+
+        try:
+            from understatapi import UnderstatClient
+
+            client = UnderstatClient()
+            self.rate_limiter.wait("understat.com")
+            match_data = client.league(league=understat_league).get_match_data(
+                season=str(api_season),
+            )
+        except ImportError:
+            logger.warning("[understat] understatapi not installed")
+            return pd.DataFrame()
+        except Exception as e:
+            logger.error("[understat] Failed to fetch match list: %s", e)
+            return pd.DataFrame()
+
+        if not match_data:
+            return pd.DataFrame()
+
+        # Filter to finished matches only (is_result=True means finished)
+        finished = [m for m in match_data if m.get("isResult", False)]
+
+        logger.info(
+            "[understat] %d finished matches to process for shot xG",
+            len(finished),
+        )
+
+        rows: List[Dict[str, Any]] = []
+        fetched = 0
+        failed = 0
+
+        for i, match in enumerate(finished):
+            try:
+                understat_id = int(match.get("id", 0))
+                if understat_id == 0:
+                    continue
+
+                date_str = self._parse_date(str(match.get("datetime", "")))
+                if date_str is None:
+                    continue
+
+                home_api_name = match.get("h", {}).get("title", "")
+                away_api_name = match.get("a", {}).get("title", "")
+                home_name = self._map_team_name(home_api_name)
+                away_name = self._map_team_name(away_api_name)
+
+                # Fetch shot-level data for this match
+                shot_xg = self.fetch_shot_xg_for_match(understat_id)
+
+                if shot_xg is None:
+                    failed += 1
+                    continue
+
+                rows.append({
+                    "date": date_str,
+                    "home_team": home_name,
+                    "away_team": away_name,
+                    "home_set_piece_xg": shot_xg["home"]["set_piece_xg"],
+                    "away_set_piece_xg": shot_xg["away"]["set_piece_xg"],
+                    "home_open_play_xg": shot_xg["home"]["open_play_xg"],
+                    "away_open_play_xg": shot_xg["away"]["open_play_xg"],
+                })
+                fetched += 1
+
+                if (i + 1) % 25 == 0:
+                    logger.info(
+                        "[understat] Shot xG progress: %d/%d matches "
+                        "(%d fetched, %d failed)",
+                        i + 1, len(finished), fetched, failed,
+                    )
+
+            except Exception as e:
+                logger.warning(
+                    "[understat] Error processing match for shot xG: %s", e,
+                )
+                failed += 1
+
+        logger.info(
+            "[understat] Shot xG complete: %d fetched, %d failed out of %d",
+            fetched, failed, len(finished),
+        )
+
+        if not rows:
+            return pd.DataFrame()
+
+        return pd.DataFrame(rows)
+
     @staticmethod
     def _safe_float(value) -> Optional[float]:
         """Safely convert a value to float."""
