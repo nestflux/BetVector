@@ -317,7 +317,7 @@ def render_value_bet_card(vb: Dict, idx: int) -> None:
                 <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #E6EDF3;">{vb["model_prob"]:.1%}</span>
             </div>
             <div>
-                <span style="font-size: 11px; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px;">Odds ({bookmaker_display})</span><br>
+                <span style="font-size: 11px; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px;">Odds</span><br>
                 <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #E6EDF3;">{vb["bookmaker_odds"]:.2f}</span>
             </div>
             <div>
