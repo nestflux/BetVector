@@ -420,6 +420,18 @@ class PoissonModel(BaseModel):
             # Heavy weather (rain >2mm or wind >30km/h) reduces scoring rates
             # on average — wet pitch and unpredictable long balls.
             f"{attack_prefix}is_heavy_weather",
+            # --- Market-implied features (E20-01, E20-02) ---
+            # Pinnacle implied probabilities: the market's best estimate of
+            # each outcome.  Overround-removed so they sum to 1.0.
+            # For home goals model: high home_prob → more home goals expected.
+            # For away goals model: high away_prob → more away goals expected.
+            f"{attack_prefix}pinnacle_home_prob",
+            f"{attack_prefix}pinnacle_draw_prob",
+            f"{attack_prefix}pinnacle_away_prob",
+            # Asian Handicap line: the sharpest market-implied strength
+            # difference.  AH = -1.5 means market expects home to win by ~1.5.
+            # Negative = stronger team, positive = weaker team.
+            f"{attack_prefix}ah_line",
         ]
 
         # Only include columns that exist in the DataFrame

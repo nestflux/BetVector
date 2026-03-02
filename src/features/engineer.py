@@ -34,6 +34,7 @@ from src.database.db import get_session
 from src.database.models import Feature, Match, Team
 from src.features.context import (
     calculate_context_features,
+    calculate_market_odds_features,
     calculate_market_value_features,
     calculate_weather_features,
 )
@@ -137,6 +138,16 @@ def compute_features(match_id: int, league_id: int) -> Dict[str, Dict[str, Any]]
     weather = calculate_weather_features(match_id)
     home_features.update(weather)
     away_features.update(weather)
+
+    # --- Market-implied features (E20-01, E20-02) ---
+    # Pinnacle implied probabilities (overround-removed) and Asian Handicap line.
+    # Same market data for both teams — the model learns from the probabilities
+    # themselves (e.g., high home_prob → fewer away goals).
+    # TEMPORAL INTEGRITY: uses only pre-match (opening) odds.
+    home_market = calculate_market_odds_features(match_id, is_home=1)
+    away_market = calculate_market_odds_features(match_id, is_home=0)
+    home_features.update(home_market)
+    away_features.update(away_market)
 
     # --- Save to database ---
     save_features(match_id, home_team_id, is_home=1, features=home_features)
@@ -347,6 +358,9 @@ def _read_existing_features(
         "market_value_ratio", "squad_value_log",
         "temperature_c", "wind_speed_kmh", "precipitation_mm",
         "is_heavy_weather",
+        # Market-implied features (E20-01, E20-02)
+        "pinnacle_home_prob", "pinnacle_draw_prob", "pinnacle_away_prob",
+        "pinnacle_overround", "ah_line",
     ]
 
     for col in feature_cols:

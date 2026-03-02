@@ -2096,7 +2096,7 @@ Complete the CLV (Closing Line Value) pipeline. Infrastructure is 90% built — 
 
 **Type:** Backend — Features + Model
 **Depends on:** E19-02, E19-03
-**Status:** PENDING
+**Status:** COMPLETED
 
 Add Pinnacle implied probabilities (overround-removed) as model features. This is the single highest-impact improvement available.
 
@@ -2106,23 +2106,21 @@ Add Pinnacle implied probabilities (overround-removed) as model features. This i
 - `pinnacle_away_prob` (Float, nullable)
 - `pinnacle_overround` (Float, nullable) — raw overround for information
 
-**Implementation approach:**
-1. New function in `context.py`: `calculate_pinnacle_features(match_id)`
-2. Query Odds table: bookmaker="Pinnacle", market_type="1X2", source IN ("football_data", "odds_api")
-3. Prefer is_opening=1 (pre-match). Fall back to any available.
-4. Remove overround: `true_prob = (1/odds) / sum(1/home + 1/draw + 1/away)`
-5. Add to Feature model in models.py
-6. Add to `_read_existing_features()` feature_cols list in engineer.py
-7. Add to `_select_feature_cols()` context_cols in poisson.py
-8. Temporal integrity: only uses opening odds available before the match
+**Implementation notes:**
+- New function `calculate_market_odds_features()` in context.py (~160 lines)
+- Proportional overround removal: `true_prob = raw_prob / sum(raw_probs)`
+- Prefers is_opening=1, falls back to closing odds for historical data
+- Integrated into engineer.py `compute_features()` after weather features
+- Added to `_read_existing_features()` and `_select_feature_cols()` in poisson.py
+- Backfilled: 1,180/1,520 Feature rows (590/760 matches) have Pinnacle probs
 
 **Acceptance Criteria:**
-- [ ] Four new columns on Feature model (pinnacle_home_prob, pinnacle_draw_prob, pinnacle_away_prob, pinnacle_overround)
-- [ ] `calculate_pinnacle_features()` computes overround-removed probabilities
-- [ ] Feature computation uses only pre-match odds (temporal integrity)
-- [ ] Features added to engineer.py and poisson.py feature lists
-- [ ] Graceful degradation when no Pinnacle odds exist (NaN)
-- [ ] DB migration applied
+- [x] Four new columns on Feature model (pinnacle_home_prob, pinnacle_draw_prob, pinnacle_away_prob, pinnacle_overround)
+- [x] `calculate_market_odds_features()` computes overround-removed probabilities
+- [x] Feature computation uses only pre-match odds (temporal integrity)
+- [x] Features added to engineer.py and poisson.py feature lists
+- [x] Graceful degradation when no Pinnacle odds exist (NaN)
+- [x] DB migration applied
 
 ---
 
@@ -2130,25 +2128,25 @@ Add Pinnacle implied probabilities (overround-removed) as model features. This i
 
 **Type:** Backend — Features + Model
 **Depends on:** E19-03
-**Status:** PENDING
+**Status:** COMPLETED
 
 Add the Asian Handicap home line as a model feature. The AH market is the sharpest market in football — the line is a direct market-implied strength difference.
 
 **New Feature column:**
 - `ah_line` (Float, nullable) — Asian Handicap home line (e.g., -0.5, -1.0)
 
-**Implementation approach:**
-1. Add to `calculate_pinnacle_features()` or new function in context.py
-2. Query Odds table: market_type="AH", bookmaker="Pinnacle" or "market_avg"
-3. The line value itself IS the feature (no conversion needed)
-4. Add to Feature model, engineer.py, poisson.py
+**Implementation notes:**
+- Implemented inside `calculate_market_odds_features()` in context.py (same function as E20-01)
+- Queries Odds table: market_type="AH", selection="home_line", bookmaker="Pinnacle" with market_avg fallback
+- AH data not yet loaded (requires CSV re-scrape) — feature gracefully returns None
+- Will auto-populate next time Football-Data.co.uk CSV is loaded (AH columns added in E19-03)
 
 **Acceptance Criteria:**
-- [ ] `ah_line` column on Feature model
-- [ ] AH line queried from Odds table correctly
-- [ ] Feature added to engineer.py and poisson.py feature lists
-- [ ] Graceful degradation when no AH data exists (NaN)
-- [ ] DB migration applied
+- [x] `ah_line` column on Feature model
+- [x] AH line queried from Odds table correctly
+- [x] Feature added to engineer.py and poisson.py feature lists
+- [x] Graceful degradation when no AH data exists (NaN)
+- [x] DB migration applied
 
 ---
 

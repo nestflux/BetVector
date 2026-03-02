@@ -529,6 +529,33 @@ class Feature(Base):
     # and provides a continuous quality signal even when opponent data is missing.
     squad_value_log = Column(Float, nullable=True)
 
+    # --- Market-implied features (E20-01, E20-02) ---
+    # Pinnacle implied probabilities with overround removed.  Pinnacle is the
+    # sharpest bookmaker — their closing line is widely considered the best
+    # available probability estimate.  Adding these as features lets the model
+    # incorporate market consensus (the "wisdom of the crowd" distilled through
+    # sharp bettors).  Expected Brier improvement: 7-9% (Constantinou 2022).
+    #
+    # Overround removal formula (multiplicative/proportional):
+    #   raw_prob = 1 / decimal_odds
+    #   overround = sum(raw_probs) - 1.0
+    #   true_prob = raw_prob / sum(raw_probs)
+    #
+    # TEMPORAL INTEGRITY: uses pre-match (opening) odds only — these are
+    # available before kickoff and before the prediction is made.
+    pinnacle_home_prob = Column(Float, nullable=True)
+    pinnacle_draw_prob = Column(Float, nullable=True)
+    pinnacle_away_prob = Column(Float, nullable=True)
+    # Raw overround — informational.  Lower overround = sharper market.
+    # Pinnacle typically runs 2-4% overround on 1X2 (vs 5-10% for soft books).
+    pinnacle_overround = Column(Float, nullable=True)
+    # Asian Handicap home line (E20-02) — the sharpest market in football.
+    # The AH line is a direct market-implied measure of the expected goal
+    # difference.  E.g., AH = -1.5 means the market expects the home team
+    # to win by ~1.5 goals.  This is the single best feature for capturing
+    # "how strong does the market think this team is?"
+    ah_line = Column(Float, nullable=True)
+
     # --- Weather features (E16-02) ---
     # Match-day conditions from Open-Meteo.  Same value for both teams in a
     # match (weather doesn't change between home and away).

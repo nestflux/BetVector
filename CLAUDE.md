@@ -160,11 +160,12 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E19-04 (CLV Tracking Pipeline)
-Currently working: E20-01 (Pinnacle Opening Odds as Features)
-Next up: E20-02 (Asian Handicap Line as Feature)
+Last completed: E20-02 (Asian Handicap Line as Feature)
+Currently working: E20-03 (Backtest Market-Augmented vs Base Poisson)
+Next up: E21-01 (ClubElo Scraper + Elo Features)
 
-E19 complete: All 4 issues done ✅ (E19-01 → E19-02 → E19-03 → E19-04)
+E19 complete: All 4 issues done ✅
+E20 progress: 2 of 3 issues complete (E20-01 + E20-02 implemented together, E20-03 pending)
 Total issues: 77 (45 original + 20 post-launch + 12 odds/model improvement)
 
 ---
