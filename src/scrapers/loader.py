@@ -123,14 +123,23 @@ def load_matches(
             ).first()
 
             if existing:
+                # Backfill kickoff_time on existing matches if we now have it
+                # and the stored value is NULL (fixes "TBD" display issue)
+                kickoff = row.get("kickoff_time")
+                if kickoff and pd.notna(kickoff) and not existing.kickoff_time:
+                    existing.kickoff_time = str(kickoff)
                 skipped_count += 1
                 continue
 
-            # Insert new match
+            # Insert new match — include kickoff_time if available
+            kickoff = row.get("kickoff_time")
+            kickoff_str = str(kickoff) if kickoff and pd.notna(kickoff) else None
+
             match = Match(
                 league_id=league_id,
                 season=season,
                 date=row["date"],
+                kickoff_time=kickoff_str,
                 home_team_id=home_team.id,
                 away_team_id=away_team.id,
                 home_goals=_safe_int(row.get("home_goals")),
@@ -644,6 +653,12 @@ def update_match_results(
             match.home_ht_goals = _safe_int(row.get("home_ht_goals"))
             match.away_ht_goals = _safe_int(row.get("away_ht_goals"))
             match.status = "finished"
+
+            # Backfill kickoff_time if we have it and it's currently NULL
+            kickoff = row.get("kickoff_time")
+            if kickoff and pd.notna(kickoff) and not match.kickoff_time:
+                match.kickoff_time = str(kickoff)
+
             updated += 1
 
     summary = {"updated": updated, "skipped": skipped, "not_found": not_found}

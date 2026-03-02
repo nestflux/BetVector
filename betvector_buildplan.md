@@ -31,8 +31,9 @@ This document breaks the BetVector masterplan into sequenced epics and issues th
 | E15 | Data Freshness & Feature Expansion | 3 | Football-Data.org API scraper, Understat expansion, Transfermarkt datasets |
 | E16 | Advanced Feature Engineering | 3 | Rolling advanced stats (NPxG, PPDA, deep), market value & weather features, recomputation & validation |
 | E17 | Dashboard Feature Surfacing | 4 | Match Deep Dive enhancements, Today's Picks indicators, League Explorer NPxG rankings, Fixtures page |
+| E18 | Match Narrative & Data Quality | 2 | Algorithmic match analysis narrative, kickoff time fix |
 
-**Total: 17 epics, 59 issues** (45 original + 14 post-launch)
+**Total: 18 epics, 61 issues** (45 original + 16 post-launch)
 
 ---
 
@@ -1780,3 +1781,67 @@ New page showing all upcoming scheduled matches with value picks highlighted.
 - [x] Days ahead slider controls time window
 - [x] Empty state handled
 - [x] Design system compliance
+
+---
+
+## Epic 18 — Match Narrative & Data Quality
+
+### E18-01 — Match Analysis Narrative
+
+**Type:** Feature — Analysis + Dashboard
+**Depends on:** E9-05, E4-03
+**Master Plan:** MP §3 Flow 2, MP §5 Model Output, MP §8 Design System
+**Status:** COMPLETED
+
+Algorithmic narrative module that synthesises raw model output and feature data into a plain-English "Match Analysis" card on the Deep Dive page. Explains WHY the model predicts what it predicts — not just the numbers.
+
+**Implementation Notes:**
+- Created `src/analysis/__init__.py` and `src/analysis/narrative.py` (~500 lines)
+- Pure Python module — no Streamlit imports, fully testable and reusable for email templates
+- `generate_match_narrative()` takes the `data` dict from `load_match_data()`, returns `MatchNarrative` dataclass
+- **Headline**: "Model strongly favours Arsenal (68%)" with colour coding (green ≥65%, yellow 55-65%, white <55%)
+- **Expected Goals**: Lambda values from Poisson model
+- **Key Factors** (top 6 from 8 generators, ranked by significance 0.0–1.0):
+  - Form (PPG gap), xG quality, Venue advantage, H2H record, Squad value ratio, Pressing (PPDA), Weather, Rest days
+  - Each factor has min signal threshold, max significance cap, and directional icon (▲/▼/—)
+  - Factors below 0.15 significance filtered out automatically
+- **Value Summary**: "2 value bets found. Best: Home Win +7.4% edge." or "No value bets — model broadly agrees with bookmaker odds."
+- **Result Comparison** (finished matches): Correct/incorrect prediction with green/red colouring
+- Rendered in `match_detail.py` as dark `bv-card` with coloured left border, inserted between weather badge and scoreline matrix
+- Graceful degradation: missing predictions, features, or data all handled with appropriate empty states
+
+**Acceptance Criteria:**
+- [x] New `src/analysis/narrative.py` created with `generate_match_narrative()` function
+- [x] Returns `MatchNarrative` dataclass with headline, factors, value summary, result
+- [x] 8 factor generators with significance ranking and filtering
+- [x] Narrative rendered on Match Deep Dive page in design-system-compliant card
+- [x] Graceful degradation for missing data (no prediction, no features, partial data)
+- [x] Pure Python module with no Streamlit imports (testable and reusable)
+- [x] Integration test passes with correct factor ranking
+
+---
+
+### E18-02 — Kickoff Time Fix
+
+**Type:** Bug Fix — Data Quality
+**Depends on:** E15-01
+**Master Plan:** MP §3 Flow 4
+**Status:** COMPLETED
+
+All fixtures showed "TBD" for kickoff times because the Football-Data.org API provides timestamps (`utcDate: "2025-08-16T14:00:00Z"`) but the scraper discarded the time component.
+
+**Implementation Notes:**
+- Added `_parse_kickoff_time()` static method to `FootballDataOrgScraper` in `football_data_org.py`
+- Extracts time from ISO 8601 `utcDate` string, returns "HH:MM" format (e.g., "15:00")
+- Returns `None` for midnight timestamps (00:00 = time unknown) and invalid formats
+- Updated `load_matches()` in `loader.py` to set `kickoff_time` on new matches
+- Added backfill logic: existing matches with NULL kickoff_time get updated when scraper re-runs
+- `update_match_results()` also backfills kickoff_time during result updates
+- Backfill happens automatically on next GitHub Actions pipeline run
+
+**Acceptance Criteria:**
+- [x] `_parse_kickoff_time()` correctly parses "2025-08-16T14:00:00Z" → "14:00"
+- [x] Returns None for midnight (00:00) and invalid timestamps
+- [x] New matches get kickoff_time on initial load
+- [x] Existing matches with NULL kickoff_time get backfilled on re-scrape
+- [x] No breaking changes to existing scraper functionality

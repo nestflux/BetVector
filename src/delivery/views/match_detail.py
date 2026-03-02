@@ -25,6 +25,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from sqlalchemy.orm import aliased
 
+from src.analysis.narrative import generate_match_narrative
 from src.database.db import get_session
 from src.database.models import (
     Feature,
@@ -320,6 +321,147 @@ def create_scoreline_heatmap(matrix: List[List[float]], home_team: str, away_tea
 
 
 # ============================================================================
+# Match Analysis Narrative Rendering (E18-01)
+# ============================================================================
+
+# Direction indicators — simple text arrows to keep the design clean
+_DIRECTION_ICONS = {
+    "positive": "▲",
+    "negative": "▼",
+    "neutral": "—",
+}
+
+
+def render_match_narrative(data: dict) -> None:
+    """Render the Match Analysis narrative card.
+
+    Calls the narrative generator to synthesise feature data into a
+    human-readable explanation, then renders it as a styled card.
+    Shows headline, expected goals, ranked factors, value summary,
+    and result comparison (for finished matches).
+    """
+    narrative = generate_match_narrative(data)
+
+    if narrative is None:
+        st.markdown(
+            '<div class="bv-empty-state">'
+            'No model prediction available for this match yet.'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    # Map colour names to hex design tokens
+    colour_map = {
+        "green": COLOURS["green"],
+        "yellow": COLOURS["yellow"],
+        "text": COLOURS["text"],
+    }
+    headline_hex = colour_map.get(narrative.headline_colour, COLOURS["text"])
+
+    # --- Build the card HTML ---
+
+    # Headline + expected goals
+    header_html = (
+        f'<div style="font-family: Inter, sans-serif; font-size: 18px; '
+        f'font-weight: 700; color: {headline_hex}; margin-bottom: 4px;">'
+        f'{narrative.headline}</div>'
+        f'<div style="font-family: Inter, sans-serif; font-size: 13px; '
+        f'color: {COLOURS["text_secondary"]}; margin-bottom: 16px;">'
+        f'Expected goals: '
+        f'<span style="font-family: JetBrains Mono, monospace; '
+        f'color: {COLOURS["text"]};">{narrative.predicted_home_goals:.2f}</span>'
+        f' - '
+        f'<span style="font-family: JetBrains Mono, monospace; '
+        f'color: {COLOURS["text"]};">{narrative.predicted_away_goals:.2f}</span>'
+        f'</div>'
+    )
+
+    # Factors section
+    factors_html = ""
+    if narrative.factors:
+        factors_html = (
+            f'<div style="font-family: Inter, sans-serif; font-size: 12px; '
+            f'color: {COLOURS["text_secondary"]}; text-transform: uppercase; '
+            f'letter-spacing: 0.5px; margin-bottom: 8px;">KEY FACTORS</div>'
+        )
+        for factor in narrative.factors:
+            icon = _DIRECTION_ICONS.get(factor.direction, "—")
+            if factor.direction == "positive":
+                icon_colour = COLOURS["green"]
+            elif factor.direction == "negative":
+                icon_colour = COLOURS["red"]
+            else:
+                icon_colour = COLOURS["text_secondary"]
+
+            factors_html += (
+                f'<div style="display: flex; align-items: flex-start; gap: 10px; '
+                f'padding: 6px 0; border-bottom: 1px solid {COLOURS["border"]};">'
+                f'<span style="color: {icon_colour}; font-size: 14px; '
+                f'min-width: 18px; font-family: JetBrains Mono, monospace;">'
+                f'{icon}</span>'
+                f'<div>'
+                f'<span style="font-family: Inter, sans-serif; font-size: 14px; '
+                f'color: {COLOURS["text"]};">{factor.headline}</span><br>'
+                f'<span style="font-family: Inter, sans-serif; font-size: 12px; '
+                f'color: {COLOURS["text_secondary"]};">{factor.detail}</span>'
+                f'</div>'
+                f'</div>'
+            )
+
+    # Value summary
+    value_html = ""
+    if narrative.value_summary:
+        vs = narrative.value_summary
+        value_border = COLOURS["green"] if vs.has_value_bets else COLOURS["border"]
+        value_html = (
+            f'<div style="margin-top: 16px; padding: 10px 12px; border-radius: 6px; '
+            f'background-color: {COLOURS["bg"]}; border: 1px solid {value_border};">'
+            f'<span style="font-family: Inter, sans-serif; font-size: 12px; '
+            f'color: {COLOURS["text_secondary"]}; text-transform: uppercase; '
+            f'letter-spacing: 0.5px;">VALUE</span><br>'
+            f'<span style="font-family: Inter, sans-serif; font-size: 13px; '
+            f'color: {COLOURS["text"]};">{vs.summary_text}</span>'
+            f'</div>'
+        )
+
+    # Result comparison (finished matches only)
+    result_html = ""
+    if narrative.result:
+        r = narrative.result
+        if r.predicted_correct_1x2:
+            result_colour = COLOURS["green"]
+            result_bg = "#0d2818"
+        else:
+            result_colour = COLOURS["red"]
+            result_bg = "#2d0f0f"
+
+        result_html = (
+            f'<div style="margin-top: 12px; padding: 10px 12px; border-radius: 6px; '
+            f'background-color: {result_bg}; border: 1px solid {result_colour};">'
+            f'<span style="font-family: Inter, sans-serif; font-size: 14px; '
+            f'font-weight: 600; color: {result_colour};">'
+            f'{r.result_text}</span>'
+            f'</div>'
+        )
+
+    # Assemble the full card
+    st.markdown(
+        '<div class="bv-section-header">Match Analysis</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f'<div class="bv-card" style="border-left: 3px solid {headline_hex};">'
+        f'{header_html}'
+        f'{factors_html}'
+        f'{value_html}'
+        f'{result_html}'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+
+# ============================================================================
 # Page Layout
 # ============================================================================
 
@@ -460,6 +602,13 @@ else:
                 f'<div style="text-align: center; margin-bottom: 16px;">{"".join(badges)}</div>',
                 unsafe_allow_html=True,
             )
+
+    st.divider()
+
+    # --- Section 1b: Match Analysis Narrative (E18-01) ---
+    # Synthesises model predictions and feature data into a plain-English
+    # explanation of why the model predicts what it predicts.
+    render_match_narrative(data)
 
     st.divider()
 

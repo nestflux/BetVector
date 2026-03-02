@@ -160,9 +160,9 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E17-04 (Fixtures Page)
-Currently working: ALL 59 ISSUES COMPLETE (45 original + 14 post-launch)
-Next up: XGBoost Model (E18)
+Last completed: E18-02 (Kickoff Time Fix)
+Currently working: ALL 61 ISSUES COMPLETE (45 original + 16 post-launch)
+Next up: XGBoost Model (E19)
 
 ---
 

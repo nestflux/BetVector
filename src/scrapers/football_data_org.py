@@ -350,9 +350,11 @@ class FootballDataOrgScraper(BaseScraper):
                 # Skip in-play, cancelled, suspended, awarded matches
                 return None
 
-            # Parse date from ISO 8601 UTC datetime
+            # Parse date and kickoff time from ISO 8601 UTC datetime
+            # e.g. "2025-08-16T14:00:00Z" → date="2025-08-16", kickoff="14:00"
             utc_date = match.get("utcDate", "")
             match_date = self._parse_date(utc_date)
+            kickoff_time = self._parse_kickoff_time(utc_date)
             if match_date is None:
                 logger.warning(
                     "[%s] Could not parse date '%s' — skipping match",
@@ -382,6 +384,7 @@ class FootballDataOrgScraper(BaseScraper):
 
             return {
                 "date": match_date,
+                "kickoff_time": kickoff_time,
                 "home_team": home_name,
                 "away_team": away_name,
                 "home_goals": home_goals,
@@ -467,4 +470,25 @@ class FootballDataOrgScraper(BaseScraper):
             # Fallback: try to extract the first 10 characters as YYYY-MM-DD
             if len(utc_date) >= 10:
                 return utc_date[:10]
+            return None
+
+    @staticmethod
+    def _parse_kickoff_time(utc_date: str) -> Optional[str]:
+        """Extract kickoff time (``HH:MM``) from an ISO 8601 UTC datetime.
+
+        The API returns timestamps like ``"2025-08-16T14:00:00Z"``
+        from which we extract ``"14:00"`` as the kickoff time (UTC).
+        Returns None if the timestamp doesn't contain a time component
+        or if the time is midnight (which usually means "time not set").
+        """
+        if not utc_date or "T" not in utc_date:
+            return None
+        try:
+            dt = datetime.fromisoformat(utc_date.replace("Z", "+00:00"))
+            # Midnight usually means the API hasn't set the actual kickoff
+            # time yet — the match isn't really at 00:00 UTC
+            if dt.hour == 0 and dt.minute == 0:
+                return None
+            return dt.strftime("%H:%M")
+        except (ValueError, AttributeError):
             return None
