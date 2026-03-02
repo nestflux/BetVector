@@ -428,14 +428,15 @@ else:
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         # Custom HTML for coloured P&L metric
-        st.markdown(f"""
-        <div>
-            <span style="font-family: 'Inter', sans-serif; font-size: 12px; color: #8B949E;
-                         text-transform: uppercase; letter-spacing: 0.5px;">Total P&L</span><br>
-            <span style="font-family: 'JetBrains Mono', monospace; font-size: 28px; font-weight: 700;
-                         color: {pnl_colour};">{pnl_sign}${abs(metrics['total_pnl']):.2f}</span>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(
+            f'<div>'
+            f'<span style="font-family: \'Inter\', sans-serif; font-size: 12px; color: #8B949E; '
+            f'text-transform: uppercase; letter-spacing: 0.5px;">Total P&L</span><br>'
+            f'<span style="font-family: \'JetBrains Mono\', monospace; font-size: 28px; font-weight: 700; '
+            f'color: {pnl_colour};">{pnl_sign}${abs(metrics["total_pnl"]):.2f}</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
     with col2:
         st.metric("ROI", f"{metrics['roi_pct']:+.1f}%")
     with col3:

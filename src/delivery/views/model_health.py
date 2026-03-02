@@ -729,14 +729,15 @@ if live_data:
 
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.markdown(f"""
-        <div>
-            <span style="font-family: 'Inter', sans-serif; font-size: 12px; color: #8B949E;
-                         text-transform: uppercase; letter-spacing: 0.5px;">Brier Score</span><br>
-            <span style="font-family: 'JetBrains Mono', monospace; font-size: 28px; font-weight: 700;
-                         color: {brier_colour};">{live_data['overall_brier']:.4f}</span>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(
+            f'<div>'
+            f'<span style="font-family: \'Inter\', sans-serif; font-size: 12px; color: #8B949E; '
+            f'text-transform: uppercase; letter-spacing: 0.5px;">Brier Score</span><br>'
+            f'<span style="font-family: \'JetBrains Mono\', monospace; font-size: 28px; font-weight: 700; '
+            f'color: {brier_colour};">{live_data["overall_brier"]:.4f}</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
     with col2:
         st.metric("Total Predictions", f"{live_data['total_predictions']:,}")
     with col3:
@@ -754,14 +755,15 @@ if live_data:
             quality = "Poor"
             q_colour = COLOURS["red"]
 
-        st.markdown(f"""
-        <div>
-            <span style="font-family: 'Inter', sans-serif; font-size: 12px; color: #8B949E;
-                         text-transform: uppercase; letter-spacing: 0.5px;">Model Quality</span><br>
-            <span style="font-family: 'JetBrains Mono', monospace; font-size: 28px; font-weight: 700;
-                         color: {q_colour};">{quality}</span>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(
+            f'<div>'
+            f'<span style="font-family: \'Inter\', sans-serif; font-size: 12px; color: #8B949E; '
+            f'text-transform: uppercase; letter-spacing: 0.5px;">Model Quality</span><br>'
+            f'<span style="font-family: \'JetBrains Mono\', monospace; font-size: 28px; font-weight: 700; '
+            f'color: {q_colour};">{quality}</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
 
     st.divider()
 

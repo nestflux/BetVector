@@ -401,18 +401,17 @@ else:
             f'{data["home_goals"]} - {data["away_goals"]}</span>'
         )
 
-    st.markdown(f"""
-    <div style="text-align: center; margin-bottom: 24px;">
-        <div style="font-family: Inter, sans-serif; font-size: 12px; color: {COLOURS["text_secondary"]};
-                    text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">
-            {data["league_name"]} &middot; {data["date"]} &middot; {data["kickoff"]}
-        </div>
-        <div style="font-family: Inter, sans-serif; font-size: 24px; font-weight: 700; color: {COLOURS["text"]};">
-            {data["home_team"]} vs {data["away_team"]}
-        </div>
-        <div style="margin-top: 8px;">{result_html}</div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        f'<div style="text-align: center; margin-bottom: 24px;">'
+        f'<div style="font-family: Inter, sans-serif; font-size: 12px; color: {COLOURS["text_secondary"]}; '
+        f'text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">'
+        f'{data["league_name"]} &middot; {data["date"]} &middot; {data["kickoff"]}</div>'
+        f'<div style="font-family: Inter, sans-serif; font-size: 24px; font-weight: 700; color: {COLOURS["text"]};">'
+        f'{data["home_team"]} vs {data["away_team"]}</div>'
+        f'<div style="margin-top: 8px;">{result_html}</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
 
     # --- Weather Badge (shown only for notable conditions) ---
     weather = data.get("weather")
@@ -536,25 +535,23 @@ else:
             conf_colour = CONFIDENCE_COLOURS.get(vb["confidence"], COLOURS["border"])
             edge_pct = vb["edge"] * 100
 
-            st.markdown(f"""
-            <div class="bv-card" style="display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <span style="font-family: Inter, sans-serif; font-size: 14px; color: {COLOURS["text"]};">
-                        {sel_label}
-                    </span>
-                    <span style="font-family: Inter, sans-serif; font-size: 12px; color: {COLOURS["text_secondary"]}; margin-left: 8px;">
-                        ({vb["bookmaker"]} @ {vb["bookmaker_odds"]:.2f})
-                    </span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    <span style="font-family: JetBrains Mono, monospace; font-size: 14px; font-weight: 700;
-                                 color: {COLOURS["green"]};">+{edge_pct:.1f}%</span>
-                    <span class="bv-badge" style="background-color: {conf_colour};">
-                        {vb["confidence"].upper()}
-                    </span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="bv-card" style="display: flex; justify-content: space-between; align-items: center;">'
+                f'<div>'
+                f'<span style="font-family: Inter, sans-serif; font-size: 14px; color: {COLOURS["text"]};">'
+                f'{sel_label}</span>'
+                f'<span style="font-family: Inter, sans-serif; font-size: 12px; color: {COLOURS["text_secondary"]}; margin-left: 8px;">'
+                f'({vb["bookmaker"]} @ {vb["bookmaker_odds"]:.2f})</span>'
+                f'</div>'
+                f'<div style="display: flex; align-items: center; gap: 12px;">'
+                f'<span style="font-family: JetBrains Mono, monospace; font-size: 14px; font-weight: 700; '
+                f'color: {COLOURS["green"]};">+{edge_pct:.1f}%</span>'
+                f'<span class="bv-badge" style="background-color: {conf_colour};">'
+                f'{vb["confidence"].upper()}</span>'
+                f'</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
 
         st.divider()
 
@@ -609,30 +606,32 @@ else:
             hv = f"{home_val:{fmt}}" if home_val is not None else "—"
             av = f"{away_val:{fmt}}" if away_val is not None else "—"
 
-            st.markdown(f"""
-            <div style="display: flex; justify-content: space-between; padding: 6px 0;
-                        border-bottom: 1px solid {COLOURS["border"]};">
-                <span style="font-family: JetBrains Mono, monospace; font-size: 14px;
-                             color: {COLOURS["text"]}; width: 80px; text-align: right;">{hv}</span>
-                <span style="font-family: Inter, sans-serif; font-size: 12px;
-                             color: {COLOURS["text_secondary"]}; text-transform: uppercase;
-                             letter-spacing: 0.5px;">{label}</span>
-                <span style="font-family: JetBrains Mono, monospace; font-size: 14px;
-                             color: {COLOURS["text"]}; width: 80px;">{av}</span>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(
+                f'<div style="display: flex; justify-content: space-between; padding: 6px 0; '
+                f'border-bottom: 1px solid {COLOURS["border"]};">'
+                f'<span style="font-family: JetBrains Mono, monospace; font-size: 14px; '
+                f'color: {COLOURS["text"]}; width: 80px; text-align: right;">{hv}</span>'
+                f'<span style="font-family: Inter, sans-serif; font-size: 12px; '
+                f'color: {COLOURS["text_secondary"]}; text-transform: uppercase; '
+                f'letter-spacing: 0.5px;">{label}</span>'
+                f'<span style="font-family: JetBrains Mono, monospace; font-size: 14px; '
+                f'color: {COLOURS["text"]}; width: 80px;">{av}</span>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
 
         # Header
-        st.markdown(f"""
-        <div style="display: flex; justify-content: space-between; padding: 8px 0; margin-bottom: 8px;">
-            <span style="font-family: Inter, sans-serif; font-size: 16px; font-weight: 600;
-                         color: {COLOURS["text"]};">{data["home_team"]}</span>
-            <span style="font-family: Inter, sans-serif; font-size: 12px;
-                         color: {COLOURS["text_secondary"]};">vs</span>
-            <span style="font-family: Inter, sans-serif; font-size: 16px; font-weight: 600;
-                         color: {COLOURS["text"]};">{data["away_team"]}</span>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(
+            f'<div style="display: flex; justify-content: space-between; padding: 8px 0; margin-bottom: 8px;">'
+            f'<span style="font-family: Inter, sans-serif; font-size: 16px; font-weight: 600; '
+            f'color: {COLOURS["text"]};">{data["home_team"]}</span>'
+            f'<span style="font-family: Inter, sans-serif; font-size: 12px; '
+            f'color: {COLOURS["text_secondary"]};">vs</span>'
+            f'<span style="font-family: Inter, sans-serif; font-size: 16px; font-weight: 600; '
+            f'color: {COLOURS["text"]};">{data["away_team"]}</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
 
         # Stats rows — basic form metrics
         basic_stats = [

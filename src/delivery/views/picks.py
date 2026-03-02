@@ -291,46 +291,45 @@ def render_value_bet_card(vb: Dict, idx: int) -> None:
             f'<div style="margin-bottom: 8px;">{"".join(badge_parts)}</div>'
         )
 
-    # Card HTML
-    st.markdown(f"""
-    <div class="bv-card">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-            <div>
-                <span style="font-family: 'Inter', sans-serif; font-size: 16px; font-weight: 600; color: #E6EDF3;">
-                    {vb["home_team"]} vs {vb["away_team"]}
-                </span>
-                <br>
-                <span style="font-family: 'Inter', sans-serif; font-size: 12px; color: #8B949E;">
-                    {vb["league"]} &middot; {vb["date"]} &middot; {vb["kickoff"]}
-                </span>
-            </div>
-            <div>{confidence_badge}</div>
-        </div>
-        {context_badges_html}
-        <div style="display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 8px;">
-            <div>
-                <span style="font-size: 11px; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px;">Market</span><br>
-                <span style="font-family: 'Inter', sans-serif; font-size: 14px; color: #E6EDF3;">{selection_label}</span>
-            </div>
-            <div>
-                <span style="font-size: 11px; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px;">Model Prob</span><br>
-                <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #E6EDF3;">{vb["model_prob"]:.1%}</span>
-            </div>
-            <div>
-                <span style="font-size: 11px; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px;">Odds</span><br>
-                <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #E6EDF3;">{vb["bookmaker_odds"]:.2f}</span>
-            </div>
-            <div>
-                <span style="font-size: 11px; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px;">Edge</span><br>
-                <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 700; color: {edge_colour};">+{edge_pct:.1f}%</span>
-            </div>
-            <div>
-                <span style="font-size: 11px; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px;">Suggested Stake</span><br>
-                <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #E6EDF3;">${suggested_stake:.2f}</span>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    # Card HTML — no leading indentation to avoid markdown code-block interpretation
+    card_html = f"""<div class="bv-card">
+<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+<div>
+<span style="font-family: 'Inter', sans-serif; font-size: 16px; font-weight: 600; color: #E6EDF3;">
+{vb["home_team"]} vs {vb["away_team"]}
+</span>
+<br>
+<span style="font-family: 'Inter', sans-serif; font-size: 12px; color: #8B949E;">
+{vb["league"]} &middot; {vb["date"]} &middot; {vb["kickoff"]}
+</span>
+</div>
+<div>{confidence_badge}</div>
+</div>
+{context_badges_html}
+<div style="display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 8px;">
+<div>
+<span style="font-size: 11px; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px;">Market</span><br>
+<span style="font-family: 'Inter', sans-serif; font-size: 14px; color: #E6EDF3;">{selection_label}</span>
+</div>
+<div>
+<span style="font-size: 11px; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px;">Model Prob</span><br>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #E6EDF3;">{vb["model_prob"]:.1%}</span>
+</div>
+<div>
+<span style="font-size: 11px; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px;">Odds</span><br>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #E6EDF3;">{vb["bookmaker_odds"]:.2f}</span>
+</div>
+<div>
+<span style="font-size: 11px; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px;">Edge</span><br>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 700; color: {edge_colour};">+{edge_pct:.1f}%</span>
+</div>
+<div>
+<span style="font-size: 11px; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px;">Suggested Stake</span><br>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #E6EDF3;">${suggested_stake:.2f}</span>
+</div>
+</div>
+</div>"""
+    st.markdown(card_html, unsafe_allow_html=True)
 
     # "Mark as Placed" expander
     with st.expander(f"Mark as Placed", expanded=False):

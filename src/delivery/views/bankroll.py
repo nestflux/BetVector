@@ -451,14 +451,15 @@ else:
 
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.markdown(f"""
-        <div>
-            <span style="font-family: 'Inter', sans-serif; font-size: 12px; color: #8B949E;
-                         text-transform: uppercase; letter-spacing: 0.5px;">Current Bankroll</span><br>
-            <span style="font-family: 'JetBrains Mono', monospace; font-size: 28px; font-weight: 700;
-                         color: {bankroll_colour};">${current:.2f}</span>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(
+            f'<div>'
+            f'<span style="font-family: \'Inter\', sans-serif; font-size: 12px; color: #8B949E; '
+            f'text-transform: uppercase; letter-spacing: 0.5px;">Current Bankroll</span><br>'
+            f'<span style="font-family: \'JetBrains Mono\', monospace; font-size: 28px; font-weight: 700; '
+            f'color: {bankroll_colour};">${current:.2f}</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
     with col2:
         st.metric("Starting Bankroll", f"${starting:.2f}")
     with col3:
@@ -467,14 +468,15 @@ else:
         dd_colour = COLOURS["green"] if drawdown_pct < 15 else (
             COLOURS["yellow"] if drawdown_pct < 25 else COLOURS["red"]
         )
-        st.markdown(f"""
-        <div>
-            <span style="font-family: 'Inter', sans-serif; font-size: 12px; color: #8B949E;
-                         text-transform: uppercase; letter-spacing: 0.5px;">Drawdown</span><br>
-            <span style="font-family: 'JetBrains Mono', monospace; font-size: 28px; font-weight: 700;
-                         color: {dd_colour};">{drawdown_pct:.1f}%</span>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(
+            f'<div>'
+            f'<span style="font-family: \'Inter\', sans-serif; font-size: 12px; color: #8B949E; '
+            f'text-transform: uppercase; letter-spacing: 0.5px;">Drawdown</span><br>'
+            f'<span style="font-family: \'JetBrains Mono\', monospace; font-size: 28px; font-weight: 700; '
+            f'color: {dd_colour};">{drawdown_pct:.1f}%</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
 
     st.divider()
 
@@ -514,22 +516,20 @@ else:
     for i, limit in enumerate(limits):
         status_colour = COLOURS.get(limit["status"], COLOURS["border"])
         with limit_cols[i]:
-            st.markdown(f"""
-            <div class="bv-card" style="text-align: center; border-color: {status_colour};">
-                <div style="font-family: Inter, sans-serif; font-size: 12px; color: {COLOURS["text_secondary"]};
-                            text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">
-                    {limit["name"]}
-                </div>
-                <div style="font-family: JetBrains Mono, monospace; font-size: 18px; font-weight: 700;
-                            color: {status_colour}; margin-bottom: 4px;">
-                    {limit["label"]}
-                </div>
-                <div style="font-family: JetBrains Mono, monospace; font-size: 11px;
-                            color: {COLOURS["text_secondary"]};">
-                    {limit["detail"]}
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="bv-card" style="text-align: center; border-color: {status_colour};">'
+                f'<div style="font-family: Inter, sans-serif; font-size: 12px; color: {COLOURS["text_secondary"]}; '
+                f'text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">'
+                f'{limit["name"]}</div>'
+                f'<div style="font-family: JetBrains Mono, monospace; font-size: 18px; font-weight: 700; '
+                f'color: {status_colour}; margin-bottom: 4px;">'
+                f'{limit["label"]}</div>'
+                f'<div style="font-family: JetBrains Mono, monospace; font-size: 11px; '
+                f'color: {COLOURS["text_secondary"]};">'
+                f'{limit["detail"]}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
 
     st.divider()
 

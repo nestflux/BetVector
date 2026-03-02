@@ -222,4 +222,4 @@ else:
                 type="secondary",
             ):
                 st.query_params["match_id"] = str(fix["match_id"])
-                st.switch_page("pages/match_detail.py")
+                st.switch_page("views/match_detail.py")

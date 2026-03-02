@@ -333,7 +333,7 @@ def get_pages() -> list:
     """Define the six dashboard pages.
 
     Uses Streamlit's st.Page to define each page with its file path,
-    title, and icon.  The pages are loaded from src/delivery/pages/.
+    title, and icon.  The pages are loaded from src/delivery/views/.
 
     Returns
     -------
@@ -343,43 +343,43 @@ def get_pages() -> list:
     # Paths are relative to this file's directory (src/delivery/)
     return [
         st.Page(
-            "pages/picks.py",
+            "views/picks.py",
             title="Today's Picks",
             icon="🎯",
             default=True,
         ),
         st.Page(
-            "pages/performance.py",
+            "views/performance.py",
             title="Performance Tracker",
             icon="📈",
         ),
         st.Page(
-            "pages/leagues.py",
+            "views/leagues.py",
             title="League Explorer",
             icon="🏟️",
         ),
         st.Page(
-            "pages/fixtures.py",
+            "views/fixtures.py",
             title="Fixtures",
             icon="📅",
         ),
         st.Page(
-            "pages/model_health.py",
+            "views/model_health.py",
             title="Model Health",
             icon="🔬",
         ),
         st.Page(
-            "pages/bankroll.py",
+            "views/bankroll.py",
             title="Bankroll Manager",
             icon="💰",
         ),
         st.Page(
-            "pages/settings.py",
+            "views/settings.py",
             title="Settings",
             icon="⚙️",
         ),
         st.Page(
-            "pages/match_detail.py",
+            "views/match_detail.py",
             title="Match Deep Dive",
             icon="🔍",
         ),
