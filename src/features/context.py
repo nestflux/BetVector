@@ -709,3 +709,174 @@ def calculate_elo_features(
         "elo_rating": team_rating,
         "elo_diff": elo_diff,
     }
+
+
+# ============================================================================
+# Referee Features (E21-02)
+# ============================================================================
+# Referees have measurable tendencies that affect match outcomes:
+#
+# 1. **Goal-permissive referees:** Some refs allow physical play and fewer
+#    stoppages, leading to more fluid attacking play and more goals.  Others
+#    are strict card-givers who break up play frequently, lowering goal totals.
+#    This is captured by ref_avg_goals — average total goals in their matches.
+#
+# 2. **Home bias signal:** Research consistently shows referees make more
+#    favourable decisions for the home team (Sutter & Kocher 2004, Dohmen 2008).
+#    ref_home_win_pct captures the intensity of this bias for each referee.
+#    A ref with 55% home win rate is roughly neutral; 65%+ signals strong
+#    home advantage amplification.
+#
+# 3. **Disciplinary tendencies:** ref_avg_fouls and ref_avg_yellows capture
+#    how strictly a referee enforces the laws.  High-discipline refs may
+#    disrupt the rhythm of technical teams (affecting O/U predictions).
+#
+# Expected Brier improvement: 1-2% for BTTS/O/U markets.
+#
+# TEMPORAL INTEGRITY: Only uses matches BEFORE the match date.
+# MINIMUM SAMPLE: Requires at least 5 matches for statistical reliability.
+# ============================================================================
+
+# Minimum number of historical matches a referee must have for features to
+# be computed.  With fewer than this, the averages are unreliable noise.
+MIN_REFEREE_MATCHES = 5
+
+# Maximum number of recent matches to include in referee averages.
+# Using a rolling window (like 20 matches) prevents ancient results from
+# diluting current tendencies, since refs' styles do evolve over time.
+MAX_REFEREE_LOOKBACK = 20
+
+
+def calculate_referee_features(
+    match_id: int,
+) -> Dict[str, Any]:
+    """Calculate referee tendency features for a specific match.
+
+    Looks up the referee assigned to this match, then queries the last
+    ``MAX_REFEREE_LOOKBACK`` matches officiated by the same referee
+    (strictly before this match date) to compute disciplinary and scoring
+    averages.
+
+    Parameters
+    ----------
+    match_id : int
+        Database ID of the match.
+
+    Returns
+    -------
+    dict
+        Keys: ref_avg_fouls, ref_avg_yellows, ref_avg_goals, ref_home_win_pct.
+        All values are None if referee is unknown or sample size is too small.
+    """
+    empty = {
+        "ref_avg_fouls": None,
+        "ref_avg_yellows": None,
+        "ref_avg_goals": None,
+        "ref_home_win_pct": None,
+    }
+
+    with get_session() as session:
+        # Get this match's referee
+        match = session.query(Match).filter_by(id=match_id).first()
+        if match is None or not match.referee:
+            return empty
+
+        referee_name = match.referee.strip()
+        match_date = match.date
+
+        # Query the referee's recent matches BEFORE this match date.
+        # Temporal integrity: we only know about matches that happened before
+        # the prediction date.  The referee's future performance is unknown.
+        ref_matches = (
+            session.query(Match)
+            .filter(
+                Match.referee == referee_name,
+                Match.date < match_date,
+                Match.home_goals.isnot(None),  # Only finished matches
+            )
+            .order_by(Match.date.desc())
+            .limit(MAX_REFEREE_LOOKBACK)
+            .all()
+        )
+
+        # Minimum sample size check — with fewer than 5 matches, averages
+        # are unreliable and could introduce noise rather than signal.
+        if len(ref_matches) < MIN_REFEREE_MATCHES:
+            logger.debug(
+                "Referee '%s': only %d matches (need %d) — skipping features",
+                referee_name, len(ref_matches), MIN_REFEREE_MATCHES,
+            )
+            return empty
+
+        # Compute averages from the referee's match history
+        total_goals = 0
+        home_wins = 0
+        total_fouls = 0
+        total_yellows = 0
+        fouls_count = 0  # Track how many matches have fouls data
+        yellows_count = 0  # Track how many matches have yellow card data
+
+        for rm in ref_matches:
+            # Goals (always available for finished matches)
+            total_goals += (rm.home_goals or 0) + (rm.away_goals or 0)
+
+            # Home win detection
+            if rm.home_goals is not None and rm.away_goals is not None:
+                if rm.home_goals > rm.away_goals:
+                    home_wins += 1
+
+            # Fouls and yellow cards — may not be available for all matches.
+            # The match_stats table has fouls/yellow_cards per team.
+            # Sum home + away for total per match.
+            from src.database.models import MatchStat
+            stats = session.query(MatchStat).filter_by(match_id=rm.id).all()
+            match_fouls = 0
+            match_yellows = 0
+            has_fouls = False
+            has_yellows = False
+
+            for stat in stats:
+                if stat.fouls is not None:
+                    match_fouls += stat.fouls
+                    has_fouls = True
+                if stat.yellow_cards is not None:
+                    match_yellows += stat.yellow_cards
+                    has_yellows = True
+
+            if has_fouls:
+                total_fouls += match_fouls
+                fouls_count += 1
+            if has_yellows:
+                total_yellows += match_yellows
+                yellows_count += 1
+
+        n = len(ref_matches)
+
+        result = {
+            "ref_avg_goals": round(total_goals / n, 3),
+            "ref_home_win_pct": round(home_wins / n, 3),
+            # Fouls/yellows: only compute if we have data for at least
+            # MIN_REFEREE_MATCHES matches.  Otherwise return None.
+            "ref_avg_fouls": (
+                round(total_fouls / fouls_count, 3)
+                if fouls_count >= MIN_REFEREE_MATCHES
+                else None
+            ),
+            "ref_avg_yellows": (
+                round(total_yellows / yellows_count, 3)
+                if yellows_count >= MIN_REFEREE_MATCHES
+                else None
+            ),
+        }
+
+        logger.debug(
+            "Referee '%s': %d matches → goals=%.2f, home_win=%.1f%%, "
+            "fouls=%s, yellows=%s",
+            referee_name, n,
+            result["ref_avg_goals"],
+            result["ref_home_win_pct"] * 100,
+            result["ref_avg_fouls"],
+            result["ref_avg_yellows"],
+        )
+
+    return result

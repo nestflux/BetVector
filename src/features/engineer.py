@@ -37,6 +37,7 @@ from src.features.context import (
     calculate_elo_features,
     calculate_market_odds_features,
     calculate_market_value_features,
+    calculate_referee_features,
     calculate_weather_features,
 )
 from src.features.rolling import (
@@ -163,6 +164,14 @@ def compute_features(match_id: int, league_id: int) -> Dict[str, Dict[str, Any]]
     )
     home_features.update(home_elo)
     away_features.update(away_elo)
+
+    # --- Referee features (E21-02) ---
+    # Referee tendencies affect match outcomes — some refs are goal-permissive
+    # (high ref_avg_goals), others are strict card-givers.  Same referee for
+    # both teams in the same match, so we store identical features on both rows.
+    ref_features = calculate_referee_features(match_id)
+    home_features.update(ref_features)
+    away_features.update(ref_features)
 
     # --- Save to database ---
     save_features(match_id, home_team_id, is_home=1, features=home_features)
@@ -378,6 +387,8 @@ def _read_existing_features(
         "pinnacle_overround", "ah_line",
         # Elo rating features (E21-01)
         "elo_rating", "elo_diff",
+        # Referee features (E21-02)
+        "ref_avg_fouls", "ref_avg_yellows", "ref_avg_goals", "ref_home_win_pct",
     ]
 
     for col in feature_cols:

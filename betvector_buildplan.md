@@ -2226,11 +2226,11 @@ Integrate ClubElo ratings — free API, no auth, CSV response. Impact: 1-8% Brie
 
 ---
 
-### E21-02 — Referee Features
+### E21-02 — Referee Features ✅
 
 **Type:** Backend — Features
 **Depends on:** E19-03 (referee on Match model)
-**Status:** PENDING
+**Status:** COMPLETED
 
 Compute referee-level statistics as model features. Impact: 1-2% Brier improvement for BTTS/O/U markets.
 
@@ -2240,20 +2240,21 @@ Compute referee-level statistics as model features. Impact: 1-2% Brier improveme
 - `ref_avg_goals` (Float, nullable) — average goals in matches they referee
 - `ref_home_win_pct` (Float, nullable) — home win rate in their matches (home bias signal)
 
-**Implementation approach:**
-1. New function in context.py: `calculate_referee_features(match_id)`
-2. Get referee name from Match record
-3. Query last 20 matches with same referee (before this match date — temporal integrity)
-4. Compute averages from MatchStat records
-5. Add to Feature model, engineer.py, poisson.py
+**Implementation notes:**
+- ref_avg_goals and ref_home_win_pct computed from Match records (home_goals, away_goals)
+- ref_avg_fouls and ref_avg_yellows return None (fouls/yellows not in match_stats yet — will auto-populate when data becomes available)
+- MIN_REFEREE_MATCHES = 5 (skip if fewer), MAX_REFEREE_LOOKBACK = 20
+- Referee data backfilled on 661/760 matches from Football-Data.co.uk CSV
+- 1,072/1,520 Features have referee data (70% — remaining 30% are early-season or scheduled)
+- Only ref_avg_goals and ref_home_win_pct added to poisson.py (fouls/yellows not relevant for goal scoring)
 
 **Acceptance Criteria:**
-- [ ] Four new columns on Feature model
-- [ ] `calculate_referee_features()` computes averages from historical matches
-- [ ] Only uses matches BEFORE the prediction date (temporal integrity)
-- [ ] Minimum sample size check (e.g., skip if <5 matches for referee)
-- [ ] Features added to engineer.py and poisson.py
-- [ ] Graceful degradation when referee data unavailable
+- [x] Four new columns on Feature model
+- [x] `calculate_referee_features()` computes averages from historical matches
+- [x] Only uses matches BEFORE the prediction date (temporal integrity)
+- [x] Minimum sample size check (e.g., skip if <5 matches for referee)
+- [x] Features added to engineer.py and poisson.py
+- [x] Graceful degradation when referee data unavailable
 
 ---
 

@@ -583,6 +583,19 @@ class Feature(Base):
     # to roughly a 64% expected win probability.
     elo_diff = Column(Float, nullable=True)
 
+    # --- Referee features (E21-02) ---
+    # Referee tendencies affect match outcomes — some referees are more
+    # lenient (more goals due to fewer stoppages), while others are strict
+    # card-givers (disrupts rhythm, more fouls).  Ref home win rate captures
+    # unconscious home bias in decision-making.
+    #
+    # All computed from the referee's last 20 matches BEFORE match date.
+    # Minimum sample size: 5 matches (skip if referee has fewer).
+    ref_avg_fouls = Column(Float, nullable=True)     # avg fouls/game
+    ref_avg_yellows = Column(Float, nullable=True)   # avg yellow cards/game
+    ref_avg_goals = Column(Float, nullable=True)     # avg total goals/game
+    ref_home_win_pct = Column(Float, nullable=True)  # % home wins (0.0-1.0)
+
     # --- Market-implied features (E20-01, E20-02) ---
     # Pinnacle implied probabilities with overround removed.  Pinnacle is the
     # sharpest bookmaker — their closing line is widely considered the best

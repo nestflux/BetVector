@@ -439,6 +439,11 @@ class PoissonModel(BaseModel):
             # Especially valuable early season and for promoted teams.
             f"{attack_prefix}elo_rating",
             f"{attack_prefix}elo_diff",
+            # --- Referee features (E21-02) ---
+            # Referee tendencies affect scoring rates.  Goal-permissive refs
+            # produce higher-scoring matches.  Home bias refs amplify home advantage.
+            f"{attack_prefix}ref_avg_goals",
+            f"{attack_prefix}ref_home_win_pct",
         ]
 
         # Only include columns that exist in the DataFrame
