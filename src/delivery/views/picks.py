@@ -300,7 +300,7 @@ def render_value_bet_card(vb: Dict, idx: int) -> None:
 </span>
 <br>
 <span style="font-family: 'Inter', sans-serif; font-size: 12px; color: #8B949E;">
-{vb["league"]} &middot; {vb["date"]} &middot; {vb["kickoff"]}
+{vb["league"]} &middot; {vb["date"]}{(" &middot; " + vb["kickoff"]) if vb.get("kickoff") and vb["kickoff"] != "TBD" else ""}
 </span>
 </div>
 <div>{confidence_badge}</div>
@@ -330,6 +330,16 @@ def render_value_bet_card(vb: Dict, idx: int) -> None:
 </div>
 </div>"""
     st.markdown(card_html, unsafe_allow_html=True)
+
+    # Action row — Deep Dive button + Mark as Placed expander
+    # Deep Dive navigates to Match Deep Dive for the full analysis narrative
+    if st.button(
+        "\U0001F50D Deep Dive",
+        key=f"pick_dive_{idx}",
+        type="secondary",
+    ):
+        st.query_params["match_id"] = str(vb["match_id"])
+        st.switch_page("views/match_detail.py")
 
     # "Mark as Placed" expander
     with st.expander(f"Mark as Placed", expanded=False):

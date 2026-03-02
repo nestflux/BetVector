@@ -193,15 +193,24 @@ else:
                 f'color: {COLOURS["text_secondary"]};">{fix["league"]}</span>'
             )
 
+            # Kickoff time — only show the time slot if we actually have one.
+            # When the Football-Data.org scraper hasn't backfilled yet,
+            # kickoff_time is NULL and we just skip the column rather
+            # than displaying "TBD" which looks broken.
+            kickoff_html = ""
+            if fix["kickoff"] and fix["kickoff"] != "TBD":
+                kickoff_html = (
+                    f'<span style="font-family: JetBrains Mono, monospace; font-size: 13px; '
+                    f'color: {COLOURS["text_secondary"]}; min-width: 50px;">'
+                    f'{fix["kickoff"]}</span>'
+                )
+
             # Fixture card
             st.markdown(
                 f'<div class="bv-card" style="display: flex; justify-content: space-between; '
                 f'align-items: center; padding: 12px 16px; {border_style}">'
                 f'<div style="display: flex; align-items: center; gap: 12px;">'
-                # Kickoff time
-                f'<span style="font-family: JetBrains Mono, monospace; font-size: 13px; '
-                f'color: {COLOURS["text_secondary"]}; min-width: 50px;">'
-                f'{fix["kickoff"]}</span>'
+                f'{kickoff_html}'
                 # Teams
                 f'<span style="font-family: Inter, sans-serif; font-size: 15px; '
                 f'font-weight: 600; color: {COLOURS["text"]};">'
