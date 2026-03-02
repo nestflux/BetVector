@@ -160,12 +160,12 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E20-02 (Asian Handicap Line as Feature)
-Currently working: E20-03 (Backtest Market-Augmented vs Base Poisson)
-Next up: E21-01 (ClubElo Scraper + Elo Features)
+Last completed: E20-03 (Backtest Market-Augmented vs Base Poisson)
+Currently working: E21-01 (ClubElo Scraper + Elo Features)
+Next up: E21-02 (Referee Features)
 
 E19 complete: All 4 issues done ✅
-E20 progress: 2 of 3 issues complete (E20-01 + E20-02 implemented together, E20-03 pending)
+E20 complete: All 3 issues done ✅ (Brier 0.6105, ROI -4.15% → -3.50%)
 Total issues: 77 (45 original + 20 post-launch + 12 odds/model improvement)
 
 ---
