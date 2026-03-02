@@ -454,3 +454,155 @@ else:
         "</div>",
         unsafe_allow_html=True,
     )
+
+# ============================================================================
+# Glossary — explains every term visible on the picks page
+# ============================================================================
+# Always shown (outside the if/else) so it appears whether or not there
+# are picks.  Collapsed by default so it doesn't clutter the view.
+
+st.divider()
+with st.expander("Glossary — What do these terms mean?", expanded=False):
+    st.markdown(
+        '<style>'
+        '.gloss-section { margin-bottom: 18px; }'
+        '.gloss-title {'
+        '  font-family: Inter, sans-serif; font-size: 14px; font-weight: 700;'
+        '  color: #3FB950; text-transform: uppercase; letter-spacing: 0.5px;'
+        '  margin-bottom: 8px; border-bottom: 1px solid #21262D; padding-bottom: 4px;'
+        '}'
+        '.gloss-row {'
+        '  display: flex; gap: 8px; margin-bottom: 6px; line-height: 1.45;'
+        '}'
+        '.gloss-term {'
+        '  font-family: "JetBrains Mono", monospace; font-size: 12px;'
+        '  font-weight: 600; color: #E6EDF3; min-width: 140px; flex-shrink: 0;'
+        '}'
+        '.gloss-def {'
+        '  font-family: Inter, sans-serif; font-size: 12px; color: #8B949E;'
+        '}'
+        '</style>',
+        unsafe_allow_html=True,
+    )
+
+    # --- The Pick Card ---
+    st.markdown(
+        '<div class="gloss-section">'
+        '<div class="gloss-title">The Pick Card</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Value Bet</span>'
+        '  <span class="gloss-def">A bet where the model thinks the outcome is more '
+        'likely than the bookmaker does. The model found a price that looks too '
+        'generous \u2014 that\'s where the profit opportunity is.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Market</span>'
+        '  <span class="gloss-def">The type of bet: Home Win / Draw / Away Win (1X2), '
+        'Over/Under 2.5 Goals, or Both Teams to Score (BTTS).</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Selection</span>'
+        '  <span class="gloss-def">The specific outcome the model recommends. '
+        'E.g. "Home Win", "Over 2.5 Goals", or "BTTS Yes".</span>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    # --- Key Numbers ---
+    st.markdown(
+        '<div class="gloss-section">'
+        '<div class="gloss-title">Key Numbers</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Model Prob</span>'
+        '  <span class="gloss-def">The model\'s estimated probability of this outcome '
+        'actually happening, based on team form, xG, venue, and other features. '
+        'E.g. 62% means the model thinks this happens roughly 6 times out of 10.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Odds</span>'
+        '  <span class="gloss-def">The decimal odds offered by the bookmaker. '
+        'Odds of 2.50 mean you win $2.50 for every $1 staked (including your stake back). '
+        'Lower odds = bookmaker thinks it\'s more likely.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Edge</span>'
+        '  <span class="gloss-def">The gap between what the model thinks and what the '
+        'bookmaker thinks. <span style="color: #3FB950;">Positive edge = the bet is '
+        'underpriced.</span> An edge of +8% means the model sees an 8 percentage-point '
+        'advantage over the bookmaker\'s price. Higher edge = stronger opportunity.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Suggested Stake</span>'
+        '  <span class="gloss-def">How much to bet, calculated from your bankroll settings. '
+        'Uses a conservative formula so no single bet risks too much of your bankroll.</span>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    # --- Confidence ---
+    st.markdown(
+        '<div class="gloss-section">'
+        '<div class="gloss-title">Confidence Levels</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term" style="color: #3FB950;">HIGH</span>'
+        '  <span class="gloss-def">Large edge with strong model certainty. '
+        'These are the bets the model is most confident about.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term" style="color: #D29922;">MEDIUM</span>'
+        '  <span class="gloss-def">Moderate edge. Worth considering but '
+        'less conviction than high-confidence picks.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term" style="color: #8B949E;">LOW</span>'
+        '  <span class="gloss-def">Marginal edge. The model sees slight value '
+        'but the signal is weaker. Proceed with caution.</span>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    # --- Context Badges ---
+    st.markdown(
+        '<div class="gloss-section">'
+        '<div class="gloss-title">Context Badges</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">\U0001F327\uFE0F Weather</span>'
+        '  <span class="gloss-def">Appears when match-day conditions are extreme '
+        '(heavy rain, strong wind, snow). Bad weather typically reduces goal-scoring '
+        'and favours defensive teams.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Squad Value</span>'
+        '  <span class="gloss-def">Appears when one squad is worth 2\u00D7+ the other '
+        '(from Transfermarkt data). A massive value gap suggests a significant '
+        'talent difference beyond what recent form shows.</span>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    # --- Summary Metrics ---
+    st.markdown(
+        '<div class="gloss-section">'
+        '<div class="gloss-title">Summary Metrics (Top of Page)</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Value Bets</span>'
+        '  <span class="gloss-def">Total number of value bets found above '
+        'your edge threshold. More isn\'t always better \u2014 quality matters.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Avg Edge</span>'
+        '  <span class="gloss-def">The average edge across all picks shown. '
+        'Higher average edge means the model sees stronger overall opportunities today.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">High Confidence</span>'
+        '  <span class="gloss-def">How many of today\'s picks the model is most '
+        'certain about. These are your best bets to focus on.</span>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
