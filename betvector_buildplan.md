@@ -2066,3 +2066,273 @@ Complete the CLV (Closing Line Value) pipeline. Infrastructure is 90% built — 
 **What's needed:**
 - New function `backfill_closing_odds()` in loader.py
 - Evening pipeline call after CSV odds are loaded
+
+**Implementation approach:**
+1. `backfill_closing_odds(session)` — query BetLog entries where `closing_odds IS NULL` and `status != 'pending'`
+2. For each entry, look up Pinnacle closing odds from Odds table (bookmaker="Pinnacle", is_opening=0, market_type="1X2")
+3. Update `closing_odds` on BetLog, then compute `clv = (closing_odds - placed_odds) / placed_odds`
+4. Call from evening pipeline after Football-Data.co.uk CSV is scraped and odds loaded
+
+**Acceptance Criteria:**
+- [ ] `backfill_closing_odds()` function exists in loader.py
+- [ ] Finds BetLog entries with NULL closing_odds and settled status
+- [ ] Looks up Pinnacle closing odds from Odds table correctly
+- [ ] Computes CLV and stores on BetLog entries
+- [ ] Called in evening pipeline after CSV odds loading
+- [ ] Model Health dashboard CLV section auto-populates with data
+- [ ] No errors when no closing odds are available (graceful skip)
+
+---
+
+## Epic 20 — Market-Augmented Poisson (E20)
+
+**Objective:** Add market-implied probabilities and Asian Handicap lines as model features. Expected impact: 7-9% Brier score improvement from Pinnacle odds, 2-4% from AH line.
+
+**Based on:** Constantinou 2022 research, user's odds research report
+
+---
+
+### E20-01 — Pinnacle Opening Odds as Features
+
+**Type:** Backend — Features + Model
+**Depends on:** E19-02, E19-03
+**Status:** PENDING
+
+Add Pinnacle implied probabilities (overround-removed) as model features. This is the single highest-impact improvement available.
+
+**New Feature columns on Feature model:**
+- `pinnacle_home_prob` (Float, nullable) — Pinnacle implied probability for home win, overround-removed
+- `pinnacle_draw_prob` (Float, nullable)
+- `pinnacle_away_prob` (Float, nullable)
+- `pinnacle_overround` (Float, nullable) — raw overround for information
+
+**Implementation approach:**
+1. New function in `context.py`: `calculate_pinnacle_features(match_id)`
+2. Query Odds table: bookmaker="Pinnacle", market_type="1X2", source IN ("football_data", "odds_api")
+3. Prefer is_opening=1 (pre-match). Fall back to any available.
+4. Remove overround: `true_prob = (1/odds) / sum(1/home + 1/draw + 1/away)`
+5. Add to Feature model in models.py
+6. Add to `_read_existing_features()` feature_cols list in engineer.py
+7. Add to `_select_feature_cols()` context_cols in poisson.py
+8. Temporal integrity: only uses opening odds available before the match
+
+**Acceptance Criteria:**
+- [ ] Four new columns on Feature model (pinnacle_home_prob, pinnacle_draw_prob, pinnacle_away_prob, pinnacle_overround)
+- [ ] `calculate_pinnacle_features()` computes overround-removed probabilities
+- [ ] Feature computation uses only pre-match odds (temporal integrity)
+- [ ] Features added to engineer.py and poisson.py feature lists
+- [ ] Graceful degradation when no Pinnacle odds exist (NaN)
+- [ ] DB migration applied
+
+---
+
+### E20-02 — Asian Handicap Line as Feature
+
+**Type:** Backend — Features + Model
+**Depends on:** E19-03
+**Status:** PENDING
+
+Add the Asian Handicap home line as a model feature. The AH market is the sharpest market in football — the line is a direct market-implied strength difference.
+
+**New Feature column:**
+- `ah_line` (Float, nullable) — Asian Handicap home line (e.g., -0.5, -1.0)
+
+**Implementation approach:**
+1. Add to `calculate_pinnacle_features()` or new function in context.py
+2. Query Odds table: market_type="AH", bookmaker="Pinnacle" or "market_avg"
+3. The line value itself IS the feature (no conversion needed)
+4. Add to Feature model, engineer.py, poisson.py
+
+**Acceptance Criteria:**
+- [ ] `ah_line` column on Feature model
+- [ ] AH line queried from Odds table correctly
+- [ ] Feature added to engineer.py and poisson.py feature lists
+- [ ] Graceful degradation when no AH data exists (NaN)
+- [ ] DB migration applied
+
+---
+
+### E20-03 — Backtest Market-Augmented vs Base Poisson
+
+**Type:** Evaluation
+**Depends on:** E20-01, E20-02
+**Status:** PENDING
+
+Run walk-forward backtest comparing base Poisson (current features) vs market-augmented Poisson (current features + Pinnacle probs + AH line). Validates expected 7-9% Brier improvement.
+
+**Implementation approach:**
+1. Ensure all historical matches have Pinnacle features computed (backfill from CSV data)
+2. Run `python run_pipeline.py backtest` with augmented feature set
+3. Compare metrics in Model Health dashboard
+4. Uses existing `src/evaluation/backtester.py` — no new code needed beyond feature computation
+
+**Metrics to compare:** Brier score, ROI, calibration, log-loss
+
+**Acceptance Criteria:**
+- [ ] All historical matches have Pinnacle features computed
+- [ ] Backtest runs successfully with augmented features
+- [ ] Brier score comparison shows improvement (document actual numbers)
+- [ ] Results stored in ModelPerformance table
+- [ ] Model Health dashboard shows comparison
+
+---
+
+## Epic 21 — External Ratings & Context (E21)
+
+**Objective:** Integrate ClubElo ratings, referee features, and fixture congestion flags to provide additional predictive signals beyond match statistics.
+
+---
+
+### E21-01 — ClubElo Scraper + Elo Features
+
+**Type:** Backend — Scraper + Features
+**Depends on:** E3-01 (BaseScraper)
+**Status:** PENDING
+
+Integrate ClubElo ratings — free API, no auth, CSV response. Impact: 1-8% Brier improvement (especially early season for promoted teams).
+
+**New file:** `src/scrapers/clubelo_scraper.py` (~100 lines)
+
+**New ORM model:** `ClubElo` table with team_id (FK), elo_rating, rank, rating_date, UniqueConstraint("team_id", "rating_date")
+
+**New Feature columns:**
+- `elo_rating` (Float, nullable) — team's Elo rating on match date
+- `elo_diff` (Float, nullable) — this team's Elo minus opponent's Elo
+
+**API:** `http://api.clubelo.com/{YYYY-MM-DD}` → CSV of all club Elo ratings for that date
+
+**Implementation approach:**
+1. New scraper inheriting BaseScraper, fetches today's ratings daily in morning pipeline
+2. Team name mapping (ClubElo uses short names like "ManCity")
+3. For backfill, fetch match-date ratings for historical matches
+4. Store in ClubElo table, compute features in context.py
+5. Add features to engineer.py + poisson.py
+
+**Acceptance Criteria:**
+- [ ] ClubElo ORM model created with proper constraints
+- [ ] Scraper fetches and parses CSV from api.clubelo.com
+- [ ] Team name normalisation maps to canonical DB names
+- [ ] Elo features (elo_rating, elo_diff) computed for matches
+- [ ] Features added to engineer.py and poisson.py
+- [ ] Integrated into morning pipeline
+- [ ] Graceful degradation when API unavailable
+
+---
+
+### E21-02 — Referee Features
+
+**Type:** Backend — Features
+**Depends on:** E19-03 (referee on Match model)
+**Status:** PENDING
+
+Compute referee-level statistics as model features. Impact: 1-2% Brier improvement for BTTS/O/U markets.
+
+**New Feature columns:**
+- `ref_avg_fouls` (Float, nullable) — referee's average fouls per game (last 20 matches)
+- `ref_avg_yellows` (Float, nullable) — average yellow cards per game
+- `ref_avg_goals` (Float, nullable) — average goals in matches they referee
+- `ref_home_win_pct` (Float, nullable) — home win rate in their matches (home bias signal)
+
+**Implementation approach:**
+1. New function in context.py: `calculate_referee_features(match_id)`
+2. Get referee name from Match record
+3. Query last 20 matches with same referee (before this match date — temporal integrity)
+4. Compute averages from MatchStat records
+5. Add to Feature model, engineer.py, poisson.py
+
+**Acceptance Criteria:**
+- [ ] Four new columns on Feature model
+- [ ] `calculate_referee_features()` computes averages from historical matches
+- [ ] Only uses matches BEFORE the prediction date (temporal integrity)
+- [ ] Minimum sample size check (e.g., skip if <5 matches for referee)
+- [ ] Features added to engineer.py and poisson.py
+- [ ] Graceful degradation when referee data unavailable
+
+---
+
+### E21-03 — Fixture Congestion Flag
+
+**Type:** Backend — Features
+**Depends on:** E4-01 (Feature engineering)
+**Status:** PENDING
+
+Add fixture congestion features — impact: 2-3% Brier improvement for European competitors.
+
+**New Feature columns:**
+- `days_since_last_match` (Integer, nullable) — days since team's most recent match
+- `is_congested` (Integer, nullable) — binary: 1 if <4 days since last match
+
+**Implementation approach:**
+1. New function in context.py: `calculate_congestion_features(match_id, team_id)`
+2. Query matches for this team ordered by date DESC before this match
+3. Calculate days between this match and previous match
+4. is_congested = 1 if days < 4 else 0
+5. Note: `rest_days` already exists in Features — `is_congested` adds binary signal for <4-day European football threshold (Carling et al. 2015)
+
+**Acceptance Criteria:**
+- [ ] Two new columns on Feature model
+- [ ] `calculate_congestion_features()` computes from match history
+- [ ] Only uses matches BEFORE the prediction date (temporal integrity)
+- [ ] Features added to engineer.py and poisson.py
+- [ ] Handles first match of season gracefully (no previous match → NULL)
+
+---
+
+## Epic 22 — Advanced Features (E22)
+
+**Objective:** Add set-piece xG breakdown and injury impact flags for further model refinement.
+
+---
+
+### E22-01 — Set-Piece xG Breakdown
+
+**Type:** Backend — Scraper + Features
+**Depends on:** E14-01 (Understat scraper)
+**Status:** PENDING
+
+Break down xG by situation (open play vs set piece) using Understat shot-level data. Impact: 1-3% Brier improvement.
+
+The `understatapi` library supports shot-level data with `situation` field (OpenPlay, SetPiece, Counter, FromCorner).
+
+**New MatchStat columns:** `set_piece_xg` (Float), `open_play_xg` (Float)
+**New Feature columns:** `set_piece_xg_5` (Float), `open_play_xg_5` (Float) — 5-match rolling averages
+
+**Implementation approach:**
+1. In `understat_scraper.py` — fetch shot data per match, aggregate by situation
+2. Store `set_piece_xg` and `open_play_xg` on MatchStat
+3. In `rolling.py` — add 5-match rolling window for set-piece and open-play xG
+4. Add to Feature model, engineer.py, poisson.py
+
+**Acceptance Criteria:**
+- [ ] Shot-level data fetched from Understat with situation breakdown
+- [ ] `set_piece_xg` and `open_play_xg` stored on MatchStat
+- [ ] 5-match rolling features computed in rolling.py
+- [ ] Features added to engineer.py and poisson.py
+- [ ] Graceful degradation when shot data unavailable
+
+---
+
+### E22-02 — Injury Impact Flags (Manual Input)
+
+**Type:** Backend + Frontend — Features + Settings Page
+**Depends on:** E10-03 (Settings page)
+**Status:** PENDING
+
+Manual injury input via Settings page until API-Football Pro is activated. Impact: 3-6% for matches with key absences at top-6 clubs.
+
+**New ORM model:** `InjuryFlag` table with team_id (FK), player_name, status ("out"/"doubt"/"suspended"), estimated_return, impact_rating (0.0-1.0), created_at, updated_at
+
+**New Feature columns:**
+- `injury_impact` (Float, nullable) — sum of impact_ratings for "out" players
+- `key_player_out` (Integer, nullable) — binary: 1 if any player with impact_rating >= 0.7 is out
+
+**Settings page additions:**
+- "Injury Flags" section — team dropdown, player name input, status select, impact slider (0.0-1.0)
+- Guidance: 0.3=rotation, 0.5=regular starter, 0.7=key player, 1.0=star player
+
+**Acceptance Criteria:**
+- [ ] InjuryFlag ORM model created with proper constraints
+- [ ] Settings page has injury input UI (team, player, status, impact rating)
+- [ ] Injury features computed from active flags
+- [ ] Features added to engineer.py and poisson.py
+- [ ] Future: when API-Football Pro activated, auto-populate from injuries endpoint
