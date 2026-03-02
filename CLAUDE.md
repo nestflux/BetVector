@@ -78,7 +78,13 @@ E13-01 → E13-02 → E13-03 →
 E14-01 → E14-02 → E14-03 → E14-04 →
 E15-01 → E15-02 → E15-03 →
 E16-01 → E16-02 → E16-03 →
-E17-01 → E17-02 → E17-03 → E17-04
+E17-01 → E17-02 → E17-03 → E17-04 →
+E18-01 → ... → E18-06 →
+E19-01 → E19-02 → E19-03 → E19-04 →
+E20-01 → E20-02 → E20-03 →
+E21-01 → E21-02 → E21-03 →
+E22-01 → E22-02 →
+E23-01 → E23-02 → E23-03 → E23-04 → E23-05 → E23-06 → E23-07
 ```
 
 If you think you should jump ahead, ask first.
@@ -161,14 +167,15 @@ Do not self-advance to the next issue. Ever.
 ## Current Status
 
 Last completed: E22-02 (Injury Impact Flags)
-Currently working: None — all 77 issues complete!
-Next up: None
+Currently working: E23-01 (Load Historical Match Data + Odds)
+Next up: E23-02 (Backfill Understat xG + Advanced Stats)
 
 E19 complete: All 4 issues done ✅
 E20 complete: All 3 issues done ✅ (Brier 0.6105, ROI -4.15% → -3.50%)
 E21 complete: All 3 issues done ✅ (Elo, referee, congestion features)
 E22 complete: All 2 issues done ✅ (Set-piece xG, injury flags)
-Total issues: 77 (45 original + 20 post-launch + 12 odds/model improvement) — ALL COMPLETE
+E23 planned: 7 issues (historical data backfill, revalidation, Odds API verification)
+Total issues: 84 (45 original + 20 post-launch + 12 odds/model + 7 backfill)
 
 ---
 

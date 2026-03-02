@@ -31,6 +31,8 @@ jobs:
       DASHBOARD_PASSWORD: ${{ secrets.DASHBOARD_PASSWORD }}
       API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
       FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
+      FOOTBALL_DATA_ORG_KEY: ${{ secrets.FOOTBALL_DATA_ORG_KEY }}
+      THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
 
     steps:
       - name: Checkout repository
@@ -59,15 +61,27 @@ jobs:
           init_db()
           db_path = str(PROJECT_ROOT / 'data' / 'betvector.db')
           conn = sqlite3.connect(db_path)
+
+          # Users table migrations
           cols = [r[1] for r in conn.execute('PRAGMA table_info(users)').fetchall()]
           for col, sql in {'notify_morning': 'ALTER TABLE users ADD COLUMN notify_morning INTEGER DEFAULT 1', 'notify_evening': 'ALTER TABLE users ADD COLUMN notify_evening INTEGER DEFAULT 1', 'notify_weekly': 'ALTER TABLE users ADD COLUMN notify_weekly INTEGER DEFAULT 1', 'has_onboarded': 'ALTER TABLE users ADD COLUMN has_onboarded INTEGER DEFAULT 0'}.items():
               if col not in cols:
                   conn.execute(sql)
-                  print(f'  Added missing column: {col}')
+                  print(f'  Added: users.{col}')
+
+          # Teams table
           team_cols = [r[1] for r in conn.execute('PRAGMA table_info(teams)').fetchall()]
           if 'api_football_name' not in team_cols:
               conn.execute('ALTER TABLE teams ADD COLUMN api_football_name TEXT')
               print('  Added: teams.api_football_name')
+
+          # Matches table: referee (E19-03)
+          match_cols = [r[1] for r in conn.execute('PRAGMA table_info(matches)').fetchall()]
+          if 'referee' not in match_cols:
+              conn.execute('ALTER TABLE matches ADD COLUMN referee TEXT')
+              print('  Added: matches.referee')
+
+          # Weather table
           conn.execute('''CREATE TABLE IF NOT EXISTS weather (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
               match_id INTEGER NOT NULL UNIQUE REFERENCES matches(id),
@@ -76,14 +90,70 @@ jobs:
               source TEXT NOT NULL DEFAULT 'open_meteo',
               created_at TEXT NOT NULL DEFAULT (datetime('now'))
           )''')
+
+          # ClubElo table (E21-01)
+          conn.execute('''CREATE TABLE IF NOT EXISTS club_elo (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              team_id INTEGER NOT NULL REFERENCES teams(id),
+              elo_rating REAL NOT NULL, rank INTEGER,
+              rating_date TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')),
+              UNIQUE (team_id, rating_date)
+          )''')
+
+          # InjuryFlags table (E22-02)
+          conn.execute('''CREATE TABLE IF NOT EXISTS injury_flags (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              team_id INTEGER NOT NULL REFERENCES teams(id),
+              player_name TEXT NOT NULL,
+              status TEXT NOT NULL CHECK (status IN ('out', 'doubt', 'suspended')),
+              estimated_return TEXT,
+              impact_rating REAL NOT NULL CHECK (impact_rating >= 0.0 AND impact_rating <= 1.0),
+              created_at TEXT NOT NULL DEFAULT (datetime('now')),
+              updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+          )''')
+
+          # MatchStats: set-piece xG (E22-01)
+          ms_cols = [r[1] for r in conn.execute('PRAGMA table_info(match_stats)').fetchall()]
+          for col in ['set_piece_xg', 'open_play_xg']:
+              if col not in ms_cols:
+                  conn.execute(f'ALTER TABLE match_stats ADD COLUMN {col} REAL')
+                  print(f'  Added: match_stats.{col}')
+
+          # Features table: all columns (E16 through E22)
           feat_cols = [r[1] for r in conn.execute('PRAGMA table_info(features)').fetchall()]
-          for col in ['npxg_5','npxga_5','npxg_diff_5','ppda_5','ppda_allowed_5','deep_5','deep_allowed_5','npxg_10','npxga_10','npxg_diff_10','ppda_10','ppda_allowed_10','deep_10','deep_allowed_10','market_value_ratio','squad_value_log','temperature_c','wind_speed_kmh','precipitation_mm']:
+          real_cols = ['npxg_5','npxga_5','npxg_diff_5','ppda_5','ppda_allowed_5','deep_5','deep_allowed_5','npxg_10','npxga_10','npxg_diff_10','ppda_10','ppda_allowed_10','deep_10','deep_allowed_10','market_value_ratio','squad_value_log','temperature_c','wind_speed_kmh','precipitation_mm','pinnacle_home_prob','pinnacle_draw_prob','pinnacle_away_prob','pinnacle_overround','ah_line','elo_rating','elo_diff','ref_avg_fouls','ref_avg_yellows','ref_avg_goals','ref_home_win_pct','set_piece_xg_5','open_play_xg_5','injury_impact']
+          int_cols = ['is_heavy_weather','days_since_last_match','is_congested','rest_days','key_player_out']
+          for col in real_cols:
               if col not in feat_cols:
                   conn.execute(f'ALTER TABLE features ADD COLUMN {col} REAL')
                   print(f'  Added: features.{col}')
-          if 'is_heavy_weather' not in feat_cols:
-              conn.execute('ALTER TABLE features ADD COLUMN is_heavy_weather INTEGER')
-              print(f'  Added: features.is_heavy_weather')
+          for col in int_cols:
+              if col not in feat_cols:
+                  conn.execute(f'ALTER TABLE features ADD COLUMN {col} INTEGER')
+                  print(f'  Added: features.{col}')
+
+          # Fix odds CHECK constraint (E19-03)
+          odds_sql = conn.execute(\"SELECT sql FROM sqlite_master WHERE type='table' AND name='odds'\").fetchone()
+          if odds_sql and 'home_line' not in odds_sql[0]:
+              print('  Migrating odds CHECK constraint...')
+              conn.execute('''CREATE TABLE odds_new (
+                  id INTEGER NOT NULL PRIMARY KEY, match_id INTEGER NOT NULL,
+                  bookmaker VARCHAR NOT NULL, market_type VARCHAR NOT NULL,
+                  selection VARCHAR NOT NULL, odds_decimal FLOAT NOT NULL,
+                  implied_prob FLOAT NOT NULL, is_opening INTEGER DEFAULT '0' NOT NULL,
+                  captured_at VARCHAR DEFAULT (datetime('now')) NOT NULL,
+                  source VARCHAR DEFAULT 'football_data' NOT NULL,
+                  CONSTRAINT ck_odds_market_type CHECK (market_type IN ('1X2', 'OU25', 'OU15', 'OU35', 'BTTS', 'AH')),
+                  CONSTRAINT ck_odds_selection CHECK (selection IN ('home', 'draw', 'away', 'over', 'under', 'yes', 'no', 'home_line', 'home_-0.5', 'home_-1.0', 'home_-1.5', 'home_+0.5', 'home_+1.0', 'home_+1.5', 'away_-0.5', 'away_-1.0', 'away_-1.5', 'away_+0.5', 'away_+1.0', 'away_+1.5')),
+                  CONSTRAINT uq_odds_match_bookie_market_sel_time UNIQUE (match_id, bookmaker, market_type, selection, captured_at),
+                  FOREIGN KEY(match_id) REFERENCES matches (id)
+              )''')
+              conn.execute('INSERT INTO odds_new SELECT * FROM odds')
+              conn.execute('DROP TABLE odds')
+              conn.execute('ALTER TABLE odds_new RENAME TO odds')
+              conn.execute('CREATE INDEX IF NOT EXISTS idx_odds_match ON odds (match_id)')
+              print('  Odds constraint migrated')
+
           conn.commit()
           conn.close()
           from src.database.seed import seed_all

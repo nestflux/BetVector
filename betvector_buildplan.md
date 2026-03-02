@@ -36,8 +36,9 @@ This document breaks the BetVector masterplan into sequenced epics and issues th
 | E20 | Market-Augmented Poisson | 3 | Pinnacle opening odds as features, Asian Handicap line as feature, backtest comparison |
 | E21 | External Ratings & Context | 3 | ClubElo scraper + Elo features, referee features, fixture congestion flag |
 | E22 | Advanced Features | 2 | Set-piece xG breakdown, injury impact flags (manual input) |
+| E23 | Historical Data Backfill | 7 | Load 4 missing seasons, Understat xG for all, shot-level xG, ClubElo, recompute features, backtest, Odds API verification |
 
-**Total: 22 epics, 77 issues** (45 original + 20 post-launch + 12 odds/model improvement)
+**Total: 23 epics, 84 issues** (45 original + 20 post-launch + 12 odds/model improvement + 7 data backfill)
 
 ---
 
@@ -67,6 +68,12 @@ E14-01 → E14-02 → E14-03 → E14-04 →
 E15-01 → E15-02 → E15-03 →
 E16-01 → E16-02 → E16-03 →
 E17-01 → E17-02 → E17-03 → E17-04
+E18-01 → E18-02 → E18-03 → E18-04 → E18-05 → E18-06 →
+E19-01 → E19-02 → E19-03 → E19-04 →
+E20-01 → E20-02 → E20-03 →
+E21-01 → E21-02 → E21-03 →
+E22-01 → E22-02 →
+E23-01 → E23-02 → E23-03 → E23-04 → E23-05 → E23-06 → E23-07
 ```
 
 ---
@@ -2345,3 +2352,291 @@ Manual injury input via Settings page until API-Football Pro is activated. Impac
 - [x] Injury features computed from active flags
 - [x] Features added to engineer.py and poisson.py
 - [x] Future: when API-Football Pro activated, auto-populate from injuries endpoint
+
+---
+
+## E23 — Historical Data Backfill & Model Revalidation
+
+### Motivation
+
+The model currently trains on only **760 matches** (2 seasons: 2024-25 + 2025-26), with xG data available for just 37% of training data (2025-26 only). Four configured seasons (2020-21 through 2023-24) have Season records but **zero match data** — they were never loaded because the pipeline only processes the current season.
+
+Understat has EPL data from 2014/15 onward, and Football-Data.co.uk has CSVs for all historical seasons. Loading all 6 seasons gives the model **~2,280 matches** with full xG/NPxG/PPDA/deep/set-piece data — a 3× increase in training data that should meaningfully improve prediction quality.
+
+**Expected impact:**
+- Training data: 760 → ~2,280 matches (3× more)
+- xG coverage: 37% → ~100% (Understat covers all 6 seasons)
+- Brier score improvement: estimated 5-10% from training data volume alone
+- Better handling of promoted teams (model sees historical promotion/relegation patterns)
+- More robust feature importance estimates (larger sample)
+
+---
+
+### E23-01 — Load Historical Match Data + Odds (4 seasons)
+
+**Type:** Data — Scraping + Loading
+**Depends on:** E3-01 (FootballDataScraper), E3-04 (Loader)
+**Status:** OPEN
+
+Load match results and odds for 2020-21, 2021-22, 2022-23, 2023-24 from Football-Data.co.uk CSVs. The scraper and loader already support this — they just need to be called for each historical season.
+
+**Implementation:**
+
+Create a backfill script (`scripts/backfill_historical.py`) that:
+1. Iterates through seasons: `["2020-21", "2021-22", "2022-23", "2023-24"]`
+2. For each season:
+   a. Call `FootballDataScraper().scrape(league_config, season)` to download the CSV
+   b. Call `load_matches(df, league_id, season)` to insert Match records
+   c. Call `load_odds(df, league_id)` to insert odds records (opening + closing Pinnacle + AH if available)
+3. Log summary: matches inserted, odds inserted, any failures
+
+**Expected volume:**
+- 4 seasons × 380 matches = 1,520 new Match records
+- ~4,000-6,000 new Odds records (varies by season — older CSVs have fewer bookmakers)
+- Referee data from CSVs (backfill on Match.referee)
+
+**Key considerations:**
+- Team name mapping must cover all historical teams (relegated clubs: Norwich, Watford, Bournemouth, Sheffield Utd, West Brom, Fulham, Brentford — many already in `EPL_TEAM_NAME_MAP`)
+- Idempotent: `load_matches()` uses INSERT OR IGNORE pattern — safe to re-run
+- Football-Data.co.uk CSV URL pattern: `https://www.football-data.co.uk/mmz4281/{season_code}/E0.csv` where season_code is `2021` for 2020-21 season
+
+**Acceptance Criteria:**
+- [ ] Backfill script loads all 4 historical seasons
+- [ ] ~1,520 new Match records created (4 × 380)
+- [ ] Odds loaded for all historical matches (Pinnacle opening + closing where available)
+- [ ] Referee data backfilled where CSV provides it
+- [ ] Idempotent — re-running does not create duplicates
+- [ ] Team name mapping handles all historical EPL teams (promoted/relegated)
+
+---
+
+### E23-02 — Backfill Understat xG + Advanced Stats (5 seasons)
+
+**Type:** Data — Scraping + Loading
+**Depends on:** E23-01 (Match records must exist), E14-01 (UnderstatScraper)
+**Status:** OPEN
+
+Load Understat match-level xG, NPxG, PPDA, and deep completions for seasons 2020-21 through 2024-25. Season 2025-26 already has Understat data (562 MatchStat rows). This gives every match in the database full advanced stats.
+
+**Implementation:**
+
+Add to backfill script:
+1. For each season in `["2020-21", "2021-22", "2022-23", "2023-24", "2024-25"]`:
+   a. Call `UnderstatScraper().scrape(league_config, season)` → returns DataFrame with xG/xGA/NPxG/NPxGA/PPDA/deep per team per match
+   b. Call `load_understat_stats(df, league_id)` to create MatchStat records
+2. Rate limit: 2s between Understat requests (existing rate limiter handles this)
+3. Log summary: MatchStat records created per season
+
+**Expected volume:**
+- 5 seasons × 380 matches × 2 teams = ~3,800 new MatchStat rows
+- Each row contains: xg, xga, npxg, npxga, ppda_coeff, ppda_allowed_coeff, deep, deep_allowed, shots, shots_on_target
+
+**Key considerations:**
+- Understat team name map (`UNDERSTAT_EPL_TEAM_MAP`) must cover historical teams
+- Rate limiting critical — Understat is a free resource, respect 2s minimum
+- 2024-25 has Match records but zero MatchStats — this fills the gap
+- `load_understat_stats()` uses idempotent upsert pattern — safe to re-run
+
+**Acceptance Criteria:**
+- [ ] Understat xG data loaded for all 5 historical seasons
+- [ ] ~3,800 new MatchStat records (5 × 380 × 2)
+- [ ] Each MatchStat has: xg, xga, npxg, npxga, ppda_coeff, deep, shots
+- [ ] Rate limiting respected (2s between requests)
+- [ ] Idempotent — re-running does not create duplicates
+- [ ] Team name mapping handles all historical Understat team names
+
+---
+
+### E23-03 — Backfill Shot-Level xG Breakdown (All seasons)
+
+**Type:** Data — Scraping + Loading
+**Depends on:** E23-02 (MatchStat records must exist), E22-01 (shot xG functions)
+**Status:** OPEN
+
+Load set-piece vs open-play xG breakdown for all 6 seasons using `fetch_shot_xg_for_season()`. This populates `set_piece_xg` and `open_play_xg` on MatchStat records. Season 2025-26 already has this data.
+
+**Implementation:**
+
+Add to backfill script:
+1. For each season in `["2020-21", "2021-22", "2022-23", "2023-24", "2024-25"]`:
+   a. Call `UnderstatScraper().fetch_shot_xg_for_season(league_config, season)` → returns DataFrame with match_id, team_name, set_piece_xg, open_play_xg
+   b. Call `load_understat_shot_xg(df, league_id)` to update existing MatchStat records
+2. This is the slowest step — fetches individual match shot data (1 API call per match)
+3. ~1,900 matches × 1 call each × 2s rate limit ≈ ~63 minutes
+
+**Expected volume:**
+- ~3,800 MatchStat rows updated with set_piece_xg and open_play_xg
+- Each match requires its own API call (shot-level data is per-match, not per-season)
+
+**Key considerations:**
+- This is rate-limit intensive — expect ~60+ minutes for 5 seasons
+- `load_understat_shot_xg()` only updates rows where `set_piece_xg IS NULL` — idempotent
+- If interrupted mid-season, can safely restart (picks up where it left off)
+- Consider running overnight or in segments (1-2 seasons at a time)
+
+**Acceptance Criteria:**
+- [ ] Shot-level xG loaded for all 5 historical seasons
+- [ ] MatchStat rows updated with set_piece_xg and open_play_xg
+- [ ] Rate limiting respected (no Understat abuse)
+- [ ] Idempotent — safe to restart after interruption
+- [ ] 2025-26 data unchanged (already populated)
+
+---
+
+### E23-04 — Backfill ClubElo for Historical Seasons
+
+**Type:** Data — Scraping + Loading
+**Depends on:** E23-01 (Match records must exist), E21-01 (ClubElo scraper)
+**Status:** OPEN
+
+Fetch Elo ratings for all match dates in the 4 historical seasons. Currently, ClubElo data only covers 2024-25 + 2025-26 (4,738 records). Historical seasons need Elo ratings for feature computation.
+
+**Implementation:**
+
+Add to backfill script:
+1. Query all distinct match dates from the 4 historical seasons
+2. For each date, call `http://api.clubelo.com/{YYYY-MM-DD}` → CSV of all club ratings
+3. Parse and insert via `load_clubelo_ratings()` (existing loader)
+4. ClubElo API is free, no auth, no rate limit — but add 1s delay per request to be polite
+
+**Expected volume:**
+- ~4 seasons × ~38 matchdays × ~3-5 unique dates per matchday ≈ ~600 unique dates
+- ~600 dates × ~23 EPL clubs = ~13,800 new ClubElo records
+
+**Key considerations:**
+- ClubElo API returns ALL clubs worldwide — filter to EPL teams via team name map
+- Dates before 2015 may not have Elo data for all teams (ClubElo coverage varies)
+- Existing `CLUBELO_TEAM_MAP` in clubelo_scraper.py — verify coverage for historical teams
+- UniqueConstraint on (team_id, rating_date) prevents duplicates
+
+**Acceptance Criteria:**
+- [ ] Elo ratings fetched for all match dates in 2020-21 through 2023-24
+- [ ] ~13,000+ new ClubElo records inserted
+- [ ] Team name mapping covers historical EPL teams
+- [ ] Idempotent — UniqueConstraint prevents duplicates
+- [ ] No excessive API usage (1s delay between date requests)
+
+---
+
+### E23-05 — Recompute All Features (6 seasons)
+
+**Type:** Data — Feature Engineering
+**Depends on:** E23-02, E23-03, E23-04 (all data must be loaded first)
+**Status:** OPEN
+
+Recompute the Feature table for all 6 seasons with the now-complete data. Features will include: rolling xG/NPxG/PPDA/deep/set-piece, Elo ratings, referee stats, congestion flags, Pinnacle odds (where available), and injury impact.
+
+**Implementation:**
+
+Add to backfill script:
+1. For each season in `["2020-21", "2021-22", "2022-23", "2023-24", "2024-25", "2025-26"]`:
+   a. Call `compute_all_features(league_id, season)` — this reads matches, stats, Elo, and other data from DB, computes all rolling/context features, and saves to the Feature table
+2. Delete existing Feature rows for seasons being recomputed (to ensure fresh computation with all new data)
+3. Log feature completeness: what % of features are non-null per season
+
+**Expected volume:**
+- 6 seasons × 380 matches × 2 teams = ~4,560 Feature rows
+- Each row has 35+ feature columns (rolling form, xG, npxG, PPDA, deep, set-piece, Elo, referee, congestion, odds)
+- Early matches in each season will have NULL rolling features (no lookback data)
+
+**Key considerations:**
+- 2020-21 will have very sparse features for early matches (no prior season data)
+- The rolling window (5 or 10 matches) needs enough prior matches — early-season features will be NULL
+- `compute_all_features()` is idempotent (updates existing, inserts new)
+- This is the most critical step — all model training depends on these features
+
+**Acceptance Criteria:**
+- [ ] Feature table rebuilt for all 6 seasons
+- [ ] ~4,560 Feature rows (6 × 380 × 2)
+- [ ] xG features populated for 95%+ of matches (excluding early-season)
+- [ ] Elo features populated for 95%+ of matches
+- [ ] Rolling features computed with correct temporal integrity (no future leakage)
+- [ ] Feature completeness logged and verified
+
+---
+
+### E23-06 — Full Backtest & Validation
+
+**Type:** Evaluation — Backtesting
+**Depends on:** E23-05 (all features must be computed)
+**Status:** OPEN
+
+Run a walk-forward backtest across all 6 seasons to validate that 3× more training data improves model performance. Compare against the current 2-season baseline.
+
+**Implementation:**
+
+1. Run backtest using existing `src/evaluation/backtester.py`:
+   ```
+   python run_pipeline.py backtest
+   ```
+   This already does walk-forward cross-validation and computes Brier score, ROI, calibration, and log-loss.
+
+2. Record baseline metrics (current 2-season model):
+   - Brier: 0.6105, ROI: -3.50% (from E20-03 backtest)
+
+3. Compare new 6-season metrics:
+   - Expect Brier improvement of 5-10%
+   - Expect ROI improvement (more data = better calibration)
+   - Log results to ModelPerformance table
+
+4. If results are worse (unlikely but possible):
+   - Investigate overfitting to historical patterns
+   - Check if xG data quality varies across seasons
+   - Consider training only on recent 3-4 seasons
+
+**Acceptance Criteria:**
+- [ ] Walk-forward backtest completed across all 6 seasons
+- [ ] Metrics logged to ModelPerformance table
+- [ ] Brier score compared against 2-season baseline (0.6105)
+- [ ] ROI compared against 2-season baseline (-3.50%)
+- [ ] Results documented in build plan with before/after comparison
+- [ ] Model promoted to production if metrics improve
+
+---
+
+### E23-07 — Verify Odds API Pipeline (Production Fix)
+
+**Type:** DevOps — Pipeline Verification
+**Depends on:** E19-01, E19-02
+**Status:** OPEN
+
+The Odds API integration (E19-01/02) is coded and integrated, but the database shows **zero odds records from `source="the_odds_api"`**. This issue ensures the live odds pipeline actually works end-to-end in production.
+
+**Implementation:**
+
+1. **Verify GitHub Actions secrets:**
+   - Check that `THE_ODDS_API_KEY` is set in repo Settings > Secrets > Actions
+   - If missing, add it (owner must do this manually)
+
+2. **Local test run:**
+   - Run the morning pipeline locally and verify The Odds API scraper executes
+   - Check that odds are loaded for upcoming scheduled matches
+   - Verify `_find_match()` successfully matches Odds API fixtures to existing Match records
+
+3. **Team name alignment:**
+   - Compare team names from The Odds API (`TEAM_NAME_MAP` in odds_api.py) against Football-Data.org fixtures
+   - Ensure no mismatches that would cause `_find_match()` to return None
+
+4. **Logging enhancement:**
+   - Upgrade the `no_match_count` DEBUG log to WARNING for visibility
+   - Add match date + team names to the warning message for debugging
+
+**Acceptance Criteria:**
+- [ ] THE_ODDS_API_KEY confirmed in GitHub Actions secrets
+- [ ] Local morning pipeline run loads odds from The Odds API
+- [ ] At least 1 upcoming match has Odds API odds in the database
+- [ ] Team name matching verified (no silent mismatches)
+- [ ] Pipeline logs clearly show Odds API success/failure
+
+---
+
+### Implementation Sequence
+
+```
+E23-01 (historical matches + odds) → E23-02 (Understat xG)
+→ E23-03 (shot-level xG) → E23-04 (ClubElo)
+→ E23-05 (recompute features) → E23-06 (backtest)
+→ E23-07 (Odds API verification)
+```
+
+E23-01 must be first (other steps need Match records). E23-02 through E23-04 are independent of each other but all depend on E23-01. E23-05 depends on all data being loaded. E23-06 depends on E23-05. E23-07 is independent and can be done anytime.

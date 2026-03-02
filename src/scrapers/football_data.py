@@ -65,6 +65,7 @@ EPL_TEAM_NAME_MAP: Dict[str, str] = {
     "Fulham": "Fulham",
     "Liverpool": "Liverpool",
     "Southampton": "Southampton",
+    "Sunderland": "Sunderland",
     "Watford": "Watford",
 
     # Teams whose Football-Data names differ from canonical
