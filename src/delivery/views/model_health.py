@@ -1028,3 +1028,201 @@ else:
         "</div>",
         unsafe_allow_html=True,
     )
+
+# ============================================================================
+# Glossary — explains every model health metric and concept (E27-03)
+# ============================================================================
+# The owner is learning (MP §12). This glossary defines statistical and ML
+# concepts so anyone can understand whether the model is performing well.
+
+st.divider()
+with st.expander("Glossary — What do these stats mean?", expanded=False):
+    st.markdown(
+        '<style>'
+        '.gloss-section { margin-bottom: 18px; }'
+        '.gloss-title {'
+        '  font-family: Inter, sans-serif; font-size: 14px; font-weight: 700;'
+        '  color: #3FB950; text-transform: uppercase; letter-spacing: 0.5px;'
+        '  margin-bottom: 8px; border-bottom: 1px solid #21262D; padding-bottom: 4px;'
+        '}'
+        '.gloss-row {'
+        '  display: flex; gap: 8px; margin-bottom: 6px; line-height: 1.45;'
+        '}'
+        '.gloss-term {'
+        '  font-family: "JetBrains Mono", monospace; font-size: 12px;'
+        '  font-weight: 600; color: #E6EDF3; min-width: 140px; flex-shrink: 0;'
+        '}'
+        '.gloss-def {'
+        '  font-family: Inter, sans-serif; font-size: 12px; color: #8B949E;'
+        '}'
+        '</style>',
+        unsafe_allow_html=True,
+    )
+
+    # --- Prediction Accuracy ---
+    st.markdown(
+        '<div class="gloss-section">'
+        '<div class="gloss-title">Prediction Accuracy</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Brier Score</span>'
+        '  <span class="gloss-def">Measures how accurate probability predictions are. '
+        'Ranges from 0 (perfect) to 1 (worst). Lower = better. '
+        'A coin flip scores 0.25. Anything below 0.20 is considered good. '
+        'BetVector targets &lt;0.20 for match result predictions.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Active Model</span>'
+        '  <span class="gloss-def">The prediction model currently generating forecasts. '
+        'BetVector uses a Market-Augmented Poisson model that combines team stats '
+        'with bookmaker odds to predict match outcomes.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Total Predictions</span>'
+        '  <span class="gloss-def">How many matches the model has predicted. '
+        'More predictions = more reliable performance metrics. '
+        'Brier score is unreliable with fewer than 100 predictions.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Model Quality</span>'
+        '  <span class="gloss-def">A qualitative label based on Brier score: '
+        '<span style="color: #3FB950;">Good</span> (&lt;0.20), '
+        '<span style="color: #D29922;">Fair</span> (0.20\u20130.25), '
+        '<span style="color: #F85149;">Poor</span> (&gt;0.25).</span>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    # --- Calibration ---
+    st.markdown(
+        '<div class="gloss-section">'
+        '<div class="gloss-title">Calibration</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Calibration Plot</span>'
+        '  <span class="gloss-def">Shows predicted probability vs actual win rate. '
+        'A perfectly calibrated model has all points on the diagonal line \u2014 '
+        'when it says 60%, events happen ~60% of the time.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Overconfident</span>'
+        '  <span class="gloss-def">Points below the diagonal. The model predicts higher '
+        'probabilities than reality \u2014 it\'s too sure of itself. '
+        'Can lead to overvaluing certain bets.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Underconfident</span>'
+        '  <span class="gloss-def">Points above the diagonal. The model predicts lower '
+        'probabilities than reality \u2014 it\'s too cautious. '
+        'May miss value bets it should have flagged.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Sample Size (dot)</span>'
+        '  <span class="gloss-def">Larger dots = more predictions in that probability bin. '
+        'Only trust calibration for bins with large samples.</span>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    # --- CLV ---
+    st.markdown(
+        '<div class="gloss-section">'
+        '<div class="gloss-title">Closing Line Value (CLV)</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">CLV</span>'
+        '  <span class="gloss-def">Closing Line Value \u2014 compares the odds you bet at '
+        'to the closing odds (final price before kickoff). '
+        'Positive CLV means you consistently got better odds than the market settled at. '
+        'This is the single best predictor of long-term profitability.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Rolling CLV</span>'
+        '  <span class="gloss-def">Average CLV over a rolling window (typically 20 bets). '
+        'A consistently positive rolling CLV confirms the model is beating the market.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Closing Line</span>'
+        '  <span class="gloss-def">The final odds offered by bookmakers just before kickoff. '
+        'Considered the most "accurate" price because it incorporates all available information.</span>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    # --- Feature Importance ---
+    st.markdown(
+        '<div class="gloss-section">'
+        '<div class="gloss-title">Feature Importance</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Feature</span>'
+        '  <span class="gloss-def">An input variable the model uses for prediction. '
+        'Examples: rolling xG, PPDA, form, Elo rating, odds movement.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Gain</span>'
+        '  <span class="gloss-def">How much a feature contributes to improving the model\'s '
+        'predictions. Higher gain = more important input. Only available for gradient-boosted '
+        'models (XGBoost/LightGBM), not Poisson regression.</span>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    # --- Market Edge Map ---
+    st.markdown(
+        '<div class="gloss-section">'
+        '<div class="gloss-title">Market Edge Map</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term" style="color: #3FB950;">Profitable</span>'
+        '  <span class="gloss-def">Positive ROI with 100+ bets and statistically significant '
+        'confidence interval \u2014 strong evidence the model has an edge here.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term" style="color: #D29922;">Promising</span>'
+        '  <span class="gloss-def">Positive ROI but fewer than 100 bets \u2014 '
+        'early signal but not yet statistically reliable.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term" style="color: #8B949E;">Insufficient</span>'
+        '  <span class="gloss-def">Fewer than 50 bets \u2014 not enough data '
+        'to draw any conclusions about this market/league combination.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term" style="color: #F85149;">Unprofitable</span>'
+        '  <span class="gloss-def">Negative ROI with 100+ bets \u2014 '
+        'the model does not have an edge in this market. Consider excluding it.</span>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    # --- Self-Improvement ---
+    st.markdown(
+        '<div class="gloss-section">'
+        '<div class="gloss-title">Self-Improvement</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Recalibration</span>'
+        '  <span class="gloss-def">Adjusting the model\'s probability outputs so they '
+        'better match observed win rates. Triggered automatically after 200+ resolved '
+        'predictions. If the adjustment makes things worse, it\'s rolled back.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Retrain</span>'
+        '  <span class="gloss-def">Re-fitting the entire model on updated data. '
+        'Triggered when the rolling Brier score degrades more than 15% from its '
+        'historical average. Includes automatic rollback if performance doesn\'t improve.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Rolled Back</span>'
+        '  <span class="gloss-def">A recalibration or retrain that was reverted because it '
+        'made the model worse. The system automatically detects and undoes harmful changes.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Brier Trend</span>'
+        '  <span class="gloss-def">Weekly average Brier score over time. A flat or declining '
+        'trend = model is stable or improving. A rising trend = model is getting less accurate '
+        'and may trigger automatic retraining.</span>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )

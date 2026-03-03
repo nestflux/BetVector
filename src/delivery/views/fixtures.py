@@ -777,3 +777,160 @@ else:
             ):
                 st.session_state["deep_dive_match_id"] = fix["match_id"]
                 st.switch_page("views/match_detail.py")
+
+# ============================================================================
+# Glossary — explains every term, badge, and indicator on this page (E27-03)
+# ============================================================================
+# The owner is learning (MP §12). This glossary defines every visible element
+# so anyone can understand the fixtures overview without prior betting knowledge.
+
+st.divider()
+with st.expander("Glossary — What do these terms mean?", expanded=False):
+    st.markdown(
+        '<style>'
+        '.gloss-section { margin-bottom: 18px; }'
+        '.gloss-title {'
+        '  font-family: Inter, sans-serif; font-size: 14px; font-weight: 700;'
+        '  color: #3FB950; text-transform: uppercase; letter-spacing: 0.5px;'
+        '  margin-bottom: 8px; border-bottom: 1px solid #21262D; padding-bottom: 4px;'
+        '}'
+        '.gloss-row {'
+        '  display: flex; gap: 8px; margin-bottom: 6px; line-height: 1.45;'
+        '}'
+        '.gloss-term {'
+        '  font-family: "JetBrains Mono", monospace; font-size: 12px;'
+        '  font-weight: 600; color: #E6EDF3; min-width: 140px; flex-shrink: 0;'
+        '}'
+        '.gloss-def {'
+        '  font-family: Inter, sans-serif; font-size: 12px; color: #8B949E;'
+        '}'
+        '</style>',
+        unsafe_allow_html=True,
+    )
+
+    # --- Market Badges ---
+    st.markdown(
+        '<div class="gloss-section">'
+        '<div class="gloss-title">Market Badges</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">H / D / A</span>'
+        '  <span class="gloss-def">Home Win / Draw / Away Win (1X2 match result market). '
+        'The most common betting market — who wins the match.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">O1.5 / U1.5</span>'
+        '  <span class="gloss-def">Over/Under 1.5 Goals. Over 1.5 means 2 or more goals total. '
+        'Under 1.5 means 0 or 1 goals (rare, ~15-20% of EPL matches).</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">O2.5 / U2.5</span>'
+        '  <span class="gloss-def">Over/Under 2.5 Goals. Over 2.5 means 3 or more goals total. '
+        'The most popular goals line in betting (~50/50 split in the EPL).</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">BTTS Y / BTTS N</span>'
+        '  <span class="gloss-def">Both Teams to Score — Yes or No. '
+        'BTTS Yes means each team scores at least one goal.</span>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    # --- Badge Colours ---
+    st.markdown(
+        '<div class="gloss-section">'
+        '<div class="gloss-title">Badge Colours</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term" style="color: #3FB950;">Green</span>'
+        '  <span class="gloss-def">The model sees a strong edge — the bookmaker\'s odds are '
+        'significantly more generous than the model thinks they should be.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term" style="color: #D29922;">Yellow</span>'
+        '  <span class="gloss-def">Marginal edge — there\'s some value but the gap between '
+        'model and bookmaker is small. Proceed with caution.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term" style="color: #F85149;">Red</span>'
+        '  <span class="gloss-def">No edge — the bookmaker\'s price is equal to or below '
+        'what the model thinks. Not a value bet.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term" style="color: #8B949E;">Grey</span>'
+        '  <span class="gloss-def">No data — either the prediction hasn\'t been generated yet '
+        'or odds haven\'t been loaded for this market.</span>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    # --- Fixture Data ---
+    st.markdown(
+        '<div class="gloss-section">'
+        '<div class="gloss-title">Fixture Data</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Predicted Score</span>'
+        '  <span class="gloss-def">The model\'s expected goals for each team '
+        '(e.g. "Model: 1.4 – 0.8"). This is the Poisson model\'s lambda (\u03BB) — '
+        'the average goals the model expects, not a specific scoreline prediction.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Edge (tooltip)</span>'
+        '  <span class="gloss-def">Hover over any badge to see the exact edge percentage. '
+        'E.g. "+8.2% edge" means the model thinks the outcome is 8.2 percentage points '
+        'more likely than the bookmaker\'s odds imply.</span>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    # --- Diagnostic Badges ---
+    st.markdown(
+        '<div class="gloss-section">'
+        '<div class="gloss-title">Diagnostic Badges</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">No pred</span>'
+        '  <span class="gloss-def">The model hasn\'t generated a prediction for this match yet. '
+        'Predictions run during the morning pipeline (6 AM).</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">No odds</span>'
+        '  <span class="gloss-def">No bookmaker odds have been loaded. '
+        'Odds are typically available 1-2 weeks before kickoff.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Full data</span>'
+        '  <span class="gloss-def">Both prediction and odds exist — the model can compute edges '
+        'and identify value bets for this match.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">X VB</span>'
+        '  <span class="gloss-def">Number of value bets identified. A value bet is a selection '
+        'where the model\'s probability exceeds the bookmaker\'s implied probability.</span>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    # --- Top Picks ---
+    st.markdown(
+        '<div class="gloss-section">'
+        '<div class="gloss-title">Top Picks Banner</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Top Picks</span>'
+        '  <span class="gloss-def">The 3\u20135 highest-edge value bets across all upcoming fixtures. '
+        'Shows the best opportunities at a glance without scrolling through every match.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Best Bookmaker</span>'
+        '  <span class="gloss-def">The bookmaker offering the best odds (highest edge) for each '
+        'pick. Different bookmakers price the same outcome differently.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Pipeline Coverage</span>'
+        '  <span class="gloss-def">How many upcoming fixtures have both model predictions and '
+        'bookmaker odds loaded. Higher coverage means more fixtures can be analysed for value.</span>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )

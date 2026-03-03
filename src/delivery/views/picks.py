@@ -703,7 +703,7 @@ with st.expander("Glossary — What do these terms mean?", expanded=False):
         '<div class="gloss-row">'
         '  <span class="gloss-term">Market</span>'
         '  <span class="gloss-def">The type of bet: Home Win / Draw / Away Win (1X2), '
-        'Over/Under 2.5 Goals, or Both Teams to Score (BTTS).</span>'
+        'Over/Under 1.5 or 2.5 Goals, or Both Teams to Score (BTTS).</span>'
         '</div>'
         '<div class="gloss-row">'
         '  <span class="gloss-term">Selection</span>'
@@ -807,6 +807,34 @@ with st.expander("Glossary — What do these terms mean?", expanded=False):
         '  <span class="gloss-term">High Confidence</span>'
         '  <span class="gloss-def">How many of today\'s picks the model is most '
         'certain about. These are your best bets to focus on.</span>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    # --- Filters & Controls ---
+    st.markdown(
+        '<div class="gloss-section">'
+        '<div class="gloss-title">Filters &amp; Controls</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Date Range</span>'
+        '  <span class="gloss-def">Slide forward to see future matchday picks, or backward to '
+        'review recent picks and their results. Defaults to today \u00B1 3 days.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Edge Threshold</span>'
+        '  <span class="gloss-def">Minimum edge required to show a pick. '
+        'Higher threshold = fewer but stronger picks. Adjust to match your risk appetite.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Best Bookmaker</span>'
+        '  <span class="gloss-def">Each pick shows the bookmaker offering the highest edge. '
+        'Different bookmakers price the same outcome differently.</span>'
+        '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Alt. Bookmakers</span>'
+        '  <span class="gloss-def">How many additional bookmakers also offer value for this '
+        'selection. Shown as "X other bookmakers also offer value" on each card.</span>'
         '</div>'
         '</div>',
         unsafe_allow_html=True,
