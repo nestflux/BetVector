@@ -770,11 +770,13 @@ def load_odds_the_odds_api(
 
             if match is None:
                 # Match not in our DB — could be a different league or
-                # a newly announced fixture not yet in the database
+                # a newly announced fixture not yet in the database.
+                # Log at WARNING (not DEBUG) for pipeline visibility (E23-07).
                 no_match_count += len(group_df)
-                logger.debug(
-                    "load_odds_the_odds_api: No match for %s %s vs %s "
-                    "— skipping %d odds records",
+                logger.warning(
+                    "load_odds_the_odds_api: No match found for %s %s vs %s "
+                    "— skipping %d odds records.  Check team name mapping "
+                    "or run API-Football scraper to create the fixture.",
                     match_date, home_name, away_name, len(group_df),
                 )
                 continue
