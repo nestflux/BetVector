@@ -1,21 +1,17 @@
 """
-BetVector — Today's Picks Page (E9-02)
-=======================================
-Displays value bets for today's matches, sorted by edge descending.
+BetVector — Today's Picks Page (E9-02, E24-01)
+================================================
+Displays actionable value bets for upcoming matches.
 
-This is the primary daily interface — the answer to "what should I bet
-on today?"  Each value bet is displayed as a card showing:
+Primary daily interface — "what should I bet on today?"
 
-- Match info (teams, league, kickoff time)
-- Market and selection (e.g. "1X2 → Home Win")
-- Model probability vs bookmaker implied probability
-- Edge (model_prob - implied_prob) and confidence badge
-- Bookmaker odds (FanDuel highlighted if available)
-- Suggested stake from the bankroll manager
+**E24-01 fix:** The original triple fallback showed stale 2024 picks when
+no upcoming value bets existed.  Now the page has two distinct sections:
 
-Users can mark bets as placed, entering the actual odds and stake they
-got from the bookmaker.  This creates a ``user_placed`` entry in bet_log
-for tracking real-money performance.
+1. **Upcoming Picks** — only scheduled matches, sorted by date then edge.
+   Fallback expands to 14 days, never further.  No finished matches appear.
+2. **Recent Results** — last 7 days of finished matches with outcomes, for
+   performance tracking.  "Mark as Placed" only shown for upcoming picks.
 
 Master Plan refs: MP §3 Flow 1 (Morning Picks Review), MP §8 Design System
 """
@@ -25,6 +21,7 @@ from typing import Dict, List, Optional
 
 import streamlit as st
 
+from src.config import config
 from src.database.db import get_session
 from src.database.models import (
     BetLog,
@@ -84,12 +81,85 @@ BOOKMAKER_DISPLAY = {
 # Data Loading
 # ============================================================================
 
-def get_todays_value_bets(edge_threshold: float = 0.0) -> List[Dict]:
-    """Fetch today's value bets with match and team details.
+def _enrich_value_bets(session, rows) -> List[Dict]:
+    """Turn raw (ValueBet, Match, League) rows into enriched dicts.
 
-    Queries the value_bets table joined with matches, teams, and leagues
-    to build complete card data.  Falls back to showing all recent value
-    bets if none exist for today (useful during development and backtesting).
+    Shared helper used by both the upcoming-picks and recent-results
+    queries so enrichment logic isn't duplicated.
+    """
+    results = []
+    for vb, match, league in rows:
+        home_team = session.query(Team).filter_by(id=match.home_team_id).first()
+        away_team = session.query(Team).filter_by(id=match.away_team_id).first()
+
+        # Weather conditions for this match (E17-02)
+        weather = session.query(Weather).filter_by(match_id=match.id).first()
+        weather_category = weather.weather_category if weather else None
+        is_heavy_weather = False
+        if weather:
+            cat = (weather.weather_category or "").lower()
+            is_heavy_weather = (
+                cat in ("rain", "heavy_rain", "snow", "storm")
+                or (weather.wind_speed_kmh or 0) > 30
+            )
+
+        # Market value ratio from the home team's features (E17-02)
+        home_feature = (
+            session.query(Feature)
+            .filter_by(match_id=match.id, team_id=match.home_team_id)
+            .first()
+        )
+        mv_ratio = getattr(home_feature, "market_value_ratio", None) if home_feature else None
+
+        # Match result for finished matches — used in Recent Results section.
+        # Guard against NULL goals: a match can be status="finished" but have
+        # NULL home_goals/away_goals if the pipeline partially updated.
+        match_result = None
+        if (match.status == "finished"
+                and match.home_goals is not None
+                and match.away_goals is not None):
+            match_result = f"{match.home_goals}-{match.away_goals}"
+
+        results.append({
+            "id": vb.id,
+            "match_id": vb.match_id,
+            "home_team": home_team.name if home_team else "Unknown",
+            "away_team": away_team.name if away_team else "Unknown",
+            "league": league.short_name,
+            "date": match.date,
+            "kickoff": match.kickoff_time or "TBD",
+            "status": match.status,
+            "match_result": match_result,
+            "market_type": vb.market_type,
+            "selection": vb.selection,
+            "model_prob": vb.model_prob,
+            "bookmaker": vb.bookmaker,
+            "bookmaker_odds": vb.bookmaker_odds,
+            "implied_prob": vb.implied_prob,
+            "edge": vb.edge,
+            "expected_value": vb.expected_value,
+            "confidence": vb.confidence,
+            "explanation": vb.explanation,
+            "detected_at": vb.detected_at,
+            "is_heavy_weather": is_heavy_weather,
+            "weather_summary": weather_category,
+            "market_value_ratio": mv_ratio,
+        })
+    return results
+
+
+def get_upcoming_value_bets(edge_threshold: float = 0.0) -> List[Dict]:
+    """Fetch value bets for upcoming (scheduled) matches only.
+
+    E24-01: Replaces the old ``get_todays_value_bets()`` which had a
+    triple fallback cascade that surfaced stale 2024 data.
+
+    New logic:
+    1. Query value bets for scheduled matches from today onward,
+       sorted by date ascending (soonest first) then edge descending.
+    2. If none found, expand window to next 14 days of scheduled matches.
+    3. If still none, return empty list — the page shows a clean empty state.
+       No all-time fallback.  No finished matches.
 
     Parameters
     ----------
@@ -99,102 +169,89 @@ def get_todays_value_bets(edge_threshold: float = 0.0) -> List[Dict]:
     Returns
     -------
     list[dict]
-        Value bet data enriched with team names, league, and kickoff.
+        Upcoming value bets enriched with team names, league, and kickoff.
     """
     with get_session() as session:
         today = date.today().isoformat()
 
-        # Try today's matches first
+        # Primary: scheduled matches from today onward
         query = (
             session.query(ValueBet, Match, League)
             .join(Match, ValueBet.match_id == Match.id)
             .join(League, Match.league_id == League.id)
-            .filter(Match.date == today)
+            .filter(Match.status == "scheduled")
+            .filter(Match.date >= today)
         )
 
         if edge_threshold > 0:
             query = query.filter(ValueBet.edge >= edge_threshold)
 
-        rows = query.order_by(ValueBet.edge.desc()).all()
+        # Sort: soonest date first, then highest edge within same date
+        rows = (
+            query
+            .order_by(Match.date.asc(), ValueBet.edge.desc())
+            .limit(50)
+            .all()
+        )
 
-        # If no today's picks, show recent value bets (last 7 days)
-        # This ensures the page has content during development/backtesting
+        # Fallback: expand to next 14 days of scheduled matches
+        # (covers international break gaps where no matches are today)
         if not rows:
-            week_ago = (date.today() - timedelta(days=7)).isoformat()
+            future_cutoff = (date.today() + timedelta(days=14)).isoformat()
             query = (
                 session.query(ValueBet, Match, League)
                 .join(Match, ValueBet.match_id == Match.id)
                 .join(League, Match.league_id == League.id)
-                .filter(Match.date >= week_ago)
+                .filter(Match.status == "scheduled")
+                .filter(Match.date >= today)
+                .filter(Match.date <= future_cutoff)
             )
             if edge_threshold > 0:
                 query = query.filter(ValueBet.edge >= edge_threshold)
 
-            rows = query.order_by(ValueBet.edge.desc()).limit(50).all()
-
-        # If still no picks (e.g., during development with only historical data),
-        # show the most recent value bets regardless of date
-        if not rows:
-            query = (
-                session.query(ValueBet, Match, League)
-                .join(Match, ValueBet.match_id == Match.id)
-                .join(League, Match.league_id == League.id)
+            rows = (
+                query
+                .order_by(Match.date.asc(), ValueBet.edge.desc())
+                .limit(50)
+                .all()
             )
-            if edge_threshold > 0:
-                query = query.filter(ValueBet.edge >= edge_threshold)
 
-            rows = query.order_by(ValueBet.edge.desc()).limit(50).all()
+        return _enrich_value_bets(session, rows)
 
-        # Enrich with team names, weather, and market value data
-        results = []
-        for vb, match, league in rows:
-            home_team = session.query(Team).filter_by(id=match.home_team_id).first()
-            away_team = session.query(Team).filter_by(id=match.away_team_id).first()
 
-            # Weather conditions for this match (E17-02)
-            weather = session.query(Weather).filter_by(match_id=match.id).first()
-            weather_category = weather.weather_category if weather else None
-            is_heavy_weather = False
-            if weather:
-                cat = (weather.weather_category or "").lower()
-                is_heavy_weather = (
-                    cat in ("rain", "heavy_rain", "snow", "storm")
-                    or (weather.wind_speed_kmh or 0) > 30
-                )
+def get_recent_results(days: int = 7, limit: int = 20) -> List[Dict]:
+    """Fetch value bets for recently finished matches with outcomes.
 
-            # Market value ratio from the home team's features (E17-02)
-            home_feature = (
-                session.query(Feature)
-                .filter_by(match_id=match.id, team_id=match.home_team_id)
-                .first()
-            )
-            mv_ratio = getattr(home_feature, "market_value_ratio", None) if home_feature else None
+    E24-01: New function providing a separate "Recent Results" section.
+    Shows how past picks performed — win or loss — for performance tracking.
 
-            results.append({
-                "id": vb.id,
-                "match_id": vb.match_id,
-                "home_team": home_team.name if home_team else "Unknown",
-                "away_team": away_team.name if away_team else "Unknown",
-                "league": league.short_name,
-                "date": match.date,
-                "kickoff": match.kickoff_time or "TBD",
-                "market_type": vb.market_type,
-                "selection": vb.selection,
-                "model_prob": vb.model_prob,
-                "bookmaker": vb.bookmaker,
-                "bookmaker_odds": vb.bookmaker_odds,
-                "implied_prob": vb.implied_prob,
-                "edge": vb.edge,
-                "expected_value": vb.expected_value,
-                "confidence": vb.confidence,
-                "explanation": vb.explanation,
-                "detected_at": vb.detected_at,
-                "is_heavy_weather": is_heavy_weather,
-                "weather_summary": weather_category,
-                "market_value_ratio": mv_ratio,
-            })
+    Parameters
+    ----------
+    days : int
+        How many days back to look (default 7).
+    limit : int
+        Max results to return.
 
-    return results
+    Returns
+    -------
+    list[dict]
+        Recent finished value bets with match results.
+    """
+    with get_session() as session:
+        cutoff = (date.today() - timedelta(days=days)).isoformat()
+
+        rows = (
+            session.query(ValueBet, Match, League)
+            .join(Match, ValueBet.match_id == Match.id)
+            .join(League, Match.league_id == League.id)
+            .filter(Match.status == "finished")
+            .filter(Match.date >= cutoff)
+            .order_by(Match.date.desc(), ValueBet.edge.desc())
+            .limit(limit)
+            .all()
+        )
+
+        return _enrich_value_bets(session, rows)
 
 
 def get_suggested_stake(model_prob: float, odds: float) -> float:
@@ -341,52 +398,103 @@ def render_value_bet_card(vb: Dict, idx: int) -> None:
         st.query_params["match_id"] = str(vb["match_id"])
         st.switch_page("views/match_detail.py")
 
-    # "Mark as Placed" expander
-    with st.expander(f"Mark as Placed", expanded=False):
-        col1, col2 = st.columns(2)
-        with col1:
-            actual_odds = st.number_input(
-                "Actual odds",
-                min_value=1.01,
-                value=vb["bookmaker_odds"],
-                step=0.01,
-                format="%.2f",
-                key=f"odds_{idx}",
-            )
-        with col2:
-            actual_stake = st.number_input(
-                "Actual stake ($)",
-                min_value=0.01,
-                value=suggested_stake,
-                step=1.0,
-                format="%.2f",
-                key=f"stake_{idx}",
-            )
+    # "Mark as Placed" — only for scheduled matches (E24-01)
+    # Finished matches can't be bet on, so hide the form
+    if vb.get("status") != "finished":
+        with st.expander(f"Mark as Placed", expanded=False):
+            col1, col2 = st.columns(2)
+            with col1:
+                actual_odds = st.number_input(
+                    "Actual odds",
+                    min_value=1.01,
+                    value=vb["bookmaker_odds"],
+                    step=0.01,
+                    format="%.2f",
+                    key=f"odds_{idx}",
+                )
+            with col2:
+                actual_stake = st.number_input(
+                    "Actual stake ($)",
+                    min_value=0.01,
+                    value=suggested_stake,
+                    step=1.0,
+                    format="%.2f",
+                    key=f"stake_{idx}",
+                )
 
-        if st.button("Confirm Bet Placed", key=f"confirm_{idx}", type="primary"):
-            user_id = get_default_user_id()
-            if user_id is None:
-                st.error("No user found. Run `python run_pipeline.py setup` first.")
-            else:
-                try:
-                    from src.betting.tracker import log_user_bet
-                    bet_id = log_user_bet(
-                        value_bet_id=vb["id"],
-                        user_id=user_id,
-                        actual_odds=actual_odds,
-                        actual_stake=actual_stake,
-                    )
-                    if bet_id:
-                        st.success(
-                            f"Bet logged (ID: {bet_id}). "
-                            f"{vb['home_team']} vs {vb['away_team']} — "
-                            f"{selection_label} @ {actual_odds:.2f}, "
-                            f"${actual_stake:.2f} staked."
+            if st.button("Confirm Bet Placed", key=f"confirm_{idx}", type="primary"):
+                user_id = get_default_user_id()
+                if user_id is None:
+                    st.error("No user found. Run `python run_pipeline.py setup` first.")
+                else:
+                    try:
+                        from src.betting.tracker import log_user_bet
+                        bet_id = log_user_bet(
+                            value_bet_id=vb["id"],
+                            user_id=user_id,
+                            actual_odds=actual_odds,
+                            actual_stake=actual_stake,
                         )
-                    else:
-                        st.warning("Bet may already be logged (duplicate).")
-                except Exception as e:
-                    st.error(f"Failed to log bet: {e}")
+                        if bet_id:
+                            st.success(
+                                f"Bet logged (ID: {bet_id}). "
+                                f"{vb['home_team']} vs {vb['away_team']} — "
+                                f"{selection_label} @ {actual_odds:.2f}, "
+                                f"${actual_stake:.2f} staked."
+                            )
+                        else:
+                            st.warning("Bet may already be logged (duplicate).")
+                    except Exception as e:
+                        st.error(f"Failed to log bet: {e}")
+
+
+def render_result_card(vb: Dict, idx: int) -> None:
+    """Render a finished-match value bet as a compact result card.
+
+    E24-01: Shows the outcome (score), whether the pick won or lost,
+    and the edge that was identified.  No "Mark as Placed" form since
+    the match is already finished.
+    """
+    selection_label = SELECTION_DISPLAY.get(
+        (vb["market_type"], vb["selection"]),
+        f"{vb['market_type']}/{vb['selection']}",
+    )
+
+    # Determine if the pick won or lost based on match result
+    result_text = vb.get("match_result", "?-?")
+    edge_pct = vb["edge"] * 100
+
+    # Result badge colour — green for won, red for lost, grey for unknown
+    # We don't have bet outcome in ValueBet directly, so just show the score
+    # and the edge for reference.  The BetLog tracks actual P&L.
+    card_html = f"""<div style="
+        background-color: #161B22; border: 1px solid #21262D; border-radius: 8px;
+        padding: 14px 18px; margin-bottom: 8px;
+        border-left: 3px solid #484F58;
+    ">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <span style="font-family: 'Inter', sans-serif; font-size: 14px; color: #E6EDF3;">
+                {vb["home_team"]} vs {vb["away_team"]}
+            </span>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #8B949E; margin-left: 10px;">
+                {result_text}
+            </span>
+        </div>
+        <div style="display: flex; gap: 12px; align-items: center;">
+            <span style="font-family: 'Inter', sans-serif; font-size: 12px; color: #8B949E;">
+                {selection_label}
+            </span>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #3FB950;">
+                +{edge_pct:.1f}%
+            </span>
+            <span style="font-family: 'Inter', sans-serif; font-size: 11px; color: #484F58;">
+                {vb["date"]}
+            </span>
+        </div>
+    </div>
+    </div>"""
+    st.markdown(card_html, unsafe_allow_html=True)
 
 
 # ============================================================================
@@ -398,60 +506,97 @@ st.markdown(
     unsafe_allow_html=True,
 )
 st.markdown(
-    '<p class="text-muted">Value bets for today\'s matches, sorted by edge</p>',
+    '<p class="text-muted">Upcoming value bets, sorted by matchday then edge</p>',
     unsafe_allow_html=True,
 )
 st.divider()
 
-# Edge threshold slider — filters picks in real-time
-# Default to 5% (standard edge threshold from config)
+# Edge threshold slider — filters picks in real-time.
+# Default comes from config so changing settings.yaml propagates here.
+try:
+    _default_edge_pct = float(config.settings.value_betting.edge_threshold) * 100
+except (AttributeError, TypeError, ValueError):
+    _default_edge_pct = 5.0
 edge_threshold = st.slider(
     "Minimum edge threshold",
     min_value=0.0,
     max_value=20.0,
-    value=5.0,
+    value=_default_edge_pct,
     step=0.5,
     format="%.1f%%",
     help="Filter picks by minimum edge. Higher = fewer but stronger picks.",
 )
 edge_threshold_decimal = edge_threshold / 100.0
 
-# Load value bets
-with st.spinner("Loading value bets..."):
-    value_bets = get_todays_value_bets(edge_threshold=edge_threshold_decimal)
+# ── Upcoming Picks (actionable) ──────────────────────────────────────────
+# Only scheduled matches, sorted by date ascending then edge descending.
+# E24-01: No finished matches.  No all-time fallback.
+with st.spinner("Loading upcoming picks..."):
+    upcoming_bets = get_upcoming_value_bets(edge_threshold=edge_threshold_decimal)
 
-# Summary metrics
-if value_bets:
+if upcoming_bets:
+    # Check if any picks are for today specifically
     today_str = date.today().isoformat()
-    is_today = any(vb["date"] == today_str for vb in value_bets)
-
-    if not is_today:
-        st.info(
-            "No picks for today. Showing recent value bets for reference."
-        )
+    today_count = sum(1 for vb in upcoming_bets if vb["date"] == today_str)
+    if today_count > 0:
+        st.success(f"**{today_count} pick{'s' if today_count != 1 else ''} for today!**")
+    else:
+        # Picks exist but not for today — show when the next ones are
+        next_date = upcoming_bets[0]["date"]
+        st.info(f"No picks for today. Next picks: **{next_date}**")
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("Value Bets", len(value_bets))
+        st.metric("Upcoming Picks", len(upcoming_bets))
     with col2:
-        avg_edge = sum(vb["edge"] for vb in value_bets) / len(value_bets)
+        avg_edge = sum(vb["edge"] for vb in upcoming_bets) / len(upcoming_bets)
         st.metric("Avg Edge", f"{avg_edge:.1%}")
     with col3:
-        high_conf = sum(1 for vb in value_bets if vb["confidence"] == "high")
+        high_conf = sum(1 for vb in upcoming_bets if vb["confidence"] == "high")
         st.metric("High Confidence", high_conf)
 
     st.divider()
 
-    # Render each value bet as a card
-    for idx, vb in enumerate(value_bets):
+    # Render each upcoming value bet as a card
+    for idx, vb in enumerate(upcoming_bets):
         render_value_bet_card(vb, idx)
 
 else:
-    # Empty state (MP §8)
+    # Empty state — no upcoming value bets at all (MP §8)
     st.markdown(
         '<div class="bv-empty-state">'
-        "No value bets right now. Your bankroll thanks you for your patience."
+        "No upcoming value bets found. Check back after the next pipeline run, "
+        "or lower the edge threshold above."
         "</div>",
+        unsafe_allow_html=True,
+    )
+
+# ── Recent Results (performance tracking) ────────────────────────────────
+# Last 7 days of finished matches that had value bets — shows how past
+# picks performed.  Compact cards, no "Mark as Placed" form.
+st.divider()
+st.markdown(
+    '<div style="font-family: Inter, sans-serif; font-size: 18px; font-weight: 600; '
+    'color: #E6EDF3; margin-bottom: 12px;">Recent Results</div>',
+    unsafe_allow_html=True,
+)
+st.markdown(
+    '<p class="text-muted" style="margin-bottom: 12px;">'
+    'Past picks from the last 7 days — track how the model performed</p>',
+    unsafe_allow_html=True,
+)
+
+with st.spinner("Loading recent results..."):
+    recent_results = get_recent_results(days=7, limit=20)
+
+if recent_results:
+    for idx, vb in enumerate(recent_results):
+        render_result_card(vb, idx)
+else:
+    st.markdown(
+        '<div style="font-family: Inter, sans-serif; font-size: 13px; '
+        'color: #484F58; padding: 16px 0;">No finished matches with value '
+        'bets in the last 7 days.</div>',
         unsafe_allow_html=True,
     )
 

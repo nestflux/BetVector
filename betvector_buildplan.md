@@ -2642,3 +2642,349 @@ E23-01 (historical matches + odds) → E23-02 (Understat xG)
 ```
 
 E23-01 must be first (other steps need Match records). E23-02 through E23-04 are independent of each other but all depend on E23-01. E23-05 depends on all data being loaded. E23-06 depends on E23-05. E23-07 is independent and can be done anytime.
+
+---
+
+## E24 — Dashboard Fixes & Fixtures Value Grid
+
+### Motivation
+
+Three dashboard issues prevent effective forward-looking use: (1) Today's Picks shows stale data from 2024 due to an unbounded fallback cascade in the query logic, (2) Match Deep Dive is empty for future matches even when Prediction records exist in the DB, and (3) the Fixtures page provides zero analytical insight — just team names and kickoff times — requiring a Deep Dive click for every match.
+
+**Expected impact:**
+- Picks page becomes actionable — only upcoming matches, sorted by date then edge
+- Deep Dive fully functional for scheduled matches — scoreline matrix, probabilities, narrative all render
+- Fixtures page becomes a standalone decision-making tool with color-coded market indicators per match
+
+---
+
+### E24-01 — Fix Today's Picks Date Logic
+
+**Type:** Bug Fix — Dashboard
+**Depends on:** E9-03 (Picks page), E19-02 (Odds API integration)
+**MP refs:** §8 Dashboard, §13.14
+**Status:** PLANNED
+
+The `get_todays_value_bets()` function has a triple fallback cascade:
+1. Today's matches → if empty...
+2. Last 7 days → if empty...
+3. **All-time top 50 by edge, no date filter, no status filter** ← this is the bug
+
+Fallback 3 surfaces finished matches from 2024 sorted purely by edge. There is no `Match.status` filter, so completed games appear alongside upcoming ones.
+
+**Implementation:**
+
+1. Replace fallback logic in `src/delivery/views/picks.py`:
+   - Primary query: `Match.status == "scheduled"` AND `Match.date >= today`, sorted by `Match.date ASC, ValueBet.edge DESC`
+   - Fallback: expand window to next 14 days of scheduled matches
+   - If still empty: show "No upcoming value bets found" with last pipeline run timestamp
+2. Add separate "Recent Results" section below for last 7 days of finished matches with actual outcomes shown (win/loss indicator)
+3. Remove "Mark as Placed" button for finished matches
+4. Sort: date ascending (soonest first), edge descending within same matchday
+
+**Acceptance Criteria:**
+- [ ] Today's Picks shows ONLY scheduled/upcoming matches by default
+- [ ] Sorting: soonest date first, then highest edge within each date
+- [ ] No finished matches appear in the actionable picks section
+- [ ] Fallback window capped at 14 days, not all-time
+- [ ] "Recent Results" section shows last 7 days of completed picks with outcomes
+- [ ] "Mark as Placed" only shown for scheduled matches
+
+---
+
+### E24-02 — Fix Deep Dive for Future Matches
+
+**Type:** Bug Fix — Dashboard
+**Depends on:** E8-01 (Match Deep Dive), E18-01 (Narrative), E19-01 (Odds API)
+**MP refs:** §8 Dashboard, §13.14
+**Status:** PLANNED
+
+The Match Deep Dive page conditionally hides scoreline matrix, market probabilities, and narrative when no ValueBet records exist. But scheduled matches have Prediction records with full scoreline matrices — the page should render this data regardless of value bet availability.
+
+**Implementation:**
+
+1. In `src/delivery/views/match_detail.py`:
+   - Render scoreline matrix section when `data["prediction"]` exists (not gated on value bets)
+   - Render market probabilities section when prediction exists
+   - Render narrative section when prediction exists
+   - Only gate the "Value Bets" card on `data["value_bets"]` being non-empty
+2. In `src/delivery/narrative.py`:
+   - Ensure `generate_match_narrative()` works with predictions that have no associated odds/value bets
+   - Gracefully handle missing odds data in narrative factors
+3. Debug Odds API team name mapping:
+   - Verify all 20 EPL teams map correctly from The Odds API → DB canonical names
+   - Add any missing mappings
+   - Add a diagnostic log when odds exist in DB but weren't matched to predictions
+
+**Acceptance Criteria:**
+- [ ] Deep Dive shows scoreline matrix for scheduled matches with predictions
+- [ ] Deep Dive shows market probabilities (1X2, BTTS, O/U) for scheduled matches
+- [ ] Deep Dive shows match narrative for scheduled matches
+- [ ] Value Bets section shows "No value bets identified" when none exist (not hidden entirely)
+- [ ] All 20 EPL teams correctly mapped in Odds API → DB name mapping
+- [ ] No crashes or empty pages for any scheduled match with a Prediction record
+
+---
+
+### E24-03 — Fixtures Value Grid — Model Indicators
+
+**Type:** Enhancement — Dashboard
+**Depends on:** E24-02 (predictions must render for scheduled matches)
+**MP refs:** §8 Dashboard, §13.14
+**Status:** PLANNED
+
+Add inline color-coded market indicators to each fixture row on the Fixtures page. Currently each row shows only: kickoff time, "Home vs Away", binary value badge, league badge, and a Deep Dive button.
+
+**Implementation:**
+
+1. In `src/delivery/views/fixtures.py`:
+   - For each scheduled match, query its Prediction record and associated Odds records
+   - Compute edge per market selection: `edge = model_prob - implied_prob` (same logic as ValueFinder)
+   - Render 7 compact badges per fixture row:
+     - **1X2:** Home (H), Draw (D), Away (A)
+     - **BTTS:** Yes, No
+     - **O/U 2.5:** Over (O), Under (U)
+   - Color coding based on edge:
+     - 🟢 Green: edge ≥ value threshold (from config, typically 3-5%)
+     - 🟡 Yellow: 0% < edge < value threshold (marginal — model slightly favours but not enough for a bet)
+     - 🔴 Red: edge ≤ 0% (no value — bookmaker price is fair or better)
+     - ⚫ Grey: no data (odds or prediction unavailable)
+   - Layout: badges appear on the same line as team names, right-aligned before the Deep Dive button
+
+2. Add a legend/key at the top of the Fixtures page explaining the color coding
+
+3. Add tooltip on each badge showing the exact edge percentage on hover (Streamlit `st.help` or custom HTML)
+
+**Acceptance Criteria:**
+- [ ] Each fixture row shows 7 color-coded badges (H/D/A, BTTS Y/N, O2.5/U2.5)
+- [ ] Green = edge above value threshold, yellow = marginal, red = no value, grey = no data
+- [ ] Edge thresholds read from config (not hardcoded)
+- [ ] Legend at top of page explains color coding
+- [ ] Badges render correctly when predictions exist but odds don't (grey fallback)
+- [ ] Fixtures without predictions show all-grey badges (not broken layout)
+- [ ] Design system compliant: green #3FB950, red #F85149, yellow #D29922, grey #484F58
+
+---
+
+### E24-04 — Fixtures Value Grid — Data Pipeline
+
+**Type:** DevOps — Pipeline Verification
+**Depends on:** E24-03 (grid must be built first)
+**MP refs:** §13.14
+**Status:** PLANNED
+
+Ensure the prediction→odds→value chain is complete for all scheduled fixtures. The value grid is only useful if data flows through the full pipeline for upcoming matches.
+
+**Implementation:**
+
+1. Verify prediction generation for all scheduled matches:
+   - Check `_generate_predictions()` in pipeline.py — confirm it processes scheduled matches
+   - Verify Feature computation includes scheduled matches (E18-03 should have fixed this)
+   - If any scheduled match lacks a Prediction, trace why and fix
+
+2. Verify Odds API coverage:
+   - Run The Odds API scraper and confirm all scheduled matches get odds loaded
+   - Check team name mapping for all 20 EPL teams
+   - Log any matches with predictions but no odds (diagnostic)
+
+3. Add diagnostic badges to fixtures page:
+   - "No odds" badge when a match has predictions but no odds loaded
+   - "No prediction" badge when odds exist but no prediction
+   - "Full data" indicator when both are present
+
+4. Add pipeline health check: a summary line at top of Fixtures page showing
+   "X/Y fixtures have full prediction + odds data"
+
+**Acceptance Criteria:**
+- [ ] All scheduled matches have Prediction records after morning pipeline
+- [ ] All scheduled matches have Odds records after morning pipeline (Odds API)
+- [ ] Diagnostic badges visible when data is partially missing
+- [ ] Pipeline health summary shown on Fixtures page
+- [ ] Zero team name mapping failures in Odds API → DB
+
+---
+
+### E24-05 — Fixtures + Picks Integration Test
+
+**Type:** Testing — End-to-End
+**Depends on:** E24-01, E24-02, E24-03, E24-04
+**MP refs:** §13.14
+**Status:** PLANNED
+
+Run the full morning pipeline and verify all three dashboard fixes work end-to-end with live data.
+
+**Acceptance Criteria:**
+- [ ] Morning pipeline runs to completion (features → predictions → odds → value bets)
+- [ ] Fixtures page shows color-coded grid with real data for all scheduled matches
+- [ ] Today's Picks shows only upcoming matches, sorted by date then edge
+- [ ] Deep Dive works for every scheduled match — shows scoreline matrix, probabilities, narrative
+- [ ] No finished/historical matches appear in actionable picks
+- [ ] All 20 EPL teams have predictions + odds for their next scheduled match
+- [ ] Dashboard loads in <5 seconds on all pages
+
+---
+
+### Implementation Sequence
+
+```
+E24-01 (picks date fix) → E24-02 (deep dive fix) → E24-03 (fixtures grid UI)
+→ E24-04 (data pipeline verification) → E24-05 (integration test)
+```
+
+E24-01 and E24-02 are independent bug fixes that can be done first. E24-03 builds the UI that E24-04 validates. E24-05 tests everything together.
+
+---
+
+## E25 — XGBoost Ensemble Model
+
+### Motivation
+
+The Poisson GLM has reached its architectural ceiling at Brier 0.5781 / ROI +2.78%. It cannot capture non-linear interactions between features — e.g., how Pinnacle odds interact with Elo ratings under fixture congestion. XGBoost (gradient-boosted decision trees) is the natural next model:
+
+- Handles non-linear relationships natively
+- Handles missing values without imputation
+- Provides feature importance rankings out of the box
+- Already installed as a pip dependency (`xgboost` in requirements.txt)
+- The `BaseModel` interface was designed for exactly this — any model producing a 7×7 scoreline matrix slots in
+
+With 2,280 matches of training data (from E23), there is sufficient volume to train a gradient-boosted model without severe overfitting.
+
+---
+
+### E25-01 — XGBoost Scoreline Model
+
+**Type:** Model — New Implementation
+**Depends on:** E4-01 (BaseModel), E23-06 (sufficient training data)
+**MP refs:** §5 Model Architecture, §13.15
+**Status:** PLANNED
+
+Build `src/models/xgboost_model.py` implementing the `BaseModel` abstract interface. Trains XGBoost regressors to predict home and away expected goals, then generates the 7×7 scoreline probability matrix via Poisson distribution from the predicted λ values.
+
+**Implementation:**
+
+1. New file `src/models/xgboost_model.py`:
+   - Class `XGBoostModel(BaseModel)`
+   - `train()`: Fits two XGBRegressor models (home_goals, away_goals) on the same feature matrix as Poisson
+   - `predict()`: Predicts home_λ and away_λ, builds 7×7 scoreline matrix via `scipy.stats.poisson.pmf`
+   - Feature selection: reuse `_select_feature_cols()` pattern from Poisson — only include columns present in DataFrame
+   - Hyperparameters in `config/settings.yaml`: max_depth, n_estimators, learning_rate, min_child_weight, subsample, colsample_bytree
+   - Walk-forward safe: `train()` only sees past data, `predict()` produces future predictions
+   - Model persistence: save/load via `src/models/storage.py` (pickle)
+
+2. Key design decisions:
+   - Predict λ (expected goals), NOT scoreline probabilities directly — preserves the Poisson distribution assumption for the scoreline matrix
+   - Use the same feature set as Poisson for fair comparison — no feature engineering advantage
+   - Cross-validation within training set for hyperparameter tuning (temporal CV, not random)
+
+**Acceptance Criteria:**
+- [ ] `XGBoostModel` implements `BaseModel` interface (train, predict, name, version)
+- [ ] Produces a valid 7×7 scoreline matrix (probabilities sum to ~1.0)
+- [ ] Hyperparameters configurable from settings.yaml
+- [ ] Walk-forward safe — train/predict split respects temporal integrity
+- [ ] Feature selection handles missing columns gracefully
+- [ ] Model saves and loads via storage.py
+- [ ] Unit test: train on small sample, predict produces valid matrix
+
+---
+
+### E25-02 — Ensemble Combiner
+
+**Type:** Model — Ensemble Integration
+**Depends on:** E25-01 (XGBoost model must exist), E11-01 (ensemble_weights.py)
+**MP refs:** §5 Model Architecture, §11 Self-Improvement, §13.15
+**Status:** PLANNED
+
+Combine Poisson and XGBoost scoreline matrices using the existing ensemble infrastructure. The combined matrix is the weighted average of both models' 7×7 outputs.
+
+**Implementation:**
+
+1. Update `src/self_improvement/ensemble_weights.py`:
+   - Register "xgboost_v1" as a new model alongside "poisson_v1"
+   - Initial weights: 50/50 (equal weighting until backtested)
+   - Weight update logic already exists — adjusts based on per-model Brier scores with guardrails (MP §11: minimum 100 bets sample, max 10% weight change per update, rollback on degradation)
+
+2. Update `src/pipeline.py`:
+   - In `_generate_predictions()`: train both Poisson and XGBoost
+   - Generate scoreline matrices from both models
+   - Combine via weighted average
+   - Store the ensemble prediction as the primary Prediction record
+   - Store individual model predictions in a new `model_name` field for tracking
+
+3. Config: `config/settings.yaml` — `ensemble.models` list with names and initial weights
+
+**Acceptance Criteria:**
+- [ ] Ensemble combines Poisson + XGBoost scoreline matrices
+- [ ] Weights configurable in settings.yaml
+- [ ] Self-improvement guardrails apply (min sample, max change rate, rollback)
+- [ ] Individual model predictions tracked alongside ensemble
+- [ ] Pipeline runs both models and stores ensemble result
+- [ ] Ensemble matrix is valid (probabilities sum to ~1.0)
+
+---
+
+### E25-03 — Walk-Forward Backtest
+
+**Type:** Evaluation — Backtesting
+**Depends on:** E25-02 (ensemble must be built)
+**MP refs:** §13.15
+**Status:** PLANNED
+
+Compare three configurations across 5 historical seasons to determine the best production model.
+
+**Configurations:**
+1. **Poisson-only** (current production baseline: Brier 0.5781, ROI +2.78%)
+2. **XGBoost-only** (new model in isolation)
+3. **Ensemble** (weighted Poisson + XGBoost)
+
+**Metrics:** Brier score, ROI, calibration (expected vs actual), log-loss, max drawdown, win rate by market.
+
+**Implementation:**
+
+1. Run `backtester.py` for each configuration with identical feature set and training data
+2. Store all results in ModelPerformance table with distinct `model_name` values
+3. Generate comparison table and charts in Model Health dashboard
+4. Document results with before/after comparison
+
+**Acceptance Criteria:**
+- [ ] All 3 configurations backtested across 5 historical seasons
+- [ ] Results stored in ModelPerformance table
+- [ ] Comparison table: Brier, ROI, calibration for each configuration
+- [ ] Clear winner identified (or conclusion that ensemble doesn't help)
+- [ ] Results documented in build plan with metrics
+
+---
+
+### E25-04 — Promote Best Model
+
+**Type:** DevOps — Model Promotion
+**Depends on:** E25-03 (backtest results must be available)
+**MP refs:** §13.15
+**Status:** PLANNED
+
+Based on E25-03 backtest results, set the winning configuration as the production default.
+
+**Implementation:**
+
+1. If ensemble wins: update `config/settings.yaml` to set ensemble as default, update pipeline.py
+2. If XGBoost-only wins: replace Poisson as the primary model in pipeline
+3. If Poisson-only still wins: keep current production config, document why XGBoost didn't help
+4. Update Model Health dashboard to display the active model configuration
+5. Update Model Performance Evolution table in masterplan
+
+**Acceptance Criteria:**
+- [ ] Best model/configuration promoted to production in settings.yaml
+- [ ] Pipeline uses the promoted configuration for daily predictions
+- [ ] Model Health dashboard shows active model name
+- [ ] Masterplan Model Performance Evolution table updated
+- [ ] Build plan documents the decision and rationale
+
+---
+
+### Implementation Sequence
+
+```
+E25-01 (XGBoost model) → E25-02 (ensemble combiner)
+→ E25-03 (backtest comparison) → E25-04 (promote winner)
+```
+
+E25-01 must be first (model must exist). E25-02 integrates it. E25-03 evaluates. E25-04 promotes.

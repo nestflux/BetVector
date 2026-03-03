@@ -85,7 +85,9 @@ E19-01 → E19-02 → E19-03 → E19-04 →
 E20-01 → E20-02 → E20-03 →
 E21-01 → E21-02 → E21-03 →
 E22-01 → E22-02 →
-E23-01 → E23-02 → E23-03 → E23-04 → E23-05 → E23-06 → E23-07
+E23-01 → E23-02 → E23-03 → E23-04 → E23-05 → E23-06 → E23-07 →
+E24-01 → E24-02 → E24-03 → E24-04 → E24-05 →
+E25-01 → E25-02 → E25-03 → E25-04
 ```
 
 The sequence is the law. Auto-advance after gates pass. Only stop for
@@ -294,8 +296,8 @@ Wait for owner to respond with approval before making the change.
 ## Current Status
 
 Last completed: E23-07 (Verify Odds API Pipeline)
-Currently working: — (All 84 issues complete!)
-Next up: —
+Currently working: E24-01 (Fix Today's Picks Date Logic)
+Next up: E24-02 (Fix Deep Dive for Future Matches)
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
@@ -308,10 +310,9 @@ E20 complete: 3 issues ✅ (Market-Augmented Poisson, Brier 0.6105 → 0.5781)
 E21 complete: 3 issues ✅ (Elo, referee, congestion features)
 E22 complete: 2 issues ✅ (Set-piece xG, injury flags)
 E23 complete: 7 issues ✅ (Historical backfill + validation)
-Total issues: 84 (45 original + 20 post-launch + 12 odds/model + 7 backfill) — ALL COMPLETE
-
-⚠️ NO XGBoost model exists. Only prediction model is market-augmented Poisson regression.
-xgboost is installed as a dependency but never used in src/models/.
+E24 in progress: 0/5 (Dashboard fixes + fixtures value grid)
+E25 planned: 0/4 (XGBoost ensemble model)
+Total issues: 93 (84 complete + 5 E24 + 4 E25)
 
 ---
 

@@ -1,6 +1,6 @@
 # BetVector — Masterplan
 
-Version 1.2 · March 2026
+Version 1.3 · March 2026
 
 ---
 
@@ -1518,3 +1518,30 @@ The model trained on just 2 seasons (760 matches) — a dangerously small sample
 | E16-03 (Advanced Features) | 0.6903 | −7.2% | 1 season (380) | +NPxG, PPDA, weather, market value |
 | E20-03 (Market-Augmented) | 0.6105 | −3.50% | 2 seasons (760) | +Pinnacle odds, AH line |
 | **E23-06 (Full Backfill)** | **0.5781** | **+2.78%** | **6 seasons (2,280)** | **3× training data — model now profitable** |
+| E25-03 (XGBoost Ensemble) | TBD | TBD | 6 seasons (2,280) | XGBoost + Poisson ensemble — non-linear feature interactions |
+
+### 13.14 — E24 — Dashboard Fixes & Fixtures Value Grid (Planned)
+
+Three dashboard issues preventing effective forward-looking use: Today's Picks shows stale 2024 data due to an unbounded fallback cascade, the Match Deep Dive page is empty for future matches even when predictions exist, and the Fixtures page gives no analytical insight without clicking into each match.
+
+**E24-01: Fix Today's Picks Date Logic.** The triple fallback in `get_todays_value_bets()` eventually queries all-time value bets sorted by edge with no date or status filter — surfacing completed matches from 2024. Fix: filter to `Match.status IN ('scheduled')` for actionable picks, sort by date ascending then edge descending, cap fallback to 14 days, and separate "Upcoming Picks" from "Recent Results" sections.
+
+**E24-02: Fix Deep Dive for Future Matches.** The Deep Dive page hides the scoreline matrix, market probabilities, and narrative sections when no ValueBet records exist — but Prediction records DO exist for scheduled matches. Fix: render prediction data (scoreline heatmap, 1X2/BTTS/O-U probabilities, expected goals, narrative) regardless of whether value bets have been identified. Also debug any Odds API team name mapping gaps that prevent odds from loading.
+
+**E24-03: Fixtures Value Grid — Model Indicators.** Add inline color-coded market indicators to each fixture row on the Fixtures page. For every scheduled match, display compact badges for 7 selections: Home/Draw/Away (1X2), BTTS Yes/No, Over 2.5/Under 2.5. Color coding: green = strong edge (above value threshold), yellow = marginal edge, red = no edge or negative. Driven by Prediction + Odds data joined at render time. This makes the Fixtures page a standalone decision-making tool without requiring Deep Dive clicks.
+
+**E24-04: Fixtures Value Grid — Data Pipeline.** Ensure the prediction→odds→value chain is complete for all scheduled fixtures. Add diagnostic indicators when data is missing (e.g., "No odds yet" badge, "Awaiting prediction" badge). Verify Odds API team name coverage and fix any gaps.
+
+**E24-05: Fixtures + Picks Integration Test.** End-to-end verification: run the morning pipeline → confirm fixtures show color-coded grid with live data → confirm Today's Picks shows only upcoming matches → confirm Deep Dive works for every scheduled match with full prediction content.
+
+### 13.15 — E25 — XGBoost Ensemble Model (Planned)
+
+The Poisson GLM is at its ceiling — it cannot exploit non-linear interactions between features (e.g., Pinnacle odds × Elo × congestion). XGBoost (gradient-boosted decision trees) is the natural next model, and the architecture was designed for this from day one: `BaseModel` defines the abstract interface, every model produces a 7×7 scoreline matrix, and `ensemble_weights.py` already handles weighted combination.
+
+**E25-01: XGBoost Scoreline Model.** New file `src/models/xgboost_model.py` implementing `BaseModel`. Trains XGBoost regressors on the same feature set as Poisson, predicting home and away expected goals. Generates the 7×7 scoreline probability matrix via Poisson distribution from the XGBoost-predicted λ values. Key advantages: captures non-linear feature interactions, handles missing values natively, automatic feature importance ranking.
+
+**E25-02: Ensemble Combiner.** Weighted average of Poisson and XGBoost scoreline matrices using the existing `src/self_improvement/ensemble_weights.py` infrastructure. Initial weights: 50/50. The self-improvement module will adjust weights over time based on per-model Brier scores (guardrails from MP §11 apply — minimum sample size, maximum weight change rate, rollback on degradation).
+
+**E25-03: Walk-Forward Backtest.** Compare three configurations across 5 historical seasons: Poisson-only, XGBoost-only, and weighted ensemble. Metrics: Brier score, ROI, calibration, log-loss. Store results in ModelPerformance table. This determines which configuration becomes the production default.
+
+**E25-04: Promote Best Model.** Based on E25-03 results, update `config/settings.yaml` to set the winning model/ensemble as the production default. Update pipeline to use the promoted configuration. If XGBoost underperforms, Poisson remains the sole production model — no forced adoption.
