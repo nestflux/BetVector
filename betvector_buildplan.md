@@ -2771,7 +2771,7 @@ Add inline color-coded market indicators to each fixture row on the Fixtures pag
 **Type:** DevOps — Pipeline Verification
 **Depends on:** E24-03 (grid must be built first)
 **MP refs:** §13.14
-**Status:** PLANNED
+**Status:** COMPLETE ✅
 
 Ensure the prediction→odds→value chain is complete for all scheduled fixtures. The value grid is only useful if data flows through the full pipeline for upcoming matches.
 

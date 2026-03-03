@@ -1,6 +1,6 @@
 """
-BetVector — Fixtures Page (E17-04, E24-03)
-============================================
+BetVector — Fixtures Page (E17-04, E24-03, E24-04)
+====================================================
 All upcoming matches across active leagues, grouped by date.
 
 Different from Today's Picks:
@@ -14,10 +14,17 @@ Home/Draw/Away (1X2), BTTS Yes/No, Over/Under 2.5.
 Colour coding:  green = strong edge, yellow = marginal, red = no edge,
 grey = no data.
 
+E24-04: Added pipeline health summary and diagnostic badges.
+- Pipeline coverage bar at top: "X/Y fixtures have full prediction + odds data"
+- Per-fixture diagnostic badges: "No pred", "No odds", "Full data", or "X VB"
+- Blue left border for full-data fixtures, green for value bet fixtures
+- Info tip when odds coverage is below 70% (explains bookmaker pricing window)
+
 Master Plan refs: MP §3 Flow 4 (Dashboard Exploration), MP §8 Design System
 """
 
 from datetime import date, timedelta
+from html import escape as html_escape
 from itertools import groupby
 from typing import Dict, List, Optional, Tuple
 
@@ -175,6 +182,13 @@ def get_all_upcoming_fixtures(days_ahead: int = 14) -> List[Dict]:
                 .first()
             )
 
+            # Check if this match has ANY odds loaded (any source)
+            odds_count = (
+                session.query(Odds)
+                .filter_by(match_id=match.id)
+                .count()
+            )
+
             # Compute per-market edges by comparing model probs to best odds.
             # For each of the 7 market selections, we need:
             #   1. model_prob from Prediction attributes
@@ -190,14 +204,16 @@ def get_all_upcoming_fixtures(days_ahead: int = 14) -> List[Dict]:
             results.append({
                 "match_id": match.id,
                 "date": match.date,
-                "kickoff": match.kickoff_time or "TBD",
-                "home_team": home_team.name,
-                "away_team": away_team.name,
-                "league": league.short_name,
-                "league_name": league.name,
+                "kickoff": html_escape(match.kickoff_time or "TBD"),
+                "home_team": html_escape(home_team.name),
+                "away_team": html_escape(away_team.name),
+                "league": html_escape(league.short_name),
+                "league_name": html_escape(league.name),
                 "has_value_bets": vb_count > 0,
                 "value_bet_count": vb_count,
                 "has_prediction": prediction is not None,
+                "has_odds": odds_count > 0,
+                "odds_count": odds_count,
                 "market_edges": market_edges,
             })
 
@@ -372,18 +388,70 @@ if not fixtures:
         unsafe_allow_html=True,
     )
 else:
-    # Summary
+    # ----------------------------------------------------------------
+    # Pipeline Health Summary (E24-04)
+    # Shows data coverage at a glance so the user knows if the pipeline
+    # has run recently and which fixtures have full model + odds data.
+    # ----------------------------------------------------------------
     total = len(fixtures)
-    with_value = sum(1 for f in fixtures if f["has_value_bets"])
     with_prediction = sum(1 for f in fixtures if f["has_prediction"])
+    with_odds = sum(1 for f in fixtures if f["has_odds"])
+    with_value = sum(1 for f in fixtures if f["has_value_bets"])
+    # "Full data" means both prediction AND odds exist — edge computation possible
+    full_data = sum(
+        1 for f in fixtures if f["has_prediction"] and f["has_odds"]
+    )
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("Upcoming Matches", total)
     with col2:
         st.metric("With Predictions", with_prediction)
     with col3:
+        st.metric("With Odds", with_odds)
+    with col4:
         st.metric("With Value Bets", with_value)
+
+    # Pipeline health bar — shows how many fixtures have full model + odds data.
+    # Green when most fixtures are covered, yellow when partial, red when sparse.
+    if total > 0:
+        coverage_pct = (full_data / total) * 100
+        # Choose bar colour based on coverage percentage
+        if coverage_pct >= 70:
+            bar_colour = COLOURS["green"]
+        elif coverage_pct >= 30:
+            bar_colour = COLOURS["yellow"]
+        else:
+            bar_colour = COLOURS["red"]
+
+        st.markdown(
+            f'<div style="font-family: Inter, sans-serif; font-size: 12px; '
+            f'color: {COLOURS["text_secondary"]}; margin: 8px 0 4px;">'
+            f'Pipeline Coverage: <strong style="color: {COLOURS["text"]};">'
+            f'{full_data}/{total}</strong> fixtures have full prediction + odds data'
+            f'</div>'
+            f'<div style="background-color: {COLOURS["border"]}; border-radius: 4px; '
+            f'height: 6px; overflow: hidden; margin-bottom: 8px;">'
+            f'<div style="width: {coverage_pct:.0f}%; height: 100%; '
+            f'background-color: {bar_colour}; border-radius: 4px; '
+            f'transition: width 0.3s ease;"></div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+        # Tip when coverage is low — explain why some fixtures lack odds
+        if coverage_pct < 70:
+            st.markdown(
+                f'<div style="font-family: Inter, sans-serif; font-size: 11px; '
+                f'color: {COLOURS["text_secondary"]}; margin-bottom: 12px; '
+                f'padding: 6px 10px; border-left: 2px solid {COLOURS["blue"]}; '
+                f'background-color: rgba(88, 166, 255, 0.05);">'
+                f'💡 Bookmakers typically price matches 1–2 weeks ahead. '
+                f'Fixtures further out show grey badges until odds become available. '
+                f'The pipeline refreshes odds automatically each morning.'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
 
     st.divider()
 
@@ -399,12 +467,14 @@ else:
         )
 
         for fix in group:
-            # Green left border for matches with value bets
-            border_style = (
-                f"border-left: 3px solid {COLOURS['green']};"
-                if fix["has_value_bets"]
-                else ""
-            )
+            # Green left border for matches with value bets,
+            # blue for full data (prediction + odds) but no value bets yet
+            if fix["has_value_bets"]:
+                border_style = f"border-left: 3px solid {COLOURS['green']};"
+            elif fix["has_prediction"] and fix["has_odds"]:
+                border_style = f"border-left: 3px solid {COLOURS['blue']};"
+            else:
+                border_style = ""
 
             # Kickoff time — only show the time slot if we actually have one
             kickoff_html = ""
@@ -421,11 +491,63 @@ else:
                 f'color: {COLOURS["text_secondary"]};">{fix["league"]}</span>'
             )
 
+            # --------------------------------------------------------
+            # Diagnostic status badges (E24-04)
+            # Show small status pills next to the league badge so the
+            # user can immediately see which fixtures have full data,
+            # which are missing odds, and which lack predictions.
+            # --------------------------------------------------------
+            diag_badges = []
+            if not fix["has_prediction"]:
+                # Red — model hasn't generated predictions for this match
+                diag_badges.append(
+                    f'<span title="No prediction available — the model has not '
+                    f'generated probabilities for this match yet" style="'
+                    f"display: inline-block; padding: 1px 5px; margin-left: 4px; "
+                    f"border-radius: 3px; font-family: 'JetBrains Mono', monospace; "
+                    f"font-size: 9px; font-weight: 600; color: {COLOURS['red']}; "
+                    f'border: 1px solid {COLOURS["red"]}; cursor: help;">'
+                    f"No pred</span>"
+                )
+            if not fix["has_odds"]:
+                # Yellow — odds not yet loaded (bookmakers may not have priced it)
+                diag_badges.append(
+                    f'<span title="No odds loaded — bookmakers may not have '
+                    f'priced this fixture yet (typically available 1–2 weeks out)" '
+                    f'style="'
+                    f"display: inline-block; padding: 1px 5px; margin-left: 4px; "
+                    f"border-radius: 3px; font-family: 'JetBrains Mono', monospace; "
+                    f"font-size: 9px; font-weight: 600; color: {COLOURS['yellow']}; "
+                    f'border: 1px solid {COLOURS["yellow"]}; cursor: help;">'
+                    f"No odds</span>"
+                )
+            if fix["has_prediction"] and fix["has_odds"]:
+                # Green outline — full data, edge computation is live
+                vb_label = (
+                    f'{fix["value_bet_count"]} VB'
+                    if fix["has_value_bets"]
+                    else "Full data"
+                )
+                vb_title = (
+                    f'{fix["value_bet_count"]} value bet(s) identified'
+                    if fix["has_value_bets"]
+                    else "Prediction + odds loaded — edge computation is live"
+                )
+                diag_badges.append(
+                    f'<span title="{vb_title}" style="'
+                    f"display: inline-block; padding: 1px 5px; margin-left: 4px; "
+                    f"border-radius: 3px; font-family: 'JetBrains Mono', monospace; "
+                    f"font-size: 9px; font-weight: 600; color: {COLOURS['green']}; "
+                    f'border: 1px solid {COLOURS["green"]}; cursor: help;">'
+                    f"{vb_label}</span>"
+                )
+            diag_html = "".join(diag_badges)
+
             # Market indicator badges — the 7 color-coded pills (E24-03)
             market_html = _render_market_badges(fix["market_edges"])
 
-            # Fixture card — two rows:
-            # Row 1: Kickoff + Teams + League badge
+            # Fixture card — three rows:
+            # Row 1: Kickoff + Teams + League badge + diagnostic badges
             # Row 2: Market indicator badges (below the team names)
             st.markdown(
                 f'<div class="bv-card" style="padding: 12px 16px; {border_style}">'
@@ -438,7 +560,9 @@ else:
                 f'font-weight: 600; color: {COLOURS["text"]};">'
                 f'{fix["home_team"]} vs {fix["away_team"]}</span>'
                 f'</div>'
-                f'<div>{league_badge}</div>'
+                f'<div style="display: flex; align-items: center;">'
+                f'{league_badge}{diag_html}'
+                f'</div>'
                 f'</div>'
                 # Row 2: market badges
                 f'<div style="display: flex; align-items: center; gap: 4px; '
