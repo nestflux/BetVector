@@ -1,17 +1,19 @@
 """
-BetVector — Today's Picks Page (E9-02, E24-01)
-================================================
-Displays actionable value bets for upcoming matches.
+BetVector — Today's Picks Page (E9-02, E24-01, E26-01)
+========================================================
+Displays actionable value bets with a date range filter.
 
-Primary daily interface — "what should I bet on today?"
+Primary picks interface — "what should I bet on?"
 
-**E24-01 fix:** The original triple fallback showed stale 2024 picks when
-no upcoming value bets existed.  Now the page has two distinct sections:
+**E26-01 overhaul:** Fixed per-bookmaker duplication (906 cards → ~35 unique
+picks) and added date range filter for browsing past and future matchdays.
 
-1. **Upcoming Picks** — only scheduled matches, sorted by date then edge.
-   Fallback expands to 14 days, never further.  No finished matches appear.
-2. **Recent Results** — last 7 days of finished matches with outcomes, for
-   performance tracking.  "Mark as Placed" only shown for upcoming picks.
+Key changes:
+- Value bets grouped by (match_id, market_type, selection) — one card per
+  unique pick showing the best bookmaker and a count of alternatives.
+- Date range slider replaces the old "today onward" logic.  Users can
+  look backward (recent results) and forward (upcoming picks) seamlessly.
+- Finished picks show inline match result and win/loss status.
 
 Master Plan refs: MP §3 Flow 1 (Morning Picks Review), MP §8 Design System
 """
@@ -148,110 +150,98 @@ def _enrich_value_bets(session, rows) -> List[Dict]:
     return results
 
 
-def get_upcoming_value_bets(edge_threshold: float = 0.0) -> List[Dict]:
-    """Fetch value bets for upcoming (scheduled) matches only.
+def get_value_bets_in_range(
+    date_from: date,
+    date_to: date,
+    edge_threshold: float = 0.0,
+) -> List[Dict]:
+    """Fetch value bets within a date range, grouped by unique pick.
 
-    E24-01: Replaces the old ``get_todays_value_bets()`` which had a
-    triple fallback cascade that surfaced stale 2024 data.
+    E26-01: Replaces the old ``get_upcoming_value_bets()`` and
+    ``get_recent_results()`` with a unified date-range query that
+    de-duplicates per-bookmaker rows.
 
-    New logic:
-    1. Query value bets for scheduled matches from today onward,
-       sorted by date ascending (soonest first) then edge descending.
-    2. If none found, expand window to next 14 days of scheduled matches.
-    3. If still none, return empty list — the page shows a clean empty state.
-       No all-time fallback.  No finished matches.
+    The ValueFinder creates a separate ValueBet per bookmaker — e.g.,
+    45 bookmakers offering Wolves Home Win each produce a row.  This
+    function groups by (match_id, market_type, selection) and keeps only
+    the row with the **highest edge** (best bookmaker), attaching the
+    count of alternative bookmakers.
+
+    Covers both scheduled (upcoming) and finished (recent) matches
+    within the date range, letting the user slide forward and backward.
 
     Parameters
     ----------
+    date_from : date
+        Start of the date range (inclusive).
+    date_to : date
+        End of the date range (inclusive).
     edge_threshold : float
-        Minimum edge to display (0.0 shows all).
+        Minimum edge to display (0.0 shows all value bets).
 
     Returns
     -------
     list[dict]
-        Upcoming value bets enriched with team names, league, and kickoff.
+        Unique value bets grouped by pick, enriched with team names,
+        league, kickoff, and alt_bookmaker_count.
     """
     with get_session() as session:
-        today = date.today().isoformat()
+        from_str = date_from.isoformat()
+        to_str = date_to.isoformat()
 
-        # Primary: scheduled matches from today onward
         query = (
             session.query(ValueBet, Match, League)
             .join(Match, ValueBet.match_id == Match.id)
             .join(League, Match.league_id == League.id)
-            .filter(Match.status == "scheduled")
-            .filter(Match.date >= today)
+            .filter(Match.date >= from_str)
+            .filter(Match.date <= to_str)
         )
 
         if edge_threshold > 0:
             query = query.filter(ValueBet.edge >= edge_threshold)
 
-        # Sort: soonest date first, then highest edge within same date
+        # Fetch all rows — we'll group in Python for flexibility
+        # (SQLite GROUP BY with MAX is awkward for returning full row data)
         rows = (
             query
             .order_by(Match.date.asc(), ValueBet.edge.desc())
-            .limit(50)
             .all()
         )
 
-        # Fallback: expand to next 14 days of scheduled matches
-        # (covers international break gaps where no matches are today)
-        if not rows:
-            future_cutoff = (date.today() + timedelta(days=14)).isoformat()
-            query = (
-                session.query(ValueBet, Match, League)
-                .join(Match, ValueBet.match_id == Match.id)
-                .join(League, Match.league_id == League.id)
-                .filter(Match.status == "scheduled")
-                .filter(Match.date >= today)
-                .filter(Match.date <= future_cutoff)
-            )
-            if edge_threshold > 0:
-                query = query.filter(ValueBet.edge >= edge_threshold)
+        # Enrich all rows (team names, weather, etc.)
+        all_enriched = _enrich_value_bets(session, rows)
 
-            rows = (
-                query
-                .order_by(Match.date.asc(), ValueBet.edge.desc())
-                .limit(50)
-                .all()
-            )
+    # --- Group by unique pick (match_id + market_type + selection) ---
+    # Keep only the best bookmaker (highest edge) per group.
+    # Attach alt_bookmaker_count = how many other bookmakers also offer value.
+    grouped: Dict[tuple, Dict] = {}
+    counts: Dict[tuple, int] = {}
 
-        return _enrich_value_bets(session, rows)
+    for vb in all_enriched:
+        key = (vb["match_id"], vb["market_type"], vb["selection"])
+        counts[key] = counts.get(key, 0) + 1
+        if key not in grouped or vb["edge"] > grouped[key]["edge"]:
+            grouped[key] = vb
+
+    # Attach alt_bookmaker_count and sort by date asc, then edge desc
+    result = []
+    for key, vb in grouped.items():
+        vb["alt_bookmaker_count"] = counts[key] - 1  # exclude the best one
+        result.append(vb)
+
+    result.sort(key=lambda x: (-_date_sort_key(x["date"]), -x["edge"]))
+    # Re-sort: date ascending, then edge descending within each date
+    result.sort(key=lambda x: (x["date"], -x["edge"]))
+
+    return result
 
 
-def get_recent_results(days: int = 7, limit: int = 20) -> List[Dict]:
-    """Fetch value bets for recently finished matches with outcomes.
-
-    E24-01: New function providing a separate "Recent Results" section.
-    Shows how past picks performed — win or loss — for performance tracking.
-
-    Parameters
-    ----------
-    days : int
-        How many days back to look (default 7).
-    limit : int
-        Max results to return.
-
-    Returns
-    -------
-    list[dict]
-        Recent finished value bets with match results.
-    """
-    with get_session() as session:
-        cutoff = (date.today() - timedelta(days=days)).isoformat()
-
-        rows = (
-            session.query(ValueBet, Match, League)
-            .join(Match, ValueBet.match_id == Match.id)
-            .join(League, Match.league_id == League.id)
-            .filter(Match.status == "finished")
-            .filter(Match.date >= cutoff)
-            .order_by(Match.date.desc(), ValueBet.edge.desc())
-            .limit(limit)
-            .all()
-        )
-
-        return _enrich_value_bets(session, rows)
+def _date_sort_key(date_str: str) -> int:
+    """Convert date string to sortable integer (for stable sorting)."""
+    try:
+        return int(date_str.replace("-", ""))
+    except (ValueError, AttributeError):
+        return 0
 
 
 def get_suggested_stake(model_prob: float, odds: float) -> float:
@@ -296,11 +286,21 @@ def render_confidence_badge(confidence: str) -> str:
     )
 
 
-def render_value_bet_card(vb: Dict, idx: int) -> None:
+def render_value_bet_card(vb: Dict, idx) -> None:
     """Render a single value bet as a styled card.
 
-    Shows match info, market details, edge, confidence badge, and
-    a "Mark as Placed" button that expands into a form.
+    Shows match info, market details, edge, confidence badge,
+    best bookmaker, alternative count, and a "Mark as Placed" form.
+
+    E26-01: Updated to show best bookmaker prominently, alternative
+    bookmaker count, and inline match result for finished matches.
+
+    Parameters
+    ----------
+    vb : dict
+        Enriched value bet dict from get_value_bets_in_range().
+    idx : int or str
+        Unique key suffix for Streamlit widgets (avoids key collisions).
     """
     market_label = MARKET_DISPLAY.get(vb["market_type"], vb["market_type"])
     selection_label = SELECTION_DISPLAY.get(
@@ -348,13 +348,40 @@ def render_value_bet_card(vb: Dict, idx: int) -> None:
             f'<div style="margin-bottom: 8px;">{"".join(badge_parts)}</div>'
         )
 
+    # Alt bookmaker count — shows how many other bookmakers also offer value
+    alt_count = vb.get("alt_bookmaker_count", 0)
+    alt_html = ""
+    if alt_count > 0:
+        alt_html = (
+            f'<div style="font-family: Inter, sans-serif; font-size: 11px; '
+            f'color: #8B949E; margin-top: 6px;">'
+            f'{alt_count} other bookmaker{"s" if alt_count != 1 else ""} also '
+            f'offer{"s" if alt_count == 1 else ""} value on this pick</div>'
+        )
+
+    # Match result badge for finished matches (inline, E26-01)
+    result_badge_html = ""
+    if vb.get("status") == "finished" and vb.get("match_result"):
+        result_badge_html = (
+            f'<span style="font-family: JetBrains Mono, monospace; font-size: 12px; '
+            f'color: #8B949E; background-color: #21262D; padding: 2px 8px; '
+            f'border-radius: 4px; margin-left: 8px;">FT {vb["match_result"]}</span>'
+        )
+
+    # Card border: green for scheduled (actionable), muted for finished (historical)
+    border_style = (
+        "border-left: 3px solid #484F58;"
+        if vb.get("status") == "finished"
+        else ""
+    )
+
     # Card HTML — no leading indentation to avoid markdown code-block interpretation
-    card_html = f"""<div class="bv-card">
+    card_html = f"""<div class="bv-card" style="{border_style}">
 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
 <div>
 <span style="font-family: 'Inter', sans-serif; font-size: 16px; font-weight: 600; color: #E6EDF3;">
 {vb["home_team"]} vs {vb["away_team"]}
-</span>
+</span>{result_badge_html}
 <br>
 <span style="font-family: 'Inter', sans-serif; font-size: 12px; color: #8B949E;">
 {vb["league"]} &middot; {vb["date"]}{(" &middot; " + vb["kickoff"]) if vb.get("kickoff") and vb["kickoff"] != "TBD" else ""}
@@ -363,7 +390,7 @@ def render_value_bet_card(vb: Dict, idx: int) -> None:
 <div>{confidence_badge}</div>
 </div>
 {context_badges_html}
-<div style="display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 8px;">
+<div style="display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 4px;">
 <div>
 <span style="font-size: 11px; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px;">Market</span><br>
 <span style="font-family: 'Inter', sans-serif; font-size: 14px; color: #E6EDF3;">{selection_label}</span>
@@ -373,7 +400,7 @@ def render_value_bet_card(vb: Dict, idx: int) -> None:
 <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #E6EDF3;">{vb["model_prob"]:.1%}</span>
 </div>
 <div>
-<span style="font-size: 11px; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px;">Odds</span><br>
+<span style="font-size: 11px; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px;">Best Odds</span><br>
 <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #E6EDF3;">{vb["bookmaker_odds"]:.2f}</span>
 </div>
 <div>
@@ -381,10 +408,15 @@ def render_value_bet_card(vb: Dict, idx: int) -> None:
 <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 700; color: {edge_colour};">+{edge_pct:.1f}%</span>
 </div>
 <div>
+<span style="font-size: 11px; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px;">Bookmaker</span><br>
+<span style="font-family: 'Inter', sans-serif; font-size: 14px; color: #E6EDF3;">{bookmaker_display}</span>
+</div>
+<div>
 <span style="font-size: 11px; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px;">Suggested Stake</span><br>
 <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #E6EDF3;">${suggested_stake:.2f}</span>
 </div>
 </div>
+{alt_html}
 </div>"""
     st.markdown(card_html, unsafe_allow_html=True)
 
@@ -498,7 +530,7 @@ def render_result_card(vb: Dict, idx: int) -> None:
 
 
 # ============================================================================
-# Page Layout
+# Page Layout (E26-01: date range filter + grouped picks)
 # ============================================================================
 
 st.markdown(
@@ -506,97 +538,123 @@ st.markdown(
     unsafe_allow_html=True,
 )
 st.markdown(
-    '<p class="text-muted">Upcoming value bets, sorted by matchday then edge</p>',
+    '<p class="text-muted">Value bets grouped by unique pick — slide the date range to browse matchdays</p>',
     unsafe_allow_html=True,
 )
 st.divider()
 
-# Edge threshold slider — filters picks in real-time.
-# Default comes from config so changing settings.yaml propagates here.
-try:
-    _default_edge_pct = float(config.settings.value_betting.edge_threshold) * 100
-except (AttributeError, TypeError, ValueError):
-    _default_edge_pct = 5.0
-edge_threshold = st.slider(
-    "Minimum edge threshold",
-    min_value=0.0,
-    max_value=20.0,
-    value=_default_edge_pct,
-    step=0.5,
-    format="%.1f%%",
-    help="Filter picks by minimum edge. Higher = fewer but stronger picks.",
-)
-edge_threshold_decimal = edge_threshold / 100.0
+# ── Filters ──────────────────────────────────────────────────────────────
+# Date range: default today-3 to today+7 (shows recent results + upcoming)
+# Edge threshold: minimum edge to display
+_today = date.today()
+_default_from = _today - timedelta(days=3)
+_default_to = _today + timedelta(days=7)
 
-# ── Upcoming Picks (actionable) ──────────────────────────────────────────
-# Only scheduled matches, sorted by date ascending then edge descending.
-# E24-01: No finished matches.  No all-time fallback.
-with st.spinner("Loading upcoming picks..."):
-    upcoming_bets = get_upcoming_value_bets(edge_threshold=edge_threshold_decimal)
+col_date, col_edge = st.columns([2, 1])
 
-if upcoming_bets:
-    # Check if any picks are for today specifically
-    today_str = date.today().isoformat()
-    today_count = sum(1 for vb in upcoming_bets if vb["date"] == today_str)
+with col_date:
+    date_range = st.date_input(
+        "Date range",
+        value=(_default_from, _default_to),
+        min_value=_today - timedelta(days=30),
+        max_value=_today + timedelta(days=30),
+        help="Slide backward to see recent results, forward for upcoming matchdays.",
+    )
+    # Streamlit returns a tuple of 1 or 2 dates depending on user selection
+    if isinstance(date_range, (tuple, list)) and len(date_range) == 2:
+        date_from, date_to = date_range
+    else:
+        # Single date selected — use it as both start and end
+        date_from = date_range[0] if isinstance(date_range, (tuple, list)) else date_range
+        date_to = date_from
+
+with col_edge:
+    try:
+        _default_edge_pct = float(config.settings.value_betting.edge_threshold) * 100
+    except (AttributeError, TypeError, ValueError):
+        _default_edge_pct = 5.0
+    edge_threshold = st.slider(
+        "Min edge",
+        min_value=0.0,
+        max_value=20.0,
+        value=_default_edge_pct,
+        step=0.5,
+        format="%.1f%%",
+        help="Filter picks by minimum edge. Higher = fewer but stronger picks.",
+    )
+    edge_threshold_decimal = edge_threshold / 100.0
+
+# ── Load picks (grouped by unique bet, best bookmaker per pick) ──────────
+with st.spinner("Loading picks..."):
+    all_picks = get_value_bets_in_range(
+        date_from=date_from,
+        date_to=date_to,
+        edge_threshold=edge_threshold_decimal,
+    )
+
+if all_picks:
+    # Split into upcoming (scheduled) and recent (finished) for summary
+    today_str = _today.isoformat()
+    upcoming = [vb for vb in all_picks if vb["status"] == "scheduled"]
+    finished = [vb for vb in all_picks if vb["status"] == "finished"]
+    today_count = sum(1 for vb in upcoming if vb["date"] == today_str)
+
     if today_count > 0:
         st.success(f"**{today_count} pick{'s' if today_count != 1 else ''} for today!**")
-    else:
-        # Picks exist but not for today — show when the next ones are
-        next_date = upcoming_bets[0]["date"]
+    elif upcoming:
+        next_date = upcoming[0]["date"]
         st.info(f"No picks for today. Next picks: **{next_date}**")
 
-    col1, col2, col3 = st.columns(3)
+    # Summary metrics
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("Upcoming Picks", len(upcoming_bets))
+        st.metric("Upcoming", len(upcoming))
     with col2:
-        avg_edge = sum(vb["edge"] for vb in upcoming_bets) / len(upcoming_bets)
-        st.metric("Avg Edge", f"{avg_edge:.1%}")
+        st.metric("Recent Results", len(finished))
     with col3:
-        high_conf = sum(1 for vb in upcoming_bets if vb["confidence"] == "high")
+        avg_edge = sum(vb["edge"] for vb in all_picks) / len(all_picks)
+        st.metric("Avg Edge", f"{avg_edge:.1%}")
+    with col4:
+        high_conf = sum(1 for vb in all_picks if vb["confidence"] == "high")
         st.metric("High Confidence", high_conf)
 
     st.divider()
 
-    # Render each upcoming value bet as a card
-    for idx, vb in enumerate(upcoming_bets):
-        render_value_bet_card(vb, idx)
+    # Group picks by date for clear visual separation
+    from itertools import groupby
+    for match_date, group in groupby(all_picks, key=lambda x: x["date"]):
+        group_list = list(group)
+        # Date header with match count
+        is_past = match_date < today_str
+        date_label = match_date
+        if match_date == today_str:
+            date_label = f"{match_date}  (Today)"
+        elif is_past:
+            date_label = f"{match_date}  (Finished)"
+
+        st.markdown(
+            f'<div style="font-family: Inter, sans-serif; font-size: 14px; '
+            f'font-weight: 600; color: {"#8B949E" if is_past else "#E6EDF3"}; '
+            f'margin: 20px 0 10px; text-transform: uppercase; '
+            f'letter-spacing: 0.5px;">{date_label}'
+            f'<span style="font-size: 12px; font-weight: 400; color: #484F58; '
+            f'margin-left: 8px;">{len(group_list)} pick{"s" if len(group_list) != 1 else ""}</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+        for idx, vb in enumerate(group_list):
+            # Use a globally unique key by combining date and idx
+            global_idx = f"{match_date}_{idx}"
+            render_value_bet_card(vb, global_idx)
 
 else:
-    # Empty state — no upcoming value bets at all (MP §8)
+    # Empty state — no value bets in the date range (MP §8)
     st.markdown(
         '<div class="bv-empty-state">'
-        "No upcoming value bets found. Check back after the next pipeline run, "
-        "or lower the edge threshold above."
+        "No value bets found in this date range. Try expanding the date range "
+        "or lowering the edge threshold."
         "</div>",
-        unsafe_allow_html=True,
-    )
-
-# ── Recent Results (performance tracking) ────────────────────────────────
-# Last 7 days of finished matches that had value bets — shows how past
-# picks performed.  Compact cards, no "Mark as Placed" form.
-st.divider()
-st.markdown(
-    '<div style="font-family: Inter, sans-serif; font-size: 18px; font-weight: 600; '
-    'color: #E6EDF3; margin-bottom: 12px;">Recent Results</div>',
-    unsafe_allow_html=True,
-)
-st.markdown(
-    '<p class="text-muted" style="margin-bottom: 12px;">'
-    'Past picks from the last 7 days — track how the model performed</p>',
-    unsafe_allow_html=True,
-)
-
-with st.spinner("Loading recent results..."):
-    recent_results = get_recent_results(days=7, limit=20)
-
-if recent_results:
-    for idx, vb in enumerate(recent_results):
-        render_result_card(vb, idx)
-else:
-    st.markdown(
-        '<div style="font-family: Inter, sans-serif; font-size: 13px; '
-        'color: #484F58; padding: 16px 0;">No finished matches with value '
-        'bets in the last 7 days.</div>',
         unsafe_allow_html=True,
     )
 

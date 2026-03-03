@@ -3023,3 +3023,143 @@ E25-01 (XGBoost model) → E25-02 (ensemble combiner)
 ```
 
 E25-01 must be first (model must exist). E25-02 integrates it. E25-03 evaluates. E25-04 promotes.
+
+---
+
+## E26 — Dashboard UX Overhaul
+
+### Motivation
+
+The dashboard's three main user-facing pages — Fixtures, Today's Picks, and Match Deep Dive — have UX issues that undermine daily usability. Picks renders 906 cards for 35 unique bets (per-bookmaker duplication). Cross-page navigation to Deep Dive silently fails. The Deep Dive picker excludes future matches. And the Fixtures page, which is the most informative daily view, isn't the landing page.
+
+These 4 issues fix the core daily workflow: land on Fixtures → scan today's matches → tap the best picks → deep dive into any match for full analysis.
+
+---
+
+### E26-01 — Fix Today's Picks: Group by Unique Bet + Date Range Filter
+
+**Type:** Bug Fix + Enhancement — Dashboard
+**Depends on:** E24-01 (picks page)
+**MP refs:** §3 Flow 1 (Morning Prediction), §8 Design System
+**Status:** TODO
+
+**Problem:** `get_upcoming_value_bets()` returns all ValueBet rows — one per bookmaker. DB has 906 rows for 35 unique (match_id, market_type, selection) combos. The render loop shows every row as a separate card.
+
+**Root cause confirmed via DB query:**
+- Wolves vs Liverpool 1X2 Home: 45 bookmaker rows (45 separate cards)
+- Same pattern across all matches: ~25-45 bookmakers per unique pick
+
+**Fix — Group by unique pick (best bookmaker only):**
+1. After the query in `get_upcoming_value_bets()` (picks.py line ~178), group results by `(match_id, market_type, selection)`
+2. For each group, keep the row with the **highest edge** (best bookmaker)
+3. Attach `alt_bookmaker_count` — how many other bookmakers also offer value
+4. Card renders: "Best: FanDuel @ 7.50 (+28.1% edge) · 44 other bookmakers also offer value"
+
+**Fix — Add date range filter:**
+1. Replace the single "today onward" query with a date range filter
+2. Add `st.date_input` (range mode) above the edge slider — default: today ± 3 days
+3. Query value bets within the date range (both scheduled AND recently finished)
+4. This surfaces picks from multiple matchdays and allows backward review
+
+**Files:** `src/delivery/views/picks.py`
+
+**Acceptance Criteria:**
+- [ ] Picks page shows ~35 unique pick cards (not 906 per-bookmaker duplicates)
+- [ ] Each card shows best bookmaker name, odds, and edge, plus count of alternative bookmakers
+- [ ] Date range filter defaults to today ± 3 days
+- [ ] Adjusting the date range backward shows recent finished picks with results
+- [ ] Adjusting forward shows picks for upcoming matchdays
+- [ ] Edge threshold slider still works as a secondary filter
+
+---
+
+### E26-02 — Fix Deep Dive Navigation + Future Match Picker
+
+**Type:** Bug Fix + Enhancement — Dashboard
+**Depends on:** E9-05 (match detail page), E24-02 (deep dive fixes)
+**MP refs:** §3 Flow 4 (Dashboard Exploration), §8 Design System
+**Status:** TODO
+
+**Problem 1:** `st.query_params` set before `st.switch_page()` are lost during page transition in Streamlit 1.41. Users click "Deep Dive" from Picks or Fixtures and land on the picker, not the analysis.
+
+**Fix — Use `st.session_state` for cross-page navigation:**
+1. In `picks.py` and `fixtures.py`: Set `st.session_state["deep_dive_match_id"]` before `st.switch_page()`
+2. In `match_detail.py`: Check session_state first, then fall back to query_params
+3. Pop from session_state after reading (one-time use), sync to query_params for URL sharing
+
+**Problem 2:** Deep Dive picker only queries `Match.status == "finished"` — no way to browse upcoming fixtures.
+
+**Fix — Split picker into Upcoming + Recent tabs:**
+1. Replace single dropdown with `st.tabs(["Upcoming", "Recent Results"])`
+2. "Upcoming" tab (default): `Match.status == "scheduled"`, date >= today, ordered by date ASC, limit 20
+3. "Recent Results" tab: `Match.status == "finished"`, ordered by date DESC, limit 20
+
+**Files:** `src/delivery/views/match_detail.py`, `src/delivery/views/picks.py`, `src/delivery/views/fixtures.py`
+
+**Acceptance Criteria:**
+- [ ] Clicking "Deep Dive" from Today's Picks navigates directly to match analysis (no re-selection)
+- [ ] Clicking "Deep Dive" from Fixtures navigates directly to match analysis (no re-selection)
+- [ ] Deep Dive picker shows "Upcoming" tab with scheduled matches
+- [ ] Deep Dive picker shows "Recent Results" tab with finished matches
+- [ ] Direct URL with `?match_id=123` still works (query_params fallback preserved)
+- [ ] Back button returns to picker view
+
+---
+
+### E26-03 — Fixtures as Landing Page + Predicted Scores + Top Picks Banner
+
+**Type:** Enhancement — Dashboard
+**Depends on:** E17-04 (fixtures page), E24-03 (market badges)
+**MP refs:** §3 Flow 4 (Dashboard Exploration), §8 Design System
+**Status:** TODO
+
+**Change 1 — Make Fixtures the landing page:**
+In `dashboard.py`, move `default=True` from Today's Picks to Fixtures.
+
+**Change 2 — Add predicted score per fixture:**
+For each fixture with a Prediction record, show expected goals inline: "Model: 1.4 – 0.8" below market badges.
+
+**Change 3 — Top Picks banner at page top:**
+Show "Top Picks" section with the 3–5 highest-edge value bets (grouped by unique pick).
+
+**Files:** `src/delivery/dashboard.py`, `src/delivery/views/fixtures.py`
+
+**Acceptance Criteria:**
+- [ ] Dashboard opens on Fixtures page (not Today's Picks)
+- [ ] Each fixture card shows predicted score from the model ("Model: X.X – X.X")
+- [ ] Fixtures without predictions show no predicted score (graceful empty state)
+- [ ] Top of page shows "Top Picks" banner with 3–5 best value bets
+- [ ] Top picks show: teams, market, best bookmaker, odds, edge %
+- [ ] Banner has empty state when no value bets exist
+
+---
+
+### E26-04 — Integration Test
+
+**Type:** QA — Dashboard Integration
+**Depends on:** E26-01, E26-02, E26-03
+**MP refs:** §8 Design System
+**Status:** TODO
+
+Run the dashboard and verify all fixes work end-to-end with live data.
+
+**Acceptance Criteria:**
+- [ ] Fixtures page loads as default landing page in <3 seconds
+- [ ] Top picks banner shows top value bets grouped by unique pick
+- [ ] Fixture cards show predicted score, market badges, and diagnostic badges
+- [ ] Today's Picks shows ~35 unique picks (not 900+ duplicates)
+- [ ] Date range filter on picks allows viewing past results and future picks
+- [ ] Deep Dive navigation works from both Fixtures and Picks pages (direct to analysis)
+- [ ] Deep Dive picker has Upcoming and Recent Results tabs
+- [ ] All pages follow design system (colours, fonts, empty states)
+
+---
+
+### Implementation Sequence
+
+```
+E26-01 (fix picks dedup + date range) → E26-02 (fix deep dive nav + picker)
+→ E26-03 (fixtures landing + predicted scores + top picks) → E26-04 (integration test)
+```
+
+E26-01 fixes the most visible bug (repeated picks). E26-02 fixes navigation. E26-03 makes fixtures the central page. E26-04 validates everything.

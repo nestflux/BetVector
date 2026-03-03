@@ -87,7 +87,8 @@ E21-01 → E21-02 → E21-03 →
 E22-01 → E22-02 →
 E23-01 → E23-02 → E23-03 → E23-04 → E23-05 → E23-06 → E23-07 →
 E24-01 → E24-02 → E24-03 → E24-04 → E24-05 →
-E25-01 → E25-02 → E25-03 → E25-04
+E25-01 → E25-02 → E25-03 → E25-04 →
+E26-01 → E26-02 → E26-03 → E26-04
 ```
 
 The sequence is the law. Auto-advance after gates pass. Only stop for
@@ -296,10 +297,8 @@ Wait for owner to respond with approval before making the change.
 ## Current Status
 
 Last completed: E25-04 (Promote Best Model)
-Currently working: — (all 93 issues complete)
-Next up: —
-
-🎉 ALL 93 ISSUES COMPLETE 🎉
+Currently working: E26-01 (Fix Today's Picks: Group by Unique Bet + Date Range Filter)
+Next up: E26-02 (Fix Deep Dive Navigation + Future Match Picker)
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
@@ -314,7 +313,8 @@ E22 complete: 2 issues ✅ (Set-piece xG, injury flags)
 E23 complete: All 7 issues done ✅ (Historical backfill + validation + Odds API verified)
 E24 complete: All 5 issues done ✅ (Dashboard fixes + fixtures value grid)
 E25 complete: All 4 issues done ✅ (XGBoost ensemble model — Poisson wins backtest, +2.78% ROI)
-Total issues: 93 (all complete)
+E26 in progress: Dashboard UX Overhaul (4 issues)
+Total issues: 97 (93 complete + 4 in progress)
 
 ---
 
