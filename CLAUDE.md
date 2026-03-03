@@ -296,8 +296,8 @@ Wait for owner to respond with approval before making the change.
 ## Current Status
 
 Last completed: E23-07 (Verify Odds API Pipeline)
-Currently working: E24-05 (Fixtures + Picks Integration Test)
-Next up: E25-01 (XGBoost Scoreline Model)
+Currently working: E25-01 (XGBoost Scoreline Model)
+Next up: E25-02 (Ensemble Combiner)
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
@@ -310,9 +310,9 @@ E20 complete: 3 issues ✅ (Market-Augmented Poisson, Brier 0.6105 → 0.5781)
 E21 complete: 3 issues ✅ (Elo, referee, congestion features)
 E22 complete: 2 issues ✅ (Set-piece xG, injury flags)
 E23 complete: 7 issues ✅ (Historical backfill + validation)
-E24 in progress: 4/5 (Dashboard fixes + fixtures value grid)
+E24 complete: All 5 issues done ✅ (Dashboard fixes + fixtures value grid)
 E25 planned: 0/4 (XGBoost ensemble model)
-Total issues: 93 (84 complete + 5 E24 + 4 E25)
+Total issues: 93 (89 complete + 4 E25)
 
 ---
 

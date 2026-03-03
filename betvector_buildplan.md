@@ -2809,7 +2809,7 @@ Ensure the prediction→odds→value chain is complete for all scheduled fixture
 **Type:** Testing — End-to-End
 **Depends on:** E24-01, E24-02, E24-03, E24-04
 **MP refs:** §13.14
-**Status:** PLANNED
+**Status:** COMPLETE ✅
 
 Run the full morning pipeline and verify all three dashboard fixes work end-to-end with live data.
 
