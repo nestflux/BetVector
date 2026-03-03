@@ -88,7 +88,8 @@ E22-01 → E22-02 →
 E23-01 → E23-02 → E23-03 → E23-04 → E23-05 → E23-06 → E23-07 →
 E24-01 → E24-02 → E24-03 → E24-04 → E24-05 →
 E25-01 → E25-02 → E25-03 → E25-04 →
-E26-01 → E26-02 → E26-03 → E26-04
+E26-01 → E26-02 → E26-03 → E26-04 →
+E27-01 → E27-02 → E27-03 → E27-04
 ```
 
 The sequence is the law. Auto-advance after gates pass. Only stop for
@@ -297,8 +298,8 @@ Wait for owner to respond with approval before making the change.
 ## Current Status
 
 Last completed: E26-04 (Integration Test — E26 epic complete)
-Currently working: (none — awaiting next epic)
-Next up: (none — critical path complete through E26)
+Currently working: E27-01 (Deep Dive Value Bets: FanDuel Default + Bookmaker Toggle)
+Next up: E27-02 (Add O/U 1.5 to Market Probabilities + Fixtures Badges)
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
@@ -314,7 +315,8 @@ E23 complete: All 7 issues done ✅ (Historical backfill + validation + Odds API
 E24 complete: All 5 issues done ✅ (Dashboard fixes + fixtures value grid)
 E25 complete: All 4 issues done ✅ (XGBoost ensemble model — Poisson wins backtest, +2.78% ROI)
 E26 complete: All 4 issues done ✅ (Dashboard UX Overhaul — picks dedup, deep dive nav, fixtures landing, integration test)
-Total issues: 97 — ALL COMPLETE
+E27 in progress: Deep Dive Polish + O/U 1.5 + Glossary Completeness (4 issues)
+Total issues: 101 (97 complete + 4 in progress)
 
 ---
 

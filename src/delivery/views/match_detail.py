@@ -1,6 +1,6 @@
 """
-BetVector — Match Deep Dive View (E9-05, E26-02)
-===================================================
+BetVector — Match Deep Dive View (E9-05, E26-02, E27-01)
+=========================================================
 Comprehensive analysis for a single match.  Accessible from Today's Picks
 cards and Fixtures page via ``st.session_state["deep_dive_match_id"]``
 (preferred) or ``?match_id=<id>`` query parameter (URL sharing fallback).
@@ -13,11 +13,19 @@ E26-02 changes:
 - session_state is popped after reading (one-time use) and synced to
   query_params so the URL remains shareable.
 
+E27-01 changes:
+- Value bets grouped by unique (market_type, selection). One card per bet,
+  not one card per bookmaker.
+- Default bookmaker: FanDuel. Falls back to highest-edge bookmaker when
+  FanDuel has no odds for that selection.
+- Bookmaker toggle: selectbox to switch between FanDuel / Best Edge / All.
+- OU15 labels added so Over/Under 1.5 value bets render correctly.
+
 Sections:
 1. Match header — teams, date, kickoff, league, actual result (if finished)
 2. Scoreline matrix — 7×7 Plotly heatmap with most likely scoreline highlighted
 3. Market probabilities — 1X2, O/U 2.5, BTTS derived from the matrix
-4. Value bets — all flagged bets for this match with edge and confidence
+4. Value bets — grouped by unique bet, FanDuel default, bookmaker toggle
 5. Head-to-head — last 5 meetings between the teams
 6. Team form — side-by-side rolling stats for home and away teams
 
@@ -75,11 +83,19 @@ SELECTION_LABELS = {
     ("1X2", "home"): "Home Win",
     ("1X2", "draw"): "Draw",
     ("1X2", "away"): "Away Win",
+    ("OU15", "over"): "Over 1.5",
+    ("OU15", "under"): "Under 1.5",
     ("OU25", "over"): "Over 2.5",
     ("OU25", "under"): "Under 2.5",
-    ("BTTS", "yes"): "Yes",
-    ("BTTS", "no"): "No",
+    ("OU35", "over"): "Over 3.5",
+    ("OU35", "under"): "Under 3.5",
+    ("BTTS", "yes"): "BTTS Yes",
+    ("BTTS", "no"): "BTTS No",
 }
+
+# E27-01: Preferred bookmaker — shown by default in value bet cards.
+# Falls back to highest-edge bookmaker when preferred isn't available.
+PREFERRED_BOOKMAKER = "FanDuel"
 
 CONFIDENCE_COLOURS = {
     "high": COLOURS["green"],
@@ -748,37 +764,174 @@ else:
     # E24-02: Always show the section header. If no value bets exist
     # (common for scheduled matches before odds arrive), show a clear
     # empty state instead of hiding the section entirely.
+    # E27-01: Group by unique (market_type, selection). Show one card per
+    # unique bet with FanDuel as the default bookmaker. Falls back to
+    # highest-edge bookmaker when FanDuel isn't available. Toggle lets
+    # the user switch to Best Edge view or expand All Bookmakers.
     st.markdown(
         '<div class="bv-section-header">Value Bets</div>',
         unsafe_allow_html=True,
     )
 
     if data["value_bets"]:
+        # ----------------------------------------------------------
+        # Group value bets by unique (market_type, selection).
+        # Each group collects all bookmaker rows for that selection.
+        # ----------------------------------------------------------
+        grouped_vbs: Dict[Tuple[str, str], List[Dict]] = {}
         for vb in data["value_bets"]:
-            sel_label = SELECTION_LABELS.get(
-                (vb["market_type"], vb["selection"]),
-                f"{vb['market_type']}/{vb['selection']}",
-            )
-            conf_colour = CONFIDENCE_COLOURS.get(vb["confidence"], COLOURS["border"])
-            edge_pct = vb["edge"] * 100
+            key = (vb["market_type"], vb["selection"])
+            grouped_vbs.setdefault(key, []).append(vb)
 
-            st.markdown(
-                f'<div class="bv-card" style="display: flex; justify-content: space-between; align-items: center;">'
-                f'<div>'
-                f'<span style="font-family: Inter, sans-serif; font-size: 14px; color: {COLOURS["text"]};">'
-                f'{sel_label}</span>'
-                f'<span style="font-family: Inter, sans-serif; font-size: 12px; color: {COLOURS["text_secondary"]}; margin-left: 8px;">'
-                f'({vb["bookmaker"]} @ {vb["bookmaker_odds"]:.2f})</span>'
-                f'</div>'
-                f'<div style="display: flex; align-items: center; gap: 12px;">'
-                f'<span style="font-family: JetBrains Mono, monospace; font-size: 14px; font-weight: 700; '
-                f'color: {COLOURS["green"]};">+{edge_pct:.1f}%</span>'
-                f'<span class="bv-badge" style="background-color: {conf_colour};">'
-                f'{vb["confidence"].upper()}</span>'
-                f'</div>'
-                f'</div>',
-                unsafe_allow_html=True,
+        # Sort each group by edge descending (best bookmaker first)
+        for key in grouped_vbs:
+            grouped_vbs[key].sort(key=lambda x: -x["edge"])
+
+        # Sort the groups themselves by highest edge (best bet first)
+        sorted_groups = sorted(
+            grouped_vbs.items(),
+            key=lambda item: -item[1][0]["edge"],
+        )
+
+        # ----------------------------------------------------------
+        # Bookmaker view toggle — lets the user control display mode
+        # ----------------------------------------------------------
+        view_mode = st.selectbox(
+            "Show odds from",
+            [
+                f"{PREFERRED_BOOKMAKER} (Default)",
+                "Best Edge",
+                "All Bookmakers",
+            ],
+            index=0,
+            key="vb_view_mode",
+            help=(
+                f"'{PREFERRED_BOOKMAKER} (Default)' shows {PREFERRED_BOOKMAKER} odds "
+                f"per bet (falls back to best edge if unavailable). "
+                f"'Best Edge' shows the single best-value bookmaker. "
+                f"'All Bookmakers' expands every bookmaker for each bet."
+            ),
+        )
+
+        # Pre-compute the preferred bookmaker name in lowercase for matching
+        _pref_lower = PREFERRED_BOOKMAKER.lower()
+
+        for (mkt, sel), vb_list in sorted_groups:
+            sel_label = SELECTION_LABELS.get(
+                (mkt, sel), f"{mkt}/{sel}",
             )
+            total_bookmakers = len(vb_list)
+            # Best edge is always the first item (sorted above)
+            best_edge_vb = vb_list[0]
+
+            # Find the preferred bookmaker row (case-insensitive match)
+            preferred_vb = None
+            for vb in vb_list:
+                if vb["bookmaker"].lower().startswith(_pref_lower):
+                    preferred_vb = vb
+                    break
+
+            # ----------------------------------------------------------
+            # Determine which bookmaker(s) to display based on view mode
+            # ----------------------------------------------------------
+            if view_mode == "All Bookmakers":
+                # Show every bookmaker in this group
+                display_vbs = vb_list
+            elif view_mode == "Best Edge":
+                # Show only the single highest-edge bookmaker
+                display_vbs = [best_edge_vb]
+            else:
+                # Preferred bookmaker (Default): show preferred if available, else best edge
+                display_vbs = [preferred_vb if preferred_vb else best_edge_vb]
+
+            # Count of alternative bookmakers (excluding the displayed one)
+            alt_count = total_bookmakers - len(display_vbs)
+            if alt_count < 0:
+                alt_count = 0
+
+            # ----------------------------------------------------------
+            # Render a selection header when showing All Bookmakers
+            # ----------------------------------------------------------
+            if view_mode == "All Bookmakers" and len(display_vbs) > 1:
+                st.markdown(
+                    f'<div style="font-family: Inter, sans-serif; font-size: 13px; '
+                    f'font-weight: 600; color: {COLOURS["text"]}; '
+                    f'margin-top: 12px; margin-bottom: 4px;">'
+                    f'{sel_label} — {total_bookmakers} bookmaker{"s" if total_bookmakers != 1 else ""}'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+
+            for vb in display_vbs:
+                conf_colour = CONFIDENCE_COLOURS.get(
+                    vb["confidence"], COLOURS["border"],
+                )
+                edge_pct = vb["edge"] * 100
+
+                # Model probability vs implied probability for context
+                model_prob_pct = vb["model_prob"] * 100 if vb.get("model_prob") else None
+                implied_prob = (1.0 / vb["bookmaker_odds"]) * 100 if vb["bookmaker_odds"] > 0 else None
+
+                # Probability comparison text (model vs implied)
+                prob_text = ""
+                if model_prob_pct is not None and implied_prob is not None:
+                    prob_text = (
+                        f'<span style="font-family: JetBrains Mono, monospace; '
+                        f'font-size: 11px; color: {COLOURS["text_secondary"]}; '
+                        f'margin-left: 8px;">'
+                        f'Model {model_prob_pct:.0f}% vs Implied {implied_prob:.0f}%'
+                        f'</span>'
+                    )
+
+                # Alt bookmakers count (only in single-card views)
+                alt_text = ""
+                if view_mode != "All Bookmakers" and alt_count > 0:
+                    # Grammar: "1 other bookmaker also offers value"
+                    #          "44 other bookmakers also offer value"
+                    bk_plural = "bookmaker" if alt_count == 1 else "bookmakers"
+                    verb = "offers" if alt_count == 1 else "offer"
+                    alt_text = (
+                        f'<div style="font-family: Inter, sans-serif; font-size: 11px; '
+                        f'color: {COLOURS["text_secondary"]}; margin-top: 2px;">'
+                        f'{alt_count} other {bk_plural} also {verb} value'
+                        f'</div>'
+                    )
+
+                # Is this the preferred bookmaker? Show a fallback indicator if not
+                is_preferred = vb["bookmaker"].lower().startswith(_pref_lower)
+                bk_indicator = ""
+                if not is_preferred and view_mode.startswith(PREFERRED_BOOKMAKER):
+                    # Fallback indicator — preferred bookmaker wasn't available
+                    bk_indicator = (
+                        f'<span style="font-family: Inter, sans-serif; font-size: 10px; '
+                        f'color: {COLOURS["yellow"]}; margin-left: 4px;">'
+                        f'({PREFERRED_BOOKMAKER} N/A)</span>'
+                    )
+
+                st.markdown(
+                    f'<div class="bv-card" style="padding: 10px 14px; margin-bottom: 6px;">'
+                    f'<div style="display: flex; justify-content: space-between; align-items: center;">'
+                    f'<div>'
+                    f'<span style="font-family: Inter, sans-serif; font-size: 14px; '
+                    f'font-weight: 600; color: {COLOURS["text"]};">'
+                    f'{sel_label}</span>'
+                    f'<span style="font-family: Inter, sans-serif; font-size: 12px; '
+                    f'color: {COLOURS["text_secondary"]}; margin-left: 8px;">'
+                    f'{vb["bookmaker"]} @ {vb["bookmaker_odds"]:.2f}</span>'
+                    f'{bk_indicator}'
+                    f'{prob_text}'
+                    f'</div>'
+                    f'<div style="display: flex; align-items: center; gap: 12px;">'
+                    f'<span style="font-family: JetBrains Mono, monospace; font-size: 14px; '
+                    f'font-weight: 700; color: {COLOURS["green"]};">+{edge_pct:.1f}%</span>'
+                    f'<span class="bv-badge" style="background-color: {conf_colour};">'
+                    f'{(vb["confidence"] or "low").upper()}</span>'
+                    f'</div>'
+                    f'</div>'
+                    f'{alt_text}'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
     else:
         st.markdown(
             f'<div style="font-family: Inter, sans-serif; font-size: 13px; '

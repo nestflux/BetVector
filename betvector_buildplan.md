@@ -3163,3 +3163,203 @@ E26-01 (fix picks dedup + date range) → E26-02 (fix deep dive nav + picker)
 ```
 
 E26-01 fixes the most visible bug (repeated picks). E26-02 fixes navigation. E26-03 makes fixtures the central page. E26-04 validates everything.
+
+---
+
+## E27 — Deep Dive Polish + O/U 1.5 + Glossary Completeness
+
+### Motivation
+
+Three targeted improvements to complete the dashboard's daily-use UX. The Deep Dive page currently dumps every bookmaker's odds for every value bet — overwhelming when a match has 45 bookmakers. Users want a single recommended line (FanDuel preferred) with the option to explore alternatives. The Over/Under 1.5 Goals market is already computed by the model (`prob_over_15` / `prob_under_15`) and tracked by the ValueFinder, but never surfaces in the dashboard. And glossaries — the owner's learning tool — are incomplete: only Picks and Deep Dive have them, while Fixtures, Performance, Bankroll, and Model Health have none.
+
+---
+
+### E27-01 — Deep Dive Value Bets: FanDuel Default + Bookmaker Toggle
+
+**Type:** Enhancement — Dashboard
+**Depends on:** E26-04 (Dashboard UX Overhaul complete)
+**MP refs:** §3 Flow 4 (Dashboard Exploration), §8 Design System
+**Status:** TODO
+
+**Problem:** The Deep Dive "Value Bets" section (Section 4, match_detail.py) renders every ValueBet row for the match — one card per bookmaker per market selection. A single match can have 45+ bookmakers × 5 markets = 200+ cards. This overwhelms the analysis-focused page.
+
+**Fix — Group by unique bet, default to FanDuel:**
+
+1. **Group value bets** by `(market_type, selection)` — same logic proven in E26-01 picks dedup.
+
+2. **Default display per group:** Show one card with the **FanDuel** line. If FanDuel isn't available for that selection, fall back to the bookmaker with the **highest edge** (best value).
+
+3. **Card layout per unique bet:**
+   - Selection label (Home Win / Over 2.5 / etc.)
+   - Primary bookmaker name, odds, and edge %
+   - Confidence badge (HIGH / MEDIUM / LOW)
+   - Model probability vs implied probability
+   - "N other bookmakers" count (muted text)
+
+4. **Bookmaker toggle:** Below the grouped value bet cards, add `st.selectbox("Show odds from", ["FanDuel (Default)", "Best Edge", "All Bookmakers"])`:
+   - **FanDuel (Default):** Shows one card per unique bet with FanDuel line (or highest-edge fallback)
+   - **Best Edge:** Shows one card per unique bet with the single highest-edge bookmaker
+   - **All Bookmakers:** Expands to show every bookmaker for every market (current behavior, but grouped under each selection header)
+
+5. **Add O/U 1.5 labels** to `SELECTION_LABELS` dict in match_detail.py: `("OU15", "over"): "Over 1.5"`, `("OU15", "under"): "Under 1.5"` — so any OU15 value bets render properly.
+
+**Data flow:** `load_match_data()` already returns all ValueBet rows ordered by edge DESC. The grouping and filtering happens at render time in `render_match_detail()`.
+
+**Files:** `src/delivery/views/match_detail.py`
+
+**Acceptance Criteria:**
+- [ ] Value Bets section shows one card per unique (market_type, selection) by default
+- [ ] Default bookmaker is FanDuel when available for that selection
+- [ ] Falls back to highest-edge bookmaker when FanDuel not available
+- [ ] Each card shows: selection label, bookmaker, odds, edge %, confidence badge
+- [ ] Each card shows count of alternative bookmakers (e.g., "44 other bookmakers")
+- [ ] Selectbox toggle switches between FanDuel / Best Edge / All Bookmakers views
+- [ ] "All Bookmakers" view groups bets by selection with each bookmaker listed
+- [ ] OU15 value bets render with correct labels (Over 1.5, Under 1.5)
+- [ ] Empty state preserved when no value bets exist
+
+---
+
+### E27-02 — Add Over/Under 1.5 to Market Probabilities + Fixtures Badges
+
+**Type:** Enhancement — Dashboard
+**Depends on:** E27-01
+**MP refs:** §5 Scoreline Matrix, §8 Design System
+**Status:** TODO
+
+**Problem:** The model already computes `prob_over_15` and `prob_under_15` from the scoreline matrix (base_model.py line 198-199), stores them in the Prediction table (models.py line 736-737), and the ValueFinder already finds OU15 value bets (value_finder.py line 81-82). But neither the Deep Dive Market Probabilities section nor the Fixtures page badge grid displays O/U 1.5.
+
+**Fix 1 — Deep Dive Market Probabilities (match_detail.py):**
+Add O/U 1.5 as a new row in Section 3 (Market Probabilities, lines 717-744). Currently shows:
+- Row 1: 1X2 (3 columns)
+- Row 2: O/U 2.5 + BTTS (4 columns)
+
+Change to:
+- Row 1: 1X2 (3 columns)
+- Row 2: O/U 1.5 + O/U 2.5 (4 columns)
+- Row 3: BTTS (2 columns, centered)
+
+Read `pred.prob_over_15` and `pred.prob_under_15` from the Prediction object.
+
+**Fix 2 — Fixtures page badges (fixtures.py):**
+Add two new badges to the `MARKET_BADGES` list: `("OU15", "over", "O1.5")` and `("OU15", "under", "U1.5")`. Insert them before the OU25 badges for natural ordering by threshold.
+
+Also add the OU15 probability mapping to `PRED_PROB_MAP`:
+- `("OU15", "over"): "prob_over_15"`
+- `("OU15", "under"): "prob_under_15"`
+
+Updated badge order: H, D, A, O1.5, U1.5, O2.5, U2.5, BTTS Y, BTTS N (9 badges).
+
+**Files:** `src/delivery/views/match_detail.py`, `src/delivery/views/fixtures.py`
+
+**Acceptance Criteria:**
+- [ ] Deep Dive Market Probabilities shows Over/Under 1.5 metrics
+- [ ] O/U 1.5 probabilities read from `pred.prob_over_15` / `pred.prob_under_15`
+- [ ] Layout: 1X2 row → O/U 1.5 + O/U 2.5 row → BTTS row
+- [ ] Fixtures page shows 9 badges per fixture (added O1.5, U1.5)
+- [ ] Badge ordering: H, D, A, O1.5, U1.5, O2.5, U2.5, BTTS Y, BTTS N
+- [ ] O/U 1.5 badges have correct edge colours and tooltips
+- [ ] Top Picks banner can surface OU15 picks with correct labels
+
+---
+
+### E27-03 — Glossary Audit: Complete Coverage on All Pages
+
+**Type:** Enhancement — Dashboard
+**Depends on:** E27-02
+**MP refs:** §8 Design System, §12 Glossary
+**Status:** TODO
+
+**Problem:** Only 2 of 7 dashboard pages have glossaries:
+- ✅ **Today's Picks** (`picks.py`) — has glossary (The Pick Card, Key Numbers, Confidence, Context Badges, Summary Metrics)
+- ✅ **Match Deep Dive** (`match_detail.py`) — has glossary (Form, xG, Pressing, Model, Markets, Value Betting, Squad, Icons)
+- ❌ **Fixtures** (`fixtures.py`) — no glossary
+- ❌ **Performance** (`performance.py`) — no glossary
+- ❌ **Bankroll** (`bankroll.py`) — no glossary
+- ❌ **Model Health** (`model_health.py`) — no glossary
+- ❌ **Settings** (`settings.py`) — no glossary needed (self-explanatory form fields)
+- ❌ **Leagues** (`leagues.py`) — no glossary needed (simple league table)
+
+The owner is learning (MP §12). Every page that shows stats, charts, or betting concepts should have a collapsed glossary at the bottom explaining every term shown.
+
+**Fix — Add glossaries to 4 pages + audit 2 existing:**
+
+1. **Fixtures page glossary** (new):
+   - Market badges (H, D, A, O1.5, U1.5, O2.5, U2.5, BTTS Y, BTTS N) and what colours mean
+   - Predicted Score — what the model numbers represent
+   - Top Picks banner — edge, confidence, best bookmaker
+   - Diagnostic badges (has prediction, has odds, value bet count)
+   - Date grouping and how fixtures are ordered
+
+2. **Performance page glossary** (new):
+   - ROI, yield, profit/loss, bankroll growth
+   - Brier score, calibration, accuracy
+   - Market-type breakdown terms
+   - Chart axes and what trends mean
+
+3. **Bankroll page glossary** (new):
+   - Bankroll, stake, Kelly criterion (if shown)
+   - Profit/loss tracking, cumulative returns
+   - Market type codes (1X2, OU15, OU25, BTTS)
+
+4. **Model Health page glossary** (new):
+   - Brier score, log loss, calibration curve
+   - Feature importance, model confidence
+   - Recalibration, drift, sample size
+
+5. **Audit existing — Deep Dive glossary:**
+   - Add O/U 1.5 definition to Market Probabilities section
+   - Add "Bookmaker" and "Toggle" explanation to Value Betting section
+   - Add "Predicted Score" / "Model Score" if shown on the page
+
+6. **Audit existing — Picks glossary:**
+   - Add O/U 1.5 market explanation
+   - Add "Date Range Filter" explanation
+   - Add "Alternative Bookmakers" count explanation
+
+**Style:** All glossaries use the same CSS and layout already established in picks.py and match_detail.py (`.gloss-section`, `.gloss-title`, `.gloss-term`, `.gloss-def`). Collapsed by default via `st.expander`.
+
+**Files:** `src/delivery/views/fixtures.py`, `src/delivery/views/performance.py`, `src/delivery/views/bankroll.py`, `src/delivery/views/model_health.py`, `src/delivery/views/match_detail.py`, `src/delivery/views/picks.py`
+
+**Acceptance Criteria:**
+- [ ] Fixtures page has a glossary covering all badges, predicted scores, top picks, and diagnostic badges
+- [ ] Performance page has a glossary covering ROI, Brier score, calibration, and chart terms
+- [ ] Bankroll page has a glossary covering bankroll, stakes, returns, and market codes
+- [ ] Model Health page has a glossary covering Brier score, calibration, feature importance, and drift
+- [ ] Deep Dive glossary updated with O/U 1.5 and bookmaker toggle explanations
+- [ ] Picks glossary updated with O/U 1.5, date range, and alternative bookmakers terms
+- [ ] All glossaries use consistent CSS (`.gloss-section`, `.gloss-title`, `.gloss-term`, `.gloss-def`)
+- [ ] All glossaries are collapsed by default (`st.expander(..., expanded=False)`)
+- [ ] Every stat, badge, and number visible on each page is explained in that page's glossary
+
+---
+
+### E27-04 — Integration Test
+
+**Type:** QA — Dashboard Integration
+**Depends on:** E27-01, E27-02, E27-03
+**MP refs:** §8 Design System
+**Status:** TODO
+
+Run the dashboard and verify all three enhancements work end-to-end.
+
+**Acceptance Criteria:**
+- [ ] Deep Dive Value Bets shows grouped picks with FanDuel default
+- [ ] Bookmaker toggle switches between FanDuel / Best Edge / All views
+- [ ] Market Probabilities shows O/U 1.5 alongside O/U 2.5 and BTTS
+- [ ] Fixtures page shows 9 market badges (including O1.5, U1.5) with correct colours
+- [ ] All 6 pages with stats/charts have glossaries (Fixtures, Picks, Deep Dive, Performance, Bankroll, Model Health)
+- [ ] Every term visible on each page is defined in that page's glossary
+- [ ] All glossaries collapsed by default, consistent CSS styling
+- [ ] Design system compliance (colours, fonts, empty states)
+
+---
+
+### Implementation Sequence
+
+```
+E27-01 (deep dive value bets + FanDuel default) → E27-02 (O/U 1.5 markets)
+→ E27-03 (glossary audit) → E27-04 (integration test)
+```
+
+E27-01 fixes the most impactful UX issue (bookmaker clutter). E27-02 adds the missing market. E27-03 ensures learning support across all pages. E27-04 validates everything.
