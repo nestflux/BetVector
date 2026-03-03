@@ -297,9 +297,9 @@ Wait for owner to respond with approval before making the change.
 
 ## Current Status
 
-Last completed: E26-04 (Integration Test — E26 epic complete)
-Currently working: E27-01 (Deep Dive Value Bets: FanDuel Default + Bookmaker Toggle)
-Next up: E27-02 (Add O/U 1.5 to Market Probabilities + Fixtures Badges)
+Last completed: E27-01 (Deep Dive Value Bets: FanDuel Default + Bookmaker Toggle)
+Currently working: E27-02 (Add O/U 1.5 to Market Probabilities + Fixtures Badges)
+Next up: E27-03 (Glossary Audit: Complete Coverage on All Pages)
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)

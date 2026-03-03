@@ -738,7 +738,7 @@ else:
             unsafe_allow_html=True,
         )
 
-        # 1X2
+        # 1X2 — the three possible match outcomes
         col1, col2, col3 = st.columns(3)
         with col1:
             st.metric("Home Win", f"{pred.prob_home_win:.1%}")
@@ -747,15 +747,24 @@ else:
         with col3:
             st.metric("Away Win", f"{pred.prob_away_win:.1%}")
 
-        # O/U 2.5 and BTTS
+        # Over/Under goals — 1.5 and 2.5 thresholds side by side.
+        # O/U 1.5 = will there be 2+ goals? O/U 2.5 = will there be 3+ goals?
+        # Both are derived from the scoreline matrix via derive_market_probabilities().
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.metric("Over 2.5", f"{pred.prob_over_25:.1%}")
+            st.metric("Over 1.5", f"{pred.prob_over_15:.1%}")
         with col2:
-            st.metric("Under 2.5", f"{pred.prob_under_25:.1%}")
+            st.metric("Under 1.5", f"{pred.prob_under_15:.1%}")
         with col3:
-            st.metric("BTTS Yes", f"{pred.prob_btts_yes:.1%}")
+            st.metric("Over 2.5", f"{pred.prob_over_25:.1%}")
         with col4:
+            st.metric("Under 2.5", f"{pred.prob_under_25:.1%}")
+
+        # BTTS — both teams to score at least one goal each
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("BTTS Yes", f"{pred.prob_btts_yes:.1%}")
+        with col2:
             st.metric("BTTS No", f"{pred.prob_btts_no:.1%}")
 
         st.divider()

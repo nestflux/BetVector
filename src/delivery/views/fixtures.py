@@ -10,8 +10,9 @@ Different from Today's Picks:
   indicators for every market"
 
 E24-03: Added inline color-coded market indicators per fixture row.
-For each scheduled match, 7 compact badges show the model's view:
-Home/Draw/Away (1X2), BTTS Yes/No, Over/Under 2.5.
+E27-02: Expanded to 9 badges by adding Over/Under 1.5 goals.
+For each scheduled match, 9 compact badges show the model's view:
+Home/Draw/Away (1X2), Over/Under 1.5, Over/Under 2.5, BTTS Yes/No.
 Colour coding:  green = strong edge, yellow = marginal, red = no edge,
 grey = no data.
 
@@ -101,19 +102,22 @@ def _edge_colour(edge: Optional[float]) -> str:
 
 
 # ============================================================================
-# Market badge definitions — the 7 selections shown per fixture.
+# Market badge definitions — the 9 selections shown per fixture.
 # Each tuple: (market_type_db, selection_db, badge_label)
 # These correspond to ValueBet.market_type and ValueBet.selection values.
+# Order: 1X2 → O/U 1.5 → O/U 2.5 → BTTS (natural threshold progression)
 # ============================================================================
 
 MARKET_BADGES = [
     ("1X2", "home", "H"),
     ("1X2", "draw", "D"),
     ("1X2", "away", "A"),
-    ("BTTS", "yes", "BTTS Y"),
-    ("BTTS", "no", "BTTS N"),
+    ("OU15", "over", "O1.5"),
+    ("OU15", "under", "U1.5"),
     ("OU25", "over", "O2.5"),
     ("OU25", "under", "U2.5"),
+    ("BTTS", "yes", "BTTS Y"),
+    ("BTTS", "no", "BTTS N"),
 ]
 
 # Map Prediction attributes to (market_type, selection) for probability lookups.
@@ -122,10 +126,12 @@ PRED_PROB_MAP = {
     ("1X2", "home"): "prob_home_win",
     ("1X2", "draw"): "prob_draw",
     ("1X2", "away"): "prob_away_win",
-    ("BTTS", "yes"): "prob_btts_yes",
-    ("BTTS", "no"): "prob_btts_no",
+    ("OU15", "over"): "prob_over_15",
+    ("OU15", "under"): "prob_under_15",
     ("OU25", "over"): "prob_over_25",
     ("OU25", "under"): "prob_under_25",
+    ("BTTS", "yes"): "prob_btts_yes",
+    ("BTTS", "no"): "prob_btts_no",
 }
 
 
@@ -197,7 +203,7 @@ def get_all_upcoming_fixtures(days_ahead: int = 14) -> List[Dict]:
             )
 
             # Compute per-market edges by comparing model probs to best odds.
-            # For each of the 7 market selections, we need:
+            # For each of the 9 market selections, we need:
             #   1. model_prob from Prediction attributes
             #   2. best available odds from the Odds table
             #   3. edge = model_prob - (1.0 / odds)
@@ -382,11 +388,11 @@ _SELECTION_LABELS = {
 # ============================================================================
 
 def _render_market_badges(market_edges: Dict[Tuple[str, str], Optional[float]]) -> str:
-    """Build HTML for the 7 color-coded market indicator badges.
+    """Build HTML for the 9 color-coded market indicator badges.
 
     Each badge is a compact pill showing the selection label (H, D, A,
-    BTTS Y, BTTS N, O2.5, U2.5) with a background colour indicating
-    the model's edge.
+    O1.5, U1.5, O2.5, U2.5, BTTS Y, BTTS N) with a background colour
+    indicating the model's edge.
 
     Parameters
     ----------
