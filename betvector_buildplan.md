@@ -2376,7 +2376,7 @@ Understat has EPL data from 2014/15 onward, and Football-Data.co.uk has CSVs for
 
 **Type:** Data — Scraping + Loading
 **Depends on:** E3-01 (FootballDataScraper), E3-04 (Loader)
-**Status:** OPEN
+**Status:** DONE ✅
 
 Load match results and odds for 2020-21, 2021-22, 2022-23, 2023-24 from Football-Data.co.uk CSVs. The scraper and loader already support this — they just need to be called for each historical season.
 
@@ -2401,12 +2401,12 @@ Create a backfill script (`scripts/backfill_historical.py`) that:
 - Football-Data.co.uk CSV URL pattern: `https://www.football-data.co.uk/mmz4281/{season_code}/E0.csv` where season_code is `2021` for 2020-21 season
 
 **Acceptance Criteria:**
-- [ ] Backfill script loads all 4 historical seasons
-- [ ] ~1,520 new Match records created (4 × 380)
-- [ ] Odds loaded for all historical matches (Pinnacle opening + closing where available)
-- [ ] Referee data backfilled where CSV provides it
-- [ ] Idempotent — re-running does not create duplicates
-- [ ] Team name mapping handles all historical EPL teams (promoted/relegated)
+- [x] Backfill script loads all 4 historical seasons
+- [x] ~1,520 new Match records created (4 × 380)
+- [x] Odds loaded for all historical matches (22,800+ odds records)
+- [x] Referee data backfilled where CSV provides it
+- [x] Idempotent — re-running does not create duplicates
+- [x] Team name mapping handles all historical EPL teams (promoted/relegated)
 
 ---
 
@@ -2414,7 +2414,7 @@ Create a backfill script (`scripts/backfill_historical.py`) that:
 
 **Type:** Data — Scraping + Loading
 **Depends on:** E23-01 (Match records must exist), E14-01 (UnderstatScraper)
-**Status:** OPEN
+**Status:** DONE ✅
 
 Load Understat match-level xG, NPxG, PPDA, and deep completions for seasons 2020-21 through 2024-25. Season 2025-26 already has Understat data (562 MatchStat rows). This gives every match in the database full advanced stats.
 
@@ -2438,12 +2438,12 @@ Add to backfill script:
 - `load_understat_stats()` uses idempotent upsert pattern — safe to re-run
 
 **Acceptance Criteria:**
-- [ ] Understat xG data loaded for all 5 historical seasons
-- [ ] ~3,800 new MatchStat records (5 × 380 × 2)
-- [ ] Each MatchStat has: xg, xga, npxg, npxga, ppda_coeff, deep, shots
-- [ ] Rate limiting respected (2s between requests)
-- [ ] Idempotent — re-running does not create duplicates
-- [ ] Team name mapping handles all historical Understat team names
+- [x] Understat xG data loaded for all 5 historical seasons
+- [x] ~3,800 new MatchStat records (5 × 380 × 2)
+- [x] Each MatchStat has: xg, xga, npxg, npxga, ppda_coeff, deep, shots
+- [x] Rate limiting respected (2s between requests)
+- [x] Idempotent — re-running does not create duplicates
+- [x] Team name mapping handles all historical Understat team names
 
 ---
 
@@ -2451,7 +2451,7 @@ Add to backfill script:
 
 **Type:** Data — Scraping + Loading
 **Depends on:** E23-02 (MatchStat records must exist), E22-01 (shot xG functions)
-**Status:** OPEN
+**Status:** DONE ✅
 
 Load set-piece vs open-play xG breakdown for all 6 seasons using `fetch_shot_xg_for_season()`. This populates `set_piece_xg` and `open_play_xg` on MatchStat records. Season 2025-26 already has this data.
 
@@ -2475,11 +2475,11 @@ Add to backfill script:
 - Consider running overnight or in segments (1-2 seasons at a time)
 
 **Acceptance Criteria:**
-- [ ] Shot-level xG loaded for all 5 historical seasons
-- [ ] MatchStat rows updated with set_piece_xg and open_play_xg
-- [ ] Rate limiting respected (no Understat abuse)
-- [ ] Idempotent — safe to restart after interruption
-- [ ] 2025-26 data unchanged (already populated)
+- [x] Shot-level xG loaded for all 5 historical seasons
+- [x] MatchStat rows updated with set_piece_xg and open_play_xg (3,800 rows)
+- [x] Rate limiting respected (2s between requests, ~100 min total)
+- [x] Idempotent — safe to restart after interruption
+- [x] 2025-26 data unchanged (already populated)
 
 ---
 
@@ -2487,7 +2487,7 @@ Add to backfill script:
 
 **Type:** Data — Scraping + Loading
 **Depends on:** E23-01 (Match records must exist), E21-01 (ClubElo scraper)
-**Status:** OPEN
+**Status:** DONE ✅
 
 Fetch Elo ratings for all match dates in the 4 historical seasons. Currently, ClubElo data only covers 2024-25 + 2025-26 (4,738 records). Historical seasons need Elo ratings for feature computation.
 
@@ -2510,11 +2510,11 @@ Add to backfill script:
 - UniqueConstraint on (team_id, rating_date) prevents duplicates
 
 **Acceptance Criteria:**
-- [ ] Elo ratings fetched for all match dates in 2020-21 through 2023-24
-- [ ] ~13,000+ new ClubElo records inserted
-- [ ] Team name mapping covers historical EPL teams
-- [ ] Idempotent — UniqueConstraint prevents duplicates
-- [ ] No excessive API usage (1s delay between date requests)
+- [x] Elo ratings fetched for all match dates in 2020-21 through 2023-24
+- [x] ~13,000+ new ClubElo records inserted (13,227 records across 495 dates)
+- [x] Team name mapping covers historical EPL teams (28 unique teams, West Brom bug fixed)
+- [x] Idempotent — UniqueConstraint prevents duplicates
+- [x] No excessive API usage (~3s delay between date requests via BaseScraper rate limiter)
 
 ---
 
