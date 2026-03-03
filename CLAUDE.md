@@ -295,9 +295,9 @@ Wait for owner to respond with approval before making the change.
 
 ## Current Status
 
-Last completed: E25-03 (Walk-Forward Backtest)
-Currently working: E25-04 (Promote Best Model)
-Next up: — (E25-04 is the final issue in E25)
+Last completed: E25-04 (Promote Best Model)
+Currently working: E23-07 (Verify Odds API Pipeline)
+Next up: — (E23-07 is the final issue in E23)
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
@@ -309,10 +309,10 @@ E19 complete: 4 issues ✅ (Live Odds Pipeline + CLV)
 E20 complete: 3 issues ✅ (Market-Augmented Poisson, Brier 0.6105 → 0.5781)
 E21 complete: 3 issues ✅ (Elo, referee, congestion features)
 E22 complete: 2 issues ✅ (Set-piece xG, injury flags)
-E23 complete: 7 issues ✅ (Historical backfill + validation)
+E23 complete: 6/7 issues done ✅ (Historical backfill + validation, E23-07 remaining)
 E24 complete: All 5 issues done ✅ (Dashboard fixes + fixtures value grid)
-E25 in progress: 3/4 (XGBoost ensemble model — Poisson wins backtest, +2.78% ROI)
-Total issues: 93 (92 complete + 1 E25 remaining)
+E25 complete: All 4 issues done ✅ (XGBoost ensemble model — Poisson wins backtest, +2.78% ROI)
+Total issues: 93 (92 complete + 1 E23-07 remaining)
 
 ---
 

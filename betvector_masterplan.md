@@ -1518,7 +1518,7 @@ The model trained on just 2 seasons (760 matches) — a dangerously small sample
 | E16-03 (Advanced Features) | 0.6903 | −7.2% | 1 season (380) | +NPxG, PPDA, weather, market value |
 | E20-03 (Market-Augmented) | 0.6105 | −3.50% | 2 seasons (760) | +Pinnacle odds, AH line |
 | **E23-06 (Full Backfill)** | **0.5781** | **+2.78%** | **6 seasons (2,280)** | **3× training data — model now profitable** |
-| E25-03 (XGBoost Ensemble) | TBD | TBD | 6 seasons (2,280) | XGBoost + Poisson ensemble — non-linear feature interactions |
+| E25-03 (XGBoost Backtest) | 0.5781 | +2.78% | 5 seasons (1,900) | Poisson wins — XGBoost overfits (Brier 0.5821, ROI −19%), ensemble unprofitable (ROI −9.4%) |
 
 ### 13.14 — E24 — Dashboard Fixes & Fixtures Value Grid (Planned)
 

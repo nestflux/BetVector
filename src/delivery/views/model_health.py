@@ -741,8 +741,20 @@ if live_data:
     with col2:
         st.metric("Total Predictions", f"{live_data['total_predictions']:,}")
     with col3:
-        num_models = len(model_comparison) if not model_comparison.empty else 1
-        st.metric("Active Models", str(num_models))
+        # Show the active production model name from config (E25-04)
+        try:
+            from src.config import config
+            active_models = list(config.settings.models.active_models)
+            ensemble_on = getattr(config.settings.models, "ensemble_enabled", False)
+            if ensemble_on and len(active_models) > 1:
+                model_label = "Ensemble"
+            elif active_models:
+                model_label = active_models[0]
+            else:
+                model_label = "Unknown"
+        except Exception:
+            model_label = "poisson_v1"
+        st.metric("Active Model", model_label)
     with col4:
         # Brier interpretation — anything below 0.25 beats random guessing
         if live_data["overall_brier"] < 0.20:

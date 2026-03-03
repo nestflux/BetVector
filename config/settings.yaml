@@ -69,7 +69,11 @@ safety:
 # Model Settings
 # ---------------------------------------------------------------------------
 # active_models lists the model keys that the pipeline runs today.
-# The ensemble is enabled only after each model has 300+ resolved preds.
+# E25-04 Decision: Poisson remains production model after E25-03 backtest:
+#   Poisson:  Brier 0.5781, ROI +2.78%  ← WINNER (only profitable model)
+#   XGBoost:  Brier 0.5821, ROI -19.0%  (overfits with ~1,900 samples)
+#   Ensemble: Brier 0.5778, ROI -9.4%   (marginally better Brier but unprofitable)
+# Revisit when training data exceeds 5,000 matches — XGBoost may improve.
 models:
   active_models:
     - "poisson_v1"

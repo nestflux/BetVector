@@ -2980,24 +2980,38 @@ Compare three configurations across 5 historical seasons to determine the best p
 **Type:** DevOps — Model Promotion
 **Depends on:** E25-03 (backtest results must be available)
 **MP refs:** §13.15
-**Status:** PLANNED
+**Status:** COMPLETE ✅
 
 Based on E25-03 backtest results, set the winning configuration as the production default.
 
-**Implementation:**
+**Decision: Keep Poisson as production model.**
 
-1. If ensemble wins: update `config/settings.yaml` to set ensemble as default, update pipeline.py
-2. If XGBoost-only wins: replace Poisson as the primary model in pipeline
-3. If Poisson-only still wins: keep current production config, document why XGBoost didn't help
-4. Update Model Health dashboard to display the active model configuration
-5. Update Model Performance Evolution table in masterplan
+The E25-03 backtest conclusively showed Poisson-only is the best configuration:
+- **Poisson:** Brier 0.5781, ROI +2.78%, PnL +£356 ← only profitable model
+- **XGBoost:** Brier 0.5821, ROI -19.0%, nearly wiped out bankroll (95% drawdown)
+- **Ensemble:** Brier 0.5778, ROI -9.4%, marginally better prediction quality but unprofitable
+
+**Why XGBoost didn't help:**
+- ~1,900 training samples is insufficient for 200-tree gradient boosting with 30+ features
+- XGBoost learns non-linear patterns that don't persist out-of-sample (overfitting)
+- The Poisson GLM's constraint (linear in log-space) acts as strong regularisation
+- XGBoost generates more value bets (769 vs 634) but at worse quality → net negative ROI
+
+**When to revisit:** When training data exceeds 5,000 matches (post-2027 with 7+ EPL seasons), XGBoost's capacity for non-linear interactions may become beneficial. The infrastructure (model class, ensemble combiner, backtester) is built and ready.
+
+**Changes made:**
+1. `config/settings.yaml` — confirmed `poisson_v1` as sole active model, `ensemble_enabled: false`, added decision documentation comment
+2. `pipeline.py` — already uses `config.settings.models.active_models` (no change needed)
+3. `model_health.py` — updated "Active Models" metric to show actual model name from config
+4. `betvector_masterplan.md` — updated Model Performance Evolution table with E25-03 results
+5. `betvector_buildplan.md` — documented full decision rationale
 
 **Acceptance Criteria:**
-- [ ] Best model/configuration promoted to production in settings.yaml
-- [ ] Pipeline uses the promoted configuration for daily predictions
-- [ ] Model Health dashboard shows active model name
-- [ ] Masterplan Model Performance Evolution table updated
-- [ ] Build plan documents the decision and rationale
+- [x] Best model/configuration promoted to production in settings.yaml (Poisson retained, decision documented)
+- [x] Pipeline uses the promoted configuration for daily predictions (poisson_v1 via config)
+- [x] Model Health dashboard shows active model name ("poisson_v1" instead of count)
+- [x] Masterplan Model Performance Evolution table updated with E25-03 results
+- [x] Build plan documents the decision and rationale (this section)
 
 ---
 
