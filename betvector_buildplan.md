@@ -3111,7 +3111,7 @@ These 4 issues fix the core daily workflow: land on Fixtures → scan today's ma
 **Type:** Enhancement — Dashboard
 **Depends on:** E17-04 (fixtures page), E24-03 (market badges)
 **MP refs:** §3 Flow 4 (Dashboard Exploration), §8 Design System
-**Status:** TODO
+**Status:** DONE — Fixtures is landing page. Top 5 picks banner. Predicted scores inline per fixture ("Model: X.X – X.X").
 
 **Change 1 — Make Fixtures the landing page:**
 In `dashboard.py`, move `default=True` from Today's Picks to Fixtures.

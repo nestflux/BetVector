@@ -341,12 +341,20 @@ def get_pages() -> list:
         List of st.Page objects for st.navigation().
     """
     # Paths are relative to this file's directory (src/delivery/)
+    # E26-03: Fixtures is the landing page — the most interesting first
+    # view, showing all matches with predicted scores and top picks.
+    # Today's Picks is still prominent in the sidebar.
     return [
+        st.Page(
+            "views/fixtures.py",
+            title="Fixtures",
+            icon="📅",
+            default=True,
+        ),
         st.Page(
             "views/picks.py",
             title="Today's Picks",
             icon="🎯",
-            default=True,
         ),
         st.Page(
             "views/performance.py",
@@ -357,11 +365,6 @@ def get_pages() -> list:
             "views/leagues.py",
             title="League Explorer",
             icon="🏟️",
-        ),
-        st.Page(
-            "views/fixtures.py",
-            title="Fixtures",
-            icon="📅",
         ),
         st.Page(
             "views/model_health.py",

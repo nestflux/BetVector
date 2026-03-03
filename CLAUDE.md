@@ -296,9 +296,9 @@ Wait for owner to respond with approval before making the change.
 
 ## Current Status
 
-Last completed: E26-02 (Fix Deep Dive Navigation + Future Match Picker)
-Currently working: E26-03 (Fixtures as Landing Page + Predicted Scores + Top Picks Banner)
-Next up: E26-04 (Integration Test)
+Last completed: E26-03 (Fixtures as Landing Page + Predicted Scores + Top Picks Banner)
+Currently working: E26-04 (Integration Test)
+Next up: (end of E26 epic)
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
