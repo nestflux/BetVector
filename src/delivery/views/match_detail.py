@@ -343,9 +343,14 @@ def render_match_narrative(data: dict) -> None:
     narrative = generate_match_narrative(data)
 
     if narrative is None:
+        # E24-02: More helpful empty state when prediction doesn't exist yet.
+        # This happens when the pipeline hasn't run for this match's matchday,
+        # or when the match was added after the last feature computation.
         st.markdown(
             '<div class="bv-empty-state">'
-            'No model prediction available for this match yet.'
+            'No model prediction available for this match yet. '
+            'Predictions are generated during the morning pipeline run — '
+            'check back after the next scheduled run.'
             '</div>',
             unsafe_allow_html=True,
         )
@@ -670,12 +675,15 @@ else:
         st.divider()
 
     # --- Section 4: Value Bets ---
-    if data["value_bets"]:
-        st.markdown(
-            '<div class="bv-section-header">Value Bets</div>',
-            unsafe_allow_html=True,
-        )
+    # E24-02: Always show the section header. If no value bets exist
+    # (common for scheduled matches before odds arrive), show a clear
+    # empty state instead of hiding the section entirely.
+    st.markdown(
+        '<div class="bv-section-header">Value Bets</div>',
+        unsafe_allow_html=True,
+    )
 
+    if data["value_bets"]:
         for vb in data["value_bets"]:
             sel_label = SELECTION_LABELS.get(
                 (vb["market_type"], vb["selection"]),
@@ -701,8 +709,17 @@ else:
                 f'</div>',
                 unsafe_allow_html=True,
             )
+    else:
+        st.markdown(
+            f'<div style="font-family: Inter, sans-serif; font-size: 13px; '
+            f'color: {COLOURS["text_secondary"]}; padding: 12px 0;">'
+            f'No value bets identified for this match. The model found no selections '
+            f'where the edge exceeds the minimum threshold, or odds data has not been '
+            f'loaded yet.</div>',
+            unsafe_allow_html=True,
+        )
 
-        st.divider()
+    st.divider()
 
     # --- Section 5: Head-to-Head ---
     st.markdown(

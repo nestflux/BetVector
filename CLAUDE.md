@@ -296,8 +296,8 @@ Wait for owner to respond with approval before making the change.
 ## Current Status
 
 Last completed: E23-07 (Verify Odds API Pipeline)
-Currently working: E24-01 (Fix Today's Picks Date Logic)
-Next up: E24-02 (Fix Deep Dive for Future Matches)
+Currently working: E24-03 (Fixtures Value Grid — Model Indicators)
+Next up: E24-04 (Fixtures Value Grid — Data Pipeline)
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
