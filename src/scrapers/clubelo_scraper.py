@@ -86,7 +86,7 @@ TEAM_NAME_MAP: Dict[str, str] = {
     "Ipswich": "Ipswich Town",
     "Sheffield United": "Sheffield United",
     "Luton": "Luton Town",
-    "West Brom": "West Brom",
+    "West Brom": "West Bromwich Albion",
     "Watford": "Watford",
     "Norwich": "Norwich City",
     # Legacy ClubElo names (older API data may use concatenated forms)
@@ -97,7 +97,7 @@ TEAM_NAME_MAP: Dict[str, str] = {
     "NottmForest": "Nottingham Forest",
     "WestHam": "West Ham United",
     "SheffieldUtd": "Sheffield United",
-    "WestBrom": "West Brom",
+    "WestBrom": "West Bromwich Albion",
 }
 
 

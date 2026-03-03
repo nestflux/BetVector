@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-BetVector — Historical Data Backfill (E23-01 + E23-02 + E23-03)
+BetVector — Historical Data Backfill (E23-01 through E23-04)
 =================================================================
 Loads historical match results, odds, and xG data for EPL seasons
 that are missing from the database.  Uses the same scrapers and loaders
@@ -18,7 +18,10 @@ Usage::
     # Load shot-level set-piece vs open-play xG breakdown (E23-03)
     python scripts/backfill_historical.py shot-xg
 
-    # Run all three in sequence
+    # Backfill ClubElo ratings for historical seasons (E23-04)
+    python scripts/backfill_historical.py clubelo
+
+    # Run all four in sequence
     python scripts/backfill_historical.py all
 
     # Override seasons
@@ -36,6 +39,7 @@ Expected output for a clean DB:
   - understat: 5 seasons × 380 × 2 = ~3,800 MatchStat records
   - shot-xg: ~3,800 MatchStat rows updated with set_piece_xg/open_play_xg
     (slowest step: ~60 minutes for 5 seasons due to per-match API calls)
+  - clubelo: ~600 unique dates × ~23 EPL teams ≈ ~13,000 ClubElo records
 """
 
 from __future__ import annotations
@@ -63,6 +67,7 @@ from src.database.models import League, Season  # noqa: E402
 from src.scrapers.football_data import FootballDataScraper  # noqa: E402
 from src.scrapers.loader import (  # noqa: E402
     load_matches, load_odds, load_understat_stats, load_understat_shot_xg,
+    load_clubelo_ratings,
 )
 
 # ---------------------------------------------------------------------------
@@ -109,6 +114,16 @@ DEFAULT_SHOT_XG_SEASONS = [
     "2022-23",
     "2023-24",
     "2024-25",
+]
+
+# E23-04: ClubElo backfill — fetch Elo ratings for all match dates in the
+# 4 historical seasons that had zero data.  ClubElo API is free, no auth.
+# 2024-25 and 2025-26 already have Elo data from daily pipeline.
+DEFAULT_CLUBELO_SEASONS = [
+    "2020-21",
+    "2021-22",
+    "2022-23",
+    "2023-24",
 ]
 
 
@@ -481,6 +496,128 @@ def backfill_season_shot_xg(
 
 
 # ============================================================================
+# E23-04: ClubElo Backfill
+# ============================================================================
+
+def backfill_clubelo(
+    league_id: int,
+    seasons: list,
+    dry_run: bool = False,
+) -> dict:
+    """Backfill ClubElo ratings for all match dates in the given seasons.
+
+    Queries the DB for all distinct match dates in the target seasons,
+    then fetches Elo ratings for each date from the ClubElo API and
+    loads them via ``load_clubelo_ratings()``.
+
+    The ClubElo API is free, no auth required.  We use 1-2s delays
+    between requests to be polite (inherited from BaseScraper rate limiter).
+
+    Parameters
+    ----------
+    league_id : int
+        Database ID for this league.
+    seasons : list[str]
+        List of season strings to backfill, e.g. ["2020-21", "2023-24"].
+    dry_run : bool
+        If True, show dates but skip API calls and DB inserts.
+
+    Returns
+    -------
+    dict
+        Summary with keys: dates_fetched, records_new, records_skipped,
+        records_errors, errors.
+    """
+    from src.scrapers.clubelo_scraper import ClubEloScraper
+
+    result = {
+        "dates_fetched": 0,
+        "records_new": 0,
+        "records_skipped": 0,
+        "records_errors": 0,
+        "errors": [],
+    }
+
+    # --- 1. Get all distinct match dates for the target seasons -----------
+    with get_session() as session:
+        from src.database.models import Match
+        dates_query = (
+            session.query(Match.date)
+            .filter(Match.season.in_(seasons))
+            .filter(Match.date.isnot(None))
+            .distinct()
+            .order_by(Match.date)
+        )
+        match_dates = sorted([row[0] for row in dates_query.all()])
+
+    if not match_dates:
+        result["errors"].append("No match dates found for the given seasons")
+        return result
+
+    logger.info(
+        "ClubElo backfill: %d unique match dates across seasons %s",
+        len(match_dates), ", ".join(seasons),
+    )
+
+    if dry_run:
+        logger.info("DRY RUN — first 5 dates: %s", match_dates[:5])
+        logger.info("DRY RUN — last 5 dates: %s", match_dates[-5:])
+        result["dates_fetched"] = len(match_dates)
+        return result
+
+    # --- 2. Fetch Elo ratings for all dates (with rate limiting) ----------
+    scraper = ClubEloScraper()
+    all_dfs = []
+
+    for i, d in enumerate(match_dates):
+        try:
+            df = scraper.fetch_ratings_for_date(d)
+            if not df.empty:
+                all_dfs.append(df)
+                result["dates_fetched"] += 1
+        except Exception as exc:
+            logger.warning("ClubElo: failed for date %s: %s", d, exc)
+
+        # Progress log every 50 dates
+        if (i + 1) % 50 == 0:
+            logger.info(
+                "ClubElo backfill progress: %d/%d dates fetched",
+                i + 1, len(match_dates),
+            )
+
+    if not all_dfs:
+        result["errors"].append("No Elo data returned from any date")
+        return result
+
+    # Combine all date DataFrames into one
+    import pandas as pd
+    combined_df = pd.concat(all_dfs, ignore_index=True)
+    logger.info(
+        "ClubElo backfill: %d total records fetched across %d dates",
+        len(combined_df), result["dates_fetched"],
+    )
+
+    # --- 3. Load into DB --------------------------------------------------
+    try:
+        load_result = load_clubelo_ratings(combined_df, league_id)
+        result["records_new"] = load_result.get("new", 0)
+        result["records_skipped"] = load_result.get("skipped", 0)
+        result["records_errors"] = load_result.get("errors", 0)
+        logger.info(
+            "ClubElo backfill loaded: %d new, %d skipped, %d errors",
+            result["records_new"],
+            result["records_skipped"],
+            result["records_errors"],
+        )
+    except Exception as exc:
+        error_msg = f"ClubElo loading failed: {exc}"
+        logger.error(error_msg)
+        result["errors"].append(error_msg)
+
+    return result
+
+
+# ============================================================================
 # Main Entry Point
 # ============================================================================
 
@@ -614,20 +751,53 @@ def run_shot_xg_backfill(args, league_cfg, league_id) -> list:
     return results
 
 
+def run_clubelo_backfill(args, league_cfg, league_id) -> dict:
+    """Run E23-04 ClubElo backfill."""
+    seasons = args.seasons or DEFAULT_CLUBELO_SEASONS
+    print("=" * 70)
+    print("E23-04 — ClubElo Ratings Backfill")
+    print("=" * 70)
+    print(f"Seasons: {', '.join(seasons)}")
+    print()
+
+    start = time.time()
+    result = backfill_clubelo(
+        league_id=league_id,
+        seasons=seasons,
+        dry_run=args.dry_run,
+    )
+    elapsed = time.time() - start
+
+    print(f"  → Dates fetched: {result['dates_fetched']}")
+    print(f"  → Records new: {result['records_new']}")
+    print(f"  → Records skipped: {result['records_skipped']}")
+    print(f"  → Records errors: {result['records_errors']}")
+    print(f"  → Elapsed: {elapsed:.0f}s")
+    if result["errors"]:
+        for err in result["errors"]:
+            print(f"  ⚠ {err}")
+    print()
+
+    print(f"ClubElo backfill: {result['records_new']} new records, "
+          f"{len(result['errors'])} errors")
+    return result
+
+
 def main() -> None:
     """Main entry point for the historical backfill script."""
     parser = argparse.ArgumentParser(
-        description="BetVector Historical Data Backfill (E23-01 + E23-02 + E23-03)",
+        description="BetVector Historical Data Backfill (E23-01 through E23-04)",
     )
     parser.add_argument(
         "command",
-        choices=["matches", "understat", "shot-xg", "all"],
+        choices=["matches", "understat", "shot-xg", "clubelo", "all"],
         help=(
             "What to backfill: "
             "'matches' = E23-01 (match results + odds from Football-Data.co.uk), "
             "'understat' = E23-02 (xG + NPxG + PPDA from Understat), "
             "'shot-xg' = E23-03 (set-piece vs open-play xG breakdown), "
-            "'all' = all three in sequence"
+            "'clubelo' = E23-04 (ClubElo ratings for match dates), "
+            "'all' = all four in sequence"
         ),
     )
     parser.add_argument(
@@ -636,7 +806,7 @@ def main() -> None:
         default=None,
         help=(
             "Override seasons to backfill. "
-            "Default for matches: 2020-21 through 2023-24. "
+            "Default for matches/clubelo: 2020-21 through 2023-24. "
             "Default for understat/shot-xg: 2020-21 through 2024-25. "
             "Format: YYYY-YY (e.g. 2022-23)"
         ),
@@ -691,6 +861,12 @@ def main() -> None:
         shot_xg_results = run_shot_xg_backfill(args, league_cfg, league_id)
         all_results.extend(shot_xg_results)
         if any(r["errors"] for r in shot_xg_results):
+            has_errors = True
+        print()
+
+    if args.command in ("clubelo", "all"):
+        clubelo_result = run_clubelo_backfill(args, league_cfg, league_id)
+        if clubelo_result["errors"]:
             has_errors = True
         print()
 

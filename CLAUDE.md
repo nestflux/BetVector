@@ -166,9 +166,9 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E23-03 (Backfill Shot-Level xG Breakdown)
-Currently working: E23-04 (Backfill ClubElo for Historical Seasons)
-Next up: E23-05 (Recompute All Features)
+Last completed: E23-04 (Backfill ClubElo for Historical Seasons)
+Currently working: E23-05 (Recompute All Features)
+Next up: E23-06 (Full Backtest & Validation)
 
 E19 complete: All 4 issues done ✅
 E20 complete: All 3 issues done ✅ (Brier 0.6105, ROI -4.15% → -3.50%)
@@ -177,6 +177,7 @@ E22 complete: All 2 issues done ✅ (Set-piece xG, injury flags)
 E23-01 complete: ✅ (1,520 matches + 22,800 odds loaded for 2020-21 through 2023-24)
 E23-02 complete: ✅ (3,800 MatchStats with xG/NPxG/PPDA/deep for 2020-21 through 2024-25)
 E23-03 complete: ✅ (3,800 MatchStats updated with set_piece_xg/open_play_xg, 100.3 min)
+E23-04 complete: ✅ (13,227 ClubElo records for 495 match dates across 2020-21 through 2023-24)
 Total issues: 84 (45 original + 20 post-launch + 12 odds/model + 7 backfill)
 
 ---
