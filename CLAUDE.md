@@ -295,9 +295,9 @@ Wait for owner to respond with approval before making the change.
 
 ## Current Status
 
-Last completed: E25-02 (Ensemble Combiner)
-Currently working: E25-03 (Walk-Forward Backtest)
-Next up: E25-04 (Promote Best Model)
+Last completed: E25-03 (Walk-Forward Backtest)
+Currently working: E25-04 (Promote Best Model)
+Next up: — (E25-04 is the final issue in E25)
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
@@ -311,8 +311,8 @@ E21 complete: 3 issues ✅ (Elo, referee, congestion features)
 E22 complete: 2 issues ✅ (Set-piece xG, injury flags)
 E23 complete: 7 issues ✅ (Historical backfill + validation)
 E24 complete: All 5 issues done ✅ (Dashboard fixes + fixtures value grid)
-E25 in progress: 2/4 (XGBoost ensemble model)
-Total issues: 93 (91 complete + 2 E25 remaining)
+E25 in progress: 3/4 (XGBoost ensemble model — Poisson wins backtest, +2.78% ROI)
+Total issues: 93 (92 complete + 1 E25 remaining)
 
 ---
 

@@ -1,0 +1,50 @@
+{
+  "Poisson-only": {
+    "model_key": "poisson_v1",
+    "brier": 0.578065,
+    "roi": 2.78,
+    "total_predicted": 380,
+    "total_value_bets": 634,
+    "total_staked": 12825.09,
+    "total_pnl": 356.33,
+    "final_bankroll": 1356.33,
+    "time_seconds": 128.7,
+    "calibration": "{'0.0-0.1': {'predicted_avg': 0.0782, 'actual_rate': 0.0, 'count': 11}, '0.1-0.2': {'predicted_avg': 0.1651, 'actual_rate': 0.1436, 'count': 181}, '0.2-0.3': {'predicted_avg': 0.2422, 'actual_rate': 0.243, 'count': 461}, '0.3-0.4': {'predicted_avg': 0.3507, 'actual_rate': 0.363, 'count': 146}, '0.4-0.5': {'predicted_avg': 0.4484, 'actual_rate': 0.4297, 'count': 128}, '0.5-0.6': {'predicted_avg': 0.5449, 'actual_rate': 0.5741, 'count': 108}, '0.6-0.7': {'predicted_avg': 0.6448, 'actual_rate': 0.6627, 'count': 83}, '0.7-0.8': {'predicted_avg': 0.7338, 'actual_rate': 0.7647, 'count': 17}, '0.8-0.9': {'predicted_avg': 0.8306, 'actual_rate': 0.8, 'count': 5}}",
+    "max_drawdown": 69.2,
+    "win_rate_1x2": 33.2,
+    "win_rate_ou": 42.7,
+    "win_rate_btts": 0.0
+  },
+  "XGBoost-only": {
+    "model_key": "xgboost_v1",
+    "brier": 0.58211,
+    "roi": -19.02,
+    "total_predicted": 380,
+    "total_value_bets": 769,
+    "total_staked": 4529.47,
+    "total_pnl": -861.7,
+    "final_bankroll": 138.29999999999995,
+    "time_seconds": 973.2,
+    "calibration": "{'0.0-0.1': {'predicted_avg': 0.0789, 'actual_rate': 0.0, 'count': 17}, '0.1-0.2': {'predicted_avg': 0.1639, 'actual_rate': 0.1667, 'count': 216}, '0.2-0.3': {'predicted_avg': 0.242, 'actual_rate': 0.2598, 'count': 435}, '0.3-0.4': {'predicted_avg': 0.3477, 'actual_rate': 0.312, 'count': 125}, '0.4-0.5': {'predicted_avg': 0.4467, 'actual_rate': 0.4248, 'count': 113}, '0.5-0.6': {'predicted_avg': 0.55, 'actual_rate': 0.5413, 'count': 109}, '0.6-0.7': {'predicted_avg': 0.646, 'actual_rate': 0.6452, 'count': 93}, '0.7-0.8': {'predicted_avg': 0.7352, 'actual_rate': 0.7407, 'count': 27}, '0.8-0.9': {'predicted_avg': 0.8364, 'actual_rate': 1.0, 'count': 5}}",
+    "max_drawdown": 95.5,
+    "win_rate_1x2": 30.4,
+    "win_rate_ou": 41.1,
+    "win_rate_btts": 0.0
+  },
+  "Ensemble (50/50)": {
+    "model_key": "ensemble_v1",
+    "brier": 0.577803,
+    "roi": -9.39,
+    "total_predicted": 380,
+    "total_value_bets": 580,
+    "total_staked": 6463.59,
+    "total_pnl": -607.05,
+    "final_bankroll": 392.95000000000005,
+    "time_seconds": 443.2,
+    "calibration": "{'0.0-0.1': {'predicted_avg': 0.0795, 'actual_rate': 0.0, 'count': 10}, '0.1-0.2': {'predicted_avg': 0.1665, 'actual_rate': 0.1379, 'count': 203}, '0.2-0.3': {'predicted_avg': 0.2421, 'actual_rate': 0.2522, 'count': 448}, '0.3-0.4': {'predicted_avg': 0.3503, 'actual_rate': 0.3551, 'count': 138}, '0.4-0.5': {'predicted_avg': 0.4514, 'actual_rate': 0.4286, 'count': 119}, '0.5-0.6': {'predicted_avg': 0.5477, 'actual_rate': 0.5818, 'count': 110}, '0.6-0.7': {'predicted_avg': 0.6468, 'actual_rate': 0.6374, 'count': 91}, '0.7-0.8': {'predicted_avg': 0.7385, 'actual_rate': 0.7778, 'count': 18}, '0.8-0.9': {'predicted_avg': 0.8271, 'actual_rate': 1.0, 'count': 3}}",
+    "max_drawdown": 82.8,
+    "win_rate_1x2": 32.7,
+    "win_rate_ou": 34.0,
+    "win_rate_btts": 0.0
+  }
+}
