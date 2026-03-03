@@ -297,9 +297,9 @@ Wait for owner to respond with approval before making the change.
 
 ## Current Status
 
-Last completed: E27-02 (Add O/U 1.5 to Market Probabilities + Fixtures Badges)
-Currently working: E27-03 (Glossary Audit: Complete Coverage on All Pages)
-Next up: E27-04 (Integration Test)
+Last completed: E27-04 (Integration Test — E27 epic complete)
+Currently working: (none — awaiting next epic)
+Next up: (none — critical path complete through E27)
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
@@ -315,8 +315,8 @@ E23 complete: All 7 issues done ✅ (Historical backfill + validation + Odds API
 E24 complete: All 5 issues done ✅ (Dashboard fixes + fixtures value grid)
 E25 complete: All 4 issues done ✅ (XGBoost ensemble model — Poisson wins backtest, +2.78% ROI)
 E26 complete: All 4 issues done ✅ (Dashboard UX Overhaul — picks dedup, deep dive nav, fixtures landing, integration test)
-E27 in progress: Deep Dive Polish + O/U 1.5 + Glossary Completeness (4 issues)
-Total issues: 101 (97 complete + 4 in progress)
+E27 complete: All 4 issues done ✅ (Deep Dive FanDuel default, O/U 1.5 markets, glossary completeness, integration test)
+Total issues: 101 — ALL COMPLETE
 
 ---
 

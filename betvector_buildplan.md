@@ -3179,7 +3179,7 @@ Three targeted improvements to complete the dashboard's daily-use UX. The Deep D
 **Type:** Enhancement — Dashboard
 **Depends on:** E26-04 (Dashboard UX Overhaul complete)
 **MP refs:** §3 Flow 4 (Dashboard Exploration), §8 Design System
-**Status:** TODO
+**Status:** DONE — Grouped by unique (market_type, selection), FanDuel default with fallback, selectbox toggle for FanDuel/Best Edge/All views. OU15/OU35 labels added.
 
 **Problem:** The Deep Dive "Value Bets" section (Section 4, match_detail.py) renders every ValueBet row for the match — one card per bookmaker per market selection. A single match can have 45+ bookmakers × 5 markets = 200+ cards. This overwhelms the analysis-focused page.
 
@@ -3225,7 +3225,7 @@ Three targeted improvements to complete the dashboard's daily-use UX. The Deep D
 **Type:** Enhancement — Dashboard
 **Depends on:** E27-01
 **MP refs:** §5 Scoreline Matrix, §8 Design System
-**Status:** TODO
+**Status:** DONE — Market Probabilities now shows 3 rows (1X2, O/U 1.5+2.5, BTTS). Fixtures badges expanded from 7 to 9 (O1.5, U1.5 added). PRED_PROB_MAP updated.
 
 **Problem:** The model already computes `prob_over_15` and `prob_under_15` from the scoreline matrix (base_model.py line 198-199), stores them in the Prediction table (models.py line 736-737), and the ValueFinder already finds OU15 value bets (value_finder.py line 81-82). But neither the Deep Dive Market Probabilities section nor the Fixtures page badge grid displays O/U 1.5.
 
@@ -3268,7 +3268,7 @@ Updated badge order: H, D, A, O1.5, U1.5, O2.5, U2.5, BTTS Y, BTTS N (9 badges).
 **Type:** Enhancement — Dashboard
 **Depends on:** E27-02
 **MP refs:** §8 Design System, §12 Glossary
-**Status:** TODO
+**Status:** DONE — 4 new glossaries (Fixtures, Performance, Bankroll, Model Health). 2 existing updated (Deep Dive + Picks). 19 glossary sections total, 696 lines. Consistent CSS, all collapsed by default.
 
 **Problem:** Only 2 of 7 dashboard pages have glossaries:
 - ✅ **Today's Picks** (`picks.py`) — has glossary (The Pick Card, Key Numbers, Confidence, Context Badges, Summary Metrics)
@@ -3339,7 +3339,7 @@ The owner is learning (MP §12). Every page that shows stats, charts, or betting
 **Type:** QA — Dashboard Integration
 **Depends on:** E27-01, E27-02, E27-03
 **MP refs:** §8 Design System
-**Status:** TODO
+**Status:** DONE — All 8 AC passed. Constants verified, badge order confirmed, glossaries on all 6 pages, consistent CSS styling.
 
 Run the dashboard and verify all three enhancements work end-to-end.
 
