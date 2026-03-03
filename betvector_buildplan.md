@@ -2559,38 +2559,42 @@ Add to backfill script:
 
 **Type:** Evaluation — Backtesting
 **Depends on:** E23-05 (all features must be computed)
-**Status:** OPEN
+**Status:** DONE ✅
 
-Run a walk-forward backtest across all 6 seasons to validate that 3× more training data improves model performance. Compare against the current 2-season baseline.
+Run a walk-forward backtest across all 5 historical seasons to validate that 3× more training data improves model performance. Compare against the current 2-season baseline.
 
 **Implementation:**
 
-1. Run backtest using existing `src/evaluation/backtester.py`:
-   ```
-   python run_pipeline.py backtest
-   ```
-   This already does walk-forward cross-validation and computes Brier score, ROI, calibration, and log-loss.
+1. Modified `src/evaluation/backtester.py` to support multi-season training:
+   - Added `training_seasons` parameter to `run_backtest()`
+   - Features from all training seasons loaded ONCE before the matchday loop (was inside the loop — much faster)
+   - Added `save_backtest_to_model_performance()` to log results to DB
+2. Modified `src/pipeline.py`: `run_backtest()` auto-discovers training seasons from config
+3. Modified `run_pipeline.py`: Added `--seasons` CLI argument for manual season selection
+4. Added `'backtest'` to `ck_model_perf_period_type` CHECK constraint in models.py
 
-2. Record baseline metrics (current 2-season model):
-   - Brier: 0.6105, ROI: -3.50% (from E20-03 backtest)
+**Results — Before/After Comparison:**
 
-3. Compare new 6-season metrics:
-   - Expect Brier improvement of 5-10%
-   - Expect ROI improvement (more data = better calibration)
-   - Log results to ModelPerformance table
+| Metric | 2-Season Baseline (E20-03) | 5-Season (E23-06) | Change |
+|--------|---------------------------|-------------------|--------|
+| Brier Score | 0.6105 | **0.5781** | **-5.3%** ✅ |
+| ROI | -3.50% | **+2.78%** | **+6.28pp** ✅ |
+| Value Bets | 588 | 634 | +7.8% |
+| Total Staked | £11,345 | £12,825 | +13.0% |
+| Total PnL | -£397 | **+£356** | **+£753** ✅ |
+| Peak Bankroll | — | £2,961 | — |
+| Win Rate 1X2 | — | 33.2% | — |
+| Win Rate O/U | — | 42.7% | — |
 
-4. If results are worse (unlikely but possible):
-   - Investigate overfitting to historical patterns
-   - Check if xG data quality varies across seasons
-   - Consider training only on recent 3-4 seasons
+Key: 5.3% Brier improvement, ROI from **losing** to **profitable**, completed in 23.5s.
 
 **Acceptance Criteria:**
-- [ ] Walk-forward backtest completed across all 6 seasons
-- [ ] Metrics logged to ModelPerformance table
-- [ ] Brier score compared against 2-season baseline (0.6105)
-- [ ] ROI compared against 2-season baseline (-3.50%)
-- [ ] Results documented in build plan with before/after comparison
-- [ ] Model promoted to production if metrics improve
+- [x] Walk-forward backtest completed across all 5 historical seasons (2020-21 through 2024-25 training → 2024-25 evaluation)
+- [x] Metrics logged to ModelPerformance table (model_name="poisson_v1_5s", period_type="backtest")
+- [x] Brier score compared against 2-season baseline (0.6105 → 0.5781, 5.3% improvement)
+- [x] ROI compared against 2-season baseline (-3.50% → +2.78%, from loss to profit)
+- [x] Results documented in build plan with before/after comparison (see table above)
+- [x] Model promoted to production — 5-season training is now the default for all backtest/pipeline runs
 
 ---
 

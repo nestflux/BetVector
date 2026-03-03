@@ -971,7 +971,7 @@ class ModelPerformance(Base):
     __table_args__ = (
         CheckConstraint(
             "period_type IN ('daily', 'weekly', 'monthly', "
-            "'season', 'all_time')",
+            "'season', 'all_time', 'backtest')",
             name="ck_model_perf_period_type",
         ),
         UniqueConstraint(

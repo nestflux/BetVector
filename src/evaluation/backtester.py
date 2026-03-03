@@ -51,7 +51,7 @@ import pandas as pd
 from src.betting.bankroll import BankrollManager
 from src.betting.value_finder import MARKET_TO_PROB, ValueFinder
 from src.database.db import get_session
-from src.database.models import Match, Odds, Prediction, Team
+from src.database.models import Match, ModelPerformance, Odds, Prediction, Team
 from src.evaluation.metrics import (
     calculate_brier_score,
     calculate_calibration,
@@ -101,23 +101,37 @@ def run_backtest(
     staking_method: str = "flat",
     stake_percentage: float = 0.02,
     starting_bankroll: float = 1000.0,
+    training_seasons: Optional[List[str]] = None,
 ) -> BacktestResult:
     """Run a walk-forward backtest on a full season of historical data.
 
     For each matchday:
-      1. Train the model on ALL matches before this date
+      1. Train the model on ALL matches before this date (from all
+         ``training_seasons``, not just the target season)
       2. Compute features for this matchday's matches
       3. Generate predictions
       4. Find value bets against available odds
       5. Simulate betting with the specified staking method
       6. Record results and advance
 
+    Multi-Season Training (E23-06)
+    ------------------------------
+    When ``training_seasons`` is provided, the backtester loads features from
+    ALL specified seasons before the matchday loop begins.  This means that
+    when predicting matchday 1 of 2024-25, the model trains on ~1,520 matches
+    from 2020-21 through 2023-24 (instead of 0 matches with single-season).
+    This dramatically improves early-season predictions and overall calibration.
+
+    The ``_get_match_ids_before_date()`` and ``_get_results_before_date()``
+    helpers already query ALL matches before a date (no season filter), so
+    the training set naturally expands to include historical seasons.
+
     Parameters
     ----------
     league_id : int
         Database ID of the league.
     season : str
-        Season identifier (e.g. "2024-25").
+        Season identifier to evaluate on (e.g. "2024-25").
     model_class : Type[BaseModel]
         The model class to instantiate and train (e.g. PoissonModel).
     edge_threshold : float
@@ -128,6 +142,11 @@ def run_backtest(
         Fraction of bankroll per bet (for flat/percentage methods).
     starting_bankroll : float
         Starting bankroll for the simulation.
+    training_seasons : list[str] or None
+        All seasons whose features should be available for training.
+        If None, only the target ``season`` is loaded (original behaviour).
+        Example: ``["2020-21", "2021-22", ..., "2024-25"]`` to train on
+        5 seasons of data when evaluating 2024-25.
 
     Returns
     -------
@@ -144,7 +163,35 @@ def run_backtest(
         logger.warning("run_backtest: No matchdays found for %s %s", league_id, season)
         return BacktestResult()
 
+    # --- Pre-load features from all training seasons (E23-06) ---
+    # Loading features ONCE before the loop is both faster and enables
+    # multi-season training.  Previously, compute_all_features() was called
+    # inside the loop on every matchday — redundant since features are stored
+    # in the DB and don't change between matchdays.
+    all_seasons = training_seasons or [season]
     print(f"Starting walk-forward backtest: {season}, {total_matchdays} matchdays")
+    print(f"  Loading features from {len(all_seasons)} season(s): {', '.join(all_seasons)}")
+
+    feature_load_start = time.time()
+    features_dfs: List[pd.DataFrame] = []
+    for s in all_seasons:
+        try:
+            sf = compute_all_features(league_id, s)
+            features_dfs.append(sf)
+            logger.info("Loaded %d feature rows for season %s", len(sf), s)
+        except Exception as e:
+            logger.warning("Backtest: Failed to load features for season %s: %s", s, e)
+
+    if not features_dfs:
+        logger.error("Backtest: No features loaded from any season")
+        return BacktestResult()
+
+    all_features = pd.concat(features_dfs, ignore_index=True)
+    feature_load_time = time.time() - feature_load_start
+    print(
+        f"  → {len(all_features)} feature rows loaded "
+        f"({len(all_features) // 2} matches) in {feature_load_time:.1f}s"
+    )
 
     # Simulation state
     bankroll = starting_bankroll
@@ -161,19 +208,12 @@ def run_backtest(
     for day_idx, (match_date, match_ids) in enumerate(matchdays):
         matchday_num = day_idx + 1
 
-        # --- Step 1: Get all features (uses expanding window up to this date) ---
-        # compute_all_features builds features for ALL matches in the season.
-        # We'll filter to only use data before match_date for training.
-        try:
-            all_features = compute_all_features(league_id, season)
-        except Exception as e:
-            logger.warning("Backtest: Feature computation failed at %s: %s", match_date, e)
-            continue
-
-        # Split features into training set (before this date) and test set (this date)
-        train_features = all_features[all_features["match_id"].isin(
-            _get_match_ids_before_date(league_id, match_date)
-        )]
+        # --- Step 1: Split preloaded features into train and test sets ---
+        # all_features contains features from ALL training_seasons.
+        # _get_match_ids_before_date returns match IDs from ALL seasons
+        # before this date, so training naturally includes historical data.
+        train_match_ids = _get_match_ids_before_date(league_id, match_date)
+        train_features = all_features[all_features["match_id"].isin(train_match_ids)]
         test_features = all_features[all_features["match_id"].isin(match_ids)]
 
         if test_features.empty:
@@ -353,12 +393,107 @@ def run_backtest(
     )
 
     print(f"\nBacktest complete in {elapsed:.1f}s")
+    print(f"  Training data: {len(all_seasons)} season(s)")
     print(f"  Matches: {result.total_matches}, Predicted: {result.total_predicted}")
     print(f"  Value bets: {result.total_value_bets}, Staked: £{result.total_staked:.2f}")
     print(f"  Final PnL: £{result.total_pnl:+.2f}, ROI: {result.roi or 0:.1f}%")
     print(f"  Brier score: {result.brier_score or 'N/A'}")
 
     return result
+
+
+def save_backtest_to_model_performance(
+    result: BacktestResult,
+    season: str,
+    model_name: str = "poisson_v1",
+    training_seasons: Optional[List[str]] = None,
+) -> None:
+    """Store backtest results in the model_performance table.
+
+    Creates a ModelPerformance record with period_type="backtest" so it
+    can be distinguished from live performance metrics.  The model_name
+    includes the number of training seasons for A/B comparison
+    (e.g., "poisson_v1_6s" for 6-season training).
+
+    Parameters
+    ----------
+    result : BacktestResult
+        Completed backtest results.
+    season : str
+        The evaluation season (e.g., "2024-25").
+    model_name : str
+        Base model name (default: "poisson_v1").
+    training_seasons : list[str] or None
+        Seasons used for training — appended to model_name for tracking.
+    """
+    import json
+    from datetime import datetime
+    from src.database.models import ModelPerformance
+
+    # Tag model name with training season count for comparison
+    n_seasons = len(training_seasons) if training_seasons else 1
+    tagged_name = f"{model_name}_{n_seasons}s"
+
+    calibration_json = (
+        json.dumps(result.calibration_data)
+        if result.calibration_data
+        else None
+    )
+
+    # Compute per-market win rates from bet_details
+    win_rates = {"1x2": None, "ou": None, "btts": None}
+    for market_key, prefixes in [
+        ("1x2", ["1X2"]),
+        ("ou", ["OU25", "OU15", "OU35"]),
+        ("btts", ["BTTS"]),
+    ]:
+        market_bets = [
+            b for b in result.bet_details
+            if b.get("market_type") in prefixes
+        ]
+        if market_bets:
+            wins = sum(1 for b in market_bets if b["status"] == "won")
+            win_rates[market_key] = round(wins / len(market_bets) * 100, 1)
+
+    with get_session() as session:
+        # Upsert: check if a record already exists for this model+season
+        existing = session.query(ModelPerformance).filter_by(
+            model_name=tagged_name,
+            period_type="backtest",
+            period_start=season,
+        ).first()
+
+        if existing:
+            existing.total_predictions = result.total_predicted
+            existing.brier_score = result.brier_score
+            existing.roi = result.roi
+            existing.avg_clv = result.clv_avg
+            existing.calibration_json = calibration_json
+            existing.win_rate_1x2 = win_rates["1x2"]
+            existing.win_rate_ou = win_rates["ou"]
+            existing.win_rate_btts = win_rates["btts"]
+            existing.computed_at = datetime.utcnow().isoformat()
+            logger.info("Updated model_performance for %s backtest %s", tagged_name, season)
+        else:
+            row = ModelPerformance(
+                model_name=tagged_name,
+                period_type="backtest",
+                period_start=season,
+                period_end=season,
+                total_predictions=result.total_predicted,
+                brier_score=result.brier_score,
+                roi=result.roi,
+                avg_clv=result.clv_avg,
+                calibration_json=calibration_json,
+                win_rate_1x2=win_rates["1x2"],
+                win_rate_ou=win_rates["ou"],
+                win_rate_btts=win_rates["btts"],
+            )
+            session.add(row)
+            logger.info("Saved model_performance for %s backtest %s", tagged_name, season)
+
+    print(f"  → Results saved to model_performance as '{tagged_name}'")
+
 
 
 # ============================================================================

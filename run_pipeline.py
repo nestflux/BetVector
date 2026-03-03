@@ -41,6 +41,7 @@ import argparse
 import logging
 import sys
 from pathlib import Path
+from typing import Optional
 
 # Load .env for local runs (GitHub Actions sets env vars directly)
 try:
@@ -111,6 +112,14 @@ def main() -> int:
         help="Season to backtest (default: 2024-25)",
     )
     sub_backtest.add_argument(
+        "--seasons", nargs="+", default=None,
+        help=(
+            "Training seasons (space-separated). If not provided, "
+            "auto-discovers all seasons up to --season from config. "
+            "Example: --seasons 2020-21 2021-22 2022-23 2023-24 2024-25"
+        ),
+    )
+    sub_backtest.add_argument(
         "--verbose", "-v", action="store_true",
         help="Enable DEBUG-level logging",
     )
@@ -150,7 +159,11 @@ def main() -> int:
     elif args.command == "evening":
         return _run_evening()
     elif args.command == "backtest":
-        return _run_backtest(league=args.league, season=args.season)
+        return _run_backtest(
+            league=args.league,
+            season=args.season,
+            training_seasons=getattr(args, "seasons", None),
+        )
     else:
         parser.print_help()
         return 1
@@ -203,11 +216,23 @@ def _run_evening() -> int:
     return 0 if result.status == "completed" else 1
 
 
-def _run_backtest(league: str, season: str) -> int:
-    """Run a walk-forward backtest."""
+def _run_backtest(
+    league: str,
+    season: str,
+    training_seasons: Optional[list] = None,
+) -> int:
+    """Run a walk-forward backtest.
+
+    If training_seasons is None, the pipeline auto-discovers all seasons
+    from config up to and including the target season (E23-06).
+    """
     from src.pipeline import Pipeline
     pipeline = Pipeline()
-    result = pipeline.run_backtest(league=league, season=season)
+    result = pipeline.run_backtest(
+        league=league,
+        season=season,
+        training_seasons=training_seasons,
+    )
     return 0 if result.status == "completed" else 1
 
 

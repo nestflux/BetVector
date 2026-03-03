@@ -1099,18 +1099,32 @@ class Pipeline:
         self,
         league: str = "EPL",
         season: str = "2024-25",
+        training_seasons: Optional[List[str]] = None,
     ) -> PipelineResult:
         """Run a walk-forward backtest via the backtester module.
 
         Delegates to ``src.evaluation.backtester.run_backtest()`` and wraps
         the result in a PipelineResult for consistent tracking.
 
+        Multi-Season Training (E23-06)
+        ------------------------------
+        When ``training_seasons`` is provided, all specified seasons' features
+        are loaded for training.  This allows the model to train on 5+ seasons
+        of historical data instead of just the target season, dramatically
+        improving calibration and early-season prediction accuracy.
+
+        If not provided, the method automatically discovers all seasons from
+        ``config/leagues.yaml`` that are before or equal to the target season.
+
         Parameters
         ----------
         league : str
             Short name of the league (e.g. "EPL").
         season : str
-            Season identifier (e.g. "2024-25").
+            Season identifier to evaluate (e.g. "2024-25").
+        training_seasons : list[str] or None
+            Seasons to include in training.  If None, auto-discovers from
+            league config — all seasons up to and including ``season``.
 
         Returns
         -------
@@ -1135,9 +1149,19 @@ class Pipeline:
             result.errors = errors
             return result
 
+        # Auto-discover training seasons from config if not provided.
+        # Include all seasons up to and including the target season so
+        # the model benefits from maximum historical training data.
+        if training_seasons is None:
+            training_seasons = self._get_training_seasons(league, season)
+
         print(f"Running walk-forward backtest: {league} {season}")
+        print(f"  Training on {len(training_seasons)} season(s)")
         try:
-            from src.evaluation.backtester import run_backtest as bt_run
+            from src.evaluation.backtester import (
+                run_backtest as bt_run,
+                save_backtest_to_model_performance,
+            )
             from src.evaluation.reporter import (
                 print_backtest_report,
                 save_backtest_report,
@@ -1157,12 +1181,20 @@ class Pipeline:
                 staking_method=bankroll_cfg.staking_method,
                 stake_percentage=bankroll_cfg.stake_percentage,
                 starting_bankroll=bankroll_cfg.starting_amount,
+                training_seasons=training_seasons,
             )
 
             # Print and save the report
             print_backtest_report(bt_result)
             save_backtest_report(bt_result)
             plot_backtest_results(bt_result)
+
+            # Save results to model_performance table for dashboard display
+            save_backtest_to_model_performance(
+                bt_result, season,
+                model_name="poisson_v1",
+                training_seasons=training_seasons,
+            )
 
             result.predictions_made = bt_result.total_predicted
             result.value_bets_found = bt_result.total_value_bets
@@ -1324,6 +1356,42 @@ class Pipeline:
         with get_session() as session:
             league = session.query(League).filter_by(short_name=short_name).first()
             return league.id if league else None
+
+    @staticmethod
+    def _get_training_seasons(league_short: str, target_season: str) -> List[str]:
+        """Get all seasons up to and including target_season from config.
+
+        Used by ``run_backtest()`` to auto-discover which historical seasons
+        should be included in the training data.  Returns seasons in
+        chronological order (earliest first).
+
+        Parameters
+        ----------
+        league_short : str
+            League short name (e.g. "EPL").
+        target_season : str
+            The evaluation season (e.g. "2024-25").
+
+        Returns
+        -------
+        list[str]
+            Seasons from config up to and including target_season.
+            Falls back to ``[target_season]`` if config lookup fails.
+        """
+        try:
+            for lg in config.leagues:
+                if getattr(lg, "short_name", "") == league_short:
+                    all_seasons = list(lg.seasons)
+                    # Include only seasons <= target_season (chronological)
+                    training = [s for s in all_seasons if s <= target_season]
+                    if training:
+                        return sorted(training)
+        except Exception as e:
+            logger.warning(
+                "Could not auto-discover training seasons: %s. "
+                "Falling back to target season only.", e,
+            )
+        return [target_season]
 
     @staticmethod
     def _get_default_user_id() -> Optional[int]:
