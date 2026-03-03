@@ -2856,7 +2856,7 @@ With 2,280 matches of training data (from E23), there is sufficient volume to tr
 **Type:** Model — New Implementation
 **Depends on:** E4-01 (BaseModel), E23-06 (sufficient training data)
 **MP refs:** §5 Model Architecture, §13.15
-**Status:** PLANNED
+**Status:** COMPLETE ✅
 
 Build `src/models/xgboost_model.py` implementing the `BaseModel` abstract interface. Trains XGBoost regressors to predict home and away expected goals, then generates the 7×7 scoreline probability matrix via Poisson distribution from the predicted λ values.
 

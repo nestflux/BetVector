@@ -295,9 +295,9 @@ Wait for owner to respond with approval before making the change.
 
 ## Current Status
 
-Last completed: E23-07 (Verify Odds API Pipeline)
-Currently working: E25-01 (XGBoost Scoreline Model)
-Next up: E25-02 (Ensemble Combiner)
+Last completed: E25-01 (XGBoost Scoreline Model)
+Currently working: E25-02 (Ensemble Combiner)
+Next up: E25-03 (Walk-Forward Backtest)
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
@@ -311,8 +311,8 @@ E21 complete: 3 issues ✅ (Elo, referee, congestion features)
 E22 complete: 2 issues ✅ (Set-piece xG, injury flags)
 E23 complete: 7 issues ✅ (Historical backfill + validation)
 E24 complete: All 5 issues done ✅ (Dashboard fixes + fixtures value grid)
-E25 planned: 0/4 (XGBoost ensemble model)
-Total issues: 93 (89 complete + 4 E25)
+E25 in progress: 1/4 (XGBoost ensemble model)
+Total issues: 93 (90 complete + 3 E25 remaining)
 
 ---
 

@@ -75,6 +75,19 @@ models:
     - "poisson_v1"
   ensemble_enabled: false
 
+  # XGBoost hyperparameters (E25-01)
+  # Conservative defaults to avoid overfitting on ~2,000 training matches.
+  # count:poisson objective is set in code — these are tree structure params.
+  xgboost:
+    max_depth: 4              # Shallow trees → less overfitting
+    n_estimators: 200         # Number of boosting rounds
+    learning_rate: 0.05       # Low rate + more trees = better generalisation
+    min_child_weight: 5       # Prevent splits on tiny sample sizes
+    subsample: 0.8            # Row-level regularisation (80% per tree)
+    colsample_bytree: 0.8     # Column-level regularisation (80% per tree)
+    reg_alpha: 0.1            # L1 regularisation (sparsity)
+    reg_lambda: 1.0           # L2 regularisation (shrinkage)
+
 # ---------------------------------------------------------------------------
 # Scoreline Matrix  (MP §5 — universal model interface)
 # ---------------------------------------------------------------------------
