@@ -335,7 +335,7 @@ def resolve_bets(match_id: int) -> Dict[str, int]:
             elif won:
                 bet.status = "won"
                 # PnL for a winning bet: stake × (odds - 1)
-                # e.g., £20 at odds 2.10 → profit = 20 × 1.10 = £22.00
+                # e.g., $20 at odds 2.10 → profit = 20 × 1.10 = $22.00
                 odds_used = bet.odds_at_placement or bet.odds_at_detection
                 bet.pnl = round(bet.stake * (odds_used - 1.0), 2)
                 won_count += 1

@@ -48,7 +48,7 @@ def print_backtest_report(result: BacktestResult) -> str:
     roi_str = f"{result.roi:+.2f}%" if result.roi is not None else "N/A"
     roi_label = "PROFITABLE" if (result.roi or 0) > 0 else "LOSS"
 
-    pnl_str = f"£{result.total_pnl:+.2f}"
+    pnl_str = f"${result.total_pnl:+.2f}"
     brier_str = f"{result.brier_score:.4f}" if result.brier_score is not None else "N/A"
     clv_str = f"{result.clv_avg:.6f}" if result.clv_avg is not None else "N/A"
 
@@ -61,7 +61,7 @@ def print_backtest_report(result: BacktestResult) -> str:
         f"  {'Total matches:':<30} {result.total_matches}",
         f"  {'Matches predicted:':<30} {result.total_predicted}",
         f"  {'Value bets found:':<30} {result.total_value_bets}",
-        f"  {'Total staked:':<30} £{result.total_staked:.2f}",
+        f"  {'Total staked:':<30} ${result.total_staked:.2f}",
         f"  {'Total P&L:':<30} {pnl_str}",
         f"  {'ROI:':<30} {roi_str}  [{roi_label}]",
         f"  {'Brier score:':<30} {brier_str}",
@@ -110,8 +110,8 @@ def print_backtest_report(result: BacktestResult) -> str:
         if bankrolls:
             peak = max(bankrolls)
             trough = min(bankrolls)
-            lines.append(f"  {'Peak bankroll:':<30} £{peak:.2f}")
-            lines.append(f"  {'Trough bankroll:':<30} £{trough:.2f}")
+            lines.append(f"  {'Peak bankroll:':<30} ${peak:.2f}")
+            lines.append(f"  {'Trough bankroll:':<30} ${trough:.2f}")
             lines.append("")
 
     lines.append("=" * 60)
@@ -184,7 +184,7 @@ def plot_backtest_results(
 
     Creates a figure with two subplots:
       1. **Cumulative PnL curve** — shows how the bankroll evolved over
-         the season, with a horizontal line at £0 for reference.
+         the season, with a horizontal line at $0 for reference.
       2. **Calibration plot** — predicted probability vs actual win rate
          per bin, with the ideal diagonal line for reference.
 
@@ -245,7 +245,7 @@ def plot_backtest_results(
 
     ax1.set_title("Cumulative PnL Over Season", fontsize=11, fontweight="bold")
     ax1.set_xlabel("Matchday")
-    ax1.set_ylabel("Cumulative PnL (£)")
+    ax1.set_ylabel("Cumulative PnL ($)")
     ax1.grid(True, alpha=0.3)
 
     # --- Plot 2: Calibration plot ---

@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BetVector — Data Sources Report</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #0D1117;
+      color: #E6EDF3;
+      line-height: 1.7;
+      font-size: 16px;
+    }
+
+    /* --- Top Nav --- */
+    .top-nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: #0D1117;
+      border-bottom: 1px solid #30363D;
+      padding: 0.75rem 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+      backdrop-filter: blur(12px);
+    }
+    .top-nav .logo {
+      font-size: 1.3rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #3FB950, #58a6ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-decoration: none;
+    }
+    .top-nav .page-title {
+      color: #8B949E;
+      font-size: 1rem;
+      font-weight: 500;
+    }
+    .hamburger {
+      display: none;
+      background: none;
+      border: none;
+      color: #E6EDF3;
+      font-size: 1.5rem;
+      cursor: pointer;
+      margin-left: auto;
+    }
+
+    /* --- Layout --- */
+    .layout {
+      display: flex;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    /* --- Sidebar TOC --- */
+    .sidebar {
+      width: 280px;
+      min-width: 280px;
+      position: sticky;
+      top: 52px;
+      height: calc(100vh - 52px);
+      overflow-y: auto;
+      border-right: 1px solid #30363D;
+      padding: 1.5rem 0;
+      scrollbar-width: thin;
+      scrollbar-color: #30363D transparent;
+    }
+    .sidebar::-webkit-scrollbar { width: 4px; }
+    .sidebar::-webkit-scrollbar-track { background: transparent; }
+    .sidebar::-webkit-scrollbar-thumb { background: #30363D; border-radius: 2px; }
+    .sidebar .toc-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #8B949E;
+      padding: 0 1.25rem;
+      margin-bottom: 0.75rem;
+    }
+    .toc-item {
+      display: block;
+      padding: 0.35rem 1.25rem;
+      color: #8B949E;
+      text-decoration: none;
+      font-size: 0.85rem;
+      border-left: 2px solid transparent;
+      transition: all 0.15s;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .toc-item:hover {
+      color: #E6EDF3;
+      background: #161B22;
+    }
+    .toc-item.active {
+      color: #3FB950;
+      border-left-color: #3FB950;
+    }
+    .toc-h3 { padding-left: 2.25rem; font-size: 0.8rem; }
+
+    /* --- Main Content --- */
+    .content {
+      flex: 1;
+      min-width: 0;
+      padding: 2rem 3rem;
+      max-width: 900px;
+    }
+
+    /* --- Typography --- */
+    .md-h2.section-header {
+      font-size: 1.75rem;
+      font-weight: 700;
+      margin: 2.5rem 0 1rem;
+      padding: 0.5rem 0 0.5rem 1rem;
+      border-left: 4px solid #3FB950;
+    }
+    .md-h3.subsection-header {
+      font-size: 1.3rem;
+      font-weight: 600;
+      margin: 2rem 0 0.75rem;
+      color: #58a6ff;
+    }
+    .md-h4 { font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
+    .md-h5 { font-size: 1rem; font-weight: 600; margin: 1rem 0 0.5rem; color: #8B949E; }
+    .md-p { margin-bottom: 1rem; }
+    .md-p strong { color: #fff; }
+
+    /* --- Links --- */
+    .md-link { color: #58a6ff; text-decoration: none; }
+    .md-link:hover { text-decoration: underline; }
+
+    /* --- Lists --- */
+    .md-list {
+      margin: 0.5rem 0 1rem 1.5rem;
+    }
+    .md-list li {
+      margin-bottom: 0.4rem;
+      padding-left: 0.25rem;
+    }
+
+    /* --- Checkboxes --- */
+    .checkbox {
+      font-family: 'JetBrains Mono', monospace;
+      color: #8B949E;
+      margin-right: 0.3rem;
+    }
+    .checkbox.checked { color: #3FB950; }
+
+    /* --- Code --- */
+    .inline-code {
+      font-family: 'JetBrains Mono', monospace;
+      background: #161B22;
+      border: 1px solid #30363D;
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      font-size: 0.88em;
+      color: #58a6ff;
+    }
+    .code-block {
+      position: relative;
+      background: #161B22;
+      border: 1px solid #30363D;
+      border-radius: 8px;
+      margin: 1rem 0;
+      overflow-x: auto;
+    }
+    .code-block pre {
+      padding: 1.25rem;
+      margin: 0;
+      overflow-x: auto;
+    }
+    .code-block code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      line-height: 1.6;
+      color: #E6EDF3;
+    }
+    .code-lang {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.75rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      color: #8B949E;
+      text-transform: uppercase;
+    }
+    .code-keyword { color: #ff7b72; font-weight: 500; }
+    .code-string { color: #a5d6ff; }
+    .code-comment { color: #8B949E; font-style: italic; }
+    .code-decorator { color: #D29922; }
+
+    /* --- Tables --- */
+    .table-wrapper {
+      overflow-x: auto;
+      margin: 1rem 0;
+      border-radius: 8px;
+      border: 1px solid #30363D;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    thead th {
+      background: #161B22;
+      padding: 0.75rem 1rem;
+      text-align: left;
+      font-weight: 600;
+      color: #E6EDF3;
+      border-bottom: 1px solid #30363D;
+      white-space: nowrap;
+    }
+    tbody td {
+      padding: 0.6rem 1rem;
+      border-bottom: 1px solid #30363D;
+    }
+    tbody tr:nth-child(even) {
+      background: rgba(22, 27, 34, 0.5);
+    }
+    tbody tr:hover {
+      background: rgba(63, 185, 80, 0.05);
+    }
+
+    /* --- Blockquotes --- */
+    .md-blockquote {
+      border-left: 3px solid #58a6ff;
+      padding: 0.75rem 1.25rem;
+      margin: 1rem 0;
+      background: #161B22;
+      border-radius: 0 8px 8px 0;
+      color: #8B949E;
+      font-style: italic;
+    }
+
+    /* --- Horizontal rules --- */
+    .md-hr {
+      border: none;
+      border-top: 1px solid #30363D;
+      margin: 2rem 0;
+    }
+
+    /* --- Badges --- */
+    .badge {
+      display: inline-block;
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 0.2rem 0.6rem;
+      border-radius: 12px;
+      vertical-align: middle;
+      margin-left: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .badge-completed {
+      background: rgba(63, 185, 80, 0.15);
+      color: #3FB950;
+      border: 1px solid rgba(63, 185, 80, 0.3);
+    }
+
+    /* --- Back to top --- */
+    .back-to-top {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: #3FB950;
+      color: #0D1117;
+      border: none;
+      cursor: pointer;
+      font-size: 1.25rem;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      transition: transform 0.2s;
+      z-index: 50;
+    }
+    .back-to-top:hover { transform: scale(1.1); }
+    .back-to-top.visible { display: flex; }
+
+    /* --- Mobile --- */
+    @media (max-width: 768px) {
+      .hamburger { display: block; }
+      .sidebar {
+        position: fixed;
+        top: 52px;
+        left: -300px;
+        width: 280px;
+        min-width: 280px;
+        height: calc(100vh - 52px);
+        background: #0D1117;
+        z-index: 90;
+        transition: left 0.3s ease;
+        border-right: 1px solid #30363D;
+      }
+      .sidebar.open { left: 0; }
+      .sidebar-overlay {
+        display: none;
+        position: fixed;
+        top: 52px;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 80;
+      }
+      .sidebar-overlay.open { display: block; }
+      .content {
+        padding: 1.5rem 1rem;
+      }
+      .md-h2.section-header { font-size: 1.4rem; }
+    }
+    </style>
+</head>
+<body>
+  <nav class="top-nav">
+    <a href="index.html" class="logo">BetVector</a>
+    <span class="page-title">Data Sources Report · v1.0</span>
+    <button class="hamburger" id="hamburger">&#9776;</button>
+  </nav>
+
+  <div class="sidebar-overlay" id="overlay"></div>
+
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="toc-title">Contents</div>
+      <a href="#executive-summary" class="toc-item toc-h2">Executive Summary</a>
+<a href="#current-state-what-betvector-has-today" class="toc-item toc-h2">Current State — What BetVector Has Today</a>
+<a href="#key-gaps-in-current-stack" class="toc-item toc-h3">Key Gaps in Current Stack</a>
+<a href="#free-tier-sources-top-10" class="toc-item toc-h2">Free-Tier Sources — Top 10</a>
+<a href="#tier-a-implement-immediately-low-risk-high-value" class="toc-item toc-h3">Tier A — Implement Immediately (Low Risk, High Value)</a>
+<a href="#1-fotmob-api" class="toc-item toc-h3">1. FotMob API</a>
+<a href="#2-transfermarkt-github-csv-dumps-web-scraping" class="toc-item toc-h3">2. Transfermarkt (GitHub CSV Dumps + Web Scraping)</a>
+<a href="#tier-b-implement-in-month-2-3-medium-risk-medium-value" class="toc-item toc-h3">Tier B — Implement in Month 2-3 (Medium Risk, Medium Value)</a>
+<a href="#3-instat-football-analytics" class="toc-item toc-h3">3. InStat Football Analytics</a>
+<a href="#4-sofascore-reverse-engineered-api" class="toc-item toc-h3">4. SofaScore (Reverse-Engineered API)</a>
+<a href="#5-oddsportal-historical-odds-archive" class="toc-item toc-h3">5. Oddsportal (Historical Odds Archive)</a>
+<a href="#tier-c-monitor-dont-implement-yet" class="toc-item toc-h3">Tier C — Monitor, Don't Implement Yet</a>
+<a href="#6-whoscored-statsbomb-powered" class="toc-item toc-h3">6. WhoScored (StatsBomb-Powered)</a>
+<a href="#7-espn-api-undocumented" class="toc-item toc-h3">7. ESPN API (Undocumented)</a>
+<a href="#8-rapidapi-marketplace-various-providers" class="toc-item toc-h3">8. RapidAPI Marketplace (Various Providers)</a>
+<a href="#9-soccerway-flashscore" class="toc-item toc-h3">9. Soccerway / Flashscore</a>
+<a href="#10-sports-reference-soccer" class="toc-item toc-h3">10. Sports-Reference (Soccer)</a>
+<a href="#paid-tier-sources-top-10-ranked-by-value-for-betvector" class="toc-item toc-h2">Paid-Tier Sources — Top 10 (Ranked by Value for BetVector)</a>
+<a href="#rank-1-api-football-pro-1999month" class="toc-item toc-h3">Rank 1: API-Football Pro — $19.99/month</a>
+<a href="#rank-2-understat-premium-10-15month" class="toc-item toc-h3">Rank 2: Understat Premium — ~$10-15/month</a>
+<a href="#rank-3-betfair-exchange-api-free-to-49month" class="toc-item toc-h3">Rank 3: Betfair Exchange API — Free to $49/month</a>
+<a href="#rank-4-football-datacouk-premium-20month-25" class="toc-item toc-h3">Rank 4: Football-Data.co.uk Premium — $20/month (~$25)</a>
+<a href="#rank-5-soccerdata-historical-30-50month" class="toc-item toc-h3">Rank 5: Soccerdata Historical — $30-50/month</a>
+<a href="#rank-6-betconnect-api-50-150month" class="toc-item toc-h3">Rank 6: Betconnect API — ~$50-150/month</a>
+<a href="#rank-7-sportmonks-99month" class="toc-item toc-h3">Rank 7: Sportmonks — €99+/month</a>
+<a href="#rank-8-the-odds-api-0-300month-per-request-pricing" class="toc-item toc-h3">Rank 8: The Odds API — $0-300/month (per-request pricing)</a>
+<a href="#rank-9-opta-statsperform-2000-10000month" class="toc-item toc-h3">Rank 9: Opta / StatsPerform — $2,000-10,000/month</a>
+<a href="#rank-10-statszone-10month" class="toc-item toc-h3">Rank 10: StatsZone — $10/month</a>
+<a href="#data-ecosystem-map-who-supplies-whom" class="toc-item toc-h2">Data Ecosystem Map — Who Supplies Whom</a>
+<a href="#key-insights" class="toc-item toc-h3">Key Insights</a>
+<a href="#data-moat-analysis-where-does-betvectors-edge-come-from" class="toc-item toc-h2">Data Moat Analysis — Where Does BetVector's Edge Come From?</a>
+<a href="#the-honest-assessment" class="toc-item toc-h3">The Honest Assessment</a>
+<a href="#strategic-recommendation-optimal-data-stack" class="toc-item toc-h2">Strategic Recommendation — Optimal Data Stack</a>
+<a href="#phase-1-this-week-20month-total" class="toc-item toc-h3">Phase 1: This Week — $20/month total</a>
+<a href="#phase-2-months-2-3-20month-same" class="toc-item toc-h3">Phase 2: Months 2-3 — $20/month (same)</a>
+<a href="#phase-3-months-4-6-50-70month" class="toc-item toc-h3">Phase 3: Months 4-6 — $50-70/month</a>
+<a href="#phase-4-year-2-100-150month" class="toc-item toc-h3">Phase 4: Year 2+ — $100-150/month</a>
+<a href="#implementation-roadmap-total-investment-vs-expected-return" class="toc-item toc-h2">Implementation Roadmap — Total Investment vs Expected Return</a>
+<a href="#the-bottom-line" class="toc-item toc-h3">The Bottom Line</a>
+<a href="#appendix-source-comparison-matrix" class="toc-item toc-h2">Appendix — Source Comparison Matrix</a>
+    </aside>
+    <main class="content">
+      <h1 id="betvector-football-data-sources-report" class="md-h1">BetVector &mdash; Football Data Sources Report</h1>
+<p class="md-p">Version 1.0 · March 2026</p>
+<hr class='md-hr'>
+<h2 id="executive-summary" class="md-h2 section-header">Executive Summary</h2>
+<p class="md-p">This report is a comprehensive audit of the football data ecosystem available to BetVector &mdash; a Python-based sports prediction platform that uses statistical models (Poisson regression, xG features, rolling team metrics) to identify value bets in the English Premier League.</p>
+<p class="md-p">BetVector currently ingests data from five sources. Two are fully operational (Football-Data.co.uk, Understat), one provides supplementary weather data (Open-Meteo), one is limited by its free tier (API-Football), and one was permanently lost when Opta terminated its FBref partnership in January 2026.</p>
+<p class="md-p">This report evaluates <strong>10 free-tier sources</strong> and <strong>10 paid sources</strong> that BetVector could integrate, maps the entire data supply chain, assesses the competitive landscape, and delivers a phased implementation roadmap with cost projections.</p>
+<p class="md-p"><strong>The single highest-impact action:</strong> upgrade API-Football from free to Pro tier ($20/month). The code is already written &mdash; it's a config change that unblocks real-time fixtures, odds, and injuries for the current 2025-26 season.</p>
+<hr class='md-hr'>
+<h2 id="current-state-what-betvector-has-today" class="md-h2 section-header">Current State &mdash; What BetVector Has Today</h2>
+<div class='table-wrapper'><table><thead><tr><th>Source</th><th>Status</th><th>What It Provides</th><th>Limitation</th></tr></thead><tbody><tr><td><strong>Football-Data.co.uk</strong></td><td>Active</td><td>Historical results + 50+ bookmaker odds (CSV)</td><td>Updates only 2x/week (2-7 day lag)</td></tr><tr><td><strong>Football-Data.org</strong></td><td>Active</td><td>Current-season fixtures/results via API</td><td>10 req/min, basic stats only</td></tr><tr><td><strong>Understat</strong></td><td>Active</td><td>xG/xGA per match via <code class="inline-code">understatapi</code></td><td>5 leagues only, post-match only</td></tr><tr><td><strong>Open-Meteo</strong></td><td>Active</td><td>Match-day weather (temp, wind, rain)</td><td>Low predictive value in isolation</td></tr><tr><td><strong>API-Football</strong></td><td>Dormant</td><td>Code complete, free tier covers 2022-24 only</td><td>Cannot access 2025-26 season</td></tr><tr><td><strong>FBref</strong></td><td>Dead</td><td>Was primary xG source via <code class="inline-code">soccerdata</code></td><td>Opta terminated data agreement Jan 2026</td></tr></tbody></table></div>
+<h3 id="key-gaps-in-current-stack" class="md-h3 subsection-header">Key Gaps in Current Stack</h3>
+<ol class='md-list'><li><strong>No current-season API data.</strong> API-Football's free tier blocks 2025-26 access. Daily predictions rely on Football-Data.co.uk CSVs that can be 2-7 days stale.</li>
+<li><strong>No injury data.</strong> Every match prediction assumes full-strength squads. Missing key players (e.g., a top scorer out for 6 weeks) is the single biggest unmodelled factor.</li>
+<li><strong>No real-time odds.</strong> Odds are scraped from historical CSVs, not live feeds. Pre-match line movement &mdash; a strong signal of sharp money &mdash; is invisible.</li>
+<li><strong>No lineup confirmation.</strong> Team sheets are released 45-60 minutes before kickoff. BetVector cannot incorporate confirmed XI data.</li>
+<li><strong>Single xG source.</strong> Understat is the sole xG provider. If it goes down (like FBref did), the model loses its strongest predictor.</li></ol>
+<hr class='md-hr'>
+<h2 id="free-tier-sources-top-10" class="md-h2 section-header">Free-Tier Sources &mdash; Top 10</h2>
+<h3 id="tier-a-implement-immediately-low-risk-high-value" class="md-h3 subsection-header">Tier A &mdash; Implement Immediately (Low Risk, High Value)</h3>
+<h3 id="1-fotmob-api" class="md-h3 subsection-header">1. FotMob API</h3>
+<ul class='md-list'><li><strong>Package:</strong> <code class="inline-code">pip install fotmob-api</code> (maintained Python wrapper)</li>
+<li><strong>Data:</strong> xG (StatsBomb-sourced), lineups, real-time odds from 3-4 bookmakers, player stats, formations</li>
+<li><strong>Coverage:</strong> 50+ leagues including EPL, La Liga, Serie A, Bundesliga, Ligue 1</li>
+<li><strong>Freshness:</strong> Real-time during matches, 5-10 minutes after final whistle</li>
+<li><strong>Historical depth:</strong> 2015+ (match data), 2018+ (xG)</li>
+<li><strong>Authentication:</strong> None required</li>
+<li><strong>Rate limits:</strong> No documented limits; community reports stable at 1 req/sec</li>
+<li><strong>Integration effort:</strong> Low (20-50 lines using the Python package)</li>
+<li><strong>Risk level:</strong> LOW &mdash; API has been stable for 3+ years, package actively maintained</li></ul>
+<p class="md-p"><strong>BetVector value:</strong> Backup xG source (reduces single-source risk on Understat), real-time odds aggregation, and confirmed lineups 45 minutes pre-match. The lineup data alone fills a critical feature gap.</p>
+<div class='table-wrapper'><table><thead><tr><th>Pros</th><th>Cons</th></tr></thead><tbody><tr><td>Official-quality xG (StatsBomb partnership)</td><td>Undocumented API (community reverse-engineered)</td></tr><tr><td>No authentication needed</td><td>Smaller historical depth than Understat</td></tr><tr><td>Live lineup data fills injury gap</td><td>Could theoretically change endpoints</td></tr><tr><td>50+ league coverage for expansion</td><td>—</td></tr></tbody></table></div>
+<hr class='md-hr'>
+<h3 id="2-transfermarkt-github-csv-dumps-web-scraping" class="md-h3 subsection-header">2. Transfermarkt (GitHub CSV Dumps + Web Scraping)</h3>
+<ul class='md-list'><li><strong>Data:</strong> Player injuries (daily updates), squad market values (monthly), transfer history, squad depth, player ages</li>
+<li><strong>Coverage:</strong> All clubs globally, 50+ leagues, 2005+ for squad data</li>
+<li><strong>Freshness:</strong> Injuries updated daily (within 24h of official club announcements)</li>
+<li><strong>Access:</strong> Community GitHub CSV dumps (CC0 license) OR direct HTML scraping via BeautifulSoup (no JavaScript rendering needed)</li>
+<li><strong>Integration effort:</strong> Low (40-80 lines scraper code, ~2 min runtime for 100 teams)</li>
+<li><strong>Risk level:</strong> LOW for GitHub CSV dumps, MEDIUM for direct scraping (ToS prohibits but enforcement is weak for low-volume academic/personal use)</li></ul>
+<p class="md-p"><strong>BetVector value:</strong> Fills the single biggest feature gap &mdash; injury data. Squad market value is a strong proxy for team quality, especially valuable for newly promoted teams (Sunderland, Leeds, Burnley in 2025-26) where historical performance data is limited.</p>
+<div class='table-wrapper'><table><thead><tr><th>Pros</th><th>Cons</th></tr></thead><tbody><tr><td>Easiest source to scrape (simple HTML)</td><td>Market values are community-estimated, not official</td></tr><tr><td>Injury data is critical and currently missing</td><td>Direct scraping technically violates ToS</td></tr><tr><td>Squad values = strong quality proxy</td><td>CSV dumps may lag 1-2 weeks behind live site</td></tr><tr><td>Already planned for E15-03</td><td>—</td></tr></tbody></table></div>
+<hr class='md-hr'>
+<h3 id="tier-b-implement-in-month-2-3-medium-risk-medium-value" class="md-h3 subsection-header">Tier B &mdash; Implement in Month 2-3 (Medium Risk, Medium Value)</h3>
+<h3 id="3-instat-football-analytics" class="md-h3 subsection-header">3. InStat Football Analytics</h3>
+<ul class='md-list'><li><strong>Data:</strong> xG (proprietary model, different methodology from Understat/StatsBomb), PPDA (passes per defensive action), pressing metrics, defensive actions, tactical analysis</li>
+<li><strong>Coverage:</strong> Top 5 European leagues, partial Champions League / Europa League</li>
+<li><strong>Freshness:</strong> 24-48 hours post-match</li>
+<li><strong>Access:</strong> JavaScript-heavy site requiring Selenium for scraping</li>
+<li><strong>Integration effort:</strong> Medium (100-150 lines, Selenium dependency)</li>
+<li><strong>Risk level:</strong> LOW-MEDIUM &mdash; no aggressive bot blocking observed, ToS ambiguous on scraping</li></ul>
+<p class="md-p"><strong>BetVector value:</strong> Alternative xG model enables xG ensemble (reduces single-source dependency). PPDA and pressing metrics are novel features unavailable from other free sources &mdash; high pressing teams concede more counter-attacks, which is predictive for goals markets.</p>
+<div class='table-wrapper'><table><thead><tr><th>Pros</th><th>Cons</th></tr></thead><tbody><tr><td>Unique xG methodology for ensemble</td><td>Selenium required (adds complexity)</td></tr><tr><td>Tactical data (PPDA, pressing) is novel</td><td>Limited historical depth (3-5 years)</td></tr><tr><td>Free access, no API key</td><td>Requires headless browser infrastructure</td></tr></tbody></table></div>
+<hr class='md-hr'>
+<h3 id="4-sofascore-reverse-engineered-api" class="md-h3 subsection-header">4. SofaScore (Reverse-Engineered API)</h3>
+<ul class='md-list'><li><strong>Data:</strong> Live ball-by-ball event data, shots, possession, corners, referee information, player ratings, formations</li>
+<li><strong>Coverage:</strong> 400+ leagues globally &mdash; widest coverage of any free source</li>
+<li><strong>Freshness:</strong> Real-time during matches (30-60 second updates)</li>
+<li><strong>Access:</strong> Undocumented internal REST API (requests library works with proper User-Agent and referrer headers)</li>
+<li><strong>Integration effort:</strong> Medium-Hard (80-120 lines + retry logic for rate limiting)</li>
+<li><strong>Risk level:</strong> MEDIUM-HIGH &mdash; SofaScore actively blocks scrapers, endpoints change quarterly</li></ul>
+<p class="md-p"><strong>BetVector value:</strong> Real-time match events for live tracking, referee context features (some referees consistently award more cards/penalties), and massive league coverage for future expansion beyond EPL.</p>
+<div class='table-wrapper'><table><thead><tr><th>Pros</th><th>Cons</th></tr></thead><tbody><tr><td>Opta-sourced data quality</td><td>Reverse-engineered API (inherently unstable)</td></tr><tr><td>400+ leagues for expansion</td><td>SofaScore actively blocks scrapers</td></tr><tr><td>Real-time match events</td><td>Endpoints change quarterly</td></tr><tr><td>Referee data is a novel feature</td><td>Selenium sometimes required as fallback</td></tr></tbody></table></div>
+<hr class='md-hr'>
+<h3 id="5-oddsportal-historical-odds-archive" class="md-h3 subsection-header">5. Oddsportal (Historical Odds Archive)</h3>
+<ul class='md-list'><li><strong>Data:</strong> Historical opening and closing odds from 100+ bookmakers across all major leagues</li>
+<li><strong>Coverage:</strong> EPL, La Liga, Serie A, Bundesliga, Ligue 1, plus 50+ smaller leagues</li>
+<li><strong>Freshness:</strong> Historical archive (not real-time), updated within 24 hours of match completion</li>
+<li><strong>Access:</strong> HTML scraping (complex JavaScript-heavy pages)</li>
+<li><strong>Integration effort:</strong> Medium-Hard (one-time backfill scrape, 200+ lines)</li>
+<li><strong>Risk level:</strong> MEDIUM &mdash; aggressive bot blocking, requires careful rate limiting</li></ul>
+<p class="md-p"><strong>BetVector value:</strong> Deep historical odds data for closing-line value (CLV) backtesting across 5-10 years. Football-Data.co.uk provides similar data but Oddsportal covers 100+ bookmakers vs ~50.</p>
+<div class='table-wrapper'><table><thead><tr><th>Pros</th><th>Cons</th></tr></thead><tbody><tr><td>Most comprehensive free odds archive</td><td>Scraping is fragile (JS-heavy)</td></tr><tr><td>100+ bookmakers per match</td><td>ToS prohibits automated scraping</td></tr><tr><td>Opening + closing odds (CLV analysis)</td><td>Best for one-time backfill, not daily pipeline</td></tr></tbody></table></div>
+<hr class='md-hr'>
+<h3 id="tier-c-monitor-dont-implement-yet" class="md-h3 subsection-header">Tier C &mdash; Monitor, Don't Implement Yet</h3>
+<h3 id="6-whoscored-statsbomb-powered" class="md-h3 subsection-header">6. WhoScored (StatsBomb-Powered)</h3>
+<ul class='md-list'><li><strong>Data:</strong> Shot-level xG, tactical formations, player ratings, pass maps</li>
+<li><strong>Freshness:</strong> 24-48 hours post-match</li>
+<li><strong>Risk:</strong> MEDIUM-HIGH &mdash; Cloudflare protection, StatsBomb owns underlying data</li>
+<li><strong>Best for:</strong> Offline backtest analysis, not daily pipeline</li>
+<li><strong>Why wait:</strong> Same xG source as FotMob but harder to access. Use FotMob instead.</li></ul>
+<hr class='md-hr'>
+<h3 id="7-espn-api-undocumented" class="md-h3 subsection-header">7. ESPN API (Undocumented)</h3>
+<ul class='md-list'><li><strong>Data:</strong> Match results, injury reports, expert consensus picks, team news</li>
+<li><strong>Coverage:</strong> 30+ leagues, deep historical data (2005+)</li>
+<li><strong>Risk:</strong> MEDIUM &mdash; Disney/ESPN aggressively blocks non-browser traffic</li>
+<li><strong>Best for:</strong> Validation data and expert consensus comparison</li>
+<li><strong>Why wait:</strong> Expert picks are useful for calibration but not core predictions.</li></ul>
+<hr class='md-hr'>
+<h3 id="8-rapidapi-marketplace-various-providers" class="md-h3 subsection-header">8. RapidAPI Marketplace (Various Providers)</h3>
+<ul class='md-list'><li><strong>Data:</strong> Various &mdash; HeartBeat (xG), SportsData (basic stats), Weatherstack</li>
+<li><strong>Limits:</strong> 100-500 requests/day free, 1-3 leagues per provider</li>
+<li><strong>Best for:</strong> Trial and backup, not primary sources</li>
+<li><strong>Why wait:</strong> Too fragmented. Individual providers overlap with better sources above.</li></ul>
+<hr class='md-hr'>
+<h3 id="9-soccerway-flashscore" class="md-h3 subsection-header">9. Soccerway / Flashscore</h3>
+<ul class='md-list'><li><strong>Data:</strong> Live scores, results, basic team stats across 200+ leagues</li>
+<li><strong>Risk:</strong> HIGH &mdash; heavily blocked, proxy rotation required, high legal risk</li>
+<li><strong>Why skip:</strong> Data quality doesn't justify the scraping complexity and legal exposure.</li></ul>
+<hr class='md-hr'>
+<h3 id="10-sports-reference-soccer" class="md-h3 subsection-header">10. Sports-Reference (Soccer)</h3>
+<ul class='md-list'><li><strong>Data:</strong> US-centric soccer stats (MLS focus)</li>
+<li><strong>Coverage:</strong> MLS primary, minimal European coverage</li>
+<li><strong>Why skip:</strong> Soccer coverage too limited for BetVector's EPL focus. Basketball/baseball coverage is strong but irrelevant.</li></ul>
+<hr class='md-hr'>
+<h2 id="paid-tier-sources-top-10-ranked-by-value-for-betvector" class="md-h2 section-header">Paid-Tier Sources &mdash; Top 10 (Ranked by Value for BetVector)</h2>
+<h3 id="rank-1-api-football-pro-1999month" class="md-h3 subsection-header">Rank 1: API-Football Pro &mdash; $19.99/month</h3>
+<ul class='md-list'><li><strong>What it unlocks:</strong> Current 2025-26 season access, 1,500 requests/day, real-time odds from 20+ bookmakers, injury/lineup data, 600+ leagues</li>
+<li><strong>Why #1:</strong> Directly solves the biggest current blocker. The free tier can't access the current season. The scraper code is already written and tested against historical data &mdash; upgrading is literally a config change in <code class="inline-code">settings.yaml</code>.</li>
+<li><strong>Integration effort:</strong> 5 minutes (change <code class="inline-code">daily_request_limit</code> and add Pro API key)</li>
+<li><strong>Expected payback:</strong> 1-2 weeks of profitable betting at modest stake sizes</li></ul>
+<div class='table-wrapper'><table><thead><tr><th>What You Get</th><th>Free Tier (Current)</th><th>Pro Tier ($20/mo)</th></tr></thead><tbody><tr><td>Seasons</td><td>2022-2024 only</td><td>All seasons including current</td></tr><tr><td>Requests/day</td><td>100</td><td>1,500</td></tr><tr><td>Real-time odds</td><td>No</td><td>Yes (20+ bookmakers)</td></tr><tr><td>Injuries/lineups</td><td>No</td><td>Yes</td></tr><tr><td>Leagues</td><td>Limited</td><td>600+</td></tr></tbody></table></div>
+<hr class='md-hr'>
+<h3 id="rank-2-understat-premium-10-15month" class="md-h3 subsection-header">Rank 2: Understat Premium &mdash; ~$10-15/month</h3>
+<ul class='md-list'><li><strong>What it unlocks:</strong> Removes rate-limiting uncertainty, ensures long-term access to xG data</li>
+<li><strong>Why #2:</strong> xG is the single strongest predictor of future goals in BetVector's feature set. Over/Under markets improve 18-25% with accurate xG features. Paying for guaranteed access is insurance against another FBref-style data loss.</li>
+<li><strong>Current status:</strong> Free tier is working fine. Premium is insurance and peace of mind, not urgently needed.</li>
+<li><strong>Recommendation:</strong> Monitor free tier reliability for 2-3 months before committing.</li></ul>
+<hr class='md-hr'>
+<h3 id="rank-3-betfair-exchange-api-free-to-49month" class="md-h3 subsection-header">Rank 3: Betfair Exchange API &mdash; Free to $49/month</h3>
+<ul class='md-list'><li><strong>What it unlocks:</strong> True closing odds from the world's most efficient betting market, real-time live exchange odds, 15 years of historical data</li>
+<li><strong>Why #3:</strong> Closing-line value (CLV) is the gold standard for validating whether your model has a genuine edge. Betfair closing odds are the closest approximation to "true" market probabilities. If your model consistently beats Betfair's closing line, you have a real edge.</li>
+<li><strong>Integration effort:</strong> Hard (WebSocket streaming, 20-40 development hours)</li>
+<li><strong>Best timing:</strong> After 300+ tracked bets, when you need to validate edge legitimacy</li></ul>
+<hr class='md-hr'>
+<h3 id="rank-4-football-datacouk-premium-20month-25" class="md-h3 subsection-header">Rank 4: Football-Data.co.uk Premium &mdash; $20/month (~$25)</h3>
+<ul class='md-list'><li><strong>What it unlocks:</strong> 30+ years of EPL historical odds from 15 bookmakers, optional JSON API access</li>
+<li><strong>Why #4:</strong> Unmatched for long-term backtesting. Validate that the model works across decades of English football, not just the last 5 seasons of data.</li>
+<li><strong>Integration effort:</strong> Minimal &mdash; seamless upgrade from current free tier</li>
+<li><strong>Best timing:</strong> When backtest validation across longer time horizons becomes a priority</li></ul>
+<hr class='md-hr'>
+<h3 id="rank-5-soccerdata-historical-30-50month" class="md-h3 subsection-header">Rank 5: Soccerdata Historical &mdash; $30-50/month</h3>
+<ul class='md-list'><li><strong>What it unlocks:</strong> 40+ years of historical odds database (oldest available), 40+ bookmakers</li>
+<li><strong>Best for:</strong> Preventing overfitting by testing the model against data from every era of English football</li>
+<li><strong>Best timing:</strong> Academic validation phase, not needed for daily operations</li></ul>
+<hr class='md-hr'>
+<h3 id="rank-6-betconnect-api-50-150month" class="md-h3 subsection-header">Rank 6: Betconnect API &mdash; ~$50-150/month</h3>
+<ul class='md-list'><li><strong>What it unlocks:</strong> Best-odds aggregation across 50+ bookmakers, smart money movement alerts</li>
+<li><strong>Why #6:</strong> Finding 1-2% better odds on every bet compounds significantly. Over 200 bets at $20 average stake, that's $40-80+ extra profit.</li>
+<li><strong>Best timing:</strong> After proving positive ROI. This maximizes profit per bet, not prediction accuracy.</li></ul>
+<hr class='md-hr'>
+<h3 id="rank-7-sportmonks-99month" class="md-h3 subsection-header">Rank 7: Sportmonks &mdash; €99+/month</h3>
+<ul class='md-list'><li><strong>What it unlocks:</strong> Professional-grade fixtures, results, and odds API covering 50+ leagues with excellent documentation and reliability</li>
+<li><strong>Why lower:</strong> Expensive overlap with API-Football Pro. Only justified if API-Football becomes unreliable or you need enterprise-grade SLAs.</li></ul>
+<hr class='md-hr'>
+<h3 id="rank-8-the-odds-api-0-300month-per-request-pricing" class="md-h3 subsection-header">Rank 8: The Odds API &mdash; $0-300/month (per-request pricing)</h3>
+<ul class='md-list'><li><strong>What it unlocks:</strong> Aggregated odds from 100+ sportsbooks including US books (FanDuel, DraftKings, BetMGM)</li>
+<li><strong>Unique value:</strong> US sportsbook odds are critical since BetVector targets FanDuel as its primary betting venue</li>
+<li><strong>Best timing:</strong> When expanding to US-specific market analysis or multi-book arbitrage detection</li></ul>
+<hr class='md-hr'>
+<h3 id="rank-9-opta-statsperform-2000-10000month" class="md-h3 subsection-header">Rank 9: Opta / StatsPerform &mdash; $2,000-10,000/month</h3>
+<ul class='md-list'><li><strong>What it unlocks:</strong> Event-level data (every pass, tackle, shot with x/y coordinates), 500K+ player records, the industry gold standard</li>
+<li><strong>Reality check:</strong> Enterprise-only pricing, requires sales negotiation and minimum commitment. Only relevant if BetVector becomes a commercial operation deploying $5K+ per week.</li>
+<li><strong>Not recommended</strong> at current scale.</li></ul>
+<hr class='md-hr'>
+<h3 id="rank-10-statszone-10month" class="md-h3 subsection-header">Rank 10: StatsZone &mdash; $10/month</h3>
+<ul class='md-list'><li><strong>What it unlocks:</strong> Heat maps, pass maps, shot maps for EPL matches</li>
+<li><strong>Why last:</strong> Web-only access (no API), can't automate. Useful for manual match review and learning, not for the prediction pipeline.</li></ul>
+<hr class='md-hr'>
+<h2 id="data-ecosystem-map-who-supplies-whom" class="md-h2 section-header">Data Ecosystem Map &mdash; Who Supplies Whom</h2>
+<p class="md-p">Understanding the supply chain reveals why certain sources have similar data and where single points of failure exist.</p>
+<div class="code-block"><pre><code>OPTA (Stats Perform)
+├── StatsBomb ──→ FBref (DEAD), WhoScored, FotMob
+├── SofaScore, Flashscore, ESPN
+└── Enterprise clients (clubs, broadcasters, betting operators)
+
+API-Football
+└── RapidAPI marketplace ──→ Individual developers
+
+Football-Data.co.uk
+└── CSV downloads ──→ Academic researchers, hobbyists
+
+Understat
+└── understatapi package ──→ Individual developers
+
+Betfair
+└── Exchange API ──→ Professional bettors, quant traders
+
+Transfermarkt
+└── GitHub community dumps ──→ Open-source projects</code></pre></div>
+<h3 id="key-insights" class="md-h3 subsection-header">Key Insights</h3>
+<ul class='md-list'><li><strong>Opta is the root of everything.</strong> Nearly all advanced stats (xG, PPDA, shot maps) trace back to Opta's event-level data. When Opta cut FBref off, it cascaded immediately. FotMob and WhoScored still have Opta data via StatsBomb, but they could be cut off too.</li>
+<li><strong>Understat is the exception.</strong> It runs its own proprietary xG model from raw match data &mdash; not Opta-dependent. This makes it structurally more resilient.</li>
+<li><strong>The free-tier ceiling is real.</strong> Enterprise data (Opta, Wyscout) costs $50K-500K/year. For solo developers, the realistic ceiling is Tier 2 sources (API-Football, Understat, FotMob). The good news: these provide 85-90% of the data quality that professional clubs use.</li></ul>
+<hr class='md-hr'>
+<h2 id="data-moat-analysis-where-does-betvectors-edge-come-from" class="md-h2 section-header">Data Moat Analysis &mdash; Where Does BetVector's Edge Come From?</h2>
+<div class='table-wrapper'><table><thead><tr><th>Data Stack</th><th>Expected Brier Score</th><th>Expected ROI</th><th>Monthly Cost</th></tr></thead><tbody><tr><td>Basic (goals only, no xG)</td><td>0.185-0.200</td><td>-2% to +2%</td><td>$0</td></tr><tr><td><strong>BetVector current</strong> (xG, odds, rolling stats)</td><td>0.165-0.180</td><td>+3% to +8%</td><td>$0</td></tr><tr><td>+ API-Football Pro + injuries</td><td>0.160-0.175</td><td>+5% to +10%</td><td>$20</td></tr><tr><td>+ Betfair CLV + multi-xG ensemble</td><td>0.155-0.170</td><td>+8% to +12%</td><td>$70</td></tr><tr><td>Enterprise (Opta event-level data)</td><td>0.150-0.165</td><td>+8% to +15%</td><td>$5,000+</td></tr></tbody></table></div>
+<h3 id="the-honest-assessment" class="md-h3 subsection-header">The Honest Assessment</h3>
+<p class="md-p">BetVector's competitive advantage does <strong>not</strong> come from data access. Everyone has access to the same free sources. The edge comes from three places:</p>
+<ol class='md-list'><li><strong>Feature engineering quality.</strong> How you transform raw xG, form, and context into predictive features matters more than the raw data. BetVector's rolling windows, weighted recency, and contextual features (home/away, promoted team flags, rest days) are where alpha lives.</li></ol>
+<ol class='md-list'><li><strong>Model calibration discipline.</strong> A well-calibrated Poisson model that knows its own uncertainty will outperform an overconfident XGBoost model. BetVector's self-improvement engine (auto-recalibration, rolling Brier monitoring, maximum change rate guardrails) prevents the model from destroying itself.</li></ol>
+<ol class='md-list'><li><strong>Execution discipline.</strong> Kelly criterion staking, bankroll management, and the discipline to only bet when the edge exceeds the threshold. Most bettors overtrade. BetVector's automated system removes emotion.</li></ol>
+<p class="md-p"><strong>Implication:</strong> Investing $20/month in API-Football Pro delivers more ROI than investing $5,000/month in Opta &mdash; because the marginal data quality improvement doesn't justify 250x the cost.</p>
+<hr class='md-hr'>
+<h2 id="strategic-recommendation-optimal-data-stack" class="md-h2 section-header">Strategic Recommendation &mdash; Optimal Data Stack</h2>
+<h3 id="phase-1-this-week-20month-total" class="md-h3 subsection-header">Phase 1: This Week &mdash; $20/month total</h3>
+<div class='table-wrapper'><table><thead><tr><th>Action</th><th>Cost</th><th>Impact</th><th>Effort</th></tr></thead><tbody><tr><td>Upgrade API-Football to Pro</td><td>$20/mo</td><td>Unblocks current-season fixtures, odds, injuries</td><td>5 minutes</td></tr><tr><td>Integrate FotMob (free)</td><td>$0</td><td>Backup xG source + real-time lineups</td><td>2-4 hours</td></tr><tr><td>Finish Transfermarkt integration (E15-03)</td><td>$0</td><td>Injury data + squad market values</td><td>Already planned</td></tr></tbody></table></div>
+<p class="md-p"><strong>Why this combination:</strong> API-Football Pro gives you the daily data pipeline you need. FotMob gives you a backup xG source (so you're never again one Cloudflare block away from losing your strongest feature). Transfermarkt gives you injury data &mdash; the single biggest unmodelled factor.</p>
+<hr class='md-hr'>
+<h3 id="phase-2-months-2-3-20month-same" class="md-h3 subsection-header">Phase 2: Months 2-3 &mdash; $20/month (same)</h3>
+<div class='table-wrapper'><table><thead><tr><th>Action</th><th>Cost</th><th>Impact</th><th>Effort</th></tr></thead><tbody><tr><td>Validate model with 100+ paper bets</td><td>—</td><td>Prove edge exists before spending more</td><td>Ongoing</td></tr><tr><td>Add InStat xG for ensemble</td><td>$0</td><td>Reduces xG single-source risk</td><td>4-6 hours</td></tr><tr><td>Cache all Understat data locally</td><td>$0</td><td>Future-proof against access loss</td><td>1-2 hours</td></tr><tr><td>Begin multi-league expansion</td><td>$0</td><td>La Liga, Serie A from existing free sources</td><td>4-8 hours</td></tr></tbody></table></div>
+<p class="md-p"><strong>Why this combination:</strong> Before spending more money, validate that the model actually produces profitable picks over 100+ bets. Use the time to build depth (xG ensemble, local caching) rather than breadth.</p>
+<hr class='md-hr'>
+<h3 id="phase-3-months-4-6-50-70month" class="md-h3 subsection-header">Phase 3: Months 4-6 &mdash; $50-70/month</h3>
+<div class='table-wrapper'><table><thead><tr><th>Action</th><th>Cost</th><th>Impact</th><th>Effort</th></tr></thead><tbody><tr><td>Add Betfair Exchange API</td><td>+$30-50/mo</td><td>Validate edge against true closing odds</td><td>20-40 hours</td></tr><tr><td>Soccerdata historical (one-time)</td><td>$30</td><td>40-year backtest validation</td><td>4-8 hours</td></tr></tbody></table></div>
+<p class="md-p"><strong>Why this combination:</strong> After 300+ bets, you need to answer the fundamental question: "Is my edge real, or am I just lucky?" Betfair closing odds are the gold standard for that answer. If your model consistently beats Betfair's closing line, you have a genuine edge.</p>
+<hr class='md-hr'>
+<h3 id="phase-4-year-2-100-150month" class="md-h3 subsection-header">Phase 4: Year 2+ &mdash; $100-150/month</h3>
+<div class='table-wrapper'><table><thead><tr><th>Action</th><th>Cost</th><th>Impact</th><th>Effort</th></tr></thead><tbody><tr><td>Betconnect odds aggregation</td><td>+$50-100/mo</td><td>Best-odds routing across 50+ bookmakers</td><td>8-16 hours</td></tr><tr><td>The Odds API (US books)</td><td>+$0-50/mo</td><td>FanDuel/DraftKings specific odds</td><td>4-8 hours</td></tr></tbody></table></div>
+<p class="md-p"><strong>Why this combination:</strong> Only invest in odds aggregation after proving consistent positive ROI. At that point, the goal shifts from "find value" to "maximize extraction" &mdash; finding the best available odds across all bookmakers for each value bet.</p>
+<hr class='md-hr'>
+<h2 id="implementation-roadmap-total-investment-vs-expected-return" class="md-h2 section-header">Implementation Roadmap &mdash; Total Investment vs Expected Return</h2>
+<div class='table-wrapper'><table><thead><tr><th>Timeline</th><th>Monthly Cost</th><th>Expected Monthly ROI ($20 avg stake, 20-30 bets/month)</th></tr></thead><tbody><tr><td>Now (free only)</td><td>$0</td><td>Limited &mdash; stale data, no current-season API access</td></tr><tr><td><strong>Phase 1</strong></td><td><strong>$20</strong></td><td><strong>$200-500</strong> &mdash; daily predictions with live odds and injuries</td></tr><tr><td>Phase 2</td><td>$20</td><td>$300-700 &mdash; validated model, xG ensemble, better features</td></tr><tr><td>Phase 3</td><td>$50-70</td><td>$400-1,000 &mdash; CLV-validated edge, longer backtest horizon</td></tr><tr><td>Phase 4</td><td>$100-150</td><td>$500-1,500+ &mdash; best-odds routing, multi-book optimization</td></tr></tbody></table></div>
+<h3 id="the-bottom-line" class="md-h3 subsection-header">The Bottom Line</h3>
+<p class="md-p">The single most impactful action right now is <strong>upgrading API-Football to Pro</strong> ($20/month). It directly unblocks the daily prediction pipeline for the current 2025-26 season. The code is already written. It's a 5-minute config change.</p>
+<p class="md-p">Everything else is sequenced by decreasing marginal value: FotMob (free, backup xG + lineups), Transfermarkt (free, injuries), InStat (free, xG ensemble), Betfair (paid, edge validation). Each step only makes sense after the previous one is validated.</p>
+<p class="md-p">Don't spend money on data you haven't proven you can use profitably.</p>
+<hr class='md-hr'>
+<h2 id="appendix-source-comparison-matrix" class="md-h2 section-header">Appendix &mdash; Source Comparison Matrix</h2>
+<div class='table-wrapper'><table><thead><tr><th>Source</th><th>Cost</th><th>xG</th><th>Odds</th><th>Injuries</th><th>Lineups</th><th>Leagues</th><th>Freshness</th><th>API Stability</th></tr></thead><tbody><tr><td>Football-Data.co.uk</td><td>Free</td><td>No</td><td>50+ books</td><td>No</td><td>No</td><td>25+</td><td>2-7 day lag</td><td>High</td></tr><tr><td>Football-Data.org</td><td>Free</td><td>No</td><td>No</td><td>No</td><td>No</td><td>15+</td><td>Same day</td><td>High</td></tr><tr><td>Understat</td><td>Free</td><td>Yes</td><td>No</td><td>No</td><td>No</td><td>5</td><td>Post-match</td><td>Medium</td></tr><tr><td>Open-Meteo</td><td>Free</td><td>No</td><td>No</td><td>No</td><td>No</td><td>N/A</td><td>Forecast</td><td>High</td></tr><tr><td>API-Football Free</td><td>Free</td><td>No</td><td>Limited</td><td>No</td><td>No</td><td>Limited</td><td>Real-time</td><td>High</td></tr><tr><td><strong>API-Football Pro</strong></td><td><strong>$20/mo</strong></td><td><strong>No</strong></td><td><strong>20+ books</strong></td><td><strong>Yes</strong></td><td><strong>Yes</strong></td><td><strong>600+</strong></td><td><strong>Real-time</strong></td><td><strong>High</strong></td></tr><tr><td>FotMob</td><td>Free</td><td>Yes</td><td>3-4 books</td><td>Partial</td><td>Yes</td><td>50+</td><td>Real-time</td><td>Medium</td></tr><tr><td>Transfermarkt</td><td>Free</td><td>No</td><td>No</td><td>Yes</td><td>No</td><td>50+</td><td>Daily</td><td>Medium</td></tr><tr><td>InStat</td><td>Free</td><td>Yes</td><td>No</td><td>No</td><td>No</td><td>5</td><td>24-48h</td><td>Low-Medium</td></tr><tr><td>SofaScore</td><td>Free</td><td>No</td><td>No</td><td>No</td><td>No</td><td>400+</td><td>Real-time</td><td>Low</td></tr><tr><td>Betfair</td><td>$0-49/mo</td><td>No</td><td>Exchange</td><td>No</td><td>No</td><td>30+</td><td>Real-time</td><td>High</td></tr></tbody></table></div>
+<hr class='md-hr'>
+<p class="md-p"><em>Report compiled March 2026. Data accuracy and pricing verified as of publication date. Source availability and terms of service may change without notice.</em></p>
+    </main>
+  </div>
+
+  <button class="back-to-top" id="backToTop" title="Back to top">&uarr;</button>
+
+  <script>
+    // Hamburger toggle
+    const hamburger = document.getElementById('hamburger');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('overlay');
+
+    if (hamburger) {
+      hamburger.addEventListener('click', () => {
+        sidebar.classList.toggle('open');
+        overlay.classList.toggle('open');
+      });
+    }
+    if (overlay) {
+      overlay.addEventListener('click', () => {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('open');
+      });
+    }
+
+    // Close sidebar on link click (mobile)
+    document.querySelectorAll('.toc-item').forEach(link => {
+      link.addEventListener('click', () => {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('open');
+      });
+    });
+
+    // Back to top
+    const btt = document.getElementById('backToTop');
+    window.addEventListener('scroll', () => {
+      if (window.scrollY > 400) {
+        btt.classList.add('visible');
+      } else {
+        btt.classList.remove('visible');
+      }
+    });
+    btt.addEventListener('click', () => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    // Active TOC highlighting
+    const tocLinks = document.querySelectorAll('.toc-item');
+    const headings = [];
+    tocLinks.forEach(link => {
+      const id = link.getAttribute('href').substring(1);
+      const el = document.getElementById(id);
+      if (el) headings.push({ el, link });
+    });
+
+    function updateActiveToc() {
+      let current = null;
+      for (const h of headings) {
+        if (h.el.getBoundingClientRect().top <= 100) {
+          current = h;
+        }
+      }
+      tocLinks.forEach(l => l.classList.remove('active'));
+      if (current) current.link.classList.add('active');
+    }
+    window.addEventListener('scroll', updateActiveToc);
+    updateActiveToc();
+    </script>
+</body>
+</html>

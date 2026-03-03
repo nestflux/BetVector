@@ -2168,7 +2168,7 @@ Run walk-forward backtest comparing base Poisson (current features) vs market-au
 **Backtest Results (EPL 2024-25, 380 matches):**
 - **Brier score: 0.6105** (was 0.6105 baseline — Poisson GLM limited in exploiting non-linear odds features)
 - **ROI: -3.50%** (was -4.15% → 0.65% improvement from market features)
-- Value bets: 1,144 | Staked: £21,749 | Final P&L: £-761
+- Value bets: 1,144 | Staked: $21,749 | Final P&L: $-761
 - Pinnacle features available on 590/760 matches (77.6% coverage)
 - AH line not yet populated (pending CSV re-scrape)
 
@@ -2580,9 +2580,9 @@ Run a walk-forward backtest across all 5 historical seasons to validate that 3×
 | Brier Score | 0.6105 | **0.5781** | **-5.3%** ✅ |
 | ROI | -3.50% | **+2.78%** | **+6.28pp** ✅ |
 | Value Bets | 588 | 634 | +7.8% |
-| Total Staked | £11,345 | £12,825 | +13.0% |
-| Total PnL | -£397 | **+£356** | **+£753** ✅ |
-| Peak Bankroll | — | £2,961 | — |
+| Total Staked | $11,345 | $12,825 | +13.0% |
+| Total PnL | -$397 | **+$356** | **+$753** ✅ |
+| Peak Bankroll | — | $2,961 | — |
 | Win Rate 1X2 | — | 33.2% | — |
 | Win Rate O/U | — | 42.7% | — |
 
@@ -2951,8 +2951,8 @@ Compare three configurations across 5 historical seasons to determine the best p
 |--------|-------------|-------------|-----------------|
 | **Brier Score** | **0.5781** | 0.5821 | 0.5778 |
 | **ROI (%)** | **+2.78** 🏆 | -19.02 | -9.39 |
-| **Total PnL (£)** | **+356.33** | -861.70 | -607.05 |
-| **Final Bankroll (£)** | **1,356.33** | 138.30 | 392.95 |
+| **Total PnL ($)** | **+356.33** | -861.70 | -607.05 |
+| **Final Bankroll ($)** | **1,356.33** | 138.30 | 392.95 |
 | Value Bets | 634 | 769 | 580 |
 | Max Drawdown (%) | 69.2 | 95.5 | 82.8 |
 | Win Rate 1X2 (%) | 33.2 | 30.4 | 32.7 |
@@ -2987,7 +2987,7 @@ Based on E25-03 backtest results, set the winning configuration as the productio
 **Decision: Keep Poisson as production model.**
 
 The E25-03 backtest conclusively showed Poisson-only is the best configuration:
-- **Poisson:** Brier 0.5781, ROI +2.78%, PnL +£356 ← only profitable model
+- **Poisson:** Brier 0.5781, ROI +2.78%, PnL +$356 ← only profitable model
 - **XGBoost:** Brier 0.5821, ROI -19.0%, nearly wiped out bankroll (95% drawdown)
 - **Ensemble:** Brier 0.5778, ROI -9.4%, marginally better prediction quality but unprofitable
 

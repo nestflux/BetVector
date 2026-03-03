@@ -363,8 +363,8 @@ def run_backtest(
         print(
             f"  Matchday {matchday_num}/{total_matchdays} ({match_date}): "
             f"{day_value_bets} value bets, "
-            f"day PnL: £{day_pnl:+.2f}, "
-            f"bankroll: £{bankroll:.2f}, "
+            f"day PnL: ${day_pnl:+.2f}, "
+            f"bankroll: ${bankroll:.2f}, "
             f"running ROI: {running_roi:+.1f}%"
         )
 
@@ -395,8 +395,8 @@ def run_backtest(
     print(f"\nBacktest complete in {elapsed:.1f}s")
     print(f"  Training data: {len(all_seasons)} season(s)")
     print(f"  Matches: {result.total_matches}, Predicted: {result.total_predicted}")
-    print(f"  Value bets: {result.total_value_bets}, Staked: £{result.total_staked:.2f}")
-    print(f"  Final PnL: £{result.total_pnl:+.2f}, ROI: {result.roi or 0:.1f}%")
+    print(f"  Value bets: {result.total_value_bets}, Staked: ${result.total_staked:.2f}")
+    print(f"  Final PnL: ${result.total_pnl:+.2f}, ROI: {result.roi or 0:.1f}%")
     print(f"  Brier score: {result.brier_score or 'N/A'}")
 
     return result

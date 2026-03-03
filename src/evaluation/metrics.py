@@ -70,9 +70,9 @@ def calculate_roi(bet_logs: List[Dict[str, Any]]) -> Optional[float]:
     ROI = (total_pnl / total_staked) × 100
 
     Example:
-      Staked £1000 total across 50 bets.
-      Won back £1050 total.
-      PnL = +£50.
+      Staked $1000 total across 50 bets.
+      Won back $1050 total.
+      PnL = +$50.
       ROI = 50 / 1000 × 100 = 5.0%
 
     Parameters

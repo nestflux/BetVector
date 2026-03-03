@@ -6,7 +6,7 @@ Version 1.3 · March 2026
 
 ## §1 — Product Vision
 
-Saturday morning. You open your phone, scroll through the day's football fixtures, and feel a pull toward Arsenal at home. They've been playing well. You put £20 on them to win at 1.80 odds, mostly because it *feels* right. By Monday, you can't remember exactly how much you've won or lost this month. You have a vague sense it's negative but no real data. You place another bet next weekend using the same process: gut feeling, tribal knowledge, hope.
+Saturday morning. You open your phone, scroll through the day's football fixtures, and feel a pull toward Arsenal at home. They've been playing well. You put $20 on them to win at 1.80 odds, mostly because it *feels* right. By Monday, you can't remember exactly how much you've won or lost this month. You have a vague sense it's negative but no real data. You place another bet next weekend using the same process: gut feeling, tribal knowledge, hope.
 
 This is how 95% of football bettors operate. No systematic edge. No data. No staking discipline. No performance tracking. They're essentially donating money to bookmakers who have teams of quantitative analysts, proprietary data, and decades of model refinement on their side.
 
@@ -83,14 +83,14 @@ This is the most important flow — it's what happens every match day.
 
 **Trigger:** User receives the evening review email at 10:00 PM, or opens the dashboard.
 
-1. User opens the evening email. Subject: "BetVector Evening — +£12.40 Today · 2/3 Wins"
+1. User opens the evening email. Subject: "BetVector Evening — +$12.40 Today · 2/3 Wins"
 2. Email shows: each bet placed today with result (✅ Win / ❌ Loss / ⏳ Pending for late matches), P&L per bet, total daily P&L, running weekly P&L, running monthly ROI
 3. Below the results, a brief note on tomorrow's fixtures: "3 matches tomorrow (EPL). Predictions will run at 6:00 AM."
 4. User taps "Open Dashboard" to see more detail
 5. Dashboard shows the "Performance Tracker" page with: running P&L chart (line graph over time), ROI by league, ROI by market type, current bankroll, a calendar heatmap showing daily P&L (green/red days)
 6. User reviews and closes the app
 
-**Key edge case:** All bets lost today. The email tone stays neutral and factual: "0/3 wins today. Daily P&L: -£30.00. Monthly ROI: +2.1%. Variance is normal — your model's edge is measured over hundreds of bets, not individual days."
+**Key edge case:** All bets lost today. The email tone stays neutral and factual: "0/3 wins today. Daily P&L: -$30.00. Monthly ROI: +2.1%. Variance is normal — your model's edge is measured over hundreds of bets, not individual days."
 
 ### Flow 3: Weekly Summary Review
 
@@ -135,7 +135,7 @@ This is the most important flow — it's what happens every match day.
 **Trigger:** User opens BetVector for the first time.
 
 1. User sees a welcome screen: "Welcome to BetVector. Let's get your system configured."
-2. Step 1 — Bankroll: "What's your starting bankroll?" Input field, default £500. Explanation: "This is the total amount you're setting aside for betting. BetVector will calculate stakes as a percentage of this amount."
+2. Step 1 — Bankroll: "What's your starting bankroll?" Input field, default $500. Explanation: "This is the total amount you're setting aside for betting. BetVector will calculate stakes as a percentage of this amount."
 3. Step 2 — Staking: "How do you want to calculate stakes?" Three options with explanations:
    - Flat Stakes (recommended for beginners): "Bet 2% of your bankroll on every qualifying bet. Simple and safe."
    - Percentage: "Bet a fixed percentage of your current bankroll. Adjusts automatically as your bankroll changes."
@@ -1413,7 +1413,7 @@ E14 and E15 added four new data sources — Understat advanced stats (NPxG, PPDA
 
 **E16-02: Market Value and Weather Features.** Added two new functions to `src/features/context.py`: `calculate_market_value_features()` queries the most recent Transfermarkt snapshot on or before the match date (temporal integrity) and returns market value ratio (capped at 10.0) and squad value log; `calculate_weather_features()` queries the weather table and returns temperature, wind speed, precipitation, and a binary heavy-weather flag. Added 6 new columns to the Feature model. Updated the Poisson model to include `market_value_ratio` and `is_heavy_weather` as context features.
 
-**E16-03: Feature Recomputation and Validation.** Added `force_recompute` parameter to `compute_all_features()` to re-run feature computation for all matches even when feature rows already exist. Recomputed all 281 EPL 2025-26 matches: 271/281 have NPxG/PPDA/deep data (from Understat), 35/281 have weather data, 4/281 have market value data. Walk-forward backtest on 2025-26: ROI -7.2%, Brier score 0.6903, 705 value bets from £10,704 staked. The model now has access to up to 17 candidate features per GLM (up from 12). Feature coverage will improve as more weather and market value data accumulates.
+**E16-03: Feature Recomputation and Validation.** Added `force_recompute` parameter to `compute_all_features()` to re-run feature computation for all matches even when feature rows already exist. Recomputed all 281 EPL 2025-26 matches: 271/281 have NPxG/PPDA/deep data (from Understat), 35/281 have weather data, 4/281 have market value data. Walk-forward backtest on 2025-26: ROI -7.2%, Brier score 0.6903, 705 value bets from $10,704 staked. The model now has access to up to 17 candidate features per GLM (up from 12). Feature coverage will improve as more weather and market value data accumulates.
 
 **Key design decisions:**
 - NPxG over raw xG in the model — strips out penalty xG for purer open-play signal
@@ -1504,7 +1504,7 @@ The model trained on just 2 seasons (760 matches) — a dangerously small sample
 
 **E23-05: Recompute All Features.** Recomputed the entire Feature table for all 6 seasons with complete data. 4,560 Feature rows (6 seasons × 380 matches × 2 teams). Coverage: xG 97–100%, Elo 100%, Pinnacle odds 78% (historical), referee 85%. All rolling windows now have sufficient lookback depth.
 
-**E23-06: Full Backtest & Revalidation.** Walk-forward backtest across 5 seasons (2020-21 through 2024-25) as out-of-sample test data: **Brier score improved from 0.6105 to 0.5781 (−5.3%)**, **ROI improved from −3.50% to +2.78% (+6.28 percentage points)**. The model crossed from losing to profitable. Total P&L: +£356 from £12,825 staked across 634 value bets. The improvement came primarily from more stable coefficient estimates in the Poisson GLM (3× more training data reduced overfitting).
+**E23-06: Full Backtest & Revalidation.** Walk-forward backtest across 5 seasons (2020-21 through 2024-25) as out-of-sample test data: **Brier score improved from 0.6105 to 0.5781 (−5.3%)**, **ROI improved from −3.50% to +2.78% (+6.28 percentage points)**. The model crossed from losing to profitable. Total P&L: +$356 from $12,825 staked across 634 value bets. The improvement came primarily from more stable coefficient estimates in the Poisson GLM (3× more training data reduced overfitting).
 
 **E23-07: Verify Odds API Pipeline.** End-to-end production verification: ran The Odds API scraper → 3,130 odds fetched from 50+ bookmakers → loader matched and stored 3,070 new records (60 duplicates correctly skipped) → all 20 EPL teams mapped → final DB state: 34,076 total Odds records. Confirmed the live pipeline works end-to-end.
 

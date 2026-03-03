@@ -250,10 +250,10 @@ def main():
     metrics = [
         ("Brier Score", "brier", ".4f", True),
         ("ROI (%)", "roi", ".2f", False),
-        ("Total PnL (£)", "total_pnl", "+.2f", False),
-        ("Final Bankroll (£)", "final_bankroll", ".2f", False),
+        ("Total PnL ($)", "total_pnl", "+.2f", False),
+        ("Final Bankroll ($)", "final_bankroll", ".2f", False),
         ("Value Bets", "total_value_bets", "d", False),
-        ("Total Staked (£)", "total_staked", ".2f", False),
+        ("Total Staked ($)", "total_staked", ".2f", False),
         ("Max Drawdown (%)", "max_drawdown", ".1f", True),
         ("Win Rate 1X2 (%)", "win_rate_1x2", ".1f", False),
         ("Win Rate O/U (%)", "win_rate_ou", ".1f", False),
@@ -318,7 +318,7 @@ def main():
         winner_name = by_brier[0][0]
         winner = by_brier[0][1]
         print(f"\n  OVERALL WINNER: {winner_name}")
-        print(f"    Brier: {winner['brier']:.4f}, ROI: {winner['roi']:.2f}%, PnL: £{winner['total_pnl']:+.2f}")
+        print(f"    Brier: {winner['brier']:.4f}, ROI: {winner['roi']:.2f}%, PnL: ${winner['total_pnl']:+.2f}")
 
     # ====================================================================
     # SAVE RESULTS

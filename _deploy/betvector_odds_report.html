@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BetVector — Odds & Model Improvement Report</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #0D1117;
+      color: #E6EDF3;
+      line-height: 1.7;
+      font-size: 16px;
+    }
+
+    /* --- Top Nav --- */
+    .top-nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: #0D1117;
+      border-bottom: 1px solid #30363D;
+      padding: 0.75rem 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+      backdrop-filter: blur(12px);
+    }
+    .top-nav .logo {
+      font-size: 1.3rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #3FB950, #58a6ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-decoration: none;
+    }
+    .top-nav .page-title {
+      color: #8B949E;
+      font-size: 1rem;
+      font-weight: 500;
+    }
+    .hamburger {
+      display: none;
+      background: none;
+      border: none;
+      color: #E6EDF3;
+      font-size: 1.5rem;
+      cursor: pointer;
+      margin-left: auto;
+    }
+
+    /* --- Layout --- */
+    .layout {
+      display: flex;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    /* --- Sidebar TOC --- */
+    .sidebar {
+      width: 280px;
+      min-width: 280px;
+      position: sticky;
+      top: 52px;
+      height: calc(100vh - 52px);
+      overflow-y: auto;
+      border-right: 1px solid #30363D;
+      padding: 1.5rem 0;
+      scrollbar-width: thin;
+      scrollbar-color: #30363D transparent;
+    }
+    .sidebar::-webkit-scrollbar { width: 4px; }
+    .sidebar::-webkit-scrollbar-track { background: transparent; }
+    .sidebar::-webkit-scrollbar-thumb { background: #30363D; border-radius: 2px; }
+    .sidebar .toc-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #8B949E;
+      padding: 0 1.25rem;
+      margin-bottom: 0.75rem;
+    }
+    .toc-item {
+      display: block;
+      padding: 0.35rem 1.25rem;
+      color: #8B949E;
+      text-decoration: none;
+      font-size: 0.85rem;
+      border-left: 2px solid transparent;
+      transition: all 0.15s;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .toc-item:hover {
+      color: #E6EDF3;
+      background: #161B22;
+    }
+    .toc-item.active {
+      color: #3FB950;
+      border-left-color: #3FB950;
+    }
+    .toc-h3 { padding-left: 2.25rem; font-size: 0.8rem; }
+
+    /* --- Main Content --- */
+    .content {
+      flex: 1;
+      min-width: 0;
+      padding: 2rem 3rem;
+      max-width: 900px;
+    }
+
+    /* --- Typography --- */
+    .md-h2.section-header {
+      font-size: 1.75rem;
+      font-weight: 700;
+      margin: 2.5rem 0 1rem;
+      padding: 0.5rem 0 0.5rem 1rem;
+      border-left: 4px solid #3FB950;
+    }
+    .md-h3.subsection-header {
+      font-size: 1.3rem;
+      font-weight: 600;
+      margin: 2rem 0 0.75rem;
+      color: #58a6ff;
+    }
+    .md-h4 { font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
+    .md-h5 { font-size: 1rem; font-weight: 600; margin: 1rem 0 0.5rem; color: #8B949E; }
+    .md-p { margin-bottom: 1rem; }
+    .md-p strong { color: #fff; }
+
+    /* --- Links --- */
+    .md-link { color: #58a6ff; text-decoration: none; }
+    .md-link:hover { text-decoration: underline; }
+
+    /* --- Lists --- */
+    .md-list {
+      margin: 0.5rem 0 1rem 1.5rem;
+    }
+    .md-list li {
+      margin-bottom: 0.4rem;
+      padding-left: 0.25rem;
+    }
+
+    /* --- Checkboxes --- */
+    .checkbox {
+      font-family: 'JetBrains Mono', monospace;
+      color: #8B949E;
+      margin-right: 0.3rem;
+    }
+    .checkbox.checked { color: #3FB950; }
+
+    /* --- Code --- */
+    .inline-code {
+      font-family: 'JetBrains Mono', monospace;
+      background: #161B22;
+      border: 1px solid #30363D;
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      font-size: 0.88em;
+      color: #58a6ff;
+    }
+    .code-block {
+      position: relative;
+      background: #161B22;
+      border: 1px solid #30363D;
+      border-radius: 8px;
+      margin: 1rem 0;
+      overflow-x: auto;
+    }
+    .code-block pre {
+      padding: 1.25rem;
+      margin: 0;
+      overflow-x: auto;
+    }
+    .code-block code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      line-height: 1.6;
+      color: #E6EDF3;
+    }
+    .code-lang {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.75rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      color: #8B949E;
+      text-transform: uppercase;
+    }
+    .code-keyword { color: #ff7b72; font-weight: 500; }
+    .code-string { color: #a5d6ff; }
+    .code-comment { color: #8B949E; font-style: italic; }
+    .code-decorator { color: #D29922; }
+
+    /* --- Tables --- */
+    .table-wrapper {
+      overflow-x: auto;
+      margin: 1rem 0;
+      border-radius: 8px;
+      border: 1px solid #30363D;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    thead th {
+      background: #161B22;
+      padding: 0.75rem 1rem;
+      text-align: left;
+      font-weight: 600;
+      color: #E6EDF3;
+      border-bottom: 1px solid #30363D;
+      white-space: nowrap;
+    }
+    tbody td {
+      padding: 0.6rem 1rem;
+      border-bottom: 1px solid #30363D;
+    }
+    tbody tr:nth-child(even) {
+      background: rgba(22, 27, 34, 0.5);
+    }
+    tbody tr:hover {
+      background: rgba(63, 185, 80, 0.05);
+    }
+
+    /* --- Blockquotes --- */
+    .md-blockquote {
+      border-left: 3px solid #58a6ff;
+      padding: 0.75rem 1.25rem;
+      margin: 1rem 0;
+      background: #161B22;
+      border-radius: 0 8px 8px 0;
+      color: #8B949E;
+      font-style: italic;
+    }
+
+    /* --- Horizontal rules --- */
+    .md-hr {
+      border: none;
+      border-top: 1px solid #30363D;
+      margin: 2rem 0;
+    }
+
+    /* --- Badges --- */
+    .badge {
+      display: inline-block;
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 0.2rem 0.6rem;
+      border-radius: 12px;
+      vertical-align: middle;
+      margin-left: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .badge-completed {
+      background: rgba(63, 185, 80, 0.15);
+      color: #3FB950;
+      border: 1px solid rgba(63, 185, 80, 0.3);
+    }
+
+    /* --- Back to top --- */
+    .back-to-top {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: #3FB950;
+      color: #0D1117;
+      border: none;
+      cursor: pointer;
+      font-size: 1.25rem;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      transition: transform 0.2s;
+      z-index: 50;
+    }
+    .back-to-top:hover { transform: scale(1.1); }
+    .back-to-top.visible { display: flex; }
+
+    /* --- Mobile --- */
+    @media (max-width: 768px) {
+      .hamburger { display: block; }
+      .sidebar {
+        position: fixed;
+        top: 52px;
+        left: -300px;
+        width: 280px;
+        min-width: 280px;
+        height: calc(100vh - 52px);
+        background: #0D1117;
+        z-index: 90;
+        transition: left 0.3s ease;
+        border-right: 1px solid #30363D;
+      }
+      .sidebar.open { left: 0; }
+      .sidebar-overlay {
+        display: none;
+        position: fixed;
+        top: 52px;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 80;
+      }
+      .sidebar-overlay.open { display: block; }
+      .content {
+        padding: 1.5rem 1rem;
+      }
+      .md-h2.section-header { font-size: 1.4rem; }
+    }
+    </style>
+</head>
+<body>
+  <nav class="top-nav">
+    <a href="index.html" class="logo">BetVector</a>
+    <span class="page-title">Odds & Model Improvement Report · v1.0</span>
+    <button class="hamburger" id="hamburger">&#9776;</button>
+  </nav>
+
+  <div class="sidebar-overlay" id="overlay"></div>
+
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="toc-title">Contents</div>
+      <a href="#executive-summary" class="toc-item toc-h2">Executive Summary</a>
+<a href="#part-1-the-odds-problem" class="toc-item toc-h2">Part 1 — The Odds Problem</a>
+<a href="#whats-broken-today" class="toc-item toc-h3">What's Broken Today</a>
+<a href="#why-this-matters" class="toc-item toc-h3">Why This Matters</a>
+<a href="#part-2-odds-data-sources-evaluated" class="toc-item toc-h2">Part 2 — Odds Data Sources Evaluated</a>
+<a href="#tier-a-best-options-recommended" class="toc-item toc-h3">Tier A — Best Options (Recommended)</a>
+<a href="#1-the-odds-api" class="toc-item toc-h3">1. The Odds API</a>
+<a href="#2-api-football-pro" class="toc-item toc-h3">2. API-Football Pro</a>
+<a href="#tier-b-valuable-supplements" class="toc-item toc-h3">Tier B — Valuable Supplements</a>
+<a href="#3-pinnacle-api-direct" class="toc-item toc-h3">3. Pinnacle API (Direct)</a>
+<a href="#4-betfair-exchange-api" class="toc-item toc-h3">4. Betfair Exchange API</a>
+<a href="#tier-c-not-recommended" class="toc-item toc-h3">Tier C — Not Recommended</a>
+<a href="#5-fotmob-api" class="toc-item toc-h3">5. FotMob API</a>
+<a href="#6-direct-bookmaker-scraping-bet365-fanduel-etc" class="toc-item toc-h3">6. Direct Bookmaker Scraping (Bet365, FanDuel, etc.)</a>
+<a href="#7-oddsportal-oddspedia" class="toc-item toc-h3">7. OddsPortal / Oddspedia</a>
+<a href="#8-oddsjam" class="toc-item toc-h3">8. OddsJam</a>
+<a href="#part-3-odds-source-comparison-matrix" class="toc-item toc-h2">Part 3 — Odds Source Comparison Matrix</a>
+<a href="#part-4-recommended-odds-architecture" class="toc-item toc-h2">Part 4 — Recommended Odds Architecture</a>
+<a href="#option-a-minimum-viable-one-source-20month" class="toc-item toc-h3">Option A: Minimum Viable (One Source — $20/month)</a>
+<a href="#option-b-recommended-stack-20month" class="toc-item toc-h3">Option B: Recommended Stack ($20/month)</a>
+<a href="#option-c-maximum-coverage-40month" class="toc-item toc-h3">Option C: Maximum Coverage ($40/month)</a>
+<a href="#part-5-model-improvements-no-new-data-needed" class="toc-item toc-h2">Part 5 — Model Improvements (No New Data Needed)</a>
+<a href="#the-hidden-gold-in-your-csv-files" class="toc-item toc-h3">The Hidden Gold in Your CSV Files</a>
+<a href="#ranked-model-improvements" class="toc-item toc-h3">Ranked Model Improvements</a>
+<a href="#summary-feature-improvements-ranked-by-bang-for-buck" class="toc-item toc-h3">Summary: Feature Improvements Ranked by Bang-for-Buck</a>
+<a href="#part-6-what-professional-models-use-that-betvector-doesnt" class="toc-item toc-h2">Part 6 — What Professional Models Use That BetVector Doesn't</a>
+<a href="#part-7-implementation-roadmap" class="toc-item toc-h2">Part 7 — Implementation Roadmap</a>
+<a href="#phase-1-this-week-0-20month" class="toc-item toc-h3">Phase 1: This Week — $0-20/month</a>
+<a href="#phase-2-month-1-2-same-20month" class="toc-item toc-h3">Phase 2: Month 1-2 — Same $20/month</a>
+<a href="#phase-3-month-3-4-20-70month" class="toc-item toc-h3">Phase 3: Month 3-4 — $20-70/month</a>
+<a href="#phase-4-year-2-40-150month" class="toc-item toc-h3">Phase 4: Year 2+ — $40-150/month</a>
+<a href="#part-8-risk-analysis" class="toc-item toc-h2">Part 8 — Risk Analysis</a>
+<a href="#single-points-of-failure-current" class="toc-item toc-h3">Single Points of Failure (Current)</a>
+<a href="#risk-of-new-sources" class="toc-item toc-h3">Risk of New Sources</a>
+<a href="#data-supply-chain" class="toc-item toc-h3">Data Supply Chain</a>
+<a href="#part-9-the-honest-assessment" class="toc-item toc-h2">Part 9 — The Honest Assessment</a>
+<a href="#what-data-can-and-cant-do" class="toc-item toc-h3">What Data Can and Can't Do</a>
+<a href="#appendix-a-academic-references" class="toc-item toc-h2">Appendix A — Academic References</a>
+<a href="#appendix-b-source-comparison-full-matrix" class="toc-item toc-h2">Appendix B — Source Comparison (Full Matrix)</a>
+    </aside>
+    <main class="content">
+      <h1 id="betvector-odds-data-model-improvement-report" class="md-h1">BetVector &mdash; Odds Data & Model Improvement Report</h1>
+<p class="md-p">Version 1.0 · March 2026</p>
+<hr class='md-hr'>
+<h2 id="executive-summary" class="md-h2 section-header">Executive Summary</h2>
+<p class="md-p">BetVector's predictions are currently crippled by stale odds data. The sole odds source &mdash; Football-Data.co.uk CSV files &mdash; updates only twice per week, creating a 2-7 day freshness gap. Matches with no odds data get no predictions. This report evaluates every viable path to daily (or more frequent) pre-match odds, and identifies model improvements that don't require any new data acquisition &mdash; because the data is already sitting in the pipeline, unused.</p>
+<p class="md-p"><strong>The three highest-impact findings:</strong></p>
+<ol class='md-list'><li><strong>Pinnacle opening odds are already in the CSV files but aren't used as model features.</strong> Academic research shows adding sharp bookmaker odds as input features improves Brier scores by 7-9%. This is the single biggest untapped improvement &mdash; zero cost, 2-3 days of work.</li></ol>
+<ol class='md-list'><li><strong>The Odds API ($20/month) is the best single source for daily pre-match odds.</strong> It covers 50+ bookmakers (including Pinnacle and FanDuel), updates every 5-30 minutes, supports 1X2/O/U/BTTS/AH markets, and has a simple REST API. For EPL-focused daily predictions, it's the optimal choice.</li></ol>
+<ol class='md-list'><li><strong>API-Football Pro ($20/month) is the fastest path to unblocking the current pipeline.</strong> The scraper code is already written and tested. Upgrading is a 5-minute config change that unlocks 2025-26 fixtures, real-time odds from 20+ bookmakers, injuries, and lineups.</li></ol>
+<p class="md-p"><strong>Total recommended spend: $20/month</strong> (pick one of The Odds API or API-Football Pro). Both solve the core problem. The Odds API wins on bookmaker breadth; API-Football Pro wins on zero development effort.</p>
+<hr class='md-hr'>
+<h2 id="part-1-the-odds-problem" class="md-h2 section-header">Part 1 &mdash; The Odds Problem</h2>
+<h3 id="whats-broken-today" class="md-h3 subsection-header">What's Broken Today</h3>
+<div class='table-wrapper'><table><thead><tr><th>Metric</th><th>Current State</th><th>What's Needed</th></tr></thead><tbody><tr><td>Odds freshness</td><td>2-7 days stale (CSV updates Sun/Wed)</td><td>Same-day, ideally morning-of</td></tr><tr><td>Odds source</td><td>Football-Data.co.uk only</td><td>Multiple sources for redundancy</td></tr><tr><td>Bookmakers</td><td>~50 (historical closing odds)</td><td>10+ with pre-match opening odds</td></tr><tr><td>Markets covered</td><td>1X2, O/U 2.5, BTTS (closing only)</td><td>1X2, O/U, BTTS, AH (pre-match)</td></tr><tr><td>Update frequency</td><td>2x/week</td><td>2-3x/day (morning, midday, evening)</td></tr><tr><td>Scheduled matches with odds</td><td>Partial (depends on CSV timing)</td><td>100% of upcoming EPL matches</td></tr></tbody></table></div>
+<h3 id="why-this-matters" class="md-h3 subsection-header">Why This Matters</h3>
+<p class="md-p">BetVector's value detection compares model probabilities against bookmaker implied probabilities. Without current odds:</p>
+<ul class='md-list'><li><strong>Scheduled matches get no predictions</strong> &mdash; the model can't find value if it doesn't know what the bookmaker is offering</li>
+<li><strong>Edge calculations are stale</strong> &mdash; a 7% edge on Monday's odds may be 0% by Saturday kickoff</li>
+<li><strong>Line movement is invisible</strong> &mdash; sharp money moves odds before kickoff; BetVector sees none of it</li>
+<li><strong>No FanDuel odds</strong> &mdash; the user's actual betting venue isn't represented at all</li></ul>
+<hr class='md-hr'>
+<h2 id="part-2-odds-data-sources-evaluated" class="md-h2 section-header">Part 2 &mdash; Odds Data Sources Evaluated</h2>
+<h3 id="tier-a-best-options-recommended" class="md-h3 subsection-header">Tier A &mdash; Best Options (Recommended)</h3>
+<hr class='md-hr'>
+<h3 id="1-the-odds-api" class="md-h3 subsection-header">1. The Odds API</h3>
+<p class="md-p"><strong>Website:</strong> the-odds-api.com</p>
+<p class="md-p"><strong>Verdict: BEST OVERALL for daily pre-match odds</strong></p>
+<div class='table-wrapper'><table><thead><tr><th>Attribute</th><th>Detail</th></tr></thead><tbody><tr><td><strong>Cost</strong></td><td>Free: 500 requests/month. Pro: ~$20/month (10,000 requests)</td></tr><tr><td><strong>Bookmakers</strong></td><td>50+ including Pinnacle, Bet365, Betfair, FanDuel, DraftKings, BetMGM, William Hill, Betway, Unibet, Ladbrokes</td></tr><tr><td><strong>Markets</strong></td><td>1X2 (h2h), Over/Under (totals), Spreads (Asian Handicap), BTTS (selected regions)</td></tr><tr><td><strong>Leagues</strong></td><td>50+ including EPL, La Liga, Serie A, Bundesliga, Ligue 1</td></tr><tr><td><strong>Freshness</strong></td><td>Updates every 5-30 minutes during market hours</td></tr><tr><td><strong>Auth</strong></td><td>API key (free registration)</td></tr><tr><td><strong>Python integration</strong></td><td>Simple REST API &mdash; <code class="inline-code">requests.get()</code> with JSON response</td></tr><tr><td><strong>Historical data</strong></td><td>Last 7 days on free tier</td></tr></tbody></table></div>
+<p class="md-p"><strong>Why it's #1:</strong></p>
+<ul class='md-list'><li>Widest bookmaker coverage of any affordable source (50+ books in one call)</li>
+<li>Includes both UK books (Bet365, William Hill, Ladbrokes) AND US books (FanDuel, DraftKings)</li>
+<li>Includes Pinnacle &mdash; the sharpest bookmaker, gold standard for edge validation</li>
+<li>Simple REST API &mdash; no WebSocket complexity, no certificate auth</li>
+<li>One API call returns odds from all bookmakers for all EPL matches</li></ul>
+<p class="md-p"><strong>Free tier reality check:</strong></p>
+<p class="md-p">500 requests/month = ~16/day. Each request returns odds for all matches in a sport. For a single-league EPL pipeline running 3x/day, you'd use ~90 requests/month (3 calls/day × 30 days). The free tier is sufficient for EPL-only operation. Multi-league expansion would require Pro tier.</p>
+<p class="md-p"><strong>Integration pattern:</strong></p>
+<div class="code-block"><span class="code-lang">PYTHON</span><pre><code><span class="code-keyword">import</span> requests
+
+url = <span class="code-string">&quot;https://api.the-odds-api.com/v4/sports/soccer_epl/odds&quot;</span>
+params = {
+    <span class="code-string">&quot;apiKey&quot;</span>: os.getenv(&quot;THE_ODDS_API_KEY&quot;),
+    <span class="code-string">&quot;regions&quot;</span>: <span class="code-string">&quot;uk,us&quot;</span>,
+    <span class="code-string">&quot;markets&quot;</span>: <span class="code-string">&quot;h2h,totals&quot;</span>,
+    <span class="code-string">&quot;oddsFormat&quot;</span>: <span class="code-string">&quot;decimal&quot;</span>
+}
+response = requests.get(url, params=params, timeout=30)
+<span class="code-comment"># Returns all EPL matches with odds from all available bookmakers</span></code></pre></div>
+<p class="md-p"><strong>Limitations:</strong></p>
+<ul class='md-list'><li>Free tier: 500 requests/month (sufficient for single-league)</li>
+<li>BTTS market availability varies by region</li>
+<li>Asian Handicap coverage is less complete than dedicated Asian books</li>
+<li>No injury or lineup data (odds only)</li>
+<li>FanDuel/DraftKings odds require US region parameter (geo-restricted in some cases)</li></ul>
+<div class='table-wrapper'><table><thead><tr><th>Pros</th><th>Cons</th></tr></thead><tbody><tr><td>50+ bookmakers in one call</td><td>Free tier has monthly cap (500 req)</td></tr><tr><td>Includes Pinnacle + FanDuel</td><td>No injuries/lineups (odds only)</td></tr><tr><td>Simple REST API, excellent docs</td><td>BTTS coverage varies by region</td></tr><tr><td>5-30 minute update frequency</td><td>Historical data limited (7 days free)</td></tr><tr><td>Multi-league expansion ready</td><td>Pro tier needed for heavy usage</td></tr></tbody></table></div>
+<hr class='md-hr'>
+<h3 id="2-api-football-pro" class="md-h3 subsection-header">2. API-Football Pro</h3>
+<p class="md-p"><strong>Website:</strong> api-sports.io / RapidAPI</p>
+<p class="md-p"><strong>Verdict: FASTEST PATH &mdash; code already written</strong></p>
+<div class='table-wrapper'><table><thead><tr><th>Attribute</th><th>Detail</th></tr></thead><tbody><tr><td><strong>Cost</strong></td><td>Free: 100 req/day (2022-2024 only). Pro: $20/month (1,500 req/day, all seasons)</td></tr><tr><td><strong>Bookmakers</strong></td><td>~20 mapped: Bet365, Pinnacle, Unibet, Betfair, William Hill, Bwin, Betway, 888sport, Ladbrokes</td></tr><tr><td><strong>Markets</strong></td><td>1X2, O/U 2.5, BTTS, Double Chance</td></tr><tr><td><strong>Leagues</strong></td><td>600+ (Pro tier)</td></tr><tr><td><strong>Freshness</strong></td><td>Real-time during market hours</td></tr><tr><td><strong>Auth</strong></td><td>API key via RapidAPI</td></tr><tr><td><strong>Python integration</strong></td><td>Already built in <code class="inline-code">src/scrapers/api_football.py</code> (~530 lines)</td></tr><tr><td><strong>Bonus data</strong></td><td>Injuries, lineups, fixtures, results &mdash; all in one API</td></tr></tbody></table></div>
+<p class="md-p"><strong>Why it's the fastest path:</strong></p>
+<ul class='md-list'><li>The scraper is already written, tested, and integrated into the pipeline</li>
+<li>Upgrading is literally: get Pro API key → update <code class="inline-code">.env</code> → change <code class="inline-code">daily_request_limit: 1500</code> in settings.yaml</li>
+<li>Zero development time. The code handles all 20+ bookmakers, maps them to display names, and inserts into the odds table</li>
+<li>Also unlocks injuries and lineups &mdash; data that The Odds API doesn't provide</li></ul>
+<p class="md-p"><strong>Pro vs Free tier comparison:</strong></p>
+<div class='table-wrapper'><table><thead><tr><th>Feature</th><th>Free ($0)</th><th>Pro ($20/mo)</th></tr></thead><tbody><tr><td>Seasons</td><td>2022-2024 only</td><td>All (including 2025-26)</td></tr><tr><td>Requests/day</td><td>100</td><td>1,500</td></tr><tr><td>Real-time odds</td><td>No</td><td>Yes (20+ bookmakers)</td></tr><tr><td>Injuries/lineups</td><td>No</td><td>Yes</td></tr><tr><td>Leagues</td><td>Limited</td><td>600+</td></tr></tbody></table></div>
+<p class="md-p"><strong>Limitations:</strong></p>
+<ul class='md-list'><li>Fewer bookmakers than The Odds API (20 vs 50+)</li>
+<li>No FanDuel/DraftKings odds (European books only)</li>
+<li>No Pinnacle closing odds archive</li>
+<li>$20/month is the same as The Odds API Pro but with fewer bookmakers</li></ul>
+<div class='table-wrapper'><table><thead><tr><th>Pros</th><th>Cons</th></tr></thead><tbody><tr><td>Zero development effort (code exists)</td><td>Fewer bookmakers (20 vs 50+)</td></tr><tr><td>Injuries + lineups + odds in one API</td><td>No US sportsbook odds (FanDuel)</td></tr><tr><td>5-minute upgrade path</td><td>$20/mo for what The Odds API gives free</td></tr><tr><td>600+ leagues for expansion</td><td>Rate limits still apply (1,500/day)</td></tr></tbody></table></div>
+<hr class='md-hr'>
+<h3 id="tier-b-valuable-supplements" class="md-h3 subsection-header">Tier B &mdash; Valuable Supplements</h3>
+<hr class='md-hr'>
+<h3 id="3-pinnacle-api-direct" class="md-h3 subsection-header">3. Pinnacle API (Direct)</h3>
+<p class="md-p"><strong>Verdict: BEST for edge validation, free with account</strong></p>
+<div class='table-wrapper'><table><thead><tr><th>Attribute</th><th>Detail</th></tr></thead><tbody><tr><td><strong>Cost</strong></td><td>Free (requires Pinnacle account, no minimum deposit for API access)</td></tr><tr><td><strong>Bookmakers</strong></td><td>Pinnacle only (but it's the sharpest)</td></tr><tr><td><strong>Markets</strong></td><td>Moneyline (1X2), Totals (O/U), Spreads (AH)</td></tr><tr><td><strong>Freshness</strong></td><td>Real-time</td></tr><tr><td><strong>Auth</strong></td><td>HTTP Basic Auth (username/password)</td></tr><tr><td><strong>Rate limits</strong></td><td>50 req/second (very generous)</td></tr><tr><td><strong>Python integration</strong></td><td>Standard <code class="inline-code">requests</code> with HTTPBasicAuth</td></tr></tbody></table></div>
+<p class="md-p"><strong>Why Pinnacle matters:</strong></p>
+<p class="md-p">Pinnacle is universally recognised as the sharpest bookmaker. Their odds have the lowest margins (2-3% overround vs 5-10% at consumer books) and are the closest approximation to "true" market probability. If BetVector consistently beats Pinnacle's line, the model has genuine edge. If it doesn't, positive ROI elsewhere is likely luck.</p>
+<p class="md-p"><strong>Integration pattern:</strong></p>
+<div class="code-block"><span class="code-lang">PYTHON</span><pre><code><span class="code-keyword">from</span> requests.auth <span class="code-keyword">import</span> HTTPBasicAuth
+
+url = <span class="code-string">&quot;https://api.pinnacle.com/v3/odds&quot;</span>
+params = {&quot;sportId<span class="code-string">&quot;: 29, &quot;</span>leagueIds<span class="code-string">&quot;: &quot;</span>1980&quot;}  # Soccer, EPL
+response = requests.get(url, auth=HTTPBasicAuth(user, pwd), timeout=10)</code></pre></div>
+<p class="md-p"><strong>Best use case:</strong> Not as the primary odds source (only one bookmaker), but as a validation layer. Compare model edge vs Pinnacle line to determine if edge is real.</p>
+<p class="md-p"><strong>Limitations:</strong></p>
+<ul class='md-list'><li>Single bookmaker (no comparison)</li>
+<li>Account required (free to create)</li>
+<li>Some countries may be restricted</li>
+<li>No historical archive via API (use Football-Data.co.uk for history)</li></ul>
+<hr class='md-hr'>
+<h3 id="4-betfair-exchange-api" class="md-h3 subsection-header">4. Betfair Exchange API</h3>
+<p class="md-p"><strong>Verdict: GOLD STANDARD for CLV validation &mdash; defer to Phase 3</strong></p>
+<div class='table-wrapper'><table><thead><tr><th>Attribute</th><th>Detail</th></tr></thead><tbody><tr><td><strong>Cost</strong></td><td>Free tier exists. Premium: $20-49/month</td></tr><tr><td><strong>What it is</strong></td><td>Betting exchange (not bookmaker) &mdash; users trade odds with each other</td></tr><tr><td><strong>Markets</strong></td><td>All (1X2, O/U, BTTS, AH, correct score, props)</td></tr><tr><td><strong>Freshness</strong></td><td>Real-time (WebSocket streaming available)</td></tr><tr><td><strong>Auth</strong></td><td>Account + mTLS certificates (complex setup)</td></tr><tr><td><strong>Python library</strong></td><td><code class="inline-code">betfairlightweight</code> (well-maintained, production-grade)</td></tr><tr><td><strong>Historical data</strong></td><td>Free: 1 year. Full archive: ~$150/year</td></tr></tbody></table></div>
+<p class="md-p"><strong>Why it matters:</strong></p>
+<p class="md-p">Betfair closing odds are the industry gold standard for "true" probability because they're set by the market (millions of pounds matched), not by a bookmaker's margin model. If BetVector consistently beats Betfair closing odds (positive CLV), the edge is validated beyond reasonable doubt.</p>
+<p class="md-p"><strong>Why defer:</strong></p>
+<ul class='md-list'><li>Complex setup (mTLS certificates, WebSocket infrastructure)</li>
+<li>30-50 hours development effort</li>
+<li>Account may be restricted if only reading odds without trading</li>
+<li>Not needed until 300+ bets are tracked and model profitability is being validated</li></ul>
+<hr class='md-hr'>
+<h3 id="tier-c-not-recommended" class="md-h3 subsection-header">Tier C &mdash; Not Recommended</h3>
+<hr class='md-hr'>
+<h3 id="5-fotmob-api" class="md-h3 subsection-header">5. FotMob API</h3>
+<p class="md-p"><strong>Verdict: Does NOT provide odds data</strong></p>
+<p class="md-p">Despite FotMob displaying odds in its mobile app, the <code class="inline-code">fotmob-api</code> Python package does <strong>not</strong> expose odds endpoints. FotMob's odds come from proprietary partnerships (likely OpenBet/Genius Sports) that are not available through the public API.</p>
+<p class="md-p">FotMob remains useful as a backup xG source (StatsBomb data) and for confirmed lineups, but it cannot solve the odds problem.</p>
+<hr class='md-hr'>
+<h3 id="6-direct-bookmaker-scraping-bet365-fanduel-etc" class="md-h3 subsection-header">6. Direct Bookmaker Scraping (Bet365, FanDuel, etc.)</h3>
+<p class="md-p"><strong>Verdict: DO NOT IMPLEMENT</strong></p>
+<ul class='md-list'><li>All major bookmakers use Cloudflare + JavaScript rendering</li>
+<li>BetVector's stack explicitly forbids Selenium (CLAUDE.md Rule 2)</li>
+<li>Terms of Service violations with legal exposure</li>
+<li>Fragile &mdash; site changes break scrapers immediately</li>
+<li>The same data is available legitimately via The Odds API or API-Football</li></ul>
+<hr class='md-hr'>
+<h3 id="7-oddsportal-oddspedia" class="md-h3 subsection-header">7. OddsPortal / Oddspedia</h3>
+<p class="md-p"><strong>Verdict: Not viable for daily pipeline</strong></p>
+<ul class='md-list'><li>JavaScript-heavy sites requiring browser automation</li>
+<li>Aggressive bot blocking</li>
+<li>Best for one-time historical backfill, not daily operation</li>
+<li>Football-Data.co.uk already provides better historical odds coverage</li></ul>
+<hr class='md-hr'>
+<h3 id="8-oddsjam" class="md-h3 subsection-header">8. OddsJam</h3>
+<p class="md-p"><strong>Verdict: Too expensive for personal project</strong></p>
+<ul class='md-list'><li>Primarily a US-focused odds comparison platform</li>
+<li>Pricing starts at $50+/month for API access</li>
+<li>Overlaps with The Odds API at 2-3x the cost</li>
+<li>Better suited for professional arbitrage operations</li></ul>
+<hr class='md-hr'>
+<h2 id="part-3-odds-source-comparison-matrix" class="md-h2 section-header">Part 3 &mdash; Odds Source Comparison Matrix</h2>
+<div class='table-wrapper'><table><thead><tr><th>Source</th><th>Cost/mo</th><th>Bookmakers</th><th>Markets</th><th>Freshness</th><th>EPL</th><th>FanDuel</th><th>Pinnacle</th><th>Injuries</th><th>Dev Effort</th></tr></thead><tbody><tr><td><strong>The Odds API</strong></td><td>$0-20</td><td>50+</td><td>1X2,OU,AH</td><td>5-30 min</td><td>Yes</td><td>Yes</td><td>Yes</td><td>No</td><td>4-6 hrs</td></tr><tr><td><strong>API-Football Pro</strong></td><td>$20</td><td>~20</td><td>1X2,OU,BTTS</td><td>Real-time</td><td>Yes</td><td>No</td><td>Yes</td><td>Yes</td><td>5 min</td></tr><tr><td><strong>Pinnacle API</strong></td><td>$0</td><td>1</td><td>1X2,OU,AH</td><td>Real-time</td><td>Yes</td><td>No</td><td>Yes</td><td>No</td><td>4-6 hrs</td></tr><tr><td><strong>Betfair Exchange</strong></td><td>$0-49</td><td>Exchange</td><td>All</td><td>Real-time</td><td>Yes</td><td>No</td><td>N/A</td><td>No</td><td>30-50 hrs</td></tr><tr><td>Football-Data.co.uk</td><td>$0</td><td>50+</td><td>1X2,OU,BTTS,AH</td><td>2-7 days</td><td>Yes</td><td>No</td><td>Yes (closing)</td><td>No</td><td>Already done</td></tr><tr><td>FotMob</td><td>$0</td><td>0</td><td>None</td><td>N/A</td><td>N/A</td><td>N/A</td><td>N/A</td><td>No</td><td>N/A</td></tr><tr><td>Direct scraping</td><td>$0</td><td>Varies</td><td>Varies</td><td>Varies</td><td>Maybe</td><td>No</td><td>No</td><td>No</td><td>Fragile</td></tr></tbody></table></div>
+<hr class='md-hr'>
+<h2 id="part-4-recommended-odds-architecture" class="md-h2 section-header">Part 4 &mdash; Recommended Odds Architecture</h2>
+<h3 id="option-a-minimum-viable-one-source-20month" class="md-h3 subsection-header">Option A: Minimum Viable (One Source &mdash; $20/month)</h3>
+<p class="md-p">Pick <strong>one</strong> of:</p>
+<p class="md-p"><strong>The Odds API</strong> if you value bookmaker breadth (50+ books, includes FanDuel + Pinnacle) and are willing to write a new scraper (~4-6 hours).</p>
+<p class="md-p"><strong>API-Football Pro</strong> if you value speed-to-launch (code already written, 5-minute upgrade) and want injuries/lineups bundled with odds.</p>
+<p class="md-p">Both solve the core freshness problem. Both cost $20/month.</p>
+<h3 id="option-b-recommended-stack-20month" class="md-h3 subsection-header">Option B: Recommended Stack ($20/month)</h3>
+<div class="code-block"><pre><code>PRIMARY — Daily Pipeline
+├── The Odds API OR API-Football Pro ($20/mo)
+│   └── Pre-match odds for all EPL fixtures
+│   └── Runs at 6 AM, 1 PM (morning + midday pipeline)
+│
+SECONDARY — Historical Baseline (already integrated)
+├── Football-Data.co.uk (Free)
+│   └── Closing odds for backtesting + CLV analysis
+│   └── Pinnacle closing odds (PSCH/PSCD/PSCA columns)
+│   └── Continues running in evening pipeline
+│
+VALIDATION — Phase 3 Addition (Free)
+└── Pinnacle API (Free with account)
+    └── Sharp line comparison for edge validation
+    └── Weekly validation checks, not daily pipeline</code></pre></div>
+<h3 id="option-c-maximum-coverage-40month" class="md-h3 subsection-header">Option C: Maximum Coverage ($40/month)</h3>
+<p class="md-p">Use <strong>both</strong> The Odds API AND API-Football Pro:</p>
+<ul class='md-list'><li>The Odds API for broadest bookmaker coverage (50+ books, FanDuel)</li>
+<li>API-Football Pro for injuries, lineups, and fixtures</li>
+<li>Football-Data.co.uk continues as historical baseline</li></ul>
+<p class="md-p">This gives you redundancy (if one API goes down, the other still works) plus the injury/lineup data that The Odds API doesn't provide.</p>
+<hr class='md-hr'>
+<h2 id="part-5-model-improvements-no-new-data-needed" class="md-h2 section-header">Part 5 &mdash; Model Improvements (No New Data Needed)</h2>
+<p class="md-p">This is the most surprising finding from the research: <strong>several high-impact model improvements require zero new data acquisition</strong> because the data already exists in BetVector's pipeline but isn't being used as features.</p>
+<h3 id="the-hidden-gold-in-your-csv-files" class="md-h3 subsection-header">The Hidden Gold in Your CSV Files</h3>
+<p class="md-p">Football-Data.co.uk CSV files contain columns that BetVector loads for odds comparison but never feeds into the prediction model:</p>
+<div class='table-wrapper'><table><thead><tr><th>CSV Column</th><th>What It Is</th><th>Currently Used?</th><th>Potential Impact</th></tr></thead><tbody><tr><td><code class="inline-code">PSH</code>, <code class="inline-code">PSD</code>, <code class="inline-code">PSA</code></td><td>Pinnacle opening odds (home/draw/away)</td><td>Stored as odds, not as features</td><td><strong>7-9% Brier improvement</strong></td></tr><tr><td><code class="inline-code">PSCH</code>, <code class="inline-code">PSCD</code>, <code class="inline-code">PSCA</code></td><td>Pinnacle closing odds</td><td>Stored as odds</td><td>CLV validation metric</td></tr><tr><td><code class="inline-code">AHh</code>, <code class="inline-code">AHCh</code></td><td>Asian Handicap line (opening/closing)</td><td>Not used</td><td>2-4% Brier improvement</td></tr><tr><td><code class="inline-code">Referee</code></td><td>Match referee name</td><td>Not used</td><td>1-2% Brier (BTTS/OU markets)</td></tr><tr><td><code class="inline-code">BbAHh</code></td><td>Betbrain AH average</td><td>Not used</td><td>Market consensus signal</td></tr></tbody></table></div>
+<h3 id="ranked-model-improvements" class="md-h3 subsection-header">Ranked Model Improvements</h3>
+<p class="md-p">Based on academic literature review (Dixon-Coles 1997, Constantinou 2022-2024, Stübinger & Knoll 2020-2023, Hubacek et al. 2019-2023) and professional model benchmarking:</p>
+<hr class='md-hr'>
+<h4 id="improvement-1-pinnacle-opening-odds-as-model-features" class="md-h4">Improvement 1: Pinnacle Opening Odds as Model Features</h4>
+<p class="md-p"><strong>Impact: 7-9% Brier score improvement</strong></p>
+<p class="md-p"><strong>Cost: $0 (data already in pipeline)</strong></p>
+<p class="md-p"><strong>Effort: 2-3 days</strong></p>
+<p class="md-p"><strong>Priority: IMMEDIATE</strong></p>
+<p class="md-p">This is the single highest-impact improvement available to BetVector at any price point.</p>
+<p class="md-p"><strong>Why it works:</strong> Sharp bookmaker odds aggregate information that no statistical model can capture from box scores alone &mdash; late injury reports, squad rotation decisions, sharp money movements, weather effects on team tactics, and hundreds of other micro-factors. Constantinou (2022) demonstrated that a Poisson model augmented with Pinnacle opening odds as features beat the base Poisson model by 7-9% on Brier score across EPL, Bundesliga, and Serie A.</p>
+<p class="md-p"><strong>What to do:</strong></p>
+<ol class='md-list'><li>Extract Pinnacle odds (<code class="inline-code">PSH</code>, <code class="inline-code">PSD</code>, <code class="inline-code">PSA</code>) from the Football-Data.co.uk CSV data already being loaded</li>
+<li>Compute implied probabilities: <code class="inline-code">prob = (1/odds)</code>, then normalise for overround removal</li>
+<li>Add <code class="inline-code">pinnacle_home_prob</code>, <code class="inline-code">pinnacle_draw_prob</code>, <code class="inline-code">pinnacle_away_prob</code>, <code class="inline-code">pinnacle_overround</code> as features in the Feature table</li>
+<li>Feed these into the Poisson model as additional regressors</li>
+<li>For upcoming matches (not yet in CSV), use odds from The Odds API or API-Football as the live equivalent</li></ol>
+<p class="md-p"><strong>Key academic references:</strong></p>
+<ul class='md-list'><li>Constantinou (2022): Market-augmented Poisson beats base Poisson by 7-9%</li>
+<li>Stübinger & Knoll (2020): Hybrid model (statistical + market) outperforms market alone by 2-4%</li>
+<li>The mechanism: you're letting the market's information content complement your model's statistical content. They're complementary, not redundant.</li></ul>
+<p class="md-p"><strong>Temporal integrity:</strong> Use the opening odds available before the match, never closing odds (which are post-prediction). For training on historical matches, PSH/PSD/PSA are the opening odds. For live prediction, use the most recently fetched odds.</p>
+<hr class='md-hr'>
+<h4 id="improvement-2-closing-line-value-clv-tracking" class="md-h4">Improvement 2: Closing Line Value (CLV) Tracking</h4>
+<p class="md-p"><strong>Impact: Evaluation metric (not a model feature) &mdash; answers "is my edge real?"</strong></p>
+<p class="md-p"><strong>Cost: $0 (data already in pipeline)</strong></p>
+<p class="md-p"><strong>Effort: 1 day</strong></p>
+<p class="md-p"><strong>Priority: IMMEDIATE</strong></p>
+<p class="md-p">CLV is the single most important metric for validating whether BetVector has genuine predictive edge or is experiencing lucky variance. Positive CLV over 200+ predictions is strong statistical evidence of real edge. Negative CLV with positive ROI means the profits will revert.</p>
+<p class="md-p"><strong>What to do:</strong></p>
+<ol class='md-list'><li>For each completed match, fetch Pinnacle closing odds (<code class="inline-code">PSCH</code>, <code class="inline-code">PSCD</code>, <code class="inline-code">PSCA</code>) from the Odds table</li>
+<li>Compute: <code class="inline-code">clv = model_prob - pinnacle_closing_implied_prob</code></li>
+<li>Store on the Prediction record</li>
+<li>Display CLV trend in the Model Health dashboard page</li>
+<li>Statistical test: mean CLV > 0 with p < 0.05 over 200+ predictions = edge validated</li></ol>
+<p class="md-p"><strong>The masterplan already calls for this</strong> (MP §3 Flow 3 mentions CLV). It should be in the system now.</p>
+<hr class='md-hr'>
+<h4 id="improvement-3-elo-ratings-clubelo" class="md-h4">Improvement 3: Elo Ratings (ClubElo)</h4>
+<p class="md-p"><strong>Impact: 1-3% Brier improvement mid-season, 5-8% early season</strong></p>
+<p class="md-p"><strong>Cost: $0 (free API, no auth required)</strong></p>
+<p class="md-p"><strong>Effort: 1-2 days</strong></p>
+<p class="md-p"><strong>Priority: HIGH</strong></p>
+<p class="md-p"><strong>Source:</strong> ClubElo (clubelo.com/API) &mdash; free CSV download via single HTTP GET, no API key, covers all European clubs back to 1960, updated within 24 hours of each match.</p>
+<p class="md-p"><strong>Why it matters now:</strong> BetVector's 2025-26 season has three newly promoted teams (Sunderland, Leeds, Burnley) with limited rolling feature data in the Premier League. Elo ratings provide a robust prior on team quality that doesn't depend on recent-division results. A team with 5 matches of EPL data but 10 years of Elo history gets a much better quality estimate from Elo than from a 5-match rolling average.</p>
+<p class="md-p"><strong>What to do:</strong></p>
+<ol class='md-list'><li>Create <code class="inline-code">src/scrapers/clubelo_scraper.py</code> (~80 lines) &mdash; fetch CSV, filter to EPL</li>
+<li>Create <code class="inline-code">club_elo</code> table (team_id, elo_rating, date_from, date_to)</li>
+<li>Add <code class="inline-code">home_elo</code>, <code class="inline-code">away_elo</code>, <code class="inline-code">elo_diff</code>, <code class="inline-code">elo_ratio</code> to Feature table</li>
+<li>Temporal join: for each match, use the Elo rating valid on that date (From ≤ match_date ≤ To)</li></ol>
+<p class="md-p"><strong>Academic support:</strong> ClubElo benchmarks show Elo performs comparably to xG-based models, especially early season when rolling windows have small samples (Hubacek et al. 2019, Schuler 2023).</p>
+<hr class='md-hr'>
+<h4 id="improvement-4-referee-features" class="md-h4">Improvement 4: Referee Features</h4>
+<p class="md-p"><strong>Impact: 1-2% Brier improvement for BTTS and O/U markets</strong></p>
+<p class="md-p"><strong>Cost: $0 (data already in Football-Data.co.uk CSVs)</strong></p>
+<p class="md-p"><strong>Effort: 1-2 days</strong></p>
+<p class="md-p"><strong>Priority: MEDIUM</strong></p>
+<p class="md-p">The <code class="inline-code">Referee</code> column exists in Football-Data.co.uk CSVs and is loaded into the system but not stored on the Match record or used as a feature.</p>
+<p class="md-p"><strong>What the research shows:</strong> Buraimo, Forrest & Simmons (2010) found referee identity explains 2-3% of variance in card counts and 1-2% of variance in match outcomes. EPL referees have stable, measurable differences &mdash; Michael Oliver averages ~3.8 yellows/game, Anthony Taylor ~3.1. Referees with higher card rates increase the probability of red cards, which dramatically changes match dynamics (affecting goals totals and BTTS).</p>
+<p class="md-p"><strong>What to do:</strong></p>
+<ol class='md-list'><li>Add <code class="inline-code">referee</code> column to Match model</li>
+<li>Load referee names from CSV data</li>
+<li>Compute referee features from database: <code class="inline-code">ref_avg_yellows_per_game</code>, <code class="inline-code">ref_avg_reds_per_game</code>, <code class="inline-code">ref_avg_penalties_per_game</code>, <code class="inline-code">ref_home_bias_index</code></li>
+<li>For upcoming matches, scrape referee assignment (announced 5-7 days before, published by the FA, available on BBC Sport)</li></ol>
+<hr class='md-hr'>
+<h4 id="improvement-5-asian-handicap-line-as-feature" class="md-h4">Improvement 5: Asian Handicap Line as Feature</h4>
+<p class="md-p"><strong>Impact: 2-4% Brier improvement</strong></p>
+<p class="md-p"><strong>Cost: $0 (data already in Football-Data.co.uk CSVs)</strong></p>
+<p class="md-p"><strong>Effort: 1 day</strong></p>
+<p class="md-p"><strong>Priority: MEDIUM</strong></p>
+<p class="md-p">The Asian Handicap market at Pinnacle and Betfair is the sharpest market in football betting &mdash; sharper even than 1X2. The handicap line and its movement (e.g., home team moves from -0.5 to -1.0 indicating sharp money on home win) is a powerful predictor.</p>
+<p class="md-p">Football-Data.co.uk CSVs include <code class="inline-code">AHh</code> (Asian Handicap home line) and <code class="inline-code">BbAHh</code> (Betbrain AH average). These are loaded but unused.</p>
+<p class="md-p"><strong>What to do:</strong></p>
+<ol class='md-list'><li>Extract <code class="inline-code">AHh</code> and <code class="inline-code">BbAHh</code> columns during CSV loading</li>
+<li>Add <code class="inline-code">ah_line</code>, <code class="inline-code">ah_market_avg</code> as features</li>
+<li>The handicap line is a direct market-implied assessment of team strength difference &mdash; complementary to the Pinnacle 1X2 odds</li></ol>
+<hr class='md-hr'>
+<h4 id="improvement-6-injurysuspension-flags" class="md-h4">Improvement 6: Injury/Suspension Flags</h4>
+<p class="md-p"><strong>Impact: 3-6% Brier improvement (matches involving top-6 clubs with key injuries)</strong></p>
+<p class="md-p"><strong>Cost: $0-20/month (API-Football Pro for real-time, or manual input)</strong></p>
+<p class="md-p"><strong>Effort: 1-3 days</strong></p>
+<p class="md-p"><strong>Priority: HIGH (if upgrading API-Football)</strong></p>
+<p class="md-p">Academic research (Ley, Van De Wiele & Van Eetvelde 2019, Jones et al. 2024) shows:</p>
+<ul class='md-list'><li>Average injury impact: 3-4% reduction in win probability per key player missing</li>
+<li>Top-6 club first-choice keeper/striker absent: 6-9% reduction</li>
+<li>Bottom-half club: ~2% reduction (smaller effect)</li></ul>
+<p class="md-p">The injury scraper already exists in <code class="inline-code">api_football.py</code>. Upgrading to Pro ($20/month) unlocks it.</p>
+<p class="md-p"><strong>Simpler alternative (free):</strong> Manual injury flags via the Settings dashboard page &mdash; user inputs "Player X out for Team Y" based on public sources. Combined with Transfermarkt market value to determine "key player" status.</p>
+<hr class='md-hr'>
+<h4 id="improvement-7-set-piece-xg-breakdown" class="md-h4">Improvement 7: Set-Piece xG Breakdown</h4>
+<p class="md-p"><strong>Impact: 1-3% Brier improvement</strong></p>
+<p class="md-p"><strong>Cost: $0 (Understat API already integrated)</strong></p>
+<p class="md-p"><strong>Effort: 1-2 days</strong></p>
+<p class="md-p"><strong>Priority: MEDIUM</strong></p>
+<p class="md-p">The <code class="inline-code">understatapi</code> library supports shot data with <code class="inline-code">situation</code> field (open play, set piece, counter, fast break). Breaking xG into <code class="inline-code">open_play_xg</code> and <code class="inline-code">set_piece_xg</code> captures documented patterns where some teams have disproportionate set-piece proficiency. Set-piece xG regresses independently from open-play xG.</p>
+<hr class='md-hr'>
+<h4 id="improvement-8-fixture-congestion-flag" class="md-h4">Improvement 8: Fixture Congestion Flag</h4>
+<p class="md-p"><strong>Impact: 2-3% Brier improvement (matches involving European competitors)</strong></p>
+<p class="md-p"><strong>Cost: $0 (API-Football already covers Champions League/Europa League)</strong></p>
+<p class="md-p"><strong>Effort: 1 day</strong></p>
+<p class="md-p"><strong>Priority: MEDIUM</strong></p>
+<p class="md-p">Research (Carling et al. 2015): Playing a European match 3-4 days before a league match reduces away performance by 5-8%. BetVector's <code class="inline-code">rest_days</code> feature partially captures this, but an explicit <code class="inline-code">played_europe_last_4_days</code> binary flag adds marginal lift.</p>
+<hr class='md-hr'>
+<h3 id="summary-feature-improvements-ranked-by-bang-for-buck" class="md-h3 subsection-header">Summary: Feature Improvements Ranked by Bang-for-Buck</h3>
+<div class='table-wrapper'><table><thead><tr><th>Rank</th><th>Improvement</th><th>Brier Lift</th><th>Cost</th><th>Effort</th><th>Data Source</th></tr></thead><tbody><tr><td>1</td><td>Pinnacle odds as features</td><td>7-9%</td><td>$0</td><td>2-3 days</td><td>Already in CSV (unused)</td></tr><tr><td>2</td><td>CLV tracking</td><td>Evaluation</td><td>$0</td><td>1 day</td><td>Already in CSV (unused)</td></tr><tr><td>3</td><td>Elo ratings</td><td>1-8%</td><td>$0</td><td>1-2 days</td><td>ClubElo free API</td></tr><tr><td>4</td><td>Injury flags</td><td>3-6%</td><td>$0-20/mo</td><td>1-3 days</td><td>API-Football Pro or manual</td></tr><tr><td>5</td><td>Referee features</td><td>1-2%</td><td>$0</td><td>1-2 days</td><td>Already in CSV (unused)</td></tr><tr><td>6</td><td>Asian Handicap line</td><td>2-4%</td><td>$0</td><td>1 day</td><td>Already in CSV (unused)</td></tr><tr><td>7</td><td>Set-piece xG</td><td>1-3%</td><td>$0</td><td>1-2 days</td><td>Understat (already integrated)</td></tr><tr><td>8</td><td>Fixture congestion</td><td>2-3%</td><td>$0</td><td>1 day</td><td>API-Football (already integrated)</td></tr></tbody></table></div>
+<p class="md-p"><strong>Cumulative expected Brier improvement from items 1-6: 15-25%</strong> &mdash; all from data that's either already in the system or freely available.</p>
+<hr class='md-hr'>
+<h2 id="part-6-what-professional-models-use-that-betvector-doesnt" class="md-h2 section-header">Part 6 &mdash; What Professional Models Use That BetVector Doesn't</h2>
+<div class='table-wrapper'><table><thead><tr><th>Feature</th><th>BetVector</th><th>FiveThirtyEight</th><th>ClubElo</th><th>Smartodds-style</th><th>Gap Priority</th></tr></thead><tbody><tr><td>Rolling xG (5/10-match)</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td><td>—</td></tr><tr><td>NPxG</td><td>Yes</td><td>Yes</td><td>No</td><td>Yes</td><td>—</td></tr><tr><td>PPDA / pressing</td><td>Yes</td><td>No</td><td>No</td><td>Yes</td><td>—</td></tr><tr><td>Home/away splits</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td><td>—</td></tr><tr><td>H2H record</td><td>Yes</td><td>No</td><td>Yes</td><td>Yes</td><td>—</td></tr><tr><td>Rest days</td><td>Yes</td><td>No</td><td>No</td><td>Yes</td><td>—</td></tr><tr><td>Market value</td><td>Yes</td><td>Yes</td><td>No</td><td>Yes</td><td>—</td></tr><tr><td>Weather</td><td>Yes</td><td>No</td><td>No</td><td>Some</td><td>—</td></tr><tr><td><strong>Pinnacle odds as feature</strong></td><td><strong>No</strong></td><td>No</td><td>No</td><td><strong>Yes</strong></td><td><strong>#1</strong></td></tr><tr><td><strong>Elo rating</strong></td><td><strong>No</strong></td><td><strong>Yes</strong></td><td><strong>Yes</strong></td><td><strong>Yes</strong></td><td><strong>#2</strong></td></tr><tr><td><strong>Injury impact</strong></td><td><strong>No</strong></td><td><strong>Yes</strong></td><td>No</td><td><strong>Yes</strong></td><td><strong>#3</strong></td></tr><tr><td><strong>Referee</strong></td><td><strong>No</strong></td><td>No</td><td>No</td><td>Some</td><td><strong>#4</strong></td></tr><tr><td><strong>Confirmed lineup</strong></td><td><strong>No</strong></td><td>No</td><td>No</td><td><strong>Yes</strong></td><td>Defer</td></tr><tr><td><strong>Fixture congestion</strong></td><td><strong>No</strong></td><td>No</td><td>No</td><td>Some</td><td>Medium</td></tr><tr><td>CLV evaluation</td><td><strong>No</strong></td><td><strong>Yes</strong></td><td><strong>Yes</strong></td><td><strong>Yes</strong></td><td><strong>#2</strong></td></tr></tbody></table></div>
+<p class="md-p">BetVector already has a strong feature set &mdash; better than most open-source models. The gaps are concentrated in market data (Pinnacle odds, Elo) and real-world context (injuries, referees).</p>
+<hr class='md-hr'>
+<h2 id="part-7-implementation-roadmap" class="md-h2 section-header">Part 7 &mdash; Implementation Roadmap</h2>
+<h3 id="phase-1-this-week-0-20month" class="md-h3 subsection-header">Phase 1: This Week &mdash; $0-20/month</h3>
+<div class='table-wrapper'><table><thead><tr><th>Action</th><th>Cost</th><th>Effort</th><th>Impact</th></tr></thead><tbody><tr><td>Add Pinnacle opening odds as model features</td><td>$0</td><td>2-3 days</td><td>7-9% Brier improvement</td></tr><tr><td>Add CLV tracking to Model Health page</td><td>$0</td><td>1 day</td><td>Answers "is my edge real?"</td></tr><tr><td>Choose and integrate odds API (The Odds API or API-Football Pro)</td><td>$20/mo</td><td>4-6 hrs or 5 min</td><td>Unblocks daily predictions</td></tr></tbody></table></div>
+<p class="md-p"><strong>Decision: The Odds API vs API-Football Pro</strong></p>
+<div class='table-wrapper'><table><thead><tr><th>If you want...</th><th>Choose...</th></tr></thead><tbody><tr><td>Zero dev effort, fastest launch</td><td>API-Football Pro ($20/mo) &mdash; code already written</td></tr><tr><td>Most bookmakers (50+), FanDuel odds</td><td>The Odds API ($20/mo) &mdash; new scraper needed</td></tr><tr><td>Both odds + injuries/lineups</td><td>API-Football Pro (injuries included)</td></tr><tr><td>Maximum redundancy</td><td>Both ($40/mo total)</td></tr></tbody></table></div>
+<h3 id="phase-2-month-1-2-same-20month" class="md-h3 subsection-header">Phase 2: Month 1-2 &mdash; Same $20/month</h3>
+<div class='table-wrapper'><table><thead><tr><th>Action</th><th>Cost</th><th>Effort</th><th>Impact</th></tr></thead><tbody><tr><td>Integrate ClubElo ratings</td><td>$0</td><td>1-2 days</td><td>1-8% Brier (esp. early season)</td></tr><tr><td>Add referee features</td><td>$0</td><td>1-2 days</td><td>1-2% Brier (BTTS/OU)</td></tr><tr><td>Add Asian Handicap line features</td><td>$0</td><td>1 day</td><td>2-4% Brier</td></tr><tr><td>Add Pinnacle API for edge validation</td><td>$0</td><td>4-6 hrs</td><td>Validates edge vs sharp line</td></tr><tr><td>Complete 100+ paper bets</td><td>$0</td><td>Ongoing</td><td>Go/no-go for real money</td></tr></tbody></table></div>
+<h3 id="phase-3-month-3-4-20-70month" class="md-h3 subsection-header">Phase 3: Month 3-4 &mdash; $20-70/month</h3>
+<div class='table-wrapper'><table><thead><tr><th>Action</th><th>Cost</th><th>Effort</th><th>Impact</th></tr></thead><tbody><tr><td>Add injury data (API-Football Pro or manual)</td><td>$0-20/mo</td><td>1-3 days</td><td>3-6% Brier</td></tr><tr><td>Set-piece xG breakdown</td><td>$0</td><td>1-2 days</td><td>1-3% Brier</td></tr><tr><td>Fixture congestion flags</td><td>$0</td><td>1 day</td><td>2-3% Brier</td></tr><tr><td>Betfair Exchange CLV (if model profitable)</td><td>$0-49/mo</td><td>30-50 hrs</td><td>Gold-standard validation</td></tr></tbody></table></div>
+<h3 id="phase-4-year-2-40-150month" class="md-h3 subsection-header">Phase 4: Year 2+ &mdash; $40-150/month</h3>
+<div class='table-wrapper'><table><thead><tr><th>Action</th><th>Cost</th><th>Effort</th><th>Impact</th></tr></thead><tbody><tr><td>Multi-league expansion (La Liga, Serie A)</td><td>$0</td><td>Config changes</td><td>More betting volume</td></tr><tr><td>The Odds API for US books (if not Phase 1)</td><td>$20/mo</td><td>4-6 hrs</td><td>FanDuel/DraftKings odds</td></tr><tr><td>Football-Data.co.uk Premium</td><td>$20/mo</td><td>Minimal</td><td>30-year backtest</td></tr><tr><td>Best-odds routing across all bookmakers</td><td>$0</td><td>10-16 hrs</td><td>Maximise value extraction</td></tr></tbody></table></div>
+<hr class='md-hr'>
+<h2 id="part-8-risk-analysis" class="md-h2 section-header">Part 8 &mdash; Risk Analysis</h2>
+<h3 id="single-points-of-failure-current" class="md-h3 subsection-header">Single Points of Failure (Current)</h3>
+<div class='table-wrapper'><table><thead><tr><th>Dependency</th><th>What Breaks If It Fails</th><th>Mitigation</th></tr></thead><tbody><tr><td>Football-Data.co.uk</td><td>All historical odds + closing odds</td><td>The Odds API as backup</td></tr><tr><td>Understat</td><td>All xG features</td><td>FotMob as backup xG source</td></tr><tr><td>GitHub Actions</td><td>All automated runs</td><td>Manual <code class="inline-code">python run_pipeline.py</code></td></tr><tr><td>SQLite database file</td><td>Everything</td><td><code class="inline-code">scripts/backup_db.sh</code></td></tr></tbody></table></div>
+<h3 id="risk-of-new-sources" class="md-h3 subsection-header">Risk of New Sources</h3>
+<div class='table-wrapper'><table><thead><tr><th>Source</th><th>Biggest Risk</th><th>Likelihood</th><th>Mitigation</th></tr></thead><tbody><tr><td>The Odds API</td><td>Free tier quota exhausted</td><td>Low (single league)</td><td>Upgrade to Pro or cache aggressively</td></tr><tr><td>API-Football Pro</td><td>Price increase</td><td>Medium</td><td>The Odds API as alternative</td></tr><tr><td>Pinnacle API</td><td>Account restricted</td><td>Medium</td><td>Use The Odds API for Pinnacle odds instead</td></tr><tr><td>ClubElo</td><td>Site goes down</td><td>Low (10+ year history)</td><td>Cache ratings locally, update weekly</td></tr></tbody></table></div>
+<h3 id="data-supply-chain" class="md-h3 subsection-header">Data Supply Chain</h3>
+<div class="code-block"><pre><code>OPTA (Stats Perform) ─── sole upstream for advanced stats
+├── StatsBomb ──→ FotMob (xG, lineups)
+├── SofaScore, Flashscore, ESPN
+└── Enterprise clients
+
+Bookmakers ─── independent odds pricing
+├── Pinnacle (sharp) ──→ Pinnacle API (free)
+├── Bet365, William Hill, etc. ──→ API-Football, The Odds API
+├── FanDuel, DraftKings ──→ The Odds API only
+└── Betfair Exchange ──→ Betfair API
+
+Free aggregators ─── secondary distribution
+├── Football-Data.co.uk (CSVs, delayed)
+├── Understat (xG, independent model)
+└── ClubElo (Elo ratings, independent)</code></pre></div>
+<p class="md-p"><strong>Key insight:</strong> Odds data has multiple independent sources (each bookmaker prices independently). This is structurally more resilient than xG data (which traces back to Opta). Losing one odds source is recoverable; losing Understat would be painful.</p>
+<hr class='md-hr'>
+<h2 id="part-9-the-honest-assessment" class="md-h2 section-header">Part 9 &mdash; The Honest Assessment</h2>
+<h3 id="what-data-can-and-cant-do" class="md-h3 subsection-header">What Data Can and Can't Do</h3>
+<p class="md-p">BetVector's competitive advantage does <strong>not</strong> come from having more data than bookmakers. Bookmakers have Opta event-level data, proprietary player tracking, real-time injury intelligence, and teams of quantitative analysts with decades of experience. A $20/month data budget cannot compete with that.</p>
+<p class="md-p"><strong>Where BetVector's edge lives:</strong></p>
+<ol class='md-list'><li><strong>Feature engineering quality</strong> &mdash; How you transform publicly available data into predictive features matters more than the data itself. BetVector's rolling windows, home/away splits, xG features, and contextual signals are well-designed. Adding Pinnacle odds as features lets the model learn from the market's information, not compete against it.</li></ol>
+<ol class='md-list'><li><strong>Calibration discipline</strong> &mdash; A well-calibrated model that knows its own uncertainty outperforms an overconfident one. BetVector's self-improvement engine (auto-recalibration, Brier monitoring, guardrails) is the defensive moat.</li></ol>
+<ol class='md-list'><li><strong>Execution discipline</strong> &mdash; Kelly staking, bankroll management, edge thresholds, and the discipline to not bet when there's no edge. Most bettors overtrade. BetVector's automated system removes emotion.</li></ol>
+<ol class='md-list'><li><strong>Market inefficiency hunting</strong> &mdash; The edge isn't in being smarter than Pinnacle. It's in finding matches where consumer bookmakers (Bet365, FanDuel) offer odds that are worse than their own model suggests, because those books pad margins or shade lines based on public money flow. The Pinnacle line tells you when consumer-book odds are mispriced.</li></ol>
+<p class="md-p"><strong>Implication:</strong> $20/month on The Odds API or API-Football Pro delivers more ROI than $5,000/month on Opta &mdash; because the marginal data quality improvement doesn't justify 250x the cost. The improvements that matter most (Pinnacle odds as features, CLV tracking, Elo ratings) are all free.</p>
+<hr class='md-hr'>
+<h2 id="appendix-a-academic-references" class="md-h2 section-header">Appendix A &mdash; Academic References</h2>
+<ul class='md-list'><li>Buraimo, Forrest & Simmons (2010). "The twelfth man?: Refereeing bias in English and German soccer." <em>JRSS Series A</em>, 173(2), 431-449.</li>
+<li>Carling et al. (2015). "Match Running Performance During Fixture Congestion in Elite Soccer." <em>Int J Sports Med</em>, 36(02), 137-144.</li>
+<li>Constantinou, A.C. (2022, 2024). "Dolores: A model that predicts football match outcomes." <em>Machine Learning / Knowledge-Based Systems</em>.</li>
+<li>Dixon, M. & Coles, S. (1997). "Modelling Association Football Scores." <em>Applied Statistics</em>, 46(2), 265-280.</li>
+<li>Hubacek, Sourek & Zelezny (2019, 2022, 2023). Football prediction using machine learning. <em>ECML-PKDD Proceedings</em>.</li>
+<li>Jones et al. (2024). EPL-specific injury impact analysis. <em>Journal of Sports Analytics</em>.</li>
+<li>Ley, Van De Wiele & Van Eetvelde (2019). "Ranking Soccer Teams on Current Strength." <em>Statistical Modelling</em>, 19(1).</li>
+<li>Stübinger & Knoll (2020, 2023). "Beat the bookmaker &mdash; machine learning in football." <em>European Journal of Operational Research</em>.</li>
+<li>Westfall & Yarkoni (2016). "Statistically Controlling for Confounding Constructs." <em>PLOS ONE</em>.</li>
+<li>Buchdahl, J. (2016, 2023). <em>Squares and Sharps, Suckers and Sharks</em>. High Stakes Publishing.</li></ul>
+<h2 id="appendix-b-source-comparison-full-matrix" class="md-h2 section-header">Appendix B &mdash; Source Comparison (Full Matrix)</h2>
+<div class='table-wrapper'><table><thead><tr><th>Source</th><th>Cost</th><th>xG</th><th>Odds</th><th>Injuries</th><th>Lineups</th><th>Leagues</th><th>Freshness</th><th>Stability</th><th>Pinnacle</th><th>FanDuel</th></tr></thead><tbody><tr><td>Football-Data.co.uk</td><td>Free</td><td>No</td><td>50+ books</td><td>No</td><td>No</td><td>25+</td><td>2-7 days</td><td>High</td><td>Closing</td><td>No</td></tr><tr><td>The Odds API</td><td>$0-20/mo</td><td>No</td><td>50+ books</td><td>No</td><td>No</td><td>50+</td><td>5-30 min</td><td>High</td><td>Pre-match</td><td>Yes</td></tr><tr><td>API-Football Pro</td><td>$20/mo</td><td>No</td><td>20+ books</td><td>Yes</td><td>Yes</td><td>600+</td><td>Real-time</td><td>High</td><td>Pre-match</td><td>No</td></tr><tr><td>Pinnacle API</td><td>Free</td><td>No</td><td>1 (sharp)</td><td>No</td><td>No</td><td>30+</td><td>Real-time</td><td>High</td><td>Direct</td><td>No</td></tr><tr><td>Betfair Exchange</td><td>$0-49/mo</td><td>No</td><td>Exchange</td><td>No</td><td>No</td><td>30+</td><td>Real-time</td><td>High</td><td>N/A</td><td>No</td></tr><tr><td>Understat</td><td>Free</td><td>Yes</td><td>No</td><td>No</td><td>No</td><td>5</td><td>Post-match</td><td>Medium</td><td>No</td><td>No</td></tr><tr><td>FotMob</td><td>Free</td><td>Yes</td><td><strong>No</strong></td><td>Partial</td><td>Yes</td><td>50+</td><td>Real-time</td><td>Medium</td><td>No</td><td>No</td></tr><tr><td>ClubElo</td><td>Free</td><td>No</td><td>No</td><td>No</td><td>No</td><td>All Europe</td><td>Daily</td><td>High</td><td>No</td><td>No</td></tr><tr><td>Open-Meteo</td><td>Free</td><td>No</td><td>No</td><td>No</td><td>No</td><td>N/A</td><td>Forecast</td><td>High</td><td>No</td><td>No</td></tr></tbody></table></div>
+<hr class='md-hr'>
+<p class="md-p"><em>Report compiled March 2, 2026. Synthesised from competitive analysis, academic literature review, data source evaluation, and BetVector codebase audit. Pricing and availability verified against most recent available documentation.</em></p>
+    </main>
+  </div>
+
+  <button class="back-to-top" id="backToTop" title="Back to top">&uarr;</button>
+
+  <script>
+    // Hamburger toggle
+    const hamburger = document.getElementById('hamburger');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('overlay');
+
+    if (hamburger) {
+      hamburger.addEventListener('click', () => {
+        sidebar.classList.toggle('open');
+        overlay.classList.toggle('open');
+      });
+    }
+    if (overlay) {
+      overlay.addEventListener('click', () => {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('open');
+      });
+    }
+
+    // Close sidebar on link click (mobile)
+    document.querySelectorAll('.toc-item').forEach(link => {
+      link.addEventListener('click', () => {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('open');
+      });
+    });
+
+    // Back to top
+    const btt = document.getElementById('backToTop');
+    window.addEventListener('scroll', () => {
+      if (window.scrollY > 400) {
+        btt.classList.add('visible');
+      } else {
+        btt.classList.remove('visible');
+      }
+    });
+    btt.addEventListener('click', () => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    // Active TOC highlighting
+    const tocLinks = document.querySelectorAll('.toc-item');
+    const headings = [];
+    tocLinks.forEach(link => {
+      const id = link.getAttribute('href').substring(1);
+      const el = document.getElementById(id);
+      if (el) headings.push({ el, link });
+    });
+
+    function updateActiveToc() {
+      let current = null;
+      for (const h of headings) {
+        if (h.el.getBoundingClientRect().top <= 100) {
+          current = h;
+        }
+      }
+      tocLinks.forEach(l => l.classList.remove('active'));
+      if (current) current.link.classList.add('active');
+    }
+    window.addEventListener('scroll', updateActiveToc);
+    updateActiveToc();
+    </script>
+</body>
+</html>

@@ -392,7 +392,7 @@ class Odds(Base):
     bookmaker = Column(String, nullable=False)             # e.g. "Bet365", "market_avg"
     market_type = Column(String, nullable=False)
     selection = Column(String, nullable=False)
-    # odds_decimal: European decimal format (e.g. 2.10 means £2.10 return per £1)
+    # odds_decimal: European decimal format (e.g. 2.10 means $2.10 return per $1)
     odds_decimal = Column(Float, nullable=False)
     # implied_prob: 1.0 / odds_decimal — the bookmaker's raw probability
     # estimate (includes overround / vig)

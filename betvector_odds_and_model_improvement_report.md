@@ -207,7 +207,7 @@ response = requests.get(url, auth=HTTPBasicAuth(user, pwd), timeout=10)
 | **Freshness** | Real-time (WebSocket streaming available) |
 | **Auth** | Account + mTLS certificates (complex setup) |
 | **Python library** | `betfairlightweight` (well-maintained, production-grade) |
-| **Historical data** | Free: 1 year. Full archive: ~£150/year |
+| **Historical data** | Free: 1 year. Full archive: ~$150/year |
 
 **Why it matters:**
 Betfair closing odds are the industry gold standard for "true" probability because they're set by the market (millions of pounds matched), not by a bookmaker's margin model. If BetVector consistently beats Betfair closing odds (positive CLV), the edge is validated beyond reasonable doubt.
@@ -577,7 +577,7 @@ BetVector already has a strong feature set — better than most open-source mode
 |--------|------|--------|--------|
 | Multi-league expansion (La Liga, Serie A) | $0 | Config changes | More betting volume |
 | The Odds API for US books (if not Phase 1) | $20/mo | 4-6 hrs | FanDuel/DraftKings odds |
-| Football-Data.co.uk Premium | £20/mo | Minimal | 30-year backtest |
+| Football-Data.co.uk Premium | $20/mo | Minimal | 30-year backtest |
 | Best-odds routing across all bookmakers | $0 | 10-16 hrs | Maximise value extraction |
 
 ---

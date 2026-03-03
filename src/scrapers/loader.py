@@ -574,7 +574,7 @@ def _insert_odds(
         return False
 
     # Calculate implied probability from decimal odds
-    # Decimal odds of 2.10 means you get £2.10 back for a £1 bet (£1.10 profit)
+    # Decimal odds of 2.10 means you get $2.10 back for a $1 bet ($1.10 profit)
     # Implied probability = 1 / 2.10 = 0.4762 (47.62%)
     implied_prob = 1.0 / odds_decimal
 

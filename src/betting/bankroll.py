@@ -17,7 +17,7 @@ This module supports three staking methods:
 
 1. **Flat staking** (default):
    stake = current_bankroll × stake_percentage
-   Example: £1000 × 0.02 = £20 per bet.  Simple and conservative.
+   Example: $1000 × 0.02 = $20 per bet.  Simple and conservative.
    Recommended for beginners.
 
 2. **Percentage staking**:
@@ -53,8 +53,8 @@ This module supports three staking methods:
    quarter-Kelly, i.e. kelly_fraction = 0.25):
 
      stake = f* × kelly_fraction × current_bankroll
-           = 0.2364 × 0.25 × £1000
-           = £59.09
+           = 0.2364 × 0.25 × $1000
+           = $59.09
 
    **When model_prob × odds < 1** (negative expected value), the Kelly
    formula yields a negative number, meaning "don't bet".  We return
@@ -196,19 +196,19 @@ class BankrollManager:
         # Build message
         if final_stake == 0.0 and method == "kelly":
             msg = (
-                f"Kelly stake is £0 — negative expected value "
+                f"Kelly stake is $0 — negative expected value "
                 f"(model_prob × odds = {model_prob * odds:.3f} < 1.0)"
             )
         elif capped_stake < raw_stake:
             msg = (
                 f"Stake capped at {max_bet_pct:.0%} of bankroll "
-                f"(£{max_stake:.2f}). "
-                f"Raw {method} stake was £{raw_stake:.2f}."
+                f"(${max_stake:.2f}). "
+                f"Raw {method} stake was ${raw_stake:.2f}."
             )
         else:
             msg = (
                 f"{method.capitalize()} stake: "
-                f"£{final_stake:.2f} ({final_stake/bankroll:.1%} of bankroll)"
+                f"${final_stake:.2f} ({final_stake/bankroll:.1%} of bankroll)"
             )
 
         # Include drawdown warning if applicable
@@ -279,19 +279,19 @@ class BankrollManager:
         messages = []
         if daily_limit_hit:
             messages.append(
-                f"Daily loss limit hit: £{daily_losses:.2f} lost today "
-                f"(limit: £{daily_limit_amount:.2f}). No more bets today."
+                f"Daily loss limit hit: ${daily_losses:.2f} lost today "
+                f"(limit: ${daily_limit_amount:.2f}). No more bets today."
             )
         if drawdown_warning:
             drawdown_actual = (peak_bankroll - current) / peak_bankroll
             messages.append(
-                f"Drawdown warning: Bankroll £{current:.2f} is "
-                f"{drawdown_actual:.1%} below peak £{peak_bankroll:.2f}."
+                f"Drawdown warning: Bankroll ${current:.2f} is "
+                f"{drawdown_actual:.1%} below peak ${peak_bankroll:.2f}."
             )
         if min_bankroll_hit:
             messages.append(
-                f"Minimum bankroll breached: £{current:.2f} is below "
-                f"£{min_bankroll:.2f} (50% of starting). "
+                f"Minimum bankroll breached: ${current:.2f} is below "
+                f"${min_bankroll:.2f} (50% of starting). "
                 f"Paper trading only."
             )
         if not messages:
@@ -330,13 +330,13 @@ class BankrollManager:
           p = 0.60 (model says 60% chance)
           b = 2.10 (bookmaker offers 2.10)
           kelly_fraction = 0.25 (quarter-Kelly)
-          bankroll = £1000
+          bankroll = $1000
 
           f* = (0.60 × 2.10 - 1) / (2.10 - 1)
              = (1.26 - 1) / 1.10
              = 0.2364
 
-          stake = 0.2364 × 0.25 × £1000 = £59.09
+          stake = 0.2364 × 0.25 × $1000 = $59.09
 
         If model_prob × odds < 1, the expected value is negative and we
         should NOT bet.  The formula returns a negative fraction, which
