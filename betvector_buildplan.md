@@ -3041,7 +3041,7 @@ These 4 issues fix the core daily workflow: land on Fixtures → scan today's ma
 **Type:** Bug Fix + Enhancement — Dashboard
 **Depends on:** E24-01 (picks page)
 **MP refs:** §3 Flow 1 (Morning Prediction), §8 Design System
-**Status:** TODO
+**Status:** DONE — 906 duplicate cards → 35 unique picks. Date range filter, edge slider, grouped by date.
 
 **Problem:** `get_upcoming_value_bets()` returns all ValueBet rows — one per bookmaker. DB has 906 rows for 35 unique (match_id, market_type, selection) combos. The render loop shows every row as a separate card.
 
@@ -3078,7 +3078,7 @@ These 4 issues fix the core daily workflow: land on Fixtures → scan today's ma
 **Type:** Bug Fix + Enhancement — Dashboard
 **Depends on:** E9-05 (match detail page), E24-02 (deep dive fixes)
 **MP refs:** §3 Flow 4 (Dashboard Exploration), §8 Design System
-**Status:** TODO
+**Status:** DONE — session_state nav replaces query_params (Streamlit 1.41 fix). Picker split into Upcoming + Recent tabs.
 
 **Problem 1:** `st.query_params` set before `st.switch_page()` are lost during page transition in Streamlit 1.41. Users click "Deep Dive" from Picks or Fixtures and land on the picker, not the analysis.
 

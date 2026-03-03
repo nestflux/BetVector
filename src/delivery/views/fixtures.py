@@ -573,11 +573,13 @@ else:
                 unsafe_allow_html=True,
             )
 
-            # "Deep Dive" button — navigates to Match Deep Dive with match_id
+            # "Deep Dive" button — navigates to Match Deep Dive with match_id.
+            # E26-02: Use session_state to pass match_id across pages — query_params
+            # set before st.switch_page() are lost in Streamlit 1.41.
             if st.button(
                 "\U0001F50D Deep Dive",
                 key=f"fixture_dive_{fix['match_id']}",
                 type="secondary",
             ):
-                st.query_params["match_id"] = str(fix["match_id"])
+                st.session_state["deep_dive_match_id"] = fix["match_id"]
                 st.switch_page("views/match_detail.py")

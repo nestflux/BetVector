@@ -421,13 +421,15 @@ def render_value_bet_card(vb: Dict, idx) -> None:
     st.markdown(card_html, unsafe_allow_html=True)
 
     # Action row — Deep Dive button + Mark as Placed expander
-    # Deep Dive navigates to Match Deep Dive for the full analysis narrative
+    # Deep Dive navigates to Match Deep Dive for the full analysis narrative.
+    # E26-02: Use session_state to pass match_id across pages — query_params
+    # set before st.switch_page() are lost in Streamlit 1.41.
     if st.button(
         "\U0001F50D Deep Dive",
         key=f"pick_dive_{idx}",
         type="secondary",
     ):
-        st.query_params["match_id"] = str(vb["match_id"])
+        st.session_state["deep_dive_match_id"] = vb["match_id"]
         st.switch_page("views/match_detail.py")
 
     # "Mark as Placed" — only for scheduled matches (E24-01)

@@ -1,9 +1,17 @@
 """
-BetVector — Match Deep Dive View (E9-05)
-==========================================
+BetVector — Match Deep Dive View (E9-05, E26-02)
+===================================================
 Comprehensive analysis for a single match.  Accessible from Today's Picks
-cards and League Explorer upcoming fixtures via ``?match_id=<id>`` query
-parameter.
+cards and Fixtures page via ``st.session_state["deep_dive_match_id"]``
+(preferred) or ``?match_id=<id>`` query parameter (URL sharing fallback).
+
+E26-02 changes:
+- Navigation uses session_state (not query_params) from Picks/Fixtures pages
+  to avoid Streamlit 1.41 param-loss on st.switch_page().
+- Match picker split into "Upcoming" and "Recent Results" tabs so users can
+  browse future matches for pre-match analysis, not just finished matches.
+- session_state is popped after reading (one-time use) and synced to
+  query_params so the URL remains shareable.
 
 Sections:
 1. Match header — teams, date, kickoff, league, actual result (if finished)
@@ -470,12 +478,38 @@ def render_match_narrative(data: dict) -> None:
 # Page Layout
 # ============================================================================
 
-# Get match_id from query params
-params = st.query_params
-match_id_str = params.get("match_id", None)
+# --- E26-02: Resolve match_id from multiple sources ---
+# Priority:
+#   1. st.session_state["deep_dive_match_id"]  (set by Picks/Fixtures pages)
+#   2. st.query_params["match_id"]             (URL sharing / direct link)
+#
+# Pop from session_state after reading so it doesn't persist across
+# unrelated page visits.  Sync to query_params so the URL is shareable.
+from datetime import date as _date_type
 
-if not match_id_str:
-    # No match selected — show a picker for demo/development
+_match_id_resolved: int | None = None
+
+# Source 1: session_state (cross-page navigation from Picks/Fixtures)
+if "deep_dive_match_id" in st.session_state:
+    _match_id_resolved = int(st.session_state.pop("deep_dive_match_id"))
+    # Sync to query_params so the URL stays shareable
+    st.query_params["match_id"] = str(_match_id_resolved)
+
+# Source 2: query_params (direct URL / refresh)
+if _match_id_resolved is None:
+    _qp = st.query_params.get("match_id", None)
+    if _qp:
+        try:
+            _match_id_resolved = int(_qp)
+        except (ValueError, TypeError):
+            _match_id_resolved = None
+
+if _match_id_resolved is None:
+    # -----------------------------------------------------------------
+    # No match selected — show a tabbed picker (E26-02)
+    # "Upcoming" = scheduled matches for pre-match analysis
+    # "Recent Results" = finished matches for post-match review
+    # -----------------------------------------------------------------
     st.markdown(
         '<div class="bv-page-title">Match Deep Dive</div>',
         unsafe_allow_html=True,
@@ -486,47 +520,83 @@ if not match_id_str:
     )
     st.divider()
 
-    # Show a match selector for development/navigation
-    with get_session() as session:
-        HomeTeam = aliased(Team)
-        AwayTeam = aliased(Team)
-        recent = (
-            session.query(Match, HomeTeam.name, AwayTeam.name)
-            .join(HomeTeam, Match.home_team_id == HomeTeam.id)
-            .join(AwayTeam, Match.away_team_id == AwayTeam.id)
-            .filter(Match.status == "finished")
-            .order_by(Match.date.desc())
-            .limit(20)
-            .all()
-        )
+    tab_upcoming, tab_recent = st.tabs(["Upcoming", "Recent Results"])
 
-    if recent:
-        match_options = {
-            m.id: f"{m.date}: {hn} vs {an}" for m, hn, an in recent
-        }
-        selected_id = st.selectbox(
-            "Select a match",
-            options=list(match_options.keys()),
-            format_func=lambda x: match_options[x],
-        )
-        if st.button("View Analysis", type="primary"):
-            st.query_params["match_id"] = str(selected_id)
-            st.rerun()
-    else:
-        st.markdown(
-            '<div class="bv-empty-state">'
-            "No matches available. Run the pipeline first."
-            "</div>",
-            unsafe_allow_html=True,
-        )
+    with tab_upcoming:
+        with get_session() as session:
+            HomeTeam = aliased(Team)
+            AwayTeam = aliased(Team)
+            today_str = _date_type.today().isoformat()
+            upcoming = (
+                session.query(Match, HomeTeam.name, AwayTeam.name)
+                .join(HomeTeam, Match.home_team_id == HomeTeam.id)
+                .join(AwayTeam, Match.away_team_id == AwayTeam.id)
+                .filter(Match.status == "scheduled")
+                .filter(Match.date >= today_str)
+                .order_by(Match.date.asc())
+                .limit(20)
+                .all()
+            )
+
+        if upcoming:
+            upcoming_options = {
+                m.id: f"{m.date}: {hn} vs {an}" for m, hn, an in upcoming
+            }
+            selected_upcoming = st.selectbox(
+                "Select an upcoming match",
+                options=list(upcoming_options.keys()),
+                format_func=lambda x: upcoming_options[x],
+                key="upcoming_picker",
+            )
+            if st.button("View Analysis", type="primary", key="view_upcoming"):
+                st.query_params["match_id"] = str(selected_upcoming)
+                st.rerun()
+        else:
+            st.markdown(
+                '<div class="bv-empty-state">'
+                "No upcoming matches found. The season may be between matchdays."
+                "</div>",
+                unsafe_allow_html=True,
+            )
+
+    with tab_recent:
+        with get_session() as session:
+            HomeTeam = aliased(Team)
+            AwayTeam = aliased(Team)
+            recent = (
+                session.query(Match, HomeTeam.name, AwayTeam.name)
+                .join(HomeTeam, Match.home_team_id == HomeTeam.id)
+                .join(AwayTeam, Match.away_team_id == AwayTeam.id)
+                .filter(Match.status == "finished")
+                .order_by(Match.date.desc())
+                .limit(20)
+                .all()
+            )
+
+        if recent:
+            recent_options = {
+                m.id: f"{m.date}: {hn} vs {an}" for m, hn, an in recent
+            }
+            selected_recent = st.selectbox(
+                "Select a recent match",
+                options=list(recent_options.keys()),
+                format_func=lambda x: recent_options[x],
+                key="recent_picker",
+            )
+            if st.button("View Analysis", type="primary", key="view_recent"):
+                st.query_params["match_id"] = str(selected_recent)
+                st.rerun()
+        else:
+            st.markdown(
+                '<div class="bv-empty-state">'
+                "No finished matches available. Run the pipeline first."
+                "</div>",
+                unsafe_allow_html=True,
+            )
 
 else:
     # Load match data
-    try:
-        match_id = int(match_id_str)
-    except (ValueError, TypeError):
-        st.error("Invalid match ID.")
-        st.stop()
+    match_id = _match_id_resolved
 
     data = load_match_data(match_id)
 

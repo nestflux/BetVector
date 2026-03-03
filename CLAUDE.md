@@ -296,9 +296,9 @@ Wait for owner to respond with approval before making the change.
 
 ## Current Status
 
-Last completed: E25-04 (Promote Best Model)
-Currently working: E26-01 (Fix Today's Picks: Group by Unique Bet + Date Range Filter)
-Next up: E26-02 (Fix Deep Dive Navigation + Future Match Picker)
+Last completed: E26-02 (Fix Deep Dive Navigation + Future Match Picker)
+Currently working: E26-03 (Fixtures as Landing Page + Predicted Scores + Top Picks Banner)
+Next up: E26-04 (Integration Test)
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
