@@ -166,15 +166,17 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E22-02 (Injury Impact Flags)
-Currently working: E23-01 (Load Historical Match Data + Odds)
-Next up: E23-02 (Backfill Understat xG + Advanced Stats)
+Last completed: E23-03 (Backfill Shot-Level xG Breakdown)
+Currently working: E23-04 (Backfill ClubElo for Historical Seasons)
+Next up: E23-05 (Recompute All Features)
 
 E19 complete: All 4 issues done ✅
 E20 complete: All 3 issues done ✅ (Brier 0.6105, ROI -4.15% → -3.50%)
 E21 complete: All 3 issues done ✅ (Elo, referee, congestion features)
 E22 complete: All 2 issues done ✅ (Set-piece xG, injury flags)
-E23 planned: 7 issues (historical data backfill, revalidation, Odds API verification)
+E23-01 complete: ✅ (1,520 matches + 22,800 odds loaded for 2020-21 through 2023-24)
+E23-02 complete: ✅ (3,800 MatchStats with xG/NPxG/PPDA/deep for 2020-21 through 2024-25)
+E23-03 complete: ✅ (3,800 MatchStats updated with set_piece_xg/open_play_xg, 100.3 min)
 Total issues: 84 (45 original + 20 post-launch + 12 odds/model + 7 backfill)
 
 ---
