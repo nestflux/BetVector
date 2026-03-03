@@ -1479,7 +1479,7 @@ Wire all three new scrapers into the existing pipeline and data loader, with DB 
 
 ---
 
-## E15 — Data Freshness & Feature Expansion (Planned)
+## E15 — Data Freshness & Feature Expansion (Completed)
 
 > **Context:** E14 added three new data sources but one gap remains: Football-Data.co.uk only updates 2×/week, and API-Football's free tier can't access 2025-26. We need a near-real-time source for fixtures/results (E15-01), richer features from data we already receive (E15-02), and unique supplementary data (E15-03). See MP §13.4.
 
@@ -1488,7 +1488,7 @@ Wire all three new scrapers into the existing pipeline and data loader, with DB 
 **Type:** Backend
 **Depends on:** E3-01, E14-04
 **Master Plan:** MP §5 Data Sources (post-launch update), MP §13.4
-**Status:** PLANNED
+**Status:** COMPLETED
 
 Build a scraper for the Football-Data.org free REST API to get near-real-time match results and fixtures for the current EPL season. This closes the freshness gap caused by Football-Data.co.uk's twice-weekly CSV updates.
 
@@ -1523,7 +1523,7 @@ Build a scraper for the Football-Data.org free REST API to get near-real-time ma
 **Type:** Backend
 **Depends on:** E14-01
 **Master Plan:** MP §13.4
-**Status:** PLANNED
+**Status:** COMPLETED
 
 Expand the existing Understat scraper to parse additional statistics that the API already returns but are not currently extracted: NPxG, PPDA, shots, and deep completions.
 
@@ -1550,7 +1550,7 @@ Expand the existing Understat scraper to parse additional statistics that the AP
 **Type:** Backend
 **Depends on:** E3-01, E2-02
 **Master Plan:** MP §13.4
-**Status:** PLANNED
+**Status:** COMPLETED
 
 Integrate weekly CSV dumps from the public Transfermarkt Datasets repository on GitHub (CC0 license) for injury data and squad market values — two data dimensions no other free source provides.
 

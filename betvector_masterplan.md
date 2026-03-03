@@ -1,6 +1,6 @@
 # BetVector — Masterplan
 
-Version 1.1 · March 2026
+Version 1.2 · March 2026
 
 ---
 
@@ -287,7 +287,7 @@ The system is designed as a set of independent, composable modules connected thr
 - `statsmodels` 0.14+ — Poisson regression
 - `requests` 2.28+ — HTTP requests for scraping
 - `beautifulsoup4` 4.12+ — HTML parsing for scrapers
-- `soccerdata` 1.0+ — FBref data access
+- `understatapi` 0.3+ — Understat xG/NPxG/PPDA data access (replaced soccerdata/FBref)
 - `pyyaml` 6.0+ — config file parsing
 - `sqlalchemy` 2.0+ — database ORM
 - `plotly` 5.15+ — charts (used by both dashboard and email reports)
@@ -356,10 +356,12 @@ The revised data source landscape:
 | Football-Data.co.uk | **Active** | Match results, odds (50+ bookmakers) | CSV download via HTTP | ~2×/week (Sun, Wed nights) |
 | FBref.com | **Dead** | ~~xG, shots, possession~~ | ~~soccerdata library~~ | N/A — Opta data removed Jan 2026 |
 | API-Football (RapidAPI) | **Dormant** | Fixtures, lineups, injuries, live odds | REST API | Free tier blocked for 2025-26 |
-| Understat | **Active** | xG, xGA per match (team-level) | `understatapi` Python package | Daily (replaces FBref) |
+| Understat | **Active** | xG, xGA, NPxG, PPDA, deep completions, shot-level xG | `understatapi` Python package | Daily (replaces FBref) |
 | Open-Meteo | **Active** | Match-day weather (temp, wind, rain) | Free REST API (no key) | Per-match (forecast + archive) |
-| Football-Data.org | **Planned** | Current-season fixtures and results | Free REST API (10 req/min) | Near real-time |
-| Transfermarkt Datasets | **Planned** | Injuries, squad market values | GitHub CSV dumps (CC0) | Weekly |
+| Football-Data.org | **Active** | Current-season fixtures and results | Free REST API (`X-Auth-Token`, 10 req/min) | Near real-time (E15-01) |
+| Transfermarkt Datasets | **Active** | Squad market values, squad size | CDN CSV dumps (CC0 license) | Weekly (E15-03) |
+| The Odds API | **Active** | Live pre-match odds from 50+ bookmakers | REST API (`THE_ODDS_API_KEY`, 500 req/mo free) | 3×/day in pipeline (E19-01) |
+| ClubElo | **Active** | Historical and current Elo ratings per team | Free CSV API (`api.clubelo.com`, no key) | Daily in morning pipeline (E21-01) |
 
 ### Key Architectural Decisions
 
@@ -465,6 +467,7 @@ CREATE TABLE matches (
     away_goals      INTEGER,                                -- NULL if match not yet played
     home_ht_goals   INTEGER,                                -- Half-time home goals
     away_ht_goals   INTEGER,                                -- Half-time away goals
+    referee         TEXT,                                   -- Match referee name (added E19-03)
     status          TEXT NOT NULL DEFAULT 'scheduled'       -- 'scheduled', 'in_play', 'finished', 'postponed'
         CHECK (status IN ('scheduled', 'in_play', 'finished', 'postponed')),
     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
@@ -496,7 +499,17 @@ CREATE TABLE match_stats (
     fouls           INTEGER,
     yellow_cards    INTEGER,
     red_cards       INTEGER,
-    source          TEXT NOT NULL DEFAULT 'fbref',          -- Where this data came from
+    source          TEXT NOT NULL DEFAULT 'understat',       -- Where this data came from ('understat', 'fbref')
+    -- Advanced stats (added E15-02, populated by Understat)
+    npxg            REAL,                                   -- Non-penalty expected goals (more predictive than raw xG)
+    npxga           REAL,                                   -- Non-penalty expected goals against
+    ppda_coeff      REAL,                                   -- Passes per defensive action (pressing intensity)
+    ppda_allowed_coeff REAL,                                -- PPDA allowed (opponent pressing faced)
+    deep            INTEGER,                                -- Deep completions (passes into final third)
+    deep_allowed    INTEGER,                                -- Deep completions conceded
+    -- Shot-level xG breakdown (added E22-01)
+    set_piece_xg    REAL,                                   -- xG from set pieces (corners, free kicks)
+    open_play_xg    REAL,                                   -- xG from open play
     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(match_id, team_id)
 );
@@ -521,7 +534,7 @@ CREATE TABLE odds (
     implied_prob    REAL NOT NULL,                          -- 1.0 / odds_decimal (raw, before removing overround)
     is_opening      INTEGER NOT NULL DEFAULT 0,             -- 1 = opening odds, 0 = current/closing
     captured_at     TEXT NOT NULL DEFAULT (datetime('now')), -- When these odds were captured
-    source          TEXT NOT NULL DEFAULT 'football_data',  -- 'football_data', 'api_football'
+    source          TEXT NOT NULL DEFAULT 'football_data',  -- 'football_data', 'api_football', 'odds_api'
     UNIQUE(match_id, bookmaker, market_type, selection, captured_at)
 );
 CREATE INDEX idx_odds_match ON odds(match_id);
@@ -579,6 +592,47 @@ CREATE TABLE features (
     rest_days       INTEGER, -- Days since last match
     matchday        INTEGER, -- Matchday number in the season
     season_progress REAL,    -- 0.0 to 1.0, how far through the season
+
+    -- Advanced rolling stats (added E16-01)
+    npxg_5          REAL,    -- Non-penalty xG per game, last 5
+    npxga_5         REAL,    -- Non-penalty xGA per game, last 5
+    npxg_diff_5     REAL,    -- NPxG - NPxGA per game, last 5
+    ppda_5          REAL,    -- PPDA coefficient, last 5
+    ppda_allowed_5  REAL,    -- PPDA allowed, last 5
+    deep_5          REAL,    -- Deep completions per game, last 5
+    deep_allowed_5  REAL,    -- Deep completions conceded per game, last 5
+    -- (Same 7 columns repeated for 10-match window: npxg_10, npxga_10, etc.)
+
+    -- Market value and weather features (added E16-02)
+    market_value_ratio REAL, -- This team's market value / opponent's (capped at 10.0)
+    squad_value_log REAL,    -- log(squad_total_value) for scaling
+    temperature     REAL,    -- Match-day temperature from weather table
+    wind_speed      REAL,    -- Match-day wind speed
+    precipitation   REAL,    -- Match-day precipitation
+    is_heavy_weather INTEGER,-- 1 if wind>40 or precip>5mm or temp<2°C
+
+    -- Market odds features (added E20-01, E20-02)
+    pinnacle_home_prob REAL, -- Pinnacle implied prob, overround-removed
+    pinnacle_draw_prob REAL,
+    pinnacle_away_prob REAL,
+    pinnacle_overround REAL,
+    ah_line         REAL,    -- Asian Handicap home line (added E20-02)
+
+    -- External ratings (added E21-01, E21-02, E21-03)
+    elo_rating      REAL,    -- Team's Elo rating on match date
+    elo_diff        REAL,    -- This team's Elo minus opponent's Elo
+    ref_avg_fouls   REAL,    -- Referee's avg fouls per game (last 20 matches)
+    ref_avg_yellows REAL,    -- Referee's avg yellow cards per game
+    ref_avg_goals   REAL,    -- Avg goals in referee's matches
+    ref_home_win_pct REAL,   -- Home win rate in referee's matches
+    days_since_last_match INTEGER, -- Days since team's most recent match
+    is_congested    INTEGER, -- 1 if <4 days since last match
+
+    -- Set-piece and injury features (added E22-01, E22-02)
+    set_piece_xg_5  REAL,    -- 5-match rolling set-piece xG
+    open_play_xg_5  REAL,    -- 5-match rolling open-play xG
+    injury_impact   REAL,    -- Sum of impact_ratings for "out" players
+    key_player_out  INTEGER, -- 1 if any player with impact_rating >= 0.7 is out
 
     computed_at     TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(match_id, team_id)
@@ -699,8 +753,8 @@ CREATE INDEX idx_bet_log_type ON bet_log(bet_type);
 CREATE TABLE model_performance (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     model_name      TEXT NOT NULL,
-    period_type     TEXT NOT NULL                           -- 'daily', 'weekly', 'monthly', 'season', 'all_time'
-        CHECK (period_type IN ('daily', 'weekly', 'monthly', 'season', 'all_time')),
+    period_type     TEXT NOT NULL                           -- 'daily', 'weekly', 'monthly', 'season', 'all_time', 'backtest'
+        CHECK (period_type IN ('daily', 'weekly', 'monthly', 'season', 'all_time', 'backtest')),
     period_start    TEXT NOT NULL,
     period_end      TEXT NOT NULL,
     total_predictions INTEGER NOT NULL,
@@ -733,6 +787,69 @@ CREATE TABLE pipeline_runs (
     emails_sent     INTEGER DEFAULT 0,
     error_message   TEXT,                                   -- NULL if successful
     duration_seconds REAL
+);
+
+-- ============================================================
+-- WEATHER (added E14-02)
+-- Match-day weather conditions from Open-Meteo API
+-- ============================================================
+CREATE TABLE weather (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    match_id        INTEGER NOT NULL REFERENCES matches(id),
+    temperature     REAL,                                   -- Celsius
+    wind_speed      REAL,                                   -- km/h
+    humidity        REAL,                                   -- Percentage
+    precipitation   REAL,                                   -- mm
+    weather_code    INTEGER,                                -- WMO weather code
+    source          TEXT NOT NULL DEFAULT 'open_meteo',
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(match_id)
+);
+
+-- ============================================================
+-- CLUB_ELO (added E21-01)
+-- Historical Elo ratings per team per date from ClubElo API
+-- ============================================================
+CREATE TABLE club_elo (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    team_id         INTEGER NOT NULL REFERENCES teams(id),
+    elo_rating      REAL NOT NULL,
+    rank            INTEGER,
+    rating_date     TEXT NOT NULL,                          -- ISO date YYYY-MM-DD
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(team_id, rating_date)
+);
+
+-- ============================================================
+-- TEAM_MARKET_VALUES (added E15-03)
+-- Squad market value snapshots from Transfermarkt Datasets
+-- ============================================================
+CREATE TABLE team_market_values (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    team_id         INTEGER NOT NULL REFERENCES teams(id),
+    squad_total_value REAL,                                 -- Total squad value in EUR
+    avg_player_value REAL,                                  -- Average player value in EUR
+    squad_size      INTEGER,
+    contract_expiring_count INTEGER,                        -- Players with contracts expiring within 6 months
+    evaluated_at    TEXT NOT NULL,                          -- Snapshot date
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(team_id, evaluated_at)
+);
+
+-- ============================================================
+-- INJURY_FLAGS (added E22-02)
+-- Manual absence tracking for key player injuries/suspensions
+-- ============================================================
+CREATE TABLE injury_flags (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    team_id         INTEGER NOT NULL REFERENCES teams(id),
+    player_name     TEXT NOT NULL,
+    status          TEXT NOT NULL                           -- 'out', 'doubt', 'suspended'
+        CHECK (status IN ('out', 'doubt', 'suspended')),
+    estimated_return TEXT,
+    impact_rating   REAL NOT NULL DEFAULT 0.5,             -- 0.0 to 1.0 (0.3=rotation, 0.5=starter, 0.7=key, 1.0=star)
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
 ```
 
@@ -1304,3 +1421,100 @@ E14 and E15 added four new data sources — Understat advanced stats (NPxG, PPDA
 - Weather as binary flag — complex non-linear weather effects simplified to a clean signal
 - `evaluated_at <= match_date` for market values — weekly snapshots are static and independent of match results, making same-day comparisons temporally safe
 - Graceful degradation everywhere — all 20 new features default to None, model handles via `fillna(mean).fillna(0.0)` and constant-column dropping
+
+### 13.7 — E17 — Dashboard Feature Surfacing (Completed)
+
+E16 added 20 new features to the prediction model (NPxG, PPDA, deep completions, market value, weather) but none were visible on the dashboard. Users could see predictions but had no insight into *why* the model favoured one team. This epic surfaced the new data across every relevant dashboard page.
+
+**E17-01: Match Deep Dive Enhancements.** Expanded the Match Deep Dive page with three new sections: advanced stats comparison (NPxG, PPDA, deep completions as bar charts), market value comparison (squad total values with ratio indicator), and weather conditions (temperature, wind, precipitation with a heavy-weather warning badge). All data pulled from Feature records via the match's team IDs.
+
+**E17-02: Today's Picks Weather & Market Value Indicators.** Added compact badges to Today's Picks cards — a weather icon with temperature when heavy weather is flagged, and a squad value ratio indicator when the difference exceeds 2×. These give at-a-glance context without cluttering the pick card layout.
+
+**E17-03: League Explorer NPxG Rankings.** Added an NPxG-based team rankings section to the League Explorer page — parallel to the existing xG rankings but using non-penalty expected goals, which strips out the noise of penalty kicks. Fixed hardcoded season defaults across the page so it always loads the current season.
+
+**E17-04: Fixtures Page.** New standalone page showing all upcoming scheduled matches with date, time, and venue. Value picks are highlighted with the model's edge percentage. Each fixture links to its Match Deep Dive page for full analysis. This replaced the old pattern of embedding upcoming matches in the Today's Picks page.
+
+### 13.8 — E18 — Match Narrative & Data Quality (Completed)
+
+The dashboard could display numbers but couldn't explain them. A user seeing "Model: 62% Home Win" had no way to understand *what drove that prediction* — form, xG trends, venue advantage, squad value gap, or pressing intensity. Meanwhile, critical data quality issues (missing kickoff times, features not computed for scheduled matches) undermined the production pipeline.
+
+**E18-01: Match Analysis Narrative.** Created `src/delivery/narrative.py` — an algorithmic narrative engine that synthesises raw model output into plain-English paragraphs. Eight factor generators examine form trends, xG quality gaps, venue strength, H2H records, squad market value differences, pressing intensity (PPDA), weather conditions, and rest day advantages. Each factor contributes a sentence only when the signal is meaningful (e.g., PPDA only mentioned when a team's pressing intensity is >2σ from league average). The output reads like a human analyst's pre-match briefing.
+
+**E18-02: Kickoff Time Fix.** The Football-Data.org API returned full datetime strings but the loader was discarding the time component, causing all fixtures to display "TBD" on the dashboard. Fixed `load_api_football_fixtures()` to parse and store the full ISO 8601 timestamp including time zone offset.
+
+**E18-03: Scheduled Match Feature Computation.** The feature engineering pipeline only processed matches with `status='FT'` (finished). Upcoming matches had no Feature rows, so predictions couldn't run. Extended `compute_all_features()` to include `status='scheduled'` matches, using opponent-specific lookback queries that respect temporal integrity (only completed matches before the scheduled date).
+
+**E18-04: Match Deep Dive Glossary.** Added a collapsible glossary panel to the Match Deep Dive page with 28 definitions organised into 7 categories: Form, xG, Pressing, Model, Market Probabilities, Value, and Squad metrics. Definitions are written for a betting novice learning quantitative concepts (per MP §12 philosophy).
+
+**E18-05: Deep Dive from Today's Picks.** Added a "Deep Dive →" button on each pick card that navigates directly to the full Match Deep Dive page for that fixture. Previously, users had to navigate through League Explorer to find individual matches.
+
+**E18-06: Today's Picks Glossary + TBD Cleanup.** Added a context-specific glossary to the Picks page explaining value bet concepts (edge, EV, Kelly fraction). Cleaned up the "TBD" display — when kickoff time is unknown, the card now shows just the date without a misleading time placeholder.
+
+### 13.9 — E19 — Live Odds Pipeline (Completed)
+
+BetVector's sole odds source — Football-Data.co.uk CSV files — updated only twice per week, creating a 2–7 day freshness gap. Matches beyond the CSV's last update had zero odds data, meaning zero value bets could be identified. This epic integrated a live odds API, extracted additional data from existing CSV columns, and completed the CLV tracking infrastructure.
+
+**E19-01: The Odds API Scraper.** Built `src/scrapers/odds_api.py` (TheOddsAPIScraper) using the free tier of The Odds API — 500 requests/month, with EPL 3×/day pipeline needing only ~90 requests/month. A single API call returns odds from 50+ bookmakers (Pinnacle, Bet365, FanDuel, DraftKings, William Hill, etc.) for all upcoming EPL matches. Includes team name normalisation map (Odds API uses display names like "Arsenal" → canonical "Arsenal"), bookmaker name mapping, and API budget tracking via `x-requests-remaining` response header. Config: `settings.yaml` section for API key env var, regions, and markets.
+
+**E19-02: Odds Loader + Pipeline Integration.** New loader function `load_odds_the_odds_api()` with idempotent upsert (dedup on match_id + bookmaker + market_type + selection). Sets `is_opening=1` for first capture, `is_opening=0` for subsequent updates. Integrated into morning and midday pipeline steps — if The Odds API fails, pipeline falls back to existing CSV odds silently.
+
+**E19-03: Extract Closing Odds + AH + Referee from CSV.** Football-Data.co.uk CSVs contain columns that BetVector was ignoring: `PSCH/PSCD/PSCA` (Pinnacle closing odds), `AHh` (Asian Handicap home line), `BbAHh` (Betbrain AH market average), and `Referee`. Extended `football_data.py` to extract all of these. Closing odds stored with `is_opening=0` and `bookmaker='Pinnacle'`. AH records stored with `market_type='AH'`. Referee name stored on the Match model (`referee TEXT` column added).
+
+**E19-04: CLV Tracking Pipeline.** The CLV infrastructure was 90% built — `BetLog` had `closing_odds` and `clv` columns (always NULL), `metrics.py` had `calculate_clv()` fully implemented, Model Health dashboard had CLV visualisation (showing empty state). The missing piece was a function to populate closing odds after matches finish. Added `backfill_closing_odds()` to the evening pipeline: for each pending BetLog entry, looks up Pinnacle closing odds and computes CLV = (bet_odds − closing_odds) / closing_odds. The existing dashboard auto-populates with real CLV data.
+
+### 13.10 — E20 — Market-Augmented Poisson (Completed)
+
+Academic research (Constantinou 2012, Štrumbelj 2014) shows that incorporating bookmaker odds as features yields 7–9% Brier score improvement — the single highest-impact enhancement available. This is because Pinnacle's odds embed crowd wisdom, injury information, and market sentiment that statistical models can't capture from match data alone.
+
+**E20-01: Pinnacle Opening Odds as Features.** Added 4 new Feature columns: `pinnacle_home_prob`, `pinnacle_draw_prob`, `pinnacle_away_prob`, `pinnacle_overround`. Uses proportional overround removal: `true_prob = (1/odds) / Σ(1/all_odds)` to convert raw odds to fair probabilities. Queries Odds table for Pinnacle 1×2 records, preferring `is_opening=1`. For historical matches, uses PSH/PSD/PSA from CSV. For upcoming matches, uses latest Odds API fetch. 1,180 of 1,520 Feature rows backfilled from CSV data.
+
+**E20-02: Asian Handicap Line as Feature.** Added `ah_line` Feature column — the Asian Handicap home line (e.g., -0.5, -1.0) is the sharpest market-implied strength difference available. The line itself IS the feature — no conversion needed. Queried from Odds table with market_type='AH', preferring Pinnacle, falling back to market average.
+
+**E20-03: Backtest Market-Augmented vs Base Poisson.** Walk-forward backtest on EPL 2024-25 (380 matches): Brier score 0.6105 (unchanged — Poisson GLM is limited in exploiting non-linear odds features), but ROI improved from -4.15% to -3.50% (+0.65pp). The odds features helped value detection more than probability calibration. The Brier-unchanged result confirmed the Poisson GLM architecture is near its ceiling — further improvement requires more training data (E23) or non-linear models (future XGBoost ensemble).
+
+### 13.11 — E21 — External Ratings & Context (Completed)
+
+Three context signals that don't exist in match statistics: long-term team quality (Elo ratings — especially valuable for promoted teams with no top-flight history), referee tendencies (some referees consistently produce higher-scoring matches), and fixture congestion (teams playing every 3 days underperform).
+
+**E21-01: ClubElo Scraper + Elo Features.** Built `src/scrapers/clubelo_scraper.py` using the free ClubElo API (`http://api.clubelo.com/{YYYY-MM-DD}` — no auth, no rate limit). Returns Elo ratings for all clubs on any given date. New `ClubElo` ORM model with UniqueConstraint on `(team_id, rating_date)`. Two new Feature columns: `elo_rating` (team's absolute Elo) and `elo_diff` (team Elo minus opponent Elo). Elo is particularly valuable early in the season for promoted teams — they have zero top-flight form data but Elo captures their Championship strength. Integrated into morning pipeline. 4,738 records backfilled for 2024-25 and 2025-26.
+
+**E21-02: Referee Features.** Four new Feature columns computed from referee history: `ref_avg_fouls`, `ref_avg_yellows`, `ref_avg_goals`, `ref_home_win_pct`. Uses a lookback of the referee's last 20 EPL matches (minimum 5 required, otherwise NULL). Only `ref_avg_goals` and `ref_home_win_pct` were added to the Poisson model — fouls and yellows don't directly predict goals. The referee features are most impactful for Over/Under and BTTS markets where the officiating environment affects goal-scoring.
+
+**E21-03: Fixture Congestion Flag.** Two new Feature columns: `days_since_last_match` (integer, any competition) and `is_congested` (binary: 1 if <4 days since last match). The 4-day threshold comes from sports science research (Carling et al. 2015) showing significant performance drops in European football when rest is under 4 days. 155 of 1,520 historical Feature rows flagged as congested (~10% — aligns with expected rate for teams in European competitions).
+
+### 13.12 — E22 — Advanced Features (Completed)
+
+Two specialised features: decomposing expected goals by situation type (set pieces vs open play — different predictive profiles), and a manual injury input system for when key players are absent.
+
+**E22-01: Set-Piece xG Breakdown.** Extended the Understat scraper to fetch shot-level data with `situation` field (OpenPlay, SetPiece, FromCorner, Counter). New MatchStat columns: `set_piece_xg` and `open_play_xg`. New Feature columns: `set_piece_xg_5` and `open_play_xg_5` (5-match rolling averages). Set-piece xG is distinctly predictive because set-piece proficiency is more repeatable than open-play quality (lower variance season-to-season). A team strong at set pieces but weak in open play has a different risk profile than the reverse.
+
+**E22-02: Injury Impact Flags (Manual Input).** New `InjuryFlag` ORM model with fields: `team_id`, `player_name`, `status` (out/doubt/suspended), `estimated_return`, and `impact_rating` (0.0–1.0 scale: 0.3 rotation player, 0.5 regular starter, 0.7 key player, 1.0 star player). New Feature columns: `injury_impact` (sum of impact_ratings for "out" players) and `key_player_out` (binary: 1 if any player with rating ≥0.7 is out). Settings page UI allows manual entry until API-Football Pro ($20/month) auto-populates from their injuries endpoint.
+
+### 13.13 — E23 — Historical Data Backfill & Model Revalidation (Completed)
+
+The model trained on just 2 seasons (760 matches) — a dangerously small sample for a Poisson GLM with 17+ features. Overfitting risk was high, and the model had never seen promoted teams that aren't in the current EPL. This epic tripled the training data to 6 seasons (~2,280 matches) and revalidated model performance.
+
+**E23-01: Load Historical Match Data + Odds.** Downloaded Football-Data.co.uk CSV files for 4 additional seasons (2020-21 through 2023-24). Loaded 1,520 new Match records with full result data, plus 22,800 Odds records (Pinnacle opening/closing, Asian Handicap, and referee data). Uses the same loader functions as the live pipeline — just pointed at historical CSV files.
+
+**E23-02: Backfill Understat xG + Advanced Stats.** Fetched 5 seasons of Understat data (2020-21 through 2024-25) via the `understatapi` library. Created 3,800 MatchStat records with xG, xGA, NPxG, NPxGA, PPDA coefficient, PPDA allowed coefficient, deep completions, and deep allowed. Rate-limited to 2 seconds per API call.
+
+**E23-03: Backfill Shot-Level xG Breakdown.** The slowest step (~100 minutes) — fetched individual shot data for each of 3,800 matches from Understat to decompose xG into set-piece and open-play components. Updated all MatchStat records with `set_piece_xg` and `open_play_xg`.
+
+**E23-04: Backfill ClubElo for Historical Seasons.** Fetched Elo ratings for 495 unique match dates across 4 historical seasons from the ClubElo API. Created 13,227 new ClubElo records (17,965 total). Fixed team name mapping bug: "West Brom"/"WestBrom" → "West Bromwich Albion". 28 unique teams across all 6 seasons with 100% match-date coverage.
+
+**E23-05: Recompute All Features.** Recomputed the entire Feature table for all 6 seasons with complete data. 4,560 Feature rows (6 seasons × 380 matches × 2 teams). Coverage: xG 97–100%, Elo 100%, Pinnacle odds 78% (historical), referee 85%. All rolling windows now have sufficient lookback depth.
+
+**E23-06: Full Backtest & Revalidation.** Walk-forward backtest across 5 seasons (2020-21 through 2024-25) as out-of-sample test data: **Brier score improved from 0.6105 to 0.5781 (−5.3%)**, **ROI improved from −3.50% to +2.78% (+6.28 percentage points)**. The model crossed from losing to profitable. Total P&L: +£356 from £12,825 staked across 634 value bets. The improvement came primarily from more stable coefficient estimates in the Poisson GLM (3× more training data reduced overfitting).
+
+**E23-07: Verify Odds API Pipeline.** End-to-end production verification: ran The Odds API scraper → 3,130 odds fetched from 50+ bookmakers → loader matched and stored 3,070 new records (60 duplicates correctly skipped) → all 20 EPL teams mapped → final DB state: 34,076 total Odds records. Confirmed the live pipeline works end-to-end.
+
+---
+
+### Model Performance Evolution
+
+| Milestone | Brier Score | ROI | Training Data | Key Change |
+|-----------|-------------|-----|---------------|------------|
+| E13-03 (Baseline) | ~0.72 | ~−15% | 1 season (380) | Initial Poisson GLM |
+| E16-03 (Advanced Features) | 0.6903 | −7.2% | 1 season (380) | +NPxG, PPDA, weather, market value |
+| E20-03 (Market-Augmented) | 0.6105 | −3.50% | 2 seasons (760) | +Pinnacle odds, AH line |
+| **E23-06 (Full Backfill)** | **0.5781** | **+2.78%** | **6 seasons (2,280)** | **3× training data — model now profitable** |

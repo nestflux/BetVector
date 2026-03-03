@@ -59,10 +59,11 @@ Never hardcode credentials. Never commit `.env`. Never print credentials to logs
 
 ---
 
-## Rule 3 — One Issue at a Time
+## Rule 3 — One Issue at a Time, Sequential Advancement
 
-Do not start the next issue until the current one is complete and every
-acceptance criteria item is confirmed.
+Work one issue at a time, in critical-path order. Never skip ahead.
+When all three gates pass (Rule 4), auto-advance to the next issue
+immediately — no waiting for owner approval.
 
 Critical path:
 ```
@@ -87,20 +88,73 @@ E22-01 → E22-02 →
 E23-01 → E23-02 → E23-03 → E23-04 → E23-05 → E23-06 → E23-07
 ```
 
-If you think you should jump ahead, ask first.
+The sequence is the law. Auto-advance after gates pass. Only stop for
+blockers (Rule 4) or critical path completion.
 
 ---
 
-## Rule 4 — Acceptance Criteria = Definition of Done
+## Rule 4 — Three-Gate Autonomous Review
 
-Every issue has an acceptance criteria checklist. Before declaring an issue
-complete, go through each item one by one and confirm it passes.
+Before an issue can be marked complete and auto-advanced (Rule 3),
+it must pass all three gates sequentially. If any gate fails, fix and
+re-run that gate. If the same gate fails twice, stop and report to the owner.
 
-Report completion as:
-✅ [criteria text] — [how you verified it]
-❌ [criteria text] — [what's failing and why]
+### Gate 1 — Acceptance Criteria Verification (Self)
 
-Do not move on until every item is ✅.
+Go through every acceptance criteria item one by one and confirm it passes.
+
+Report format:
+`[PASS]` [criteria text] — [how you verified it]
+`[FAIL]` [criteria text] — [what's failing and why]
+
+All items must be `[PASS]` to advance to Gate 2. If any `[FAIL]`, fix
+the issue and re-run Gate 1.
+
+### Gate 2 — Masterplan Cross-Reference Audit (Dispatched Agent)
+
+Launch a separate agent to audit the completed work against the Master Plan
+sections referenced by the issue. The agent reads the MP sections, reads the
+code that was written, and checks for:
+- Wrong field names, missing enum values, architectural violations
+- Constraint mismatches, component structure drift
+- Any deviation from what the MP specifies
+
+Report format:
+`[CLEAN]` — No drift detected between code and Master Plan.
+`[GAP]` — [specific drift found, with MP section reference and code location]
+
+Must be `[CLEAN]` to advance to Gate 3. If `[GAP]`, fix the gaps and re-run.
+
+### Gate 3 — Code Review (Dispatched Agent)
+
+Launch a separate agent to review all code changes for production quality.
+The agent checks for:
+- Error handling and edge cases
+- Idempotency and temporal integrity
+- No hardcoded values, no TODOs left in code
+- Proper comments explaining betting concepts
+- Design system compliance (Rule 5)
+- All standing technical constraints (Rule 6)
+
+Report format:
+`[APPROVED]` — Code meets production quality standards.
+`[ISSUE]` — [specific problem, file, and line reference]
+
+Must be `[APPROVED]` to pass. If `[ISSUE]`, fix and re-run Gate 3.
+
+### Blocker Detection
+
+The following require stopping and asking the owner because they cannot
+be resolved autonomously:
+- API keys, tokens, or credentials not yet provisioned
+- Account creation or third-party service registration
+- DNS configuration or domain setup
+- OAuth or external authentication setup
+- Anything requiring payment or subscription changes
+- External service configuration outside the codebase
+
+When a blocker is detected: stop, report the blocker clearly, and wait
+for the owner to resolve it before continuing.
 
 ---
 
@@ -147,20 +201,93 @@ These apply to every issue without needing to be restated:
 
 ---
 
-## Rule 7 — Update Current Status When an Issue Closes
+## Rule 7 — Advance and Report
 
-When all acceptance criteria for an issue are ✅, before moving on you must:
+When all three gates pass (Rule 4), execute this sequence immediately:
 
-1. Open `CLAUDE.md`
-2. Update the `## Current Status` section:
+1. **Update `CLAUDE.md` status:**
    - Move the completed issue to "Last completed"
    - Set "Currently working" to the next issue
    - Set "Next up" to the issue after that
-3. Save the file
-4. Stop and tell the owner the issue is complete. Wait for explicit go-ahead
-   before starting the next issue.
 
-Do not self-advance to the next issue. Ever.
+2. **Update `betvector_buildplan.md`:**
+   - Mark the issue as DONE with results/metrics
+
+3. **Deploy tracker:**
+   - Commit and push changes so the owner can see progress remotely
+
+4. **Post completion report** in this format:
+   ```
+   ══════════════════════════════════════
+   ✅ ISSUE [ID] — [Title] — COMPLETE
+   ══════════════════════════════════════
+   Gate 1 (AC):        [PASS] — [count] / [count] items verified
+   Gate 2 (Masterplan): [CLEAN] or [GAP] — [summary]
+   Gate 3 (Code Review): [APPROVED] or [ISSUE] — [summary]
+   Key Metrics:        [relevant stats]
+   Next:               [next issue ID] — [title]
+   ══════════════════════════════════════
+   ```
+
+5. **Advance immediately** — begin the next issue without waiting.
+
+### When to stop
+
+Only stop advancing for:
+- **Unfixable gate failure** — same gate failed twice after fix attempts
+- **Blocker needing owner action** — from the Blocker Detection list (Rule 4)
+- **Critical path complete** — no more issues in the sequence
+
+---
+
+## Rule 8 — Masterplan Update Protocol
+
+The Master Plan (`betvector_masterplan.md`) is the single source of
+architectural truth. It must stay in sync with the codebase. Updates are
+handled in two tiers based on scope:
+
+### Tier 1 — Auto-Update (No Approval Needed)
+
+After closing an epic (all issues in an E-series marked DONE), automatically:
+1. Add or update the §13.x subsection for that epic
+2. Update the §5 data source table if new sources were added
+3. Update the §6 schema if new tables or columns were added
+4. Bump the version patch number (e.g., 1.2 → 1.3)
+5. Update the Model Performance Evolution table if Brier/ROI changed
+
+These are factual updates documenting what was already built and approved
+through the three-gate process. They don't change the plan — they record
+what happened.
+
+### Tier 2 — Proposal Required (Owner Must Approve)
+
+Any change that alters the *future direction* of the project requires
+explicit owner approval before writing to the Master Plan:
+
+- Adding new epics or issues to the critical path
+- Changing the tech stack (Rule 2)
+- Modifying architectural constraints (§3, §4, §5 core sections)
+- Adding new data sources not yet discussed
+- Changing model architecture (e.g., adding XGBoost ensemble)
+- Revising success criteria (§1) or the product vision
+- Adding new external service dependencies or costs
+
+**Proposal format:**
+
+```
+══════════════════════════════════════
+📋 MASTERPLAN UPDATE PROPOSAL
+══════════════════════════════════════
+Section(s):     [which MP sections would change]
+Type:           [new epic / architecture change / stack change / etc.]
+Summary:        [1-2 sentence description]
+Rationale:      [why this change is needed]
+Impact:         [what existing code/plans it affects]
+Cost:           [$0 / $X per month / one-time $X]
+══════════════════════════════════════
+```
+
+Wait for owner to respond with approval before making the change.
 
 ---
 
@@ -170,19 +297,21 @@ Last completed: E23-07 (Verify Odds API Pipeline)
 Currently working: — (All 84 issues complete!)
 Next up: —
 
-E19 complete: All 4 issues done ✅
-E20 complete: All 3 issues done ✅ (Brier 0.6105, ROI -4.15% → -3.50%)
-E21 complete: All 3 issues done ✅ (Elo, referee, congestion features)
-E22 complete: All 2 issues done ✅ (Set-piece xG, injury flags)
-E23 complete: All 7 issues done ✅ (Historical backfill + validation)
-E23-01: ✅ 1,520 matches + 22,800 odds (2020-21 through 2023-24)
-E23-02: ✅ 3,800 MatchStats with xG/NPxG/PPDA/deep
-E23-03: ✅ 3,800 MatchStats with set_piece_xg/open_play_xg
-E23-04: ✅ 13,227 ClubElo records for 495 match dates
-E23-05: ✅ 4,560 Feature rows across 6 seasons
-E23-06: ✅ Brier 0.5781 (-5.3%), ROI +2.78% (model now profitable)
-E23-07: ✅ Odds API verified — 3,070 live odds loaded, 0 failures
+E1-E13 complete: 45 original issues ✅
+E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
+E15 complete: 3 issues ✅ (Football-Data.org API, Understat expansion, Transfermarkt)
+E16 complete: 3 issues ✅ (Rolling advanced stats, market/weather features, recomputation)
+E17 complete: 4 issues ✅ (Dashboard feature surfacing)
+E18 complete: 6 issues ✅ (Match narratives, kickoff fix, glossaries)
+E19 complete: 4 issues ✅ (Live Odds Pipeline + CLV)
+E20 complete: 3 issues ✅ (Market-Augmented Poisson, Brier 0.6105 → 0.5781)
+E21 complete: 3 issues ✅ (Elo, referee, congestion features)
+E22 complete: 2 issues ✅ (Set-piece xG, injury flags)
+E23 complete: 7 issues ✅ (Historical backfill + validation)
 Total issues: 84 (45 original + 20 post-launch + 12 odds/model + 7 backfill) — ALL COMPLETE
+
+⚠️ NO XGBoost model exists. Only prediction model is market-augmented Poisson regression.
+xgboost is installed as a dependency but never used in src/models/.
 
 ---
 
