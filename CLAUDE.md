@@ -166,9 +166,9 @@ Do not self-advance to the next issue. Ever.
 
 ## Current Status
 
-Last completed: E23-04 (Backfill ClubElo for Historical Seasons)
-Currently working: E23-05 (Recompute All Features)
-Next up: E23-06 (Full Backtest & Validation)
+Last completed: E23-05 (Recompute All Features)
+Currently working: E23-06 (Full Backtest & Validation)
+Next up: E23-07 (Verify Odds API Pipeline)
 
 E19 complete: All 4 issues done ✅
 E20 complete: All 3 issues done ✅ (Brier 0.6105, ROI -4.15% → -3.50%)
@@ -178,6 +178,7 @@ E23-01 complete: ✅ (1,520 matches + 22,800 odds loaded for 2020-21 through 202
 E23-02 complete: ✅ (3,800 MatchStats with xG/NPxG/PPDA/deep for 2020-21 through 2024-25)
 E23-03 complete: ✅ (3,800 MatchStats updated with set_piece_xg/open_play_xg, 100.3 min)
 E23-04 complete: ✅ (13,227 ClubElo records for 495 match dates across 2020-21 through 2023-24)
+E23-05 complete: ✅ (4,560 Feature rows across 6 seasons, xG 97-100%, Elo 100%, 3.3 min)
 Total issues: 84 (45 original + 20 post-launch + 12 odds/model + 7 backfill)
 
 ---

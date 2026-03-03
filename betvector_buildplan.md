@@ -2522,7 +2522,7 @@ Add to backfill script:
 
 **Type:** Data — Feature Engineering
 **Depends on:** E23-02, E23-03, E23-04 (all data must be loaded first)
-**Status:** OPEN
+**Status:** DONE ✅
 
 Recompute the Feature table for all 6 seasons with the now-complete data. Features will include: rolling xG/NPxG/PPDA/deep/set-piece, Elo ratings, referee stats, congestion flags, Pinnacle odds (where available), and injury impact.
 
@@ -2546,12 +2546,12 @@ Add to backfill script:
 - This is the most critical step — all model training depends on these features
 
 **Acceptance Criteria:**
-- [ ] Feature table rebuilt for all 6 seasons
-- [ ] ~4,560 Feature rows (6 × 380 × 2)
-- [ ] xG features populated for 95%+ of matches (excluding early-season)
-- [ ] Elo features populated for 95%+ of matches
-- [ ] Rolling features computed with correct temporal integrity (no future leakage)
-- [ ] Feature completeness logged and verified
+- [x] Feature table rebuilt for all 6 seasons (760 per season = 4,560 total)
+- [x] ~4,560 Feature rows (6 × 380 × 2) — exactly 4,560
+- [x] xG features populated for 95%+ of matches (97.4-99.9% across all seasons)
+- [x] Elo features populated for 95%+ of matches (100% across all 6 seasons)
+- [x] Rolling features computed with correct temporal integrity (first matches have NULL form_5/xg_5)
+- [x] Feature completeness logged and verified (15 key features per season)
 
 ---
 

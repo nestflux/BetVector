@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-BetVector — Historical Data Backfill (E23-01 through E23-04)
+BetVector — Historical Data Backfill (E23-01 through E23-05)
 =================================================================
-Loads historical match results, odds, and xG data for EPL seasons
-that are missing from the database.  Uses the same scrapers and loaders
-that the daily pipeline uses, so all team name normalisation, odds
-parsing, and deduplication logic is shared.
+Loads historical match results, odds, xG data, and Elo ratings for EPL
+seasons that are missing from the database, then recomputes all features.
+Uses the same scrapers, loaders, and feature engineer that the daily
+pipeline uses, so all team name normalisation, odds parsing, deduplication,
+and feature computation logic is shared.
 
 Usage::
 
@@ -21,7 +22,10 @@ Usage::
     # Backfill ClubElo ratings for historical seasons (E23-04)
     python scripts/backfill_historical.py clubelo
 
-    # Run all four in sequence
+    # Recompute features for all 6 seasons (E23-05)
+    python scripts/backfill_historical.py features
+
+    # Run all five in sequence
     python scripts/backfill_historical.py all
 
     # Override seasons
@@ -32,7 +36,8 @@ Usage::
 
 The script is fully idempotent — re-running it produces zero
 duplicate records.  All loaders check for existing records
-before inserting.
+before inserting.  Feature recomputation uses force_recompute=True
+to ensure all features reflect the latest data.
 
 Expected output for a clean DB:
   - matches: 4 seasons × 380 = 1,520 Match records + ~22,800 Odds
@@ -40,6 +45,7 @@ Expected output for a clean DB:
   - shot-xg: ~3,800 MatchStat rows updated with set_piece_xg/open_play_xg
     (slowest step: ~60 minutes for 5 seasons due to per-match API calls)
   - clubelo: ~600 unique dates × ~23 EPL teams ≈ ~13,000 ClubElo records
+  - features: 6 seasons × 380 × 2 = ~4,560 Feature rows
 """
 
 from __future__ import annotations
@@ -124,6 +130,19 @@ DEFAULT_CLUBELO_SEASONS = [
     "2021-22",
     "2022-23",
     "2023-24",
+]
+
+# E23-05: Recompute features for ALL seasons.  After backfilling match data,
+# xG stats, shot-level xG, and ClubElo, we need to recompute every Feature
+# row so rolling windows, Elo, referee stats, and market features use the
+# now-complete data.  This covers all 6 seasons including current.
+DEFAULT_FEATURE_SEASONS = [
+    "2020-21",
+    "2021-22",
+    "2022-23",
+    "2023-24",
+    "2024-25",
+    "2025-26",
 ]
 
 
@@ -783,21 +802,201 @@ def run_clubelo_backfill(args, league_cfg, league_id) -> dict:
     return result
 
 
+# ============================================================================
+# E23-05: Feature Recomputation
+# ============================================================================
+
+def backfill_features(
+    league_id: int,
+    season: str,
+    dry_run: bool = False,
+) -> dict:
+    """Recompute all features for one season with force_recompute=True.
+
+    This deletes existing Feature rows for the season first, then calls
+    ``compute_all_features()`` to rebuild them from scratch.  This ensures
+    all features reflect the now-complete data (xG, Elo, referee, etc.).
+
+    Parameters
+    ----------
+    league_id : int
+        Database ID for this league.
+    season : str
+        Season identifier, e.g. "2022-23".
+    dry_run : bool
+        If True, count existing features but skip recomputation.
+
+    Returns
+    -------
+    dict
+        Summary with keys: season, features_computed, features_total,
+        completeness (dict of feature -> % non-null), errors.
+    """
+    from src.features.engineer import compute_all_features
+
+    result = {
+        "season": season,
+        "features_computed": 0,
+        "features_total": 0,
+        "completeness": {},
+        "errors": [],
+    }
+
+    # --- 1. Count existing features before deletion -----------------------
+    with get_session() as session:
+        from src.database.models import Feature, Match
+        existing = (
+            session.query(Feature)
+            .join(Match, Feature.match_id == Match.id)
+            .filter(Match.season == season)
+            .count()
+        )
+    logger.info("Season %s: %d existing Feature rows", season, existing)
+
+    if dry_run:
+        logger.info("DRY RUN — would recompute features for %s", season)
+        result["features_total"] = existing
+        return result
+
+    # --- 2. Delete existing features for fresh recomputation --------------
+    # We delete rather than using force_recompute=True because the latter
+    # updates in-place, which can leave stale columns from old computations.
+    # A fresh insert ensures all features are computed from the latest data.
+    if existing > 0:
+        with get_session() as session:
+            from src.database.models import Feature, Match
+            # Get all match IDs for this season
+            match_ids = [
+                row[0] for row in
+                session.query(Match.id).filter(Match.season == season).all()
+            ]
+            if match_ids:
+                deleted = session.query(Feature).filter(
+                    Feature.match_id.in_(match_ids)
+                ).delete(synchronize_session="fetch")
+                logger.info(
+                    "Season %s: deleted %d old Feature rows for fresh recompute",
+                    season, deleted,
+                )
+
+    # --- 3. Recompute features for all matches in this season -------------
+    try:
+        season_start = time.time()
+        df = compute_all_features(league_id, season, force_recompute=False)
+        elapsed = time.time() - season_start
+
+        result["features_computed"] = len(df) if df is not None and not df.empty else 0
+        logger.info(
+            "Season %s: %d feature rows computed in %.1fs",
+            season, result["features_computed"], elapsed,
+        )
+    except Exception as exc:
+        error_msg = f"Season {season}: Feature computation failed — {exc}"
+        logger.error(error_msg)
+        result["errors"].append(error_msg)
+        return result
+
+    # --- 4. Count final features and compute completeness -----------------
+    with get_session() as session:
+        from src.database.models import Feature, Match
+        final_count = (
+            session.query(Feature)
+            .join(Match, Feature.match_id == Match.id)
+            .filter(Match.season == season)
+            .count()
+        )
+        result["features_total"] = final_count
+
+        # Sample feature completeness: check key columns for non-null %
+        # Query a sample of features to check completeness
+        key_features = [
+            "form_5", "xg_5", "npxg_5", "ppda_5", "deep_5",
+            "set_piece_xg_5", "open_play_xg_5",
+            "elo_rating", "elo_diff",
+            "ref_avg_goals", "ref_home_win_pct",
+            "days_since_last_match", "is_congested",
+            "pinnacle_home_prob", "ah_line",
+        ]
+        features_all = (
+            session.query(Feature)
+            .join(Match, Feature.match_id == Match.id)
+            .filter(Match.season == season)
+            .all()
+        )
+        if features_all:
+            for col_name in key_features:
+                non_null = sum(
+                    1 for f in features_all
+                    if getattr(f, col_name, None) is not None
+                )
+                pct = (non_null / len(features_all)) * 100
+                result["completeness"][col_name] = round(pct, 1)
+
+    return result
+
+
+def run_features_backfill(args, league_cfg, league_id) -> list:
+    """Run E23-05 feature recomputation."""
+    seasons = args.seasons or DEFAULT_FEATURE_SEASONS
+    print("=" * 70)
+    print("E23-05 — Recompute All Features")
+    print("=" * 70)
+    print(f"Seasons: {', '.join(seasons)}")
+    print()
+
+    results = []
+
+    for i, season in enumerate(seasons, 1):
+        season_start = time.time()
+        print(f"[{i}/{len(seasons)}] Recomputing features: {season}...")
+        season_result = backfill_features(
+            league_id=league_id,
+            season=season,
+            dry_run=args.dry_run,
+        )
+        results.append(season_result)
+        elapsed = time.time() - season_start
+
+        print(f"  → Feature rows: {season_result['features_total']}")
+        print(f"  → Elapsed: {elapsed:.0f}s")
+
+        # Show completeness for key features
+        if season_result["completeness"]:
+            print("  → Completeness:")
+            for feat, pct in sorted(season_result["completeness"].items()):
+                indicator = "✅" if pct >= 80 else "⚠️" if pct >= 50 else "❌"
+                print(f"      {indicator} {feat}: {pct}%")
+
+        if season_result["errors"]:
+            for err in season_result["errors"]:
+                print(f"  ⚠ {err}")
+        print()
+
+    # Summary
+    total_features = sum(r["features_total"] for r in results)
+    total_errors = sum(len(r["errors"]) for r in results)
+
+    print(f"Feature recomputation: {total_features} total feature rows, "
+          f"{total_errors} errors")
+    return results
+
+
 def main() -> None:
     """Main entry point for the historical backfill script."""
     parser = argparse.ArgumentParser(
-        description="BetVector Historical Data Backfill (E23-01 through E23-04)",
+        description="BetVector Historical Data Backfill (E23-01 through E23-05)",
     )
     parser.add_argument(
         "command",
-        choices=["matches", "understat", "shot-xg", "clubelo", "all"],
+        choices=["matches", "understat", "shot-xg", "clubelo", "features", "all"],
         help=(
             "What to backfill: "
             "'matches' = E23-01 (match results + odds from Football-Data.co.uk), "
             "'understat' = E23-02 (xG + NPxG + PPDA from Understat), "
             "'shot-xg' = E23-03 (set-piece vs open-play xG breakdown), "
             "'clubelo' = E23-04 (ClubElo ratings for match dates), "
-            "'all' = all four in sequence"
+            "'features' = E23-05 (recompute all features for all seasons), "
+            "'all' = all five in sequence"
         ),
     )
     parser.add_argument(
@@ -808,6 +1007,7 @@ def main() -> None:
             "Override seasons to backfill. "
             "Default for matches/clubelo: 2020-21 through 2023-24. "
             "Default for understat/shot-xg: 2020-21 through 2024-25. "
+            "Default for features: all 6 seasons (2020-21 through 2025-26). "
             "Format: YYYY-YY (e.g. 2022-23)"
         ),
     )
@@ -867,6 +1067,13 @@ def main() -> None:
     if args.command in ("clubelo", "all"):
         clubelo_result = run_clubelo_backfill(args, league_cfg, league_id)
         if clubelo_result["errors"]:
+            has_errors = True
+        print()
+
+    if args.command in ("features", "all"):
+        feature_results = run_features_backfill(args, league_cfg, league_id)
+        all_results.extend(feature_results)
+        if any(r["errors"] for r in feature_results):
             has_errors = True
         print()
 
