@@ -296,9 +296,9 @@ Wait for owner to respond with approval before making the change.
 
 ## Current Status
 
-Last completed: E26-03 (Fixtures as Landing Page + Predicted Scores + Top Picks Banner)
-Currently working: E26-04 (Integration Test)
-Next up: (end of E26 epic)
+Last completed: E26-04 (Integration Test — E26 epic complete)
+Currently working: (none — awaiting next epic)
+Next up: (none — critical path complete through E26)
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
@@ -313,8 +313,8 @@ E22 complete: 2 issues ✅ (Set-piece xG, injury flags)
 E23 complete: All 7 issues done ✅ (Historical backfill + validation + Odds API verified)
 E24 complete: All 5 issues done ✅ (Dashboard fixes + fixtures value grid)
 E25 complete: All 4 issues done ✅ (XGBoost ensemble model — Poisson wins backtest, +2.78% ROI)
-E26 in progress: Dashboard UX Overhaul (4 issues)
-Total issues: 97 (93 complete + 4 in progress)
+E26 complete: All 4 issues done ✅ (Dashboard UX Overhaul — picks dedup, deep dive nav, fixtures landing, integration test)
+Total issues: 97 — ALL COMPLETE
 
 ---
 

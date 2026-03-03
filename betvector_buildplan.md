@@ -3139,7 +3139,7 @@ Show "Top Picks" section with the 3–5 highest-edge value bets (grouped by uniq
 **Type:** QA — Dashboard Integration
 **Depends on:** E26-01, E26-02, E26-03
 **MP refs:** §8 Design System
-**Status:** TODO
+**Status:** DONE — All 8 AC passed. Fixtures loads in 1.5s, 17 unique picks, session_state nav, tabbed picker, design system compliant.
 
 Run the dashboard and verify all fixes work end-to-end with live data.
 
