@@ -1232,30 +1232,35 @@ class Pipeline:
         season: str,
         features_df: Any,
     ) -> list:
-        """Train the model and generate predictions for matches needing them.
+        """Train active models and generate predictions.
+
+        E25-02: Ensemble support — trains both Poisson and XGBoost (if enabled),
+        generates predictions from each, then combines their scoreline matrices
+        via weighted average to produce the ensemble prediction.
 
         Trains on ALL finished matches across ALL seasons (not just the
-        current season) to maximise the training set.  The Poisson model
-        benefits from more data — 5+ seasons of results produce more
-        stable attack/defence estimates than a single season alone.
+        current season) to maximise the training set.
         (MP §4: walk-forward uses all data up to the prediction date.)
 
-        Historical season features are loaded via compute_all_features()
-        which reads from the features table.  This is idempotent — if
-        features are already computed, they're read from the DB instantly.
+        The pipeline stores up to 3 prediction records per match:
+        - "poisson_v1": individual Poisson prediction
+        - "xgboost_v1": individual XGBoost prediction (if enabled)
+        - "ensemble_v1": weighted combination (if ensemble enabled)
 
-        Predictions are only generated for the current season's matches
-        that don't yet have predictions from the active model.
-
-        Returns a list of MatchPrediction objects.
+        Returns a list of MatchPrediction objects (the primary predictions).
         """
         import pandas as pd
 
         from src.database.db import get_session
         from src.database.models import Match, Prediction
         from src.features.engineer import compute_all_features
+        from src.models.base_model import (
+            MatchPrediction,
+            derive_market_probabilities,
+        )
         from src.models.poisson import PoissonModel
         from src.models.storage import save_predictions
+        from src.self_improvement.ensemble_weights import get_current_weights
 
         # Build results DataFrame for training from ALL historical seasons
         # (not just the current season).  More training data = better model.
@@ -1319,36 +1324,218 @@ class Pipeline:
             len(train_features), current_count, hist_count,
         )
 
-        # Train the model on the full historical dataset
-        model = PoissonModel()
-        model.train(train_features, results_df)
+        # ---- Determine which models to train (E25-02) ----
+        # Read active models from config. If ensemble is disabled or only
+        # one model is listed, run single-model mode (backwards compatible).
+        try:
+            active_models = list(config.settings.models.active_models)
+        except (AttributeError, TypeError):
+            active_models = ["poisson_v1"]
 
-        # Find matches that need predictions (finished matches without
-        # predictions from this model, plus any scheduled matches)
+        try:
+            ensemble_enabled = bool(config.settings.models.ensemble_enabled)
+        except (AttributeError, TypeError):
+            ensemble_enabled = False
+
+        # ---- Train and predict from each active model ----
+        # model_predictions maps model_name → list of MatchPrediction
+        model_predictions = {}
+
+        for model_key in active_models:
+            # Instantiate the correct model class
+            model = self._create_model(model_key)
+            if model is None:
+                logger.warning("Unknown model key '%s', skipping", model_key)
+                continue
+
+            # Check which matches still need predictions from this model
+            with get_session() as session:
+                existing_pred_ids = set(
+                    r[0] for r in session.query(Prediction.match_id)
+                    .filter(
+                        Prediction.model_name == model.name,
+                        Prediction.model_version == model.version,
+                    )
+                    .all()
+                )
+
+            predict_features = features_df[
+                ~features_df["match_id"].isin(existing_pred_ids)
+            ]
+            if predict_features.empty:
+                logger.info(
+                    "All matches already have predictions from %s", model.name,
+                )
+                # Still need existing predictions for ensemble combining
+                model_predictions[model.name] = []
+                continue
+
+            # Train the model on the full historical dataset
+            try:
+                model.train(train_features, results_df)
+            except Exception as e:
+                logger.error("Failed to train %s: %s", model.name, e)
+                continue
+
+            # Generate predictions
+            try:
+                preds = model.predict(predict_features)
+            except Exception as e:
+                logger.error("Failed to predict with %s: %s", model.name, e)
+                continue
+
+            # Save individual model predictions to DB
+            if preds:
+                save_predictions(preds)
+                logger.info(
+                    "Generated %d predictions from %s", len(preds), model.name,
+                )
+
+            model_predictions[model.name] = preds
+
+        # ---- Ensemble combination (E25-02) ----
+        # If ensemble is enabled and we have predictions from 2+ models,
+        # combine their scoreline matrices into an ensemble prediction.
+        if ensemble_enabled and len(model_predictions) >= 2:
+            ensemble_preds = self._combine_ensemble(
+                model_predictions, active_models, features_df,
+            )
+            if ensemble_preds:
+                save_predictions(ensemble_preds)
+                logger.info(
+                    "Generated %d ensemble predictions", len(ensemble_preds),
+                )
+                return ensemble_preds
+
+        # Single-model mode: return the first model's predictions
+        for model_key in active_models:
+            preds = model_predictions.get(model_key, [])
+            if preds:
+                return preds
+
+        return []
+
+    @staticmethod
+    def _create_model(model_key: str):
+        """Instantiate a model class from its config key.
+
+        Maps config strings like "poisson_v1" and "xgboost_v1" to their
+        corresponding model classes.  Returns None for unknown keys.
+        """
+        from src.models.poisson import PoissonModel
+        from src.models.xgboost_model import XGBoostModel
+
+        model_map = {
+            "poisson_v1": PoissonModel,
+            "xgboost_v1": XGBoostModel,
+        }
+        cls = model_map.get(model_key)
+        return cls() if cls else None
+
+    def _combine_ensemble(
+        self,
+        model_predictions: dict,
+        active_models: list,
+        features_df: Any,
+    ) -> list:
+        """Combine predictions from multiple models into an ensemble.
+
+        For each match, takes the weighted average of the scoreline matrices
+        from all models, then derives market probabilities from the combined
+        matrix.  Weights come from the ensemble_weights module (inverse Brier
+        weighting with guardrails from MP §11.3).
+
+        Only combines matches where ALL active models have predictions.
+        """
+        from src.models.base_model import (
+            MatchPrediction,
+            derive_market_probabilities,
+        )
+        from src.self_improvement.ensemble_weights import get_current_weights
+        from src.database.db import get_session
+        from src.database.models import Prediction
+
+        # Get model names that actually produced predictions
+        model_names = [
+            name for name in active_models
+            if name in model_predictions and model_predictions[name]
+        ]
+        if len(model_names) < 2:
+            logger.info("Not enough models with predictions for ensemble")
+            return []
+
+        # Get current ensemble weights
+        weights = get_current_weights(model_names)
+        logger.info("Ensemble weights: %s", weights)
+
+        # Check which matches already have ensemble predictions
         with get_session() as session:
-            existing_pred_ids = set(
+            existing_ensemble_ids = set(
                 r[0] for r in session.query(Prediction.match_id)
                 .filter(
-                    Prediction.model_name == model.name,
-                    Prediction.model_version == model.version,
+                    Prediction.model_name == "ensemble_v1",
                 )
                 .all()
             )
 
-        # Predict all matches in the features DataFrame that don't have predictions
-        predict_features = features_df[~features_df["match_id"].isin(existing_pred_ids)]
+        # Build a lookup: match_id → {model_name: MatchPrediction}
+        match_model_preds = {}
+        for model_name, preds in model_predictions.items():
+            for pred in preds:
+                if pred.match_id not in match_model_preds:
+                    match_model_preds[pred.match_id] = {}
+                match_model_preds[pred.match_id][model_name] = pred
 
-        if predict_features.empty:
-            logger.info("All matches already have predictions from %s", model.name)
-            return []
+        ensemble_preds = []
+        for match_id, preds_by_model in match_model_preds.items():
+            # Skip if already have ensemble prediction
+            if match_id in existing_ensemble_ids:
+                continue
 
-        predictions = model.predict(predict_features)
+            # Only combine if ALL weighted models have predictions
+            if not all(m in preds_by_model for m in model_names):
+                continue
 
-        # Save to database
-        if predictions:
-            save_predictions(predictions)
+            # Weighted average of scoreline matrices
+            combined_matrix = [[0.0] * 7 for _ in range(7)]
+            combined_home_goals = 0.0
+            combined_away_goals = 0.0
 
-        return predictions
+            for model_name in model_names:
+                w = weights.get(model_name, 1.0 / len(model_names))
+                pred = preds_by_model[model_name]
+                combined_home_goals += w * pred.predicted_home_goals
+                combined_away_goals += w * pred.predicted_away_goals
+
+                for h in range(7):
+                    for a in range(7):
+                        combined_matrix[h][a] += w * pred.scoreline_matrix[h][a]
+
+            # Renormalise the combined matrix (weights should sum to 1.0,
+            # but clamping/rounding may introduce tiny errors)
+            total = sum(
+                combined_matrix[h][a] for h in range(7) for a in range(7)
+            )
+            if total > 0 and abs(total - 1.0) > 1e-6:
+                combined_matrix = [
+                    [p / total for p in row] for row in combined_matrix
+                ]
+
+            # Derive market probabilities from the combined matrix
+            market_probs = derive_market_probabilities(combined_matrix)
+
+            ensemble_pred = MatchPrediction(
+                match_id=match_id,
+                model_name="ensemble_v1",
+                model_version="1.0.0",
+                predicted_home_goals=round(combined_home_goals, 4),
+                predicted_away_goals=round(combined_away_goals, 4),
+                scoreline_matrix=combined_matrix,
+                **market_probs,
+            )
+            ensemble_preds.append(ensemble_pred)
+
+        return ensemble_preds
 
     @staticmethod
     def _get_league_id(short_name: str) -> Optional[int]:
