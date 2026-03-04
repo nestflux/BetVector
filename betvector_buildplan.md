@@ -3687,3 +3687,121 @@ Add a bankroll reset feature to the Settings page with two-step confirmation.
 E29-01 (Deep Dive top pick) → E29-02 (Fixtures ring + tooltips)
 → E29-03 (Performance/Bankroll badges) → E29-04 (Settings bankroll reset)
 ```
+
+---
+
+## Epic 30 — Fixtures Enhancements + Logo Integration
+
+**Goal:** Improve the Fixtures page with always-on model picks, adjustable thresholds, and a historical results view. Integrate logo assets throughout the dashboard.
+
+**MP refs:** §3 Flow 4 (Dashboard Exploration), §8 Design System
+
+---
+
+### E30-01 — Always Ring Best Badge + Editable Threshold
+
+**Type:** Enhancement — Dashboard
+**Depends on:** E29-02
+**MP refs:** §8 Design System
+**Status:** DONE ✅
+
+Refactor the edge threshold into a runtime slider and make the model's best-badge ring always visible — with two styles differentiating genuine value bets from below-threshold best guesses.
+
+**Changes:**
+- Rename module-level `_edge_threshold` to `_config_edge_threshold` (keep as default + Top Picks baseline)
+- Add `threshold` parameter to `_edge_colour()` and `_render_market_badges()`
+- Add edge threshold slider (1-15%, step 1%) alongside days_ahead slider in `st.columns(2)`
+- Change best-badge selection to find highest edge regardless of sign/threshold
+- Two ring styles: green ring for edge ≥ threshold (value), grey ring for below threshold (best guess)
+- Extract `_find_best_badge()` helper function for reuse by E30-02
+- Move legend after sliders (dynamic threshold text)
+- Add grey-ringed legend entry: "Best Guess (below threshold)"
+- Top Picks banner stays on config default (not slider-sensitive)
+
+**Files:** `src/delivery/views/fixtures.py`
+
+**Results:** Always-ring logic + edge threshold slider implemented. Every fixture's best badge now gets a ring (green for value, grey for best-guess). Legend dynamically reflects slider position. `_find_best_badge()` extracted for E30-02 reuse.
+
+**Acceptance Criteria:**
+- [x] Every fixture has a ringed badge (no fixtures without a ring, unless no edges at all)
+- [x] Green ring on badges with edge ≥ slider threshold
+- [x] Grey ring on best badge when below threshold
+- [x] Edge threshold slider (1-15%, default from config) changes badge colours in real-time
+- [x] Legend dynamically shows current threshold (e.g., "Value (edge ≥ 2%)")
+- [x] Top Picks banner unaffected by slider (uses config default)
+- [x] Tooltip still shows "★ Model's Pick" on best badge regardless of ring colour
+
+---
+
+### E30-02 — Historical Fixtures View (Past 30 Days)
+
+**Type:** Enhancement — Dashboard
+**Depends on:** E30-01
+**MP refs:** §3 Flow 4, §8 Design System
+**Status:** TODO
+
+Add a "Recent Results" toggle to the Fixtures page showing completed matches from the last 30 days with actual scores, model predictions, and correctness indicators.
+
+**Changes:**
+- Add horizontal radio toggle: "Upcoming" (default) vs "Recent Results"
+- New `get_recent_results(days_back=30)` data loader — queries finished matches with predictions, odds, and actual scores
+- Determine actual outcomes per market (1X2, OU15, OU25, BTTS) using home_goals/away_goals
+- Compute `top_pick_correct` (model's best pick matched actual) and `vb_profitable` (any VB selection correct)
+- Summary metrics row: Matches count, Top Pick Accuracy (X/Y), VB Record (W/T), VB Hit Rate (%)
+- Fixture cards show: actual score (bold 18px), predicted score (muted), ✅/❌ indicator, market badges with ring
+- Left border: green if VB profitable, red if VB existed but lost, blue if full data but no VB
+- Grouped by date descending (most recent first)
+- Graceful handling: no prediction → "No prediction" badge; no odds → grey badges; no results → empty state
+
+**Files:** `src/delivery/views/fixtures.py`
+
+**Acceptance Criteria:**
+- [ ] "Upcoming" / "Recent Results" radio toggle visible below page title
+- [ ] "Recent Results" shows completed matches from last 30 days
+- [ ] Each match shows actual score prominently (JetBrains Mono 18px bold)
+- [ ] Predicted score shown below actual (muted text)
+- [ ] ✅ indicator when model's top pick was correct, ❌ when wrong
+- [ ] Summary metrics: Matches, Top Pick Accuracy, VB Record, VB Hit Rate
+- [ ] Market badges show pre-match edges with ring (same logic as E30-01)
+- [ ] Green left border for profitable VB matches, red for unprofitable VB matches
+- [ ] Toggle back to "Upcoming" shows normal view with Top Picks banner
+- [ ] Graceful empty states for missing predictions/odds/results
+
+---
+
+### E30-03 — Logo Integration
+
+**Type:** Enhancement — Dashboard
+**Depends on:** (none — independent)
+**MP refs:** §8 Design System
+**Status:** TODO
+
+Integrate the BetVector logo assets throughout the dashboard: favicon, sidebar, and login gate.
+
+**Logo assets:**
+- Main wordmark: `docs/logo/Bvlogo3.png` — "BetVector" with lightning-slash V
+- Icon: `docs/logo/Bvlogo1.5.png` — Standalone V with green arrow
+
+**Changes:**
+- Replace emoji favicon (`page_icon="📊"`) with Bvlogo1.5 in `st.set_page_config()`
+- Add `st.logo()` to sidebar with Bvlogo3 (expanded) and Bvlogo1.5 (collapsed icon)
+- Remove or replace text "BetVector" heading in sidebar with the logo
+- Add Bvlogo3 image to login gate above password field
+
+**Files:** `src/delivery/dashboard.py`, `src/delivery/views/onboarding.py` (optional)
+
+**Acceptance Criteria:**
+- [ ] Browser tab shows Bvlogo1.5 (V icon) instead of 📊 emoji
+- [ ] Sidebar shows Bvlogo3 (full wordmark) when expanded
+- [ ] Sidebar shows Bvlogo1.5 (V icon) when collapsed
+- [ ] Login page shows Bvlogo3 above password field
+- [ ] Logo renders correctly on dark background (#0D1117 / #161B22)
+
+---
+
+### Implementation Sequence
+
+```
+E30-01 (Always-ring + threshold slider) → E30-02 (Historical fixtures view)
+E30-03 (Logo integration) — independent, can run in parallel
+```

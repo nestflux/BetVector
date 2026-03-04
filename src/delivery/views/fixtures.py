@@ -1,6 +1,6 @@
 """
-BetVector — Fixtures Page (E17-04, E24-03, E24-04, E26-03, E29-02)
-===================================================================
+BetVector — Fixtures Page (E17-04, E24-03, E24-04, E26-03, E29-02, E30-01)
+==========================================================================
 All upcoming matches across active leagues, grouped by date.
 **E26-03: Now the dashboard landing page.**
 
@@ -32,6 +32,14 @@ E29-02: Preferred bet ring + rich tooltips:
 - The badge with the highest positive edge (≥ threshold) gets a green ring
   (box-shadow) marking it as the model's preferred bet.
 - Tooltips enriched with model probability and confidence level from ValueBet
+
+E30-01: Always-ring best badge + editable threshold:
+- Every fixture's best badge gets a ring regardless of threshold:
+  • Green ring = genuine value (edge ≥ threshold)
+  • Grey ring = best guess (below threshold)
+- Edge threshold slider (1-15%) lets users adjust what counts as "value"
+- Legend dynamically updates to reflect the slider's threshold
+- _find_best_badge() extracted as standalone helper for reuse
   records.  Best badge tooltip appends "★ Model's Pick".
 - Legend updated with a ringed swatch for "★ Model's Pick".
 
@@ -81,19 +89,25 @@ COLOURS = {
 # ============================================================================
 
 try:
-    _edge_threshold = float(config.settings.value_betting.edge_threshold)
+    _config_edge_threshold = float(config.settings.value_betting.edge_threshold)
 except (AttributeError, TypeError, ValueError):
-    _edge_threshold = 0.05  # 5% default
+    _config_edge_threshold = 0.05  # 5% default
 
 
-def _edge_colour(edge: Optional[float]) -> str:
+def _edge_colour(edge: Optional[float], threshold: float = 0.05) -> str:
     """Return a hex colour based on the edge value.
+
+    E30-01: Now accepts a ``threshold`` parameter so the Fixtures page
+    slider can dynamically control what counts as a "value" badge.
 
     Parameters
     ----------
     edge : float or None
         Model probability minus bookmaker implied probability.
         None means data is unavailable.
+    threshold : float
+        Minimum edge to qualify as a value bet (green badge).
+        Defaults to 0.05 (5%).  Overridden by the user's slider.
 
     Returns
     -------
@@ -102,7 +116,7 @@ def _edge_colour(edge: Optional[float]) -> str:
     """
     if edge is None:
         return COLOURS["grey"]
-    if edge >= _edge_threshold:
+    if edge >= threshold:
         return COLOURS["green"]
     if edge > 0:
         return COLOURS["yellow"]
@@ -433,10 +447,44 @@ _SELECTION_LABELS = {
 # Badge Rendering
 # ============================================================================
 
+def _find_best_badge(
+    market_edges: Dict[Tuple[str, str], Optional[float]],
+) -> Tuple[Optional[Tuple[str, str]], Optional[float]]:
+    """Find the badge with the highest edge — the model's preferred pick.
+
+    E30-01: Finds the best badge **regardless of threshold** — even negative
+    edges are considered.  This ensures every fixture with edge data has a
+    "Model's Pick" ring.  The ring *style* (green vs grey) is determined
+    separately based on whether the best edge meets the threshold.
+
+    Parameters
+    ----------
+    market_edges : dict
+        Keys are (market_type, selection) tuples, values are edge floats
+        or None.
+
+    Returns
+    -------
+    tuple
+        ``(best_key, best_edge)`` where ``best_key`` is the (market_type,
+        selection) tuple with the highest edge, and ``best_edge`` is the
+        float.  Returns ``(None, None)`` if no edges are available.
+    """
+    best_key: Optional[Tuple[str, str]] = None
+    best_edge: Optional[float] = None
+    for (mt, sel), edge in market_edges.items():
+        if edge is not None:
+            if best_edge is None or edge > best_edge:
+                best_edge = edge
+                best_key = (mt, sel)
+    return best_key, best_edge
+
+
 def _render_market_badges(
     market_edges: Dict[Tuple[str, str], Optional[float]],
     market_vb_info: Optional[Dict[Tuple[str, str], Dict]] = None,
     market_probs: Optional[Dict[Tuple[str, str], float]] = None,
+    threshold: float = 0.05,
 ) -> str:
     """Build HTML for the 9 color-coded market indicator badges.
 
@@ -444,10 +492,10 @@ def _render_market_badges(
     O1.5, U1.5, O2.5, U2.5, BTTS Y, BTTS N) with a background colour
     indicating the model's edge.
 
-    E29-02: The badge with the highest positive edge (≥ threshold) gets
-    a green ring highlight via ``box-shadow``, marking it as the model's
-    preferred bet.  Tooltips now include model probability and confidence
-    level (when available from ValueBet records).
+    E29-02: Tooltips include model probability and confidence level.
+    E30-01: The best badge ALWAYS gets a ring — green if it meets the
+    threshold (genuine value), grey if below threshold (best guess).
+    Threshold is now a runtime parameter driven by the user's slider.
 
     Parameters
     ----------
@@ -456,11 +504,13 @@ def _render_market_badges(
         or None.
     market_vb_info : dict, optional
         Per-market ValueBet data: {(market_type, selection): {"model_prob",
-        "confidence", "edge"}}.  Used for confidence in tooltips and
-        identifying the model's preferred bet.
+        "confidence", "edge"}}.
     market_probs : dict, optional
-        Model probabilities from the Prediction record: {(market_type,
-        selection): float}.  Used for tooltip display on non-VB badges.
+        Model probabilities from the Prediction record.
+    threshold : float
+        Minimum edge to qualify as a value bet.  Controls badge colour
+        (green vs yellow) and ring style (green vs grey).  Defaults to
+        0.05 (5%).  Overridden by the user's slider.
 
     Returns
     -------
@@ -470,23 +520,18 @@ def _render_market_badges(
     _vb_info = market_vb_info or {}
     _probs = market_probs or {}
 
-    # E29-02: Find the model's preferred bet — the badge with the highest
-    # positive edge at or above the value threshold.  This badge gets a
-    # green ring to visually distinguish it from the other badges.
-    best_key: Optional[Tuple[str, str]] = None
-    best_edge = 0.0
-    for (mt, sel), edge in market_edges.items():
-        if edge is not None and edge >= _edge_threshold and edge > best_edge:
-            best_edge = edge
-            best_key = (mt, sel)
+    # E30-01: Find the model's preferred bet — the badge with the highest
+    # edge, regardless of sign or threshold.  Every fixture with edge data
+    # gets a "Model's Pick" ring; the ring STYLE depends on threshold.
+    best_key, best_edge = _find_best_badge(market_edges)
 
     badges = []
     for market_type, selection, label in MARKET_BADGES:
         key = (market_type, selection)
         edge = market_edges.get(key)
-        bg = _edge_colour(edge)
+        bg = _edge_colour(edge, threshold=threshold)
 
-        # --- Tooltip text (E29-02: enriched with model prob + confidence) ---
+        # --- Tooltip text (enriched with model prob + confidence) ---
         if edge is not None:
             edge_pct = edge * 100
             parts = [f"{label}: {edge_pct:+.1f}% edge"]
@@ -511,16 +556,24 @@ def _render_market_badges(
         else:
             title = html_escape(f"{label}: no data")
 
-        # --- Ring effect for the model's preferred bet (E29-02) ---
-        # CSS box-shadow creates a ring around the badge without changing
-        # its size.  The best badge gets a bright ring + glow; other value
-        # bets get no extra ring (their green background is sufficient).
+        # --- Ring effect for the model's preferred bet (E30-01) ---
+        # CSS box-shadow creates a ring without changing element size.
+        # Green ring = genuine value (edge ≥ threshold).
+        # Grey ring = best guess but below threshold.
         ring_style = ""
-        if key == best_key:
-            ring_style = (
-                f"box-shadow: 0 0 0 2px {COLOURS['green']}, "
-                f"0 0 6px rgba(63, 185, 80, 0.4); "
-            )
+        if key == best_key and best_edge is not None:
+            if best_edge >= threshold:
+                # Bright green ring — this is a real value bet
+                ring_style = (
+                    f"box-shadow: 0 0 0 2px {COLOURS['green']}, "
+                    f"0 0 6px rgba(63, 185, 80, 0.4); "
+                )
+            else:
+                # Dim grey ring — model's best guess, not meeting threshold
+                ring_style = (
+                    f"box-shadow: 0 0 0 2px {COLOURS['grey']}, "
+                    f"0 0 4px rgba(72, 79, 88, 0.3); "
+                )
 
         badges.append(
             f'<span title="{title}" style="'
@@ -573,8 +626,10 @@ if top_picks:
         edge_pct = pick["edge"] * 100
         # Green if edge is at least 2× the configured threshold (strong pick),
         # yellow otherwise (still a value bet, but less emphatic).
-        # _edge_threshold is loaded from config at module level (e.g. 0.05 = 5%).
-        _strong_edge_pct = _edge_threshold * 200  # 2× threshold as percentage
+        # _config_edge_threshold is loaded from config at module level (e.g. 0.05 = 5%).
+        # Top Picks uses the *config* threshold, not the user's slider — system
+        # picks are stable and shouldn't shift when the slider moves.
+        _strong_edge_pct = _config_edge_threshold * 200  # 2× threshold as percentage
         edge_colour = COLOURS["green"] if edge_pct >= _strong_edge_pct else COLOURS["yellow"]
         conf_colour = (
             COLOURS["green"] if pick["confidence"] == "high"
@@ -630,43 +685,75 @@ else:
 
 st.divider()
 
-# Legend — explains the badge colour coding
+# ── E30-01: Dual sliders — days ahead + edge threshold ─────────────────
+# Side-by-side controls: left controls date range, right controls what
+# counts as a "value" bet.  The edge threshold dynamically recolours badges
+# and updates the legend text below.
+col_days, col_edge = st.columns(2)
+with col_days:
+    days_ahead = st.slider(
+        "Days ahead",
+        min_value=7,
+        max_value=28,
+        value=14,
+        step=7,
+        help="How far ahead to show fixtures.",
+    )
+with col_edge:
+    edge_threshold_pct = st.slider(
+        "Edge threshold (%)",
+        min_value=1,
+        max_value=15,
+        value=int(_config_edge_threshold * 100),
+        step=1,
+        help=(
+            "Minimum edge to colour a badge green (value bet). "
+            "Lower it to see near-misses; raise it to be stricter."
+        ),
+    )
+# Convert percentage to decimal for internal use
+edge_threshold = edge_threshold_pct / 100.0
+
+# Legend — explains the badge colour coding.
+# E30-01: Placed AFTER sliders so it can reference the dynamic threshold.
+# Added grey-ringed "Best Guess" swatch alongside the existing green-ringed
+# "Model's Pick" to explain the two ring styles.
 st.markdown(
     '<div style="font-family: Inter, sans-serif; font-size: 12px; '
     f'color: {COLOURS["text_secondary"]}; margin-bottom: 16px; '
     'display: flex; gap: 16px; flex-wrap: wrap; align-items: center;">'
     '<span style="font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; '
     'margin-right: 4px;">Legend:</span>'
+    # Green swatch — value bet (edge ≥ threshold)
     f'<span><span style="display: inline-block; width: 10px; height: 10px; '
     f'border-radius: 2px; background-color: {COLOURS["green"]}; margin-right: 4px; '
-    f'vertical-align: middle;"></span>Value (edge ≥ {_edge_threshold*100:.0f}%)</span>'
+    f'vertical-align: middle;"></span>Value (edge &ge; {edge_threshold_pct}%)</span>'
+    # Yellow swatch — marginal positive edge (0 to threshold)
     f'<span><span style="display: inline-block; width: 10px; height: 10px; '
     f'border-radius: 2px; background-color: {COLOURS["yellow"]}; margin-right: 4px; '
-    f'vertical-align: middle;"></span>Marginal (0–{_edge_threshold*100:.0f}%)</span>'
+    f'vertical-align: middle;"></span>Marginal (0–{edge_threshold_pct}%)</span>'
+    # Red swatch — no value (negative edge)
     f'<span><span style="display: inline-block; width: 10px; height: 10px; '
     f'border-radius: 2px; background-color: {COLOURS["red"]}; margin-right: 4px; '
-    f'vertical-align: middle;"></span>No Value (≤ 0%)</span>'
+    f'vertical-align: middle;"></span>No Value (&le; 0%)</span>'
+    # Grey swatch — no data
     f'<span><span style="display: inline-block; width: 10px; height: 10px; '
     f'border-radius: 2px; background-color: {COLOURS["grey"]}; margin-right: 4px; '
     f'vertical-align: middle;"></span>No Data</span>'
-    # E29-02: Model's Pick legend entry — shows a green-ringed swatch
+    # Green-ringed swatch — model's top pick that meets threshold
     f'<span><span style="display: inline-block; width: 10px; height: 10px; '
     f'border-radius: 2px; background-color: {COLOURS["green"]}; margin-right: 4px; '
     f'vertical-align: middle; '
     f'box-shadow: 0 0 0 2px {COLOURS["green"]}, 0 0 4px rgba(63, 185, 80, 0.4); '
     f'"></span>\u2605 Model\'s Pick</span>'
+    # Grey-ringed swatch — model's best guess, below threshold
+    f'<span><span style="display: inline-block; width: 10px; height: 10px; '
+    f'border-radius: 2px; background-color: {COLOURS["yellow"]}; margin-right: 4px; '
+    f'vertical-align: middle; '
+    f'box-shadow: 0 0 0 2px {COLOURS["grey"]}, 0 0 4px rgba(72, 79, 88, 0.3); '
+    f'"></span>Best Guess (below threshold)</span>'
     '</div>',
     unsafe_allow_html=True,
-)
-
-# Days-ahead slider — controls how far forward we look
-days_ahead = st.slider(
-    "Days ahead",
-    min_value=7,
-    max_value=28,
-    value=14,
-    step=7,
-    help="How far ahead to show fixtures.",
 )
 
 # Load fixtures
@@ -837,11 +924,14 @@ else:
                 )
             diag_html = "".join(diag_badges)
 
-            # Market indicator badges — the 7 color-coded pills (E24-03)
+            # Market indicator badges — the 9 color-coded pills (E24-03)
+            # E30-01: Pass the user's slider-controlled threshold so badge
+            # colours and ring styles update dynamically.
             market_html = _render_market_badges(
                 fix["market_edges"],
                 market_vb_info=fix.get("market_vb_info"),
                 market_probs=fix.get("market_probs"),
+                threshold=edge_threshold,
             )
 
             # E26-03: Predicted score inline — "Model: 1.4 – 0.8"
