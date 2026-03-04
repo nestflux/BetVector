@@ -92,7 +92,8 @@ E26-01 → E26-02 → E26-03 → E26-04 →
 E27-01 → E27-02 → E27-03 → E27-04 →
 E28-01 → E28-02 → E28-03 → E28-04 →
 E29-01 → E29-02 → E29-03 → E29-04 →
-E30-01 → E30-02 → E30-03
+E30-01 → E30-02 → E30-03 →
+E31-01 → E31-02 → E31-03 → E31-04
 ```
 
 The sequence is the law. Auto-advance after gates pass. Only stop for
@@ -300,8 +301,8 @@ Wait for owner to respond with approval before making the change.
 
 ## Current Status
 
-Last completed: E30-03 (Logo Integration)
-Currently working: (none — critical path complete through E30)
+Last completed: E31-04 (Integration Test)
+Currently working: (none — critical path complete through E31)
 Next up: (none — awaiting new epics)
 
 E1-E13 complete: 45 original issues ✅
@@ -322,7 +323,8 @@ E27 complete: All 4 issues done ✅ (Deep Dive FanDuel default, O/U 1.5 markets,
 E28 complete: All 4 issues done ✅ (Team Badges — logo fetch, badge helper, page rollout, integration test)
 E29 complete: All 4 issues done ✅ (Dashboard UX Polish — model top pick, badge ring, perf/bankroll badges, bankroll reset)
 E30 complete: All 3 issues done ✅ (Fixtures Enhancements + Logo — threshold/ring, historical view, logo integration)
-Total issues: 112 — ALL COMPLETE ✅
+E31 complete: All 4 issues done ✅ (Badge Ring Redesign + League Explorer Badges — blue/green rings, card borders, team badges in all tables)
+Total issues: 116 — ALL COMPLETE ✅
 
 ---
 

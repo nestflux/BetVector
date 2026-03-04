@@ -1,5 +1,5 @@
 """
-BetVector — Fixtures Page (E17-04, E24-03, E24-04, E26-03, E29-02, E30-01, E30-02)
+BetVector — Fixtures Page (E17-04, E24-03, E24-04, E26-03, E29-02, E30-01, E30-02, E31-01, E31-02)
 ==================================================================================
 All upcoming matches across active leagues, grouped by date.
 **E26-03: Now the dashboard landing page.**
@@ -34,14 +34,22 @@ E29-02: Preferred bet ring + rich tooltips:
 - Tooltips enriched with model probability and confidence level from ValueBet
 
 E30-01: Always-ring best badge + editable threshold:
-- Every fixture's best badge gets a ring regardless of threshold:
-  • Green ring = genuine value (edge ≥ threshold)
-  • Grey ring = best guess (below threshold)
+- Every fixture's best badge gets a ring regardless of threshold
 - Edge threshold slider (1-15%) lets users adjust what counts as "value"
 - Legend dynamically updates to reflect the slider's threshold
 - _find_best_badge() extracted as standalone helper for reuse
   records.  Best badge tooltip appends "★ Model's Pick".
-- Legend updated with a ringed swatch for "★ Model's Pick".
+
+E31-01: Badge ring redesign (Option C — owner-approved via mockup):
+- Green DOUBLE ring + glow = genuine value bet (edge ≥ threshold)
+- Blue ring = model's best guess (below threshold)
+- ★ star prefix on best-pick badge label (e.g. "★ H" vs "H")
+- Legend updated with two ring swatches: "★ Value Pick" / "★ Best Guess"
+
+E31-02: Fixture card value highlight (two-level visual hierarchy):
+- Upcoming: full green card border + glow for value-bet fixtures
+- Recent Results: green border = VB profitable, red border = VB lost
+- Non-value fixtures use default card styling (no coloured border)
 
 E30-02: Historical fixtures view (Recent Results):
 - "Upcoming" / "Recent Results" toggle at the top of the page
@@ -672,8 +680,8 @@ def _find_best_badge(
 
     E30-01: Finds the best badge **regardless of threshold** — even negative
     edges are considered.  This ensures every fixture with edge data has a
-    "Model's Pick" ring.  The ring *style* (green vs grey) is determined
-    separately based on whether the best edge meets the threshold.
+    "Model's Pick" ring.  The ring *style* (green double vs blue) is
+    determined separately based on whether the best edge meets the threshold.
 
     Parameters
     ----------
@@ -711,8 +719,8 @@ def _render_market_badges(
     indicating the model's edge.
 
     E29-02: Tooltips include model probability and confidence level.
-    E30-01: The best badge ALWAYS gets a ring — green if it meets the
-    threshold (genuine value), grey if below threshold (best guess).
+    E30-01/E31-01: The best badge ALWAYS gets a ring — green double ring
+    if it meets the threshold (value), blue ring if below (best guess).
     Threshold is now a runtime parameter driven by the user's slider.
 
     Parameters
@@ -727,8 +735,8 @@ def _render_market_badges(
         Model probabilities from the Prediction record.
     threshold : float
         Minimum edge to qualify as a value bet.  Controls badge colour
-        (green vs yellow) and ring style (green vs grey).  Defaults to
-        0.05 (5%).  Overridden by the user's slider.
+        (green vs yellow) and ring style (green double vs blue).  Defaults
+        to 0.05 (5%).  Overridden by the user's slider.
 
     Returns
     -------
@@ -774,24 +782,34 @@ def _render_market_badges(
         else:
             title = html_escape(f"{label}: no data")
 
-        # --- Ring effect for the model's preferred bet (E30-01) ---
+        # --- Ring effect for the model's preferred bet (E31-01) ---
         # CSS box-shadow creates a ring without changing element size.
-        # Green ring = genuine value (edge ≥ threshold).
-        # Grey ring = best guess but below threshold.
+        # Two-tier system approved via owner mockup (Option C):
+        #   Green DOUBLE ring + glow = genuine value bet (edge ≥ threshold)
+        #   Blue ring = model's best guess (below threshold)
         ring_style = ""
         if key == best_key and best_edge is not None:
             if best_edge >= threshold:
-                # Bright green ring — this is a real value bet
+                # Green double ring with glow — genuine value bet.
+                # Two concentric rings (2px solid + 4px translucent) plus
+                # outer glow make this unmistakable at a glance.
                 ring_style = (
                     f"box-shadow: 0 0 0 2px {COLOURS['green']}, "
-                    f"0 0 6px rgba(63, 185, 80, 0.4); "
+                    f"0 0 0 4px rgba(63, 185, 80, 0.35), "
+                    f"0 0 10px rgba(63, 185, 80, 0.4); "
                 )
             else:
-                # Dim grey ring — model's best guess, not meeting threshold
+                # Blue ring — model's best guess, below value threshold.
+                # Blue (#58A6FF) is highly visible on the dark bg (#0D1117),
+                # unlike the previous grey ring which was nearly invisible.
                 ring_style = (
-                    f"box-shadow: 0 0 0 2px {COLOURS['grey']}, "
-                    f"0 0 4px rgba(72, 79, 88, 0.3); "
+                    f"box-shadow: 0 0 0 2px {COLOURS['blue']}, "
+                    f"0 0 6px rgba(88, 166, 255, 0.35); "
                 )
+
+        # Star prefix on the model's best pick for instant visual identification.
+        # "★ H" is immediately recognisable vs plain "H" even at small sizes.
+        display_label = f"\u2605 {label}" if key == best_key else label
 
         badges.append(
             f'<span title="{title}" style="'
@@ -799,7 +817,7 @@ def _render_market_badges(
             f"border-radius: 4px; font-family: 'JetBrains Mono', monospace; "
             f"font-size: 10px; font-weight: 600; color: #fff; "
             f"background-color: {bg}; cursor: help; {ring_style}"
-            f'">{label}</span>'
+            f'">{display_label}</span>'
         )
     return "".join(badges)
 
@@ -945,13 +963,15 @@ if view_mode == "Upcoming":
     # Convert percentage to decimal for internal use
     edge_threshold = edge_threshold_pct / 100.0
 
-    # Legend — explains the badge colour coding (dynamic threshold).
+    # Legend — explains badge colours and ring indicators (E31-01).
+    # Two ring styles: green double ring = value pick, blue ring = best guess.
     st.markdown(
         '<div style="font-family: Inter, sans-serif; font-size: 12px; '
         f'color: {COLOURS["text_secondary"]}; margin-bottom: 16px; '
         'display: flex; gap: 16px; flex-wrap: wrap; align-items: center;">'
         '<span style="font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; '
         'margin-right: 4px;">Legend:</span>'
+        # Badge colour swatches (edge-based fill colours)
         f'<span><span style="display: inline-block; width: 10px; height: 10px; '
         f'border-radius: 2px; background-color: {COLOURS["green"]}; margin-right: 4px; '
         f'vertical-align: middle;"></span>Value (edge &ge; {edge_threshold_pct}%)</span>'
@@ -964,16 +984,20 @@ if view_mode == "Upcoming":
         f'<span><span style="display: inline-block; width: 10px; height: 10px; '
         f'border-radius: 2px; background-color: {COLOURS["grey"]}; margin-right: 4px; '
         f'vertical-align: middle;"></span>No Data</span>'
+        # Ring indicator swatches (model's best pick identification)
         f'<span><span style="display: inline-block; width: 10px; height: 10px; '
         f'border-radius: 2px; background-color: {COLOURS["green"]}; margin-right: 4px; '
         f'vertical-align: middle; '
-        f'box-shadow: 0 0 0 2px {COLOURS["green"]}, 0 0 4px rgba(63, 185, 80, 0.4); '
-        f'"></span>\u2605 Model\'s Pick</span>'
+        f'box-shadow: 0 0 0 2px {COLOURS["green"]}, '
+        f'0 0 0 4px rgba(63, 185, 80, 0.35), '
+        f'0 0 10px rgba(63, 185, 80, 0.4); '
+        f'"></span>\u2605 Value Pick (edge &ge; {edge_threshold_pct}%)</span>'
         f'<span><span style="display: inline-block; width: 10px; height: 10px; '
         f'border-radius: 2px; background-color: {COLOURS["yellow"]}; margin-right: 4px; '
         f'vertical-align: middle; '
-        f'box-shadow: 0 0 0 2px {COLOURS["grey"]}, 0 0 4px rgba(72, 79, 88, 0.3); '
-        f'"></span>Best Guess (below threshold)</span>'
+        f'box-shadow: 0 0 0 2px {COLOURS["blue"]}, '
+        f'0 0 6px rgba(88, 166, 255, 0.35); '
+        f'"></span>\u2605 Best Guess (below threshold)</span>'
         '</div>',
         unsafe_allow_html=True,
     )
@@ -1063,11 +1087,17 @@ if view_mode == "Upcoming":
             )
 
             for fix in group:
-                # Left border colour: green = value bets, blue = full data, none = partial
+                # Card border — two-level visual hierarchy (E31-02):
+                # 1. Value-bet fixtures get a full green card border + subtle
+                #    glow so users can scan the page at-a-glance for value.
+                # 2. Non-value fixtures keep the default card styling — the
+                #    ★ blue-ringed best-guess badge inside provides the detail.
                 if fix["has_value_bets"]:
-                    border_style = f"border-left: 3px solid {COLOURS['green']};"
-                elif fix["has_prediction"] and fix["has_odds"]:
-                    border_style = f"border-left: 3px solid {COLOURS['blue']};"
+                    border_style = (
+                        f"border: 1.5px solid {COLOURS['green']}; "
+                        f"box-shadow: 0 0 0 1px rgba(63, 185, 80, 0.2), "
+                        f"0 0 12px rgba(63, 185, 80, 0.12);"
+                    )
                 else:
                     border_style = ""
 
@@ -1261,14 +1291,22 @@ else:
             )
 
             for fix in group:
-                # Left border: green if VB profitable, red if VB existed
-                # but lost, blue if full data but no VB
+                # Card border for completed matches (E31-02):
+                # Green full border = value bet was profitable (nice!)
+                # Red full border = value bet existed but lost
+                # Default = no value bet existed, or partial data
                 if fix["vb_profitable"] is True:
-                    border_style = f"border-left: 3px solid {COLOURS['green']};"
+                    border_style = (
+                        f"border: 1.5px solid {COLOURS['green']}; "
+                        f"box-shadow: 0 0 0 1px rgba(63, 185, 80, 0.2), "
+                        f"0 0 12px rgba(63, 185, 80, 0.12);"
+                    )
                 elif fix["vb_profitable"] is False:
-                    border_style = f"border-left: 3px solid {COLOURS['red']};"
-                elif fix["has_prediction"] and fix["has_odds"]:
-                    border_style = f"border-left: 3px solid {COLOURS['blue']};"
+                    border_style = (
+                        f"border: 1.5px solid {COLOURS['red']}; "
+                        f"box-shadow: 0 0 0 1px rgba(248, 81, 73, 0.2), "
+                        f"0 0 12px rgba(248, 81, 73, 0.12);"
+                    )
                 else:
                     border_style = ""
 

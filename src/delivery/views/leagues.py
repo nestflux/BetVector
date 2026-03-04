@@ -1,6 +1,6 @@
 """
-BetVector — League Explorer Page (E9-04)
-=========================================
+BetVector — League Explorer Page (E9-04, E31-03)
+==================================================
 Browse league standings, recent results, upcoming fixtures, and team form.
 
 This page lets the owner explore any active league in depth:
@@ -13,10 +13,16 @@ This page lets the owner explore any active league in depth:
   with historical data only).
 - **Form table**: Each team's last 5 results shown as W/D/L badges.
 
+E31-03: Team crest badges added to Standings, Team Form, and NPxG tables.
+Standings and NPxG use ``_render_html_table()`` (replacing ``st.dataframe()``
+which cannot render inline HTML images).  Team Form already used custom HTML
+so badges are prepended via ``render_team_badge()``.
+
 Master Plan refs: MP §3 Flow 4 (Dashboard Exploration), MP §8 Design System
 """
 
 from collections import defaultdict
+import html as html_mod  # standard library HTML escaping (prevents XSS/entity issues)
 from typing import Dict, List, Optional
 
 import pandas as pd
@@ -282,8 +288,9 @@ def calculate_team_form(
 ) -> pd.DataFrame:
     """Calculate each team's form over their last N matches.
 
-    Returns a DataFrame with the team name and a list of W/D/L results
-    for their most recent matches (chronological order, most recent last).
+    Returns a DataFrame with the team name, team_id (for badge rendering),
+    and a list of W/D/L results for their most recent matches
+    (chronological order, most recent last).
 
     Parameters
     ----------
@@ -297,17 +304,23 @@ def calculate_team_form(
     Returns
     -------
     pd.DataFrame
-        Columns: Team, Form (list of 'W'/'D'/'L' strings), Pts (form points)
+        Columns: Team, team_id, Form (list of 'W'/'D'/'L' strings),
+        Pts (form points).  ``team_id`` is included for badge rendering
+        (E31-03).
     """
     season = season or _get_current_season()
     HomeTeam = aliased(Team)
     AwayTeam = aliased(Team)
 
     with get_session() as session:
-        # Get all finished matches
+        # Get all finished matches.  E31-03: also select team IDs so we
+        # can map team_name → team_id for badge rendering.
         matches = (
             session.query(
-                Match, HomeTeam.name.label("home_name"),
+                Match,
+                HomeTeam.id.label("home_team_id"),
+                HomeTeam.name.label("home_name"),
+                AwayTeam.id.label("away_team_id"),
                 AwayTeam.name.label("away_name"),
             )
             .join(HomeTeam, Match.home_team_id == HomeTeam.id)
@@ -321,10 +334,15 @@ def calculate_team_form(
             .all()
         )
 
-    # Build form sequences per team
-    team_results = defaultdict(list)
+    # Build form sequences per team and a name → id mapping.
+    team_results: dict[str, list] = defaultdict(list)
+    team_id_map: dict[str, int] = {}
 
-    for match, home_name, away_name in matches:
+    for match, home_team_id, home_name, away_team_id, away_name in matches:
+        # Track team IDs (last seen wins — stable for a given season)
+        team_id_map[home_name] = home_team_id
+        team_id_map[away_name] = away_team_id
+
         hg = match.home_goals or 0
         ag = match.away_goals or 0
 
@@ -345,6 +363,7 @@ def calculate_team_form(
         form_pts = sum(3 if r == "W" else 1 if r == "D" else 0 for r in recent)
         rows.append({
             "Team": team_name,
+            "team_id": team_id_map.get(team_name),
             "Form": recent,
             "Pts": form_pts,
         })
@@ -419,7 +438,8 @@ def calculate_npxg_rankings(
     latest = latest.sort_values("NPxG Diff", ascending=False).reset_index(drop=True)
     latest.insert(0, "Rank", range(1, len(latest) + 1))
 
-    return latest[["Rank", "Team", "NPxG", "NPxGA", "NPxG Diff", "PPDA", "Deep Comps"]]
+    # E31-03: Include team_id for badge rendering in the HTML table.
+    return latest[["Rank", "team_id", "Team", "NPxG", "NPxGA", "NPxG Diff", "PPDA", "Deep Comps"]]
 
 
 # ============================================================================
@@ -456,6 +476,108 @@ def render_score(home_goals: int, away_goals: int) -> str:
         f'<span style="font-family: JetBrains Mono, monospace; '
         f'font-weight: 700; color: {COLOURS["text"]};">'
         f'{home_goals} - {away_goals}</span>'
+    )
+
+
+def _render_html_table(
+    df: pd.DataFrame,
+    team_col: str = "Team",
+    team_id_col: str = "team_id",
+    num_formats: Optional[Dict[str, str]] = None,
+) -> str:
+    """Render a DataFrame as a dark-themed HTML table with team badges.
+
+    E31-03: Replaces ``st.dataframe()`` calls where we need inline badge
+    images in the Team column.  ``st.dataframe()`` cannot render HTML,
+    so we build a styled ``<table>`` manually.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Data to render.  Must contain ``team_col`` and ``team_id_col``.
+    team_col : str
+        Column containing team display names (default ``"Team"``).
+    team_id_col : str
+        Column containing integer team IDs for badge lookup (default
+        ``"team_id"``).  This column is excluded from the rendered output.
+    num_formats : dict, optional
+        Column-name → Python format-spec mapping for numeric columns.
+        Example: ``{"NPxG": ".2f", "PPDA": ".1f"}``.
+
+    Returns
+    -------
+    str
+        HTML string for the complete ``<table>`` element, safe for use
+        with ``st.markdown(..., unsafe_allow_html=True)``.
+    """
+    num_formats = num_formats or {}
+
+    # Columns to display (exclude the team_id column — internal only)
+    display_cols = [c for c in df.columns if c != team_id_col]
+
+    # Table header
+    header_cells = "".join(
+        f'<th style="padding: 8px 12px; text-align: {"left" if c == team_col else "right"}; '
+        f'font-family: Inter, sans-serif; font-size: 12px; font-weight: 600; '
+        f'color: {COLOURS["text_secondary"]}; border-bottom: 1px solid {COLOURS["border"]}; '
+        f'text-transform: uppercase; letter-spacing: 0.5px;">{c}</th>'
+        for c in display_cols
+    )
+
+    # Table rows — alternating background colours per MP §8 table spec:
+    # even rows = #0D1117 (background), odd rows = #161B22 (surface).
+    row_htmls = []
+    for row_idx, (_, row) in enumerate(df.iterrows()):
+        row_bg = "#0D1117" if row_idx % 2 == 0 else COLOURS["surface"]
+        cells = []
+        for c in display_cols:
+            val = row[c]
+            if c == team_col:
+                # Render team name with badge image (E31-03).
+                # Fallback: HTML-escaped plain text if no team_id.
+                tid = row.get(team_id_col)
+                badge_html = (
+                    render_team_badge(tid, str(val), size=20)
+                    if tid
+                    else html_mod.escape(str(val))
+                )
+                cells.append(
+                    f'<td style="padding: 8px 12px; text-align: left; '
+                    f'font-family: Inter, sans-serif; font-size: 14px; '
+                    f'color: {COLOURS["text"]};">{badge_html}</td>'
+                )
+            else:
+                # Numeric or plain text — right-aligned with JetBrains Mono.
+                # Guard against NaN/None which would display as "nan".
+                fmt = num_formats.get(c)
+                is_valid = val is not None and not pd.isna(val)
+                if fmt and is_valid:
+                    display_val = format(val, fmt)
+                    # Add "+" prefix for positive diff columns (e.g. NPxG Diff)
+                    if c.endswith("Diff") and val > 0:
+                        display_val = f"+{display_val}"
+                elif not is_valid:
+                    display_val = "-"
+                else:
+                    display_val = html_mod.escape(str(val))
+                cells.append(
+                    f'<td style="padding: 8px 12px; text-align: right; '
+                    f"font-family: 'JetBrains Mono', monospace; font-size: 13px; "
+                    f'color: {COLOURS["text"]};">{display_val}</td>'
+                )
+        row_htmls.append(
+            f'<tr style="background-color: {row_bg}; '
+            f'border-bottom: 1px solid {COLOURS["border"]};">'
+            f'{"".join(cells)}</tr>'
+        )
+
+    return (
+        f'<table style="width: 100%; border-collapse: collapse; '
+        f'border-radius: 8px; overflow: hidden;">'
+        f'<thead><tr style="background-color: {COLOURS["surface"]};">'
+        f'{header_cells}</tr></thead>'
+        f'<tbody>{"".join(row_htmls)}</tbody>'
+        f'</table>'
     )
 
 
@@ -506,14 +628,10 @@ else:
         if standings.empty:
             st.info("No match results available to calculate standings.")
         else:
-            # Drop team_id from display (used internally for badges elsewhere)
-            display_cols = [c for c in standings.columns if c != "team_id"]
-            st.dataframe(
-                standings[display_cols],
-                use_container_width=True,
-                hide_index=True,
-                height=min(38 * len(standings) + 40, 800),
-            )
+            # E31-03: Render as HTML table with team badges instead of
+            # st.dataframe() which cannot display inline HTML images.
+            standings_html = _render_html_table(standings)
+            st.markdown(standings_html, unsafe_allow_html=True)
 
         st.divider()
 
@@ -527,14 +645,19 @@ else:
         if form_df.empty:
             st.info("No match data available for form calculation.")
         else:
-            # Render form badges as HTML
+            # Render form badges as HTML.  E31-03: added team crest badge
+            # before the team name for visual consistency with other sections.
             for _, row in form_df.iterrows():
                 badges_html = render_form_badges(row["Form"])
+                # Team badge (graceful fallback to plain text if no badge)
+                team_html = render_team_badge(
+                    row.get("team_id"), row["Team"], size=20,
+                ) if row.get("team_id") else row["Team"]
                 st.markdown(
                     f'<div class="bv-card" style="display: flex; justify-content: '
                     f'space-between; align-items: center; padding: 10px 16px;">'
                     f'<span style="font-family: Inter, sans-serif; font-size: 14px; '
-                    f'color: {COLOURS["text"]}; min-width: 200px;">{row["Team"]}</span>'
+                    f'color: {COLOURS["text"]}; min-width: 200px;">{team_html}</span>'
                     f'<div>{badges_html}</div>'
                     f'<span style="font-family: JetBrains Mono, monospace; font-size: 14px; '
                     f'color: {COLOURS["text_secondary"]};">{row["Pts"]} pts</span>'
@@ -568,19 +691,19 @@ else:
                 "for this season."
             )
         else:
-            st.dataframe(
+            # E31-03: Render as HTML table with team badges instead of
+            # st.dataframe() which cannot display inline HTML images.
+            npxg_html = _render_html_table(
                 npxg_df,
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "NPxG": st.column_config.NumberColumn(format="%.2f"),
-                    "NPxGA": st.column_config.NumberColumn(format="%.2f"),
-                    "NPxG Diff": st.column_config.NumberColumn(format="%+.2f"),
-                    "PPDA": st.column_config.NumberColumn(format="%.1f"),
-                    "Deep Comps": st.column_config.NumberColumn(format="%.1f"),
+                num_formats={
+                    "NPxG": ".2f",
+                    "NPxGA": ".2f",
+                    "NPxG Diff": ".2f",
+                    "PPDA": ".1f",
+                    "Deep Comps": ".1f",
                 },
-                height=min(38 * len(npxg_df) + 40, 800),
             )
+            st.markdown(npxg_html, unsafe_allow_html=True)
 
         st.divider()
 

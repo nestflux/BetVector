@@ -3809,3 +3809,120 @@ Integrate the BetVector logo assets throughout the dashboard: favicon, sidebar, 
 E30-01 (Always-ring + threshold slider) → E30-02 (Historical fixtures view)
 E30-03 (Logo integration) — independent, can run in parallel
 ```
+
+---
+
+## E31 — Badge Ring Redesign + League Explorer Badges
+
+Two visual enhancements to complete the dashboard polish:
+
+1. **Badge ring visibility** — The grey ring (`#484F58`) for "best guess below threshold" is nearly invisible on dark background. Replace with a two-tier system: blue ring for best guess, green double ring with glow for value bets (Option C — owner-approved via mockup). Add fixture card-level green borders for value-bet fixtures (two-level scan hierarchy).
+
+2. **League Explorer team badges** — Standings, Team Form, and NPxG Rankings sections don't show team crest badges. Recent Results and Upcoming Fixtures already use `render_team_badge()`. Add badges everywhere for consistency.
+
+**MP refs:** §8 Design System, §3 Flow 4 (Dashboard Exploration)
+
+### E31-01 — Badge Ring Redesign ★
+
+**Type:** Enhancement
+**Depends on:** E30-01 (ring logic must exist)
+**Master Plan:** MP §8 Design System
+**Status:** DONE
+
+**Changes:**
+- Replace grey ring CSS (`#484F58`) with blue ring (`#58A6FF`) for best-guess-below-threshold badges
+- Replace single green ring with double green ring + glow for value-bet best picks (Option C)
+- Add ★ star prefix to the best-pick badge label (e.g. `★ H` instead of `H`)
+- Update legend swatches: "★ Value Pick (edge ≥ X%)" with double green ring, "★ Best Guess (below threshold)" with blue ring
+
+**Files:** `src/delivery/views/fixtures.py`
+
+Ring CSS values:
+- Value: `box-shadow: 0 0 0 2px #3FB950, 0 0 0 4px rgba(63,185,80,0.35), 0 0 10px rgba(63,185,80,0.4)`
+- Best guess: `box-shadow: 0 0 0 2px #58A6FF, 0 0 6px rgba(88,166,255,0.35)`
+
+**Acceptance Criteria:**
+- [ ] Every fixture shows a ★-prefixed best-pick badge (regardless of edge)
+- [ ] Value-bet best picks: green double ring with glow (clearly distinct from blue)
+- [ ] Below-threshold best picks: blue ring (clearly visible on dark bg #0D1117)
+- [ ] Legend reflects both ring styles with updated labels
+- [ ] Tooltip still shows "★ Model's Pick" on hover
+
+---
+
+### E31-02 — Fixture Card Value Highlight
+
+**Type:** Enhancement
+**Depends on:** E31-01 (ring styles must be in place)
+**Master Plan:** MP §8 Design System
+**Status:** DONE
+
+**Changes:**
+- Replace left-border-only styling with full card border for value-bet upcoming fixtures
+- Value card: `border: 1.5px solid #3FB950; box-shadow: 0 0 0 1px rgba(63,185,80,0.2), 0 0 12px rgba(63,185,80,0.12)`
+- Non-value cards: default card styling (no green border, but ★ blue-ring best guess inside)
+- Recent Results: VB profitable = green full border, VB lost = red full border, no VB = default
+
+**Files:** `src/delivery/views/fixtures.py`
+
+**Acceptance Criteria:**
+- [ ] Upcoming fixtures with value bets have full green card border with subtle glow
+- [ ] Upcoming fixtures without value bets have default card styling (no green)
+- [ ] Recent Results: VB profitable = green border, VB lost = red border, no VB = default
+- [ ] Two-level hierarchy: scan cards for green borders → find ★ double-ring badge inside
+
+---
+
+### E31-03 — League Explorer Team Badges
+
+**Type:** Enhancement
+**Depends on:** E28-02 (badge helper must exist)
+**Master Plan:** MP §8 Design System
+**Status:** DONE
+
+**Changes:**
+- **Standings**: Convert `st.dataframe()` to HTML table with team badges. `calculate_standings()` already returns `team_id` (currently dropped before display). Use `render_team_badge()` in Team column.
+- **Team Form**: Add `team_id` to `calculate_team_form()` return data. Build `team_id_map` from query results. Add badge to each team name in the custom HTML rendering loop.
+- **NPxG Rankings**: Include `team_id` in `calculate_npxg_rankings()` return columns (currently dropped at line 422). Convert `st.dataframe()` to HTML table with badges.
+- Optional: Extract shared `_render_html_table()` helper for Standings + NPxG table patterns.
+
+**Files:** `src/delivery/views/leagues.py`
+
+**Acceptance Criteria:**
+- [ ] Standings table shows team crest badges next to team names
+- [ ] Team Form rows show team crest badges (left of team name)
+- [ ] NPxG Rankings table shows team crest badges next to team names
+- [ ] Badges gracefully degrade to plain text when image not available
+- [ ] Tables maintain dark theme styling (surface bg, text colours, monospace numbers)
+- [ ] All 5 sections in League Explorer now have consistent badge display
+
+---
+
+### E31-04 — Integration Test
+
+**Type:** Test
+**Depends on:** E31-01, E31-02, E31-03
+**Master Plan:** MP §8 Design System
+**Status:** DONE
+
+Visual and functional verification across both pages.
+
+**Acceptance Criteria:**
+- [ ] Fixtures page: every fixture has a ★-prefixed ringed badge (blue or double-green)
+- [ ] Fixtures page: value-bet cards have full green card border
+- [ ] Fixtures page: non-value cards have default border + ★ blue-ringed best guess
+- [ ] Fixtures page: legend accurately reflects both ring styles
+- [ ] Fixtures page: Recent Results view uses same ring logic + value-aware card borders
+- [ ] League Explorer: all 5 sections display team badges (Standings, Form, NPxG, Recent Results, Upcoming)
+- [ ] All pages load in <3s
+- [ ] No console errors, no broken badge images
+
+---
+
+### Implementation Sequence
+
+```
+E31-01 (Badge ring redesign) → E31-02 (Card value highlight)
+E31-03 (League Explorer badges) — independent, can run after E31-01
+E31-04 (Integration test) — after all three
+```
