@@ -3656,7 +3656,7 @@ Add team crest badges to the bet history tables on the Performance and Bankroll 
 **Type:** Enhancement — Dashboard
 **Depends on:** E29-03
 **MP refs:** §3 Flow 6 (First-Time Setup), §8 Design System
-**Status:** TODO
+**Status:** DONE ✅
 
 Add a bankroll reset feature to the Settings page with two-step confirmation.
 
@@ -3664,18 +3664,20 @@ Add a bankroll reset feature to the Settings page with two-step confirmation.
 - Add `reset_bankroll(user_id)` backend function
 - Add "Bankroll Management" subsection after Starting Bankroll input
 - Show current vs starting bankroll comparison
-- Red "Reset Bankroll" button with two-step confirmation (prevents accidental clicks)
+- "Reset Bankroll" button with two-step confirmation (prevents accidental clicks)
 - Resets `current_bankroll` to `starting_bankroll`; preserves all bet history
 
 **Files:** `src/delivery/views/settings.py`
 
+**Results:** Two-step reset button works: click 1 shows warning + confirm/cancel, click 2 resets bankroll. Toast confirmation shown. Bet history fully preserved.
+
 **Acceptance Criteria:**
-- [ ] "Reset Bankroll" button visible in Settings after Starting Bankroll input
-- [ ] First click shows warning message + "Confirm Reset" button
-- [ ] Confirm resets `current_bankroll` to `starting_bankroll` in database
-- [ ] Success toast shown after reset
-- [ ] Bet history (BetLog) is NOT deleted
-- [ ] Two-step confirmation prevents accidental resets
+- [x] "Reset Bankroll" button visible in Settings after Starting Bankroll input
+- [x] First click shows warning message + "Confirm Reset" button
+- [x] Confirm resets `current_bankroll` to `starting_bankroll` in database
+- [x] Success toast shown after reset
+- [x] Bet history (BetLog) is NOT deleted
+- [x] Two-step confirmation prevents accidental resets
 
 ---
 

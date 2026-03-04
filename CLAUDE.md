@@ -299,9 +299,9 @@ Wait for owner to respond with approval before making the change.
 
 ## Current Status
 
-Last completed: E29-03 (Performance + Bankroll Team Badges)
-Currently working: E29-04 (Settings Bankroll Reset)
-Next up: (none — E29-04 is the last issue in E29)
+Last completed: E29-04 (Settings Bankroll Reset)
+Currently working: (none — critical path complete through E29)
+Next up: (none — awaiting new epics)
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
@@ -319,8 +319,8 @@ E25 complete: All 4 issues done ✅ (XGBoost ensemble model — Poisson wins bac
 E26 complete: All 4 issues done ✅ (Dashboard UX Overhaul — picks dedup, deep dive nav, fixtures landing, integration test)
 E27 complete: All 4 issues done ✅ (Deep Dive FanDuel default, O/U 1.5 markets, glossary completeness, integration test)
 E28 complete: All 4 issues done ✅ (Team Badges — logo fetch, badge helper, page rollout, integration test)
-E29 in progress: Dashboard UX Polish (4 issues — model clarity, badge ring, perf/bankroll badges, bankroll reset)
-Total issues: 109 (105 complete + 4 in progress)
+E29 complete: All 4 issues done ✅ (Dashboard UX Polish — model top pick, badge ring, perf/bankroll badges, bankroll reset)
+Total issues: 109 — ALL COMPLETE ✅
 
 ---
 

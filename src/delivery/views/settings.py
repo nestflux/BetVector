@@ -1,15 +1,18 @@
 """
-BetVector — Settings Page (E10-03)
-====================================
+BetVector — Settings Page (E10-03, E29-04)
+============================================
 User preferences, league management, notification toggles, and user
 management for the dashboard owner.
 
 Sections:
 1. User Preferences — staking method, stake %, Kelly fraction, edge threshold,
-   starting bankroll
+   starting bankroll, bankroll reset
 2. League Management — enable/disable leagues from config
 3. Notification Preferences — email address, morning/evening/weekly toggles
 4. User Management (owner only) — list users, invite new viewer
+
+E29-04: Added bankroll reset feature with two-step confirmation.
+  Resets current_bankroll to starting_bankroll. Preserves all bet history.
 
 Master Plan refs: MP §3 Flow 6 (First-Time Setup), MP §3 Flow 7 (Adding a
 Friend), MP §8 Design System
@@ -135,6 +138,36 @@ def save_user_setting(user_id: int, field: str, value) -> bool:
             if not user:
                 return False
             setattr(user, field, value)
+            user.updated_at = datetime.utcnow().isoformat()
+            session.commit()
+        return True
+    except Exception:
+        return False
+
+
+def reset_bankroll(user_id: int) -> bool:
+    """Reset the user's current bankroll to their starting bankroll.
+
+    E29-04: This is a "fresh start" — the bankroll counter resets but all
+    historical bet data (BetLog) is preserved.  This lets the user restart
+    their bankroll tracking without losing performance history.
+
+    Parameters
+    ----------
+    user_id : int
+        The user's database ID.
+
+    Returns
+    -------
+    bool
+        True if the reset succeeded, False otherwise.
+    """
+    try:
+        with get_session() as session:
+            user = session.get(User, user_id)
+            if not user:
+                return False
+            user.current_bankroll = user.starting_bankroll
             user.updated_at = datetime.utcnow().isoformat()
             session.commit()
         return True
@@ -455,6 +488,94 @@ else:
     if abs(new_starting - user_data["starting_bankroll"]) > 0.01:
         if save_user_setting(user_data["id"], "starting_bankroll", new_starting):
             st.toast(f"Starting bankroll updated to ${new_starting:.2f}", icon="✅")
+
+    # --- 1e: Bankroll Management (E29-04) ---
+    # Shows current vs starting bankroll comparison and a reset button
+    # with two-step confirmation to prevent accidental resets.
+    st.markdown(
+        '<div style="margin-top: 20px; font-family: Inter, sans-serif; '
+        f'font-size: 14px; font-weight: 600; color: {COLOURS["text"]};">'
+        'Bankroll Management</div>',
+        unsafe_allow_html=True,
+    )
+
+    # Current vs starting comparison
+    current_br = user_data["current_bankroll"]
+    starting_br = user_data["starting_bankroll"]
+    diff = current_br - starting_br
+    diff_colour = COLOURS["green"] if diff >= 0 else COLOURS["red"]
+    diff_sign = "+" if diff >= 0 else ""
+
+    st.markdown(
+        f'<div style="display: flex; gap: 24px; align-items: center; '
+        f'margin: 8px 0 12px 0; font-family: Inter, sans-serif; '
+        f'font-size: 13px; color: {COLOURS["text_secondary"]};">'
+        f'<span>Starting: <strong style="color: {COLOURS["text"]}; '
+        f"font-family: 'JetBrains Mono', monospace;\">${starting_br:.2f}</strong></span>"
+        f'<span>Current: <strong style="color: {diff_colour}; '
+        f"font-family: 'JetBrains Mono', monospace;\">${current_br:.2f}</strong></span>"
+        f'<span style="color: {diff_colour}; font-family: \'JetBrains Mono\', monospace; '
+        f'font-size: 12px;">({diff_sign}${abs(diff):.2f})</span>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    # Two-step reset: first click shows warning + confirm button
+    # Using session state to track confirmation step
+    if "bankroll_reset_confirm" not in st.session_state:
+        st.session_state.bankroll_reset_confirm = False
+
+    if not st.session_state.bankroll_reset_confirm:
+        # Step 1: Show the initial reset button
+        if st.button(
+            "🔄 Reset Bankroll",
+            key="reset_bankroll_btn",
+            help="Reset your current bankroll to the starting amount",
+            type="secondary",
+        ):
+            st.session_state.bankroll_reset_confirm = True
+            st.rerun()
+    else:
+        # Step 2: Show warning message and confirm/cancel buttons
+        st.markdown(
+            f'<div style="background-color: rgba(248, 81, 73, 0.1); '
+            f'border: 1px solid {COLOURS["red"]}; border-radius: 6px; '
+            f'padding: 12px; margin: 8px 0; font-family: Inter, sans-serif; '
+            f'font-size: 13px; color: {COLOURS["text"]};">'
+            f'⚠️ This will reset your current bankroll to '
+            f'<strong>${starting_br:.2f}</strong>. '
+            f'Existing bet history will be preserved.'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+        confirm_cols = st.columns([1, 1, 3])
+        with confirm_cols[0]:
+            if st.button(
+                "✅ Confirm Reset",
+                key="confirm_reset_btn",
+                type="primary",
+            ):
+                if reset_bankroll(user_data["id"]):
+                    st.session_state.bankroll_reset_confirm = False
+                    st.toast(
+                        f"Bankroll reset to ${starting_br:.2f}",
+                        icon="✅",
+                    )
+                    # Update local state so the comparison refreshes
+                    user_data["current_bankroll"] = starting_br
+                    st.rerun()
+                else:
+                    st.error("Failed to reset bankroll. Please try again.")
+
+        with confirm_cols[1]:
+            if st.button(
+                "Cancel",
+                key="cancel_reset_btn",
+                type="secondary",
+            ):
+                st.session_state.bankroll_reset_confirm = False
+                st.rerun()
 
     st.divider()
 
