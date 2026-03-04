@@ -3381,7 +3381,7 @@ The badges will be fetched from API-Football's `/teams` endpoint (which returns 
 **Type:** Data — Schema + Scraper Enhancement
 **Depends on:** E27-04
 **MP refs:** §5 Data Sources (API-Football), §6 Schema (teams table)
-**Status:** TODO
+**Status:** DONE — 28 teams with logo_url + api_football_id + cached badges
 
 **Changes:**
 

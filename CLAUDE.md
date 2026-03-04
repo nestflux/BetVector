@@ -298,9 +298,9 @@ Wait for owner to respond with approval before making the change.
 
 ## Current Status
 
-Last completed: E27-04 (Integration Test — E27 epic complete)
-Currently working: E28-01 (Add logo_url to Team Model + Fetch from API-Football)
-Next up: E28-02 (Badge Rendering Helper + Deep Dive Integration)
+Last completed: E28-01 (Add logo_url to Team Model + Fetch from API-Football)
+Currently working: E28-02 (Badge Rendering Helper + Deep Dive Integration)
+Next up: E28-03 (Badges on Fixtures, Picks, Leagues, Performance, Bankroll)
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)

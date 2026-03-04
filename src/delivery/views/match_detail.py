@@ -1,6 +1,6 @@
 """
-BetVector — Match Deep Dive View (E9-05, E26-02, E27-01)
-=========================================================
+BetVector — Match Deep Dive View (E9-05, E26-02, E27-01, E28-02)
+==================================================================
 Comprehensive analysis for a single match.  Accessible from Today's Picks
 cards and Fixtures page via ``st.session_state["deep_dive_match_id"]``
 (preferred) or ``?match_id=<id>`` query parameter (URL sharing fallback).
@@ -21,8 +21,14 @@ E27-01 changes:
 - Bookmaker toggle: selectbox to switch between FanDuel / Best Edge / All.
 - OU15 labels added so Over/Under 1.5 value bets render correctly.
 
+E28-02 changes:
+- Team badges (crests) displayed beside team names using base64-encoded PNGs.
+- Badge helper module ``_badge_helper.py`` provides ``render_team_badge()``
+  with memory caching and graceful fallback to plain text.
+- Match header uses 28px badges, H2H and form sections use 20px inline badges.
+
 Sections:
-1. Match header — teams, date, kickoff, league, actual result (if finished)
+1. Match header — teams with badges, date, kickoff, league, actual result (if finished)
 2. Scoreline matrix — 7×7 Plotly heatmap with most likely scoreline highlighted
 3. Market probabilities — 1X2, O/U 2.5, BTTS derived from the matrix
 4. Value bets — grouped by unique bet, FanDuel default, bookmaker toggle
@@ -53,6 +59,7 @@ from src.database.models import (
     ValueBet,
     Weather,
 )
+from src.delivery.views._badge_helper import render_team_badge
 
 
 # ============================================================================
@@ -100,7 +107,7 @@ PREFERRED_BOOKMAKER = "FanDuel"
 CONFIDENCE_COLOURS = {
     "high": COLOURS["green"],
     "medium": COLOURS["yellow"],
-    "low": COLOURS["border"],
+    "low": "#484F58",  # MP §8: muted text colour for low confidence
 }
 
 
@@ -258,6 +265,8 @@ def load_match_data(match_id: int) -> Optional[Dict]:
                 "date": m.date,
                 "home_team": hn,
                 "away_team": an,
+                "home_team_id": m.home_team_id,
+                "away_team_id": m.away_team_id,
                 "home_goals": m.home_goals,
                 "away_goals": m.away_goals,
             }
@@ -634,13 +643,26 @@ else:
             f'{data["home_goals"]} - {data["away_goals"]}</span>'
         )
 
+    # Build badge + name HTML for the match header (28px badges for header)
+    home_badge_html = render_team_badge(
+        data["home_team_id"], data["home_team"], size=28,
+        name_style=f"font-family: Inter, sans-serif; font-size: 24px; font-weight: 700; color: {COLOURS['text']};",
+    )
+    away_badge_html = render_team_badge(
+        data["away_team_id"], data["away_team"], size=28,
+        name_style=f"font-family: Inter, sans-serif; font-size: 24px; font-weight: 700; color: {COLOURS['text']};",
+    )
+
     st.markdown(
         f'<div style="text-align: center; margin-bottom: 24px;">'
         f'<div style="font-family: Inter, sans-serif; font-size: 12px; color: {COLOURS["text_secondary"]}; '
         f'text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">'
         f'{data["league_name"]} &middot; {data["date"]} &middot; {data["kickoff"]}</div>'
-        f'<div style="font-family: Inter, sans-serif; font-size: 24px; font-weight: 700; color: {COLOURS["text"]};">'
-        f'{data["home_team"]} vs {data["away_team"]}</div>'
+        f'<div style="display: flex; align-items: center; justify-content: center; gap: 12px;">'
+        f'{home_badge_html}'
+        f'<span style="font-family: Inter, sans-serif; font-size: 18px; color: {COLOURS["text_secondary"]};">vs</span>'
+        f'{away_badge_html}'
+        f'</div>'
         f'<div style="margin-top: 8px;">{result_html}</div>'
         f'</div>',
         unsafe_allow_html=True,
@@ -961,19 +983,22 @@ else:
 
     if data["h2h"]:
         for h in data["h2h"]:
+            # Render badges inline beside team names (20px for H2H rows)
+            h2h_home = render_team_badge(h["home_team_id"], h["home_team"], size=20)
+            h2h_away = render_team_badge(h["away_team_id"], h["away_team"], size=20)
             st.markdown(
                 f'<div class="bv-card" style="display: flex; align-items: center; '
                 f'gap: 12px; padding: 10px 16px;">'
                 f'<span style="font-family: JetBrains Mono, monospace; font-size: 12px; '
                 f'color: {COLOURS["text_secondary"]}; min-width: 85px;">{h["date"]}</span>'
                 f'<span style="font-family: Inter, sans-serif; font-size: 14px; '
-                f'color: {COLOURS["text"]}; min-width: 180px; text-align: right;">'
-                f'{h["home_team"]}</span>'
+                f'color: {COLOURS["text"]}; min-width: 200px; text-align: right;">'
+                f'{h2h_home}</span>'
                 f'<span style="font-family: JetBrains Mono, monospace; font-size: 14px; '
                 f'font-weight: 700; color: {COLOURS["text"]}; min-width: 50px; text-align: center;">'
                 f'{h["home_goals"]} - {h["away_goals"]}</span>'
                 f'<span style="font-family: Inter, sans-serif; font-size: 14px; '
-                f'color: {COLOURS["text"]};">{h["away_team"]}</span>'
+                f'color: {COLOURS["text"]};">{h2h_away}</span>'
                 f'</div>',
                 unsafe_allow_html=True,
             )
@@ -1018,15 +1043,22 @@ else:
                 unsafe_allow_html=True,
             )
 
-        # Header
+        # Header with team badges (20px inline badges)
+        form_home = render_team_badge(
+            data["home_team_id"], data["home_team"], size=20,
+            name_style=f"font-family: Inter, sans-serif; font-size: 16px; font-weight: 600; color: {COLOURS['text']};",
+        )
+        form_away = render_team_badge(
+            data["away_team_id"], data["away_team"], size=20,
+            name_style=f"font-family: Inter, sans-serif; font-size: 16px; font-weight: 600; color: {COLOURS['text']};",
+        )
         st.markdown(
-            f'<div style="display: flex; justify-content: space-between; padding: 8px 0; margin-bottom: 8px;">'
-            f'<span style="font-family: Inter, sans-serif; font-size: 16px; font-weight: 600; '
-            f'color: {COLOURS["text"]};">{data["home_team"]}</span>'
+            f'<div style="display: flex; justify-content: space-between; align-items: center; '
+            f'padding: 8px 0; margin-bottom: 8px;">'
+            f'<span>{form_home}</span>'
             f'<span style="font-family: Inter, sans-serif; font-size: 12px; '
             f'color: {COLOURS["text_secondary"]};">vs</span>'
-            f'<span style="font-family: Inter, sans-serif; font-size: 16px; font-weight: 600; '
-            f'color: {COLOURS["text"]};">{data["away_team"]}</span>'
+            f'<span>{form_away}</span>'
             f'</div>',
             unsafe_allow_html=True,
         )
