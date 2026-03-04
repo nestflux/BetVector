@@ -299,9 +299,9 @@ Wait for owner to respond with approval before making the change.
 
 ## Current Status
 
-Last completed: E29-02 (Fixtures Preferred Bet Ring + Rich Tooltips)
-Currently working: E29-03 (Performance + Bankroll Team Badges)
-Next up: E29-04 (Settings Bankroll Reset)
+Last completed: E29-03 (Performance + Bankroll Team Badges)
+Currently working: E29-04 (Settings Bankroll Reset)
+Next up: (none — E29-04 is the last issue in E29)
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)

@@ -3624,27 +3624,30 @@ Add a glowing green ring around the model's preferred market badge on fixture ca
 **Type:** Enhancement — Dashboard
 **Depends on:** E29-02
 **MP refs:** §8 Design System
-**Status:** TODO
+**Status:** DONE ✅
 
 Add team crest badges to the bet history tables on the Performance and Bankroll pages — the only two pages still missing badges.
 
 **Changes:**
-- Import `render_team_badge` and `Match` model
-- Batch-load team IDs via BetLog.match_id → Match → Team join
+- Import `render_badge_only` and `Match` model
+- Batch-load team IDs via BetLog.match_id → Match join (single IN query)
 - Replace `st.dataframe()` with HTML table via `st.markdown()` for badge support
 - 16px badges for table density
 - P&L column with green/red coloring
+- HTML-escaped team names for defense-in-depth
 
 **Files:** `src/delivery/views/performance.py`, `src/delivery/views/bankroll.py`
 
+**Results:** Both pages now show 16px team badges inline in bet tables. Batch team ID lookup (1 query per page). Monthly P&L table unchanged. Graceful fallback for missing badges/orphaned matches.
+
 **Acceptance Criteria:**
-- [ ] Performance page recent bets table shows 16px team badges inline
-- [ ] Bankroll page bet history table shows 16px team badges inline
-- [ ] Badges use batch Match lookup (no N+1 queries)
-- [ ] P&L column is green for positive, red for negative
-- [ ] Table follows design system (dark theme, JetBrains Mono for data, Inter for text)
-- [ ] Monthly P&L breakdown table unchanged (aggregated, no per-match data)
-- [ ] Graceful fallback for missing badges or orphaned match_ids
+- [x] Performance page recent bets table shows 16px team badges inline
+- [x] Bankroll page bet history table shows 16px team badges inline
+- [x] Badges use batch Match lookup (no N+1 queries)
+- [x] P&L column is green for positive, red for negative
+- [x] Table follows design system (dark theme, JetBrains Mono for data, Inter for text)
+- [x] Monthly P&L breakdown table unchanged (aggregated, no per-match data)
+- [x] Graceful fallback for missing badges or orphaned match_ids
 
 ---
 

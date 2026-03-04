@@ -1,6 +1,6 @@
 """
-BetVector — Performance Tracker Page (E9-03)
-=============================================
+BetVector — Performance Tracker Page (E9-03, E29-03)
+=====================================================
 Shows betting results, P&L charts, ROI, and win rates.
 
 This is the evening review interface — the answer to "how am I doing?"
@@ -9,7 +9,7 @@ Displays:
 - 4 metric cards: Total P&L, ROI %, Total Bets, Win Rate
 - Cumulative P&L line chart (Plotly, dark theme)
 - Monthly P&L bar chart (green for profit, red for loss)
-- Recent bets table with result indicators
+- Recent bets table with team badges and result indicators
 - Filters: date range, league, market type, bet type
 
 P&L formula:
@@ -17,10 +17,15 @@ P&L formula:
   Loss: -stake
   ROI:  total_pnl / total_staked × 100
 
+E29-03: Added 16px team badges inline in the recent bets table.
+  Batch-loads team IDs via BetLog.match_id → Match join (no N+1).
+  st.dataframe replaced with HTML table for badge rendering.
+
 Master Plan refs: MP §3 Flow 2 (Evening Results Review), MP §8 Design System
 """
 
 from datetime import date, datetime, timedelta
+from html import escape as html_escape
 from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
@@ -29,7 +34,8 @@ import streamlit as st
 from sqlalchemy import func
 
 from src.database.db import get_session
-from src.database.models import BetLog
+from src.database.models import BetLog, Match
+from src.delivery.views._badge_helper import render_badge_only
 
 
 # ============================================================================
@@ -83,7 +89,8 @@ def load_bet_data(
     -------
     pd.DataFrame
         Columns: date, league, home_team, away_team, market_type, selection,
-        odds, stake, status, pnl, bet_type, edge
+        odds, stake, status, pnl, bet_type, edge, match_id,
+        home_team_id, away_team_id
     """
     with get_session() as session:
         query = session.query(BetLog).filter(
@@ -106,10 +113,29 @@ def load_bet_data(
         if not rows:
             return pd.DataFrame()
 
+        # E29-03: Batch-load team IDs for badge rendering.
+        # BetLog.match_id → Match → home_team_id / away_team_id.
+        # One batch query instead of N+1 per-row lookups.
+        match_ids = list(set(b.match_id for b in rows if b.match_id))
+        match_team_map: Dict[int, Tuple[int, int]] = {}
+        if match_ids:
+            match_rows = (
+                session.query(Match.id, Match.home_team_id, Match.away_team_id)
+                .filter(Match.id.in_(match_ids))
+                .all()
+            )
+            match_team_map = {
+                m.id: (m.home_team_id, m.away_team_id)
+                for m in match_rows
+            }
+
         data = []
         for b in rows:
             # Use actual placement odds for user_placed, detection odds for system picks
             odds = b.odds_at_placement if b.odds_at_placement else b.odds_at_detection
+            # E29-03: Look up team IDs from the batch-loaded match map.
+            # Falls back to None if match_id is missing or orphaned.
+            home_tid, away_tid = match_team_map.get(b.match_id, (None, None))
             data.append({
                 "date": b.date,
                 "league": b.league,
@@ -123,6 +149,9 @@ def load_bet_data(
                 "pnl": b.pnl or 0.0,
                 "bet_type": b.bet_type,
                 "edge": b.edge,
+                "match_id": b.match_id,
+                "home_team_id": home_tid,
+                "away_team_id": away_tid,
             })
 
     return pd.DataFrame(data)
@@ -325,26 +354,116 @@ MARKET_LABELS = {
 }
 
 
-def create_bets_table(df: pd.DataFrame, limit: int = 50) -> pd.DataFrame:
-    """Create a formatted DataFrame for the recent bets table.
+def create_bets_table_html(df: pd.DataFrame, limit: int = 50) -> str:
+    """Build an HTML table for recent bets with inline team badges.
 
-    Most recent bets first, limited to `limit` rows.  Adds human-readable
-    result indicators and formatted P&L values.
+    E29-03: Replaced st.dataframe() with HTML table to support inline
+    base64-encoded team badge images.  16px badges for table density.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Bet data from ``load_bet_data()`` (must include home_team_id,
+        away_team_id, home_team, away_team columns).
+    limit : int
+        Maximum rows to show (default 50, most recent first).
+
+    Returns
+    -------
+    str
+        Complete HTML table string safe for ``st.markdown(unsafe_allow_html=True)``.
     """
-    recent = df.sort_values("date", ascending=False).head(limit).copy()
+    if df.empty:
+        return ""
 
-    # Format columns for display
-    recent["Match"] = recent["home_team"] + " vs " + recent["away_team"]
-    recent["Market"] = recent["market_type"].map(MARKET_LABELS).fillna(recent["market_type"])
-    recent["Odds"] = recent["odds"].apply(lambda x: f"{x:.2f}")
-    recent["Stake"] = recent["stake"].apply(lambda x: f"${x:.2f}")
-    recent["Result"] = recent["status"].map({"won": "✅ Won", "lost": "❌ Lost"})
-    recent["P&L"] = recent["pnl"].apply(
-        lambda x: f"+${x:.2f}" if x >= 0 else f"-${abs(x):.2f}"
+    recent = df.sort_values("date", ascending=False).head(limit)
+
+    # Table header
+    header = (
+        f'<table style="width: 100%; border-collapse: collapse; '
+        f'font-family: Inter, sans-serif; font-size: 13px; '
+        f'color: {COLOURS["text"]};">'
+        f'<thead><tr style="border-bottom: 1px solid {COLOURS["border"]};">'
+        f'<th style="text-align: left; padding: 8px 6px; color: {COLOURS["text_secondary"]}; '
+        f'font-size: 11px; font-weight: 600; text-transform: uppercase; '
+        f'letter-spacing: 0.5px;">Date</th>'
+        f'<th style="text-align: left; padding: 8px 6px; color: {COLOURS["text_secondary"]}; '
+        f'font-size: 11px; font-weight: 600; text-transform: uppercase; '
+        f'letter-spacing: 0.5px;">Match</th>'
+        f'<th style="text-align: left; padding: 8px 6px; color: {COLOURS["text_secondary"]}; '
+        f'font-size: 11px; font-weight: 600; text-transform: uppercase; '
+        f'letter-spacing: 0.5px;">Market</th>'
+        f'<th style="text-align: right; padding: 8px 6px; color: {COLOURS["text_secondary"]}; '
+        f'font-size: 11px; font-weight: 600; text-transform: uppercase; '
+        f'letter-spacing: 0.5px;">Odds</th>'
+        f'<th style="text-align: right; padding: 8px 6px; color: {COLOURS["text_secondary"]}; '
+        f'font-size: 11px; font-weight: 600; text-transform: uppercase; '
+        f'letter-spacing: 0.5px;">Stake</th>'
+        f'<th style="text-align: center; padding: 8px 6px; color: {COLOURS["text_secondary"]}; '
+        f'font-size: 11px; font-weight: 600; text-transform: uppercase; '
+        f'letter-spacing: 0.5px;">Result</th>'
+        f'<th style="text-align: right; padding: 8px 6px; color: {COLOURS["text_secondary"]}; '
+        f'font-size: 11px; font-weight: 600; text-transform: uppercase; '
+        f'letter-spacing: 0.5px;">P&amp;L</th>'
+        f'</tr></thead><tbody>'
     )
-    recent["Date"] = recent["date"]
 
-    return recent[["Date", "Match", "Market", "Odds", "Stake", "Result", "P&L"]]
+    rows_html = []
+    for _, row in recent.iterrows():
+        # E29-03: Inline 16px team badges in the Match column.
+        # render_badge_only returns just the <img> tag (no name text),
+        # gracefully falls back to empty string if badge is missing.
+        home_tid = row.get("home_team_id")
+        away_tid = row.get("away_team_id")
+        home_name = row.get("home_team", "")
+        away_name = row.get("away_team", "")
+
+        home_badge = render_badge_only(int(home_tid), home_name, size=16) if pd.notna(home_tid) else ""
+        away_badge = render_badge_only(int(away_tid), away_name, size=16) if pd.notna(away_tid) else ""
+        # HTML-escape team names to handle "&" in names like "Brighton & Hove Albion"
+        safe_home = html_escape(home_name)
+        safe_away = html_escape(away_name)
+        match_cell = f"{home_badge} {safe_home} vs {away_badge} {safe_away}"
+
+        # Market label (human-readable)
+        market_raw = row.get("market_type", "")
+        market_label = MARKET_LABELS.get(market_raw, market_raw)
+
+        # Odds (monospace)
+        odds_val = row.get("odds")
+        odds_str = f"{odds_val:.2f}" if odds_val else "—"
+
+        # Stake
+        stake_val = row.get("stake")
+        stake_str = f"${stake_val:.2f}" if stake_val else "—"
+
+        # Result indicator
+        status = row.get("status", "")
+        result_str = {"won": "✅ Won", "lost": "❌ Lost"}.get(status, status)
+
+        # P&L with colour — green for profit, red for loss
+        pnl = row.get("pnl", 0.0) or 0.0
+        pnl_colour = COLOURS["green"] if pnl >= 0 else COLOURS["red"]
+        pnl_str = f"+${pnl:.2f}" if pnl >= 0 else f"-${abs(pnl):.2f}"
+
+        rows_html.append(
+            f'<tr style="border-bottom: 1px solid {COLOURS["border"]};">'
+            f'<td style="padding: 6px; font-family: \'JetBrains Mono\', monospace; '
+            f'font-size: 12px; white-space: nowrap;">{row.get("date", "")}</td>'
+            f'<td style="padding: 6px; white-space: nowrap;">{match_cell}</td>'
+            f'<td style="padding: 6px;">{market_label}</td>'
+            f'<td style="padding: 6px; text-align: right; '
+            f'font-family: \'JetBrains Mono\', monospace; font-size: 12px;">{odds_str}</td>'
+            f'<td style="padding: 6px; text-align: right; '
+            f'font-family: \'JetBrains Mono\', monospace; font-size: 12px;">{stake_str}</td>'
+            f'<td style="padding: 6px; text-align: center;">{result_str}</td>'
+            f'<td style="padding: 6px; text-align: right; '
+            f'font-family: \'JetBrains Mono\', monospace; font-size: 12px; '
+            f'font-weight: 600; color: {pnl_colour};">{pnl_str}</td>'
+            f'</tr>'
+        )
+
+    return header + "".join(rows_html) + "</tbody></table>"
 
 
 # ============================================================================
@@ -468,18 +587,24 @@ else:
 
     st.divider()
 
-    # --- Recent Bets Table ---
+    # --- Recent Bets Table (E29-03: HTML table with inline team badges) ---
     st.markdown(
         '<div class="bv-section-header">Recent Bets</div>',
         unsafe_allow_html=True,
     )
-    bets_table = create_bets_table(df)
-    st.dataframe(
-        bets_table,
-        use_container_width=True,
-        hide_index=True,
-        height=400,
-    )
+    bets_html = create_bets_table_html(df)
+    if bets_html:
+        st.markdown(
+            f'<div style="max-height: 400px; overflow-y: auto; '
+            f'background-color: {COLOURS["surface"]}; border-radius: 6px; '
+            f'padding: 4px 8px;">{bets_html}</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            '<div class="bv-empty-state">No bets to display.</div>',
+            unsafe_allow_html=True,
+        )
 
 # ============================================================================
 # Glossary — explains every metric, chart, and term on this page (E27-03)

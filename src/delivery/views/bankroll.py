@@ -1,6 +1,6 @@
 """
-BetVector — Bankroll Manager Page (E10-02)
-============================================
+BetVector — Bankroll Manager Page (E10-02, E29-03)
+====================================================
 Current bankroll, staking method display, bet history with filters,
 safety alert status, bankroll chart, and monthly P&L breakdown.
 
@@ -9,21 +9,28 @@ Sections:
 2. Staking method — current method with brief explanation
 3. Safety status — traffic light indicators for each limit
 4. Bankroll chart — Plotly line chart with peak annotated
-5. Bet history — filterable, sortable table
+5. Bet history — filterable, sortable table with team badges
 6. Monthly P&L breakdown — table with bets, wins, losses, P&L, ROI
+
+E29-03: Added 16px team badges inline in the bet history table.
+  Batch-loads team IDs via BetLog.match_id → Match join (no N+1).
+  st.dataframe replaced with HTML table for badge rendering.
+  Monthly P&L table unchanged (aggregated, no per-match data).
 
 Master Plan refs: MP §3 Flow 4 (Bankroll Manager), MP §8 Design System
 """
 
 from datetime import date
-from typing import Dict, List, Optional
+from html import escape as html_escape
+from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
 from src.database.db import get_session
-from src.database.models import BetLog, User
+from src.database.models import BetLog, Match, User
+from src.delivery.views._badge_helper import render_badge_only
 
 
 # ============================================================================
@@ -206,8 +213,13 @@ def load_bet_history(
     market_type: Optional[str] = None,
     status_filter: Optional[str] = None,
     bet_type: Optional[str] = None,
-) -> pd.DataFrame:
-    """Load bet history with optional filters for the bet history table."""
+) -> List[Dict]:
+    """Load bet history with optional filters for the bet history table.
+
+    E29-03: Returns a list of dicts (not DataFrame) to preserve team_id
+    integers for badge rendering.  Each dict includes home_team_id and
+    away_team_id from a batch Match lookup.
+    """
     with get_session() as session:
         query = session.query(BetLog).filter(BetLog.user_id == user_id)
 
@@ -226,29 +238,154 @@ def load_bet_history(
 
         rows = query.order_by(BetLog.date.desc()).all()
 
-    if not rows:
-        return pd.DataFrame()
+        if not rows:
+            return []
+
+        # E29-03: Batch-load team IDs for badge rendering.
+        # BetLog.match_id → Match → home_team_id / away_team_id.
+        match_ids = list(set(b.match_id for b in rows if b.match_id))
+        match_team_map: Dict[int, Tuple[int, int]] = {}
+        if match_ids:
+            match_rows = (
+                session.query(Match.id, Match.home_team_id, Match.away_team_id)
+                .filter(Match.id.in_(match_ids))
+                .all()
+            )
+            match_team_map = {
+                m.id: (m.home_team_id, m.away_team_id)
+                for m in match_rows
+            }
 
     data = []
     for b in rows:
         odds = b.odds_at_placement if b.odds_at_placement else b.odds_at_detection
+        home_tid, away_tid = match_team_map.get(b.match_id, (None, None))
         data.append({
-            "Date": b.date,
-            "Match": f"{b.home_team} vs {b.away_team}",
-            "Market": MARKET_LABELS.get(b.market_type, b.market_type),
-            "Selection": b.selection,
-            "Odds": f"{odds:.2f}" if odds else "—",
-            "Stake": f"${b.stake:.2f}" if b.stake else "—",
-            "Result": {"won": "✅ Won", "lost": "❌ Lost", "pending": "⏳ Pending",
-                       "void": "⚪ Void", "half_won": "✅ Half", "half_lost": "❌ Half"
-                       }.get(b.status, b.status),
-            "P&L": f"+${b.pnl:.2f}" if b.pnl and b.pnl >= 0 else (
-                f"-${abs(b.pnl):.2f}" if b.pnl else "—"
-            ),
-            "Type": b.bet_type,
+            "date": b.date,
+            "home_team": b.home_team,
+            "away_team": b.away_team,
+            "home_team_id": home_tid,
+            "away_team_id": away_tid,
+            "market_type": b.market_type,
+            "selection": b.selection,
+            "odds": odds,
+            "stake": b.stake,
+            "status": b.status,
+            "pnl": b.pnl,
+            "bet_type": b.bet_type,
         })
 
-    return pd.DataFrame(data)
+    return data
+
+
+def render_bet_history_html(bet_data: List[Dict]) -> str:
+    """Build an HTML table for bet history with inline team badges.
+
+    E29-03: Replaces st.dataframe() to support inline base64-encoded
+    team badge images.  16px badges for table density.
+
+    Parameters
+    ----------
+    bet_data : list of dict
+        Bet history rows from ``load_bet_history()`` (must include
+        home_team_id, away_team_id, home_team, away_team keys).
+
+    Returns
+    -------
+    str
+        Complete HTML table string safe for ``st.markdown(unsafe_allow_html=True)``.
+        Returns empty string if ``bet_data`` is empty.
+    """
+    if not bet_data:
+        return ""
+
+    # Status indicators for different bet outcomes
+    STATUS_DISPLAY = {
+        "won": "✅ Won", "lost": "❌ Lost", "pending": "⏳ Pending",
+        "void": "⚪ Void", "half_won": "✅ Half", "half_lost": "❌ Half",
+    }
+
+    # Table header
+    th_style = (
+        f'text-align: left; padding: 8px 6px; color: {COLOURS["text_secondary"]}; '
+        f'font-size: 11px; font-weight: 600; text-transform: uppercase; '
+        f'letter-spacing: 0.5px;'
+    )
+    header = (
+        f'<table style="width: 100%; border-collapse: collapse; '
+        f'font-family: Inter, sans-serif; font-size: 13px; '
+        f'color: {COLOURS["text"]};">'
+        f'<thead><tr style="border-bottom: 1px solid {COLOURS["border"]};">'
+        f'<th style="{th_style}">Date</th>'
+        f'<th style="{th_style}">Match</th>'
+        f'<th style="{th_style}">Market</th>'
+        f'<th style="{th_style}">Selection</th>'
+        f'<th style="{th_style} text-align: right;">Odds</th>'
+        f'<th style="{th_style} text-align: right;">Stake</th>'
+        f'<th style="{th_style} text-align: center;">Result</th>'
+        f'<th style="{th_style} text-align: right;">P&amp;L</th>'
+        f'</tr></thead><tbody>'
+    )
+
+    rows_html = []
+    for row in bet_data:
+        # E29-03: Inline 16px team badges in the Match column
+        home_tid = row.get("home_team_id")
+        away_tid = row.get("away_team_id")
+        home_name = row.get("home_team", "")
+        away_name = row.get("away_team", "")
+
+        home_badge = render_badge_only(home_tid, home_name, size=16) if home_tid else ""
+        away_badge = render_badge_only(away_tid, away_name, size=16) if away_tid else ""
+        # HTML-escape team names to handle "&" in names like "Brighton & Hove Albion"
+        safe_home = html_escape(home_name)
+        safe_away = html_escape(away_name)
+        match_cell = f"{home_badge} {safe_home} vs {away_badge} {safe_away}"
+
+        # Market label
+        market_label = MARKET_LABELS.get(row.get("market_type", ""), row.get("market_type", ""))
+        selection = row.get("selection", "")
+
+        # Odds
+        odds_val = row.get("odds")
+        odds_str = f"{odds_val:.2f}" if odds_val else "—"
+
+        # Stake
+        stake_val = row.get("stake")
+        stake_str = f"${stake_val:.2f}" if stake_val else "—"
+
+        # Result
+        status = row.get("status", "")
+        result_str = STATUS_DISPLAY.get(status, status)
+
+        # P&L with colour
+        pnl = row.get("pnl")
+        if pnl is not None and pnl != 0:
+            pnl_colour = COLOURS["green"] if pnl >= 0 else COLOURS["red"]
+            pnl_str = f"+${pnl:.2f}" if pnl >= 0 else f"-${abs(pnl):.2f}"
+        else:
+            pnl_colour = COLOURS["text_secondary"]
+            pnl_str = "—"
+
+        rows_html.append(
+            f'<tr style="border-bottom: 1px solid {COLOURS["border"]};">'
+            f'<td style="padding: 6px; font-family: \'JetBrains Mono\', monospace; '
+            f'font-size: 12px; white-space: nowrap;">{row.get("date", "")}</td>'
+            f'<td style="padding: 6px; white-space: nowrap;">{match_cell}</td>'
+            f'<td style="padding: 6px;">{market_label}</td>'
+            f'<td style="padding: 6px;">{selection}</td>'
+            f'<td style="padding: 6px; text-align: right; '
+            f'font-family: \'JetBrains Mono\', monospace; font-size: 12px;">{odds_str}</td>'
+            f'<td style="padding: 6px; text-align: right; '
+            f'font-family: \'JetBrains Mono\', monospace; font-size: 12px;">{stake_str}</td>'
+            f'<td style="padding: 6px; text-align: center;">{result_str}</td>'
+            f'<td style="padding: 6px; text-align: right; '
+            f'font-family: \'JetBrains Mono\', monospace; font-size: 12px; '
+            f'font-weight: 600; color: {pnl_colour};">{pnl_str}</td>'
+            f'</tr>'
+        )
+
+    return header + "".join(rows_html) + "</tbody></table>"
 
 
 def load_bankroll_history(user_id: int = 1) -> pd.DataFrame:
@@ -609,12 +746,14 @@ else:
         bet_type=bh_type if bh_type != "All" else None,
     )
 
-    if not bet_hist.empty:
-        st.dataframe(
-            bet_hist,
-            use_container_width=True,
-            hide_index=True,
-            height=400,
+    if bet_hist:
+        # E29-03: HTML table with inline team badges
+        hist_html = render_bet_history_html(bet_hist)
+        st.markdown(
+            f'<div style="max-height: 400px; overflow-y: auto; '
+            f'background-color: {COLOURS["surface"]}; border-radius: 6px; '
+            f'padding: 4px 8px;">{hist_html}</div>',
+            unsafe_allow_html=True,
         )
         st.markdown(
             f'<p style="font-family: Inter, sans-serif; font-size: 12px; '
