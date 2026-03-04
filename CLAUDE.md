@@ -299,9 +299,9 @@ Wait for owner to respond with approval before making the change.
 
 ## Current Status
 
-Last completed: E28-04 (Integration Test)
-Currently working: E29-01 (Deep Dive Model's Top Pick)
-Next up: E29-02 (Fixtures Preferred Bet Ring + Rich Tooltips)
+Last completed: E29-02 (Fixtures Preferred Bet Ring + Rich Tooltips)
+Currently working: E29-03 (Performance + Bankroll Team Badges)
+Next up: E29-04 (Settings Bankroll Reset)
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)

@@ -1,6 +1,6 @@
 """
-BetVector — Fixtures Page (E17-04, E24-03, E24-04, E26-03)
-============================================================
+BetVector — Fixtures Page (E17-04, E24-03, E24-04, E26-03, E29-02)
+===================================================================
 All upcoming matches across active leagues, grouped by date.
 **E26-03: Now the dashboard landing page.**
 
@@ -27,6 +27,13 @@ E26-03: Landing page enhancements:
   shown prominently at the top of the page.
 - Predicted score per fixture: "Model: X.X - X.X" inline below market badges.
 - Fixtures page is now default=True in dashboard.py.
+
+E29-02: Preferred bet ring + rich tooltips:
+- The badge with the highest positive edge (≥ threshold) gets a green ring
+  (box-shadow) marking it as the model's preferred bet.
+- Tooltips enriched with model probability and confidence level from ValueBet
+  records.  Best badge tooltip appends "★ Model's Pick".
+- Legend updated with a ringed swatch for "★ Model's Pick".
 
 Master Plan refs: MP §3 Flow 4 (Dashboard Exploration), MP §8 Design System
 """
@@ -181,12 +188,16 @@ def get_all_upcoming_fixtures(days_ahead: int = 14) -> List[Dict]:
 
         results = []
         for match, home_team, away_team, league in matches:
-            # Count value bets flagged for this match
-            vb_count = (
+            # E29-02: Load all ValueBet rows up front — we need them for
+            # both the count (diagnostic badges) and the per-market info
+            # (tooltip enrichment + model's pick ring).  One query instead
+            # of a separate COUNT + SELECT.
+            vb_rows = (
                 session.query(ValueBet)
                 .filter_by(match_id=match.id)
-                .count()
+                .all()
             )
+            vb_count = len(vb_rows)
 
             # Load prediction for this match (most recent model)
             prediction = (
@@ -223,6 +234,30 @@ def get_all_upcoming_fixtures(days_ahead: int = 14) -> List[Dict]:
                 pred_home_goals = getattr(prediction, "predicted_home_goals", None)
                 pred_away_goals = getattr(prediction, "predicted_away_goals", None)
 
+            # E29-02: Build per-market model_prob and confidence lookup from
+            # the already-loaded ValueBet rows.  This enriches the market
+            # badges with tooltip data (model probability, confidence level)
+            # and identifies the model's preferred bet (ring highlight).
+            market_vb_info: Dict[Tuple[str, str], Dict] = {}
+            for vb in vb_rows:
+                key = (vb.market_type, vb.selection)
+                if key not in market_vb_info or vb.edge > market_vb_info[key]["edge"]:
+                    market_vb_info[key] = {
+                        "model_prob": vb.model_prob,
+                        "confidence": vb.confidence,
+                        "edge": vb.edge,
+                    }
+
+            # E29-02: Extract model probabilities from the Prediction record
+            # for badges that don't have ValueBet entries (e.g., negative edge
+            # markets still show model prob in their tooltip).
+            market_probs: Dict[Tuple[str, str], float] = {}
+            if prediction is not None:
+                for (mt, sel), attr in PRED_PROB_MAP.items():
+                    val = getattr(prediction, attr, None)
+                    if val is not None:
+                        market_probs[(mt, sel)] = val
+
             results.append({
                 "match_id": match.id,
                 "date": match.date,
@@ -239,6 +274,8 @@ def get_all_upcoming_fixtures(days_ahead: int = 14) -> List[Dict]:
                 "has_odds": odds_count > 0,
                 "odds_count": odds_count,
                 "market_edges": market_edges,
+                "market_vb_info": market_vb_info,
+                "market_probs": market_probs,
                 "predicted_home_goals": pred_home_goals,
                 "predicted_away_goals": pred_away_goals,
             })
@@ -396,43 +433,102 @@ _SELECTION_LABELS = {
 # Badge Rendering
 # ============================================================================
 
-def _render_market_badges(market_edges: Dict[Tuple[str, str], Optional[float]]) -> str:
+def _render_market_badges(
+    market_edges: Dict[Tuple[str, str], Optional[float]],
+    market_vb_info: Optional[Dict[Tuple[str, str], Dict]] = None,
+    market_probs: Optional[Dict[Tuple[str, str], float]] = None,
+) -> str:
     """Build HTML for the 9 color-coded market indicator badges.
 
     Each badge is a compact pill showing the selection label (H, D, A,
     O1.5, U1.5, O2.5, U2.5, BTTS Y, BTTS N) with a background colour
     indicating the model's edge.
 
+    E29-02: The badge with the highest positive edge (≥ threshold) gets
+    a green ring highlight via ``box-shadow``, marking it as the model's
+    preferred bet.  Tooltips now include model probability and confidence
+    level (when available from ValueBet records).
+
     Parameters
     ----------
     market_edges : dict
         Keys are (market_type, selection) tuples, values are edge floats
         or None.
+    market_vb_info : dict, optional
+        Per-market ValueBet data: {(market_type, selection): {"model_prob",
+        "confidence", "edge"}}.  Used for confidence in tooltips and
+        identifying the model's preferred bet.
+    market_probs : dict, optional
+        Model probabilities from the Prediction record: {(market_type,
+        selection): float}.  Used for tooltip display on non-VB badges.
 
     Returns
     -------
     str
         HTML string of badge spans.
     """
+    _vb_info = market_vb_info or {}
+    _probs = market_probs or {}
+
+    # E29-02: Find the model's preferred bet — the badge with the highest
+    # positive edge at or above the value threshold.  This badge gets a
+    # green ring to visually distinguish it from the other badges.
+    best_key: Optional[Tuple[str, str]] = None
+    best_edge = 0.0
+    for (mt, sel), edge in market_edges.items():
+        if edge is not None and edge >= _edge_threshold and edge > best_edge:
+            best_edge = edge
+            best_key = (mt, sel)
+
     badges = []
     for market_type, selection, label in MARKET_BADGES:
-        edge = market_edges.get((market_type, selection))
+        key = (market_type, selection)
+        edge = market_edges.get(key)
         bg = _edge_colour(edge)
 
-        # Tooltip text — shows edge percentage on hover
+        # --- Tooltip text (E29-02: enriched with model prob + confidence) ---
         if edge is not None:
             edge_pct = edge * 100
-            title = f"{label}: {edge_pct:+.1f}% edge"
+            parts = [f"{label}: {edge_pct:+.1f}% edge"]
+
+            # Add model probability from ValueBet or Prediction
+            vb_data = _vb_info.get(key)
+            prob = _probs.get(key)
+            if vb_data and vb_data.get("model_prob") is not None:
+                parts.append(f"Model: {vb_data['model_prob'] * 100:.0f}%")
+            elif prob is not None:
+                parts.append(f"Model: {prob * 100:.0f}%")
+
+            # Add confidence level (only for value bets with confidence data)
+            if vb_data and vb_data.get("confidence"):
+                parts.append(f"Confidence: {vb_data['confidence'].capitalize()}")
+
+            # Mark the best pick
+            if key == best_key:
+                parts.append("\u2605 Model\u2019s Pick")
+
+            title = html_escape(" | ".join(parts))
         else:
-            title = f"{label}: no data"
+            title = html_escape(f"{label}: no data")
+
+        # --- Ring effect for the model's preferred bet (E29-02) ---
+        # CSS box-shadow creates a ring around the badge without changing
+        # its size.  The best badge gets a bright ring + glow; other value
+        # bets get no extra ring (their green background is sufficient).
+        ring_style = ""
+        if key == best_key:
+            ring_style = (
+                f"box-shadow: 0 0 0 2px {COLOURS['green']}, "
+                f"0 0 6px rgba(63, 185, 80, 0.4); "
+            )
 
         badges.append(
             f'<span title="{title}" style="'
             f"display: inline-block; padding: 2px 6px; margin: 0 2px; "
             f"border-radius: 4px; font-family: 'JetBrains Mono', monospace; "
             f"font-size: 10px; font-weight: 600; color: #fff; "
-            f'background-color: {bg}; cursor: help;">'
-            f"{label}</span>"
+            f"background-color: {bg}; cursor: help; {ring_style}"
+            f'">{label}</span>'
         )
     return "".join(badges)
 
@@ -553,6 +649,12 @@ st.markdown(
     f'<span><span style="display: inline-block; width: 10px; height: 10px; '
     f'border-radius: 2px; background-color: {COLOURS["grey"]}; margin-right: 4px; '
     f'vertical-align: middle;"></span>No Data</span>'
+    # E29-02: Model's Pick legend entry — shows a green-ringed swatch
+    f'<span><span style="display: inline-block; width: 10px; height: 10px; '
+    f'border-radius: 2px; background-color: {COLOURS["green"]}; margin-right: 4px; '
+    f'vertical-align: middle; '
+    f'box-shadow: 0 0 0 2px {COLOURS["green"]}, 0 0 4px rgba(63, 185, 80, 0.4); '
+    f'"></span>\u2605 Model\'s Pick</span>'
     '</div>',
     unsafe_allow_html=True,
 )
@@ -736,7 +838,11 @@ else:
             diag_html = "".join(diag_badges)
 
             # Market indicator badges — the 7 color-coded pills (E24-03)
-            market_html = _render_market_badges(fix["market_edges"])
+            market_html = _render_market_badges(
+                fix["market_edges"],
+                market_vb_info=fix.get("market_vb_info"),
+                market_probs=fix.get("market_probs"),
+            )
 
             # E26-03: Predicted score inline — "Model: 1.4 – 0.8"
             # Only shown when the prediction record has expected goals.

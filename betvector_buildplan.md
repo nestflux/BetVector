@@ -3565,7 +3565,7 @@ The dashboard displays value bets but doesn't make it immediately obvious *which
 **Type:** Enhancement — Dashboard
 **Depends on:** E28-04 (badges complete)
 **MP refs:** §8 Design System
-**Status:** TODO
+**Status:** DONE ✅
 
 Add a visual "MODEL'S TOP PICK" indicator to the first value bet card in the Deep Dive page. The value bets are already sorted by edge descending — the first card IS the best bet, but it looks identical to the rest.
 
@@ -3593,7 +3593,7 @@ Add a visual "MODEL'S TOP PICK" indicator to the first value bet card in the Dee
 **Type:** Enhancement — Dashboard
 **Depends on:** E29-01
 **MP refs:** §8 Design System
-**Status:** TODO
+**Status:** DONE ✅
 
 Add a glowing green ring around the model's preferred market badge on fixture cards, and enhance tooltips to show model probability and confidence level.
 
@@ -3606,14 +3606,16 @@ Add a glowing green ring around the model's preferred market badge on fixture ca
 
 **Files:** `src/delivery/views/fixtures.py`
 
+**Results:** Green ring (box-shadow) on highest-edge badge, enriched tooltips with model prob + confidence + ★ label, legend updated. Eliminated redundant ValueBet COUNT query (1 fewer query per match). Tooltip content defensively HTML-escaped.
+
 **Acceptance Criteria:**
-- [ ] Best market badge has a green ring (box-shadow) on fixture cards
-- [ ] Hover tooltip shows model probability (e.g., "Model: 58%")
-- [ ] Hover tooltip shows confidence level for value bets (e.g., "Confidence: High")
-- [ ] Best badge tooltip includes "★ Model's Pick" label
-- [ ] Non-value badges show model probability in tooltip (but no confidence)
-- [ ] Legend updated with "★ Model's Pick" entry
-- [ ] No ring shown when no badges have positive edge ≥ threshold
+- [x] Best market badge has a green ring (box-shadow) on fixture cards
+- [x] Hover tooltip shows model probability (e.g., "Model: 58%")
+- [x] Hover tooltip shows confidence level for value bets (e.g., "Confidence: High")
+- [x] Best badge tooltip includes "★ Model's Pick" label
+- [x] Non-value badges show model probability in tooltip (but no confidence)
+- [x] Legend updated with "★ Model's Pick" entry
+- [x] No ring shown when no badges have positive edge ≥ threshold
 
 ---
 
