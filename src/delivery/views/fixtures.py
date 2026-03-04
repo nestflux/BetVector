@@ -43,6 +43,7 @@ from sqlalchemy.orm import aliased
 from src.config import config
 from src.database.db import get_session
 from src.database.models import League, Match, Odds, Prediction, Team, ValueBet
+from src.delivery.views._badge_helper import render_team_badge
 
 
 # ============================================================================
@@ -226,8 +227,10 @@ def get_all_upcoming_fixtures(days_ahead: int = 14) -> List[Dict]:
                 "match_id": match.id,
                 "date": match.date,
                 "kickoff": html_escape(match.kickoff_time or "TBD"),
-                "home_team": html_escape(home_team.name),
-                "away_team": html_escape(away_team.name),
+                "home_team": home_team.name,  # Not pre-escaped; badge helper handles escaping
+                "away_team": away_team.name,
+                "home_team_id": home_team.id,
+                "away_team_id": away_team.id,
                 "league": html_escape(league.short_name),
                 "league_name": html_escape(league.name),
                 "has_value_bets": vb_count > 0,
@@ -328,7 +331,11 @@ def get_top_picks(max_picks: int = 5) -> List[Dict]:
 
     with get_session() as session:
         rows = (
-            session.query(ValueBet, Match, League, HomeTeam.name, AwayTeam.name)
+            session.query(
+                ValueBet, Match, League,
+                HomeTeam.name, AwayTeam.name,
+                HomeTeam.id, AwayTeam.id,
+            )
             .join(Match, ValueBet.match_id == Match.id)
             .join(League, Match.league_id == League.id)
             .join(HomeTeam, Match.home_team_id == HomeTeam.id)
@@ -345,13 +352,15 @@ def get_top_picks(max_picks: int = 5) -> List[Dict]:
         # HTML-escape all string values that will be rendered in templates
         # (consistent with get_all_upcoming_fixtures escaping pattern).
         grouped: Dict[tuple, Dict] = {}
-        for vb, match, league, home_name, away_name in rows:
+        for vb, match, league, home_name, away_name, home_id, away_id in rows:
             key = (vb.match_id, vb.market_type, vb.selection)
             if key not in grouped or vb.edge > grouped[key]["edge"]:
                 grouped[key] = {
                     "match_id": vb.match_id,
-                    "home_team": html_escape(home_name),
-                    "away_team": html_escape(away_name),
+                    "home_team": home_name,  # Not pre-escaped; badge helper handles escaping
+                    "away_team": away_name,
+                    "home_team_id": home_id,
+                    "away_team_id": away_id,
                     "date": match.date,
                     "league": html_escape(league.short_name),
                     "market_type": html_escape(vb.market_type),
@@ -477,13 +486,17 @@ if top_picks:
             else COLOURS["grey"]
         )
 
+        # Render badges beside team names in top picks (20px inline)
+        tp_home = render_team_badge(pick["home_team_id"], pick["home_team"], size=20)
+        tp_away = render_team_badge(pick["away_team_id"], pick["away_team"], size=20)
+
         picks_html_parts.append(
             f'<div style="background-color: {COLOURS["surface"]}; '
             f'border: 1px solid {COLOURS["border"]}; border-radius: 8px; '
             f'padding: 10px 14px; flex: 1 1 220px; min-width: 220px;">'
             f'<div style="font-family: Inter, sans-serif; font-size: 13px; '
             f'font-weight: 600; color: {COLOURS["text"]}; margin-bottom: 4px;">'
-            f'{pick["home_team"]} vs {pick["away_team"]}</div>'
+            f'{tp_home} vs {tp_away}</div>'
             f'<div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">'
             f'<span style="font-family: Inter, sans-serif; font-size: 12px; '
             f'color: {COLOURS["text_secondary"]};">{sel_label}</span>'
@@ -739,8 +752,12 @@ else:
                     f'Model: {pred_h:.1f} – {pred_a:.1f}</span>'
                 )
 
+            # Render badges beside team names in fixture card (20px inline)
+            fix_home = render_team_badge(fix["home_team_id"], fix["home_team"], size=20)
+            fix_away = render_team_badge(fix["away_team_id"], fix["away_team"], size=20)
+
             # Fixture card — three rows:
-            # Row 1: Kickoff + Teams + Predicted Score + League badge + diagnostic badges
+            # Row 1: Kickoff + Teams (with badges) + Predicted Score + League badge + diagnostic badges
             # Row 2: Market indicator badges (below the team names)
             st.markdown(
                 f'<div class="bv-card" style="padding: 12px 16px; {border_style}">'
@@ -751,7 +768,7 @@ else:
                 f'{kickoff_html}'
                 f'<span style="font-family: Inter, sans-serif; font-size: 15px; '
                 f'font-weight: 600; color: {COLOURS["text"]};">'
-                f'{fix["home_team"]} vs {fix["away_team"]}</span>'
+                f'{fix_home} vs {fix_away}</span>'
                 f'{pred_html}'
                 f'</div>'
                 f'<div style="display: flex; align-items: center;">'

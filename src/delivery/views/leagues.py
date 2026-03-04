@@ -17,7 +17,7 @@ Master Plan refs: MP §3 Flow 4 (Dashboard Exploration), MP §8 Design System
 """
 
 from collections import defaultdict
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import pandas as pd
 import streamlit as st
@@ -26,6 +26,7 @@ from sqlalchemy.orm import aliased
 from src.config import config
 from src.database.db import get_session
 from src.database.models import Feature, League, Match, Team
+from src.delivery.views._badge_helper import render_team_badge
 
 
 # ============================================================================
@@ -125,9 +126,10 @@ def calculate_standings(league_id: int, season: str = "") -> pd.DataFrame:
         return pd.DataFrame()
 
     # Aggregate stats per team
-    # Each team gets entries from both home and away matches
+    # Each team gets entries from both home and away matches.
+    # Track team_id alongside name for badge rendering.
     stats = defaultdict(lambda: {
-        "P": 0, "W": 0, "D": 0, "L": 0, "GF": 0, "GA": 0,
+        "P": 0, "W": 0, "D": 0, "L": 0, "GF": 0, "GA": 0, "team_id": None,
     })
 
     for match, home_name, away_name in matches:
@@ -138,6 +140,7 @@ def calculate_standings(league_id: int, season: str = "") -> pd.DataFrame:
         stats[home_name]["P"] += 1
         stats[home_name]["GF"] += hg
         stats[home_name]["GA"] += ag
+        stats[home_name]["team_id"] = match.home_team_id
         if hg > ag:
             stats[home_name]["W"] += 1
         elif hg == ag:
@@ -149,6 +152,7 @@ def calculate_standings(league_id: int, season: str = "") -> pd.DataFrame:
         stats[away_name]["P"] += 1
         stats[away_name]["GF"] += ag
         stats[away_name]["GA"] += hg
+        stats[away_name]["team_id"] = match.away_team_id
         if ag > hg:
             stats[away_name]["W"] += 1
         elif ag == hg:
@@ -163,6 +167,7 @@ def calculate_standings(league_id: int, season: str = "") -> pd.DataFrame:
         pts = s["W"] * 3 + s["D"]
         rows.append({
             "Team": team_name,
+            "team_id": s["team_id"],
             "P": s["P"],
             "W": s["W"],
             "D": s["D"],
@@ -220,6 +225,8 @@ def get_recent_results(
             "date": m.date,
             "home_team": hn,
             "away_team": an,
+            "home_team_id": m.home_team_id,
+            "away_team_id": m.away_team_id,
             "home_goals": m.home_goals,
             "away_goals": m.away_goals,
             "match_id": m.id,
@@ -262,6 +269,8 @@ def get_upcoming_fixtures(
             "kickoff": m.kickoff_time or "TBD",
             "home_team": hn,
             "away_team": an,
+            "home_team_id": m.home_team_id,
+            "away_team_id": m.away_team_id,
             "match_id": m.id,
         }
         for m, hn, an in matches
@@ -497,8 +506,10 @@ else:
         if standings.empty:
             st.info("No match results available to calculate standings.")
         else:
+            # Drop team_id from display (used internally for badges elsewhere)
+            display_cols = [c for c in standings.columns if c != "team_id"]
             st.dataframe(
-                standings,
+                standings[display_cols],
                 use_container_width=True,
                 hide_index=True,
                 height=min(38 * len(standings) + 40, 800),
@@ -585,17 +596,20 @@ else:
         else:
             for r in results:
                 score_html = render_score(r["home_goals"], r["away_goals"])
+                # Badges beside team names in recent results (20px inline)
+                rr_home = render_team_badge(r["home_team_id"], r["home_team"], size=20)
+                rr_away = render_team_badge(r["away_team_id"], r["away_team"], size=20)
                 st.markdown(
                     f'<div class="bv-card" style="display: flex; align-items: center; '
                     f'gap: 12px; padding: 10px 16px;">'
                     f'<span style="font-family: JetBrains Mono, monospace; font-size: 12px; '
                     f'color: {COLOURS["text_secondary"]}; min-width: 85px;">{r["date"]}</span>'
                     f'<span style="font-family: Inter, sans-serif; font-size: 14px; '
-                    f'color: {COLOURS["text"]}; min-width: 180px; text-align: right;">'
-                    f'{r["home_team"]}</span>'
+                    f'color: {COLOURS["text"]}; min-width: 200px; text-align: right;">'
+                    f'{rr_home}</span>'
                     f'<span style="min-width: 50px; text-align: center;">{score_html}</span>'
                     f'<span style="font-family: Inter, sans-serif; font-size: 14px; '
-                    f'color: {COLOURS["text"]};">{r["away_team"]}</span>'
+                    f'color: {COLOURS["text"]};">{rr_away}</span>'
                     f'</div>',
                     unsafe_allow_html=True,
                 )
@@ -619,6 +633,9 @@ else:
             )
         else:
             for f in fixtures:
+                # Badges beside team names in upcoming fixtures (20px inline)
+                uf_home = render_team_badge(f["home_team_id"], f["home_team"], size=20)
+                uf_away = render_team_badge(f["away_team_id"], f["away_team"], size=20)
                 st.markdown(
                     f'<div class="bv-card" style="display: flex; align-items: center; '
                     f'gap: 12px; padding: 10px 16px;">'
@@ -627,12 +644,12 @@ else:
                     f'<span style="font-family: JetBrains Mono, monospace; font-size: 12px; '
                     f'color: {COLOURS["text_secondary"]}; min-width: 45px;">{f["kickoff"]}</span>'
                     f'<span style="font-family: Inter, sans-serif; font-size: 14px; '
-                    f'color: {COLOURS["text"]}; min-width: 180px; text-align: right;">'
-                    f'{f["home_team"]}</span>'
+                    f'color: {COLOURS["text"]}; min-width: 200px; text-align: right;">'
+                    f'{uf_home}</span>'
                     f'<span style="font-family: Inter, sans-serif; font-size: 14px; '
                     f'color: {COLOURS["text_secondary"]};">vs</span>'
                     f'<span style="font-family: Inter, sans-serif; font-size: 14px; '
-                    f'color: {COLOURS["text"]};">{f["away_team"]}</span>'
+                    f'color: {COLOURS["text"]};">{uf_away}</span>'
                     f'</div>',
                     unsafe_allow_html=True,
                 )

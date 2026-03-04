@@ -35,6 +35,7 @@ from src.database.models import (
     ValueBet,
     Weather,
 )
+from src.delivery.views._badge_helper import render_team_badge
 
 
 # ============================================================================
@@ -127,6 +128,8 @@ def _enrich_value_bets(session, rows) -> List[Dict]:
             "match_id": vb.match_id,
             "home_team": home_team.name if home_team else "Unknown",
             "away_team": away_team.name if away_team else "Unknown",
+            "home_team_id": home_team.id if home_team else None,
+            "away_team_id": away_team.id if away_team else None,
             "league": league.short_name,
             "date": match.date,
             "kickoff": match.kickoff_time or "TBD",
@@ -375,12 +378,16 @@ def render_value_bet_card(vb: Dict, idx) -> None:
         else ""
     )
 
+    # Render badges beside team names on pick cards (20px inline)
+    pk_home = render_team_badge(vb.get("home_team_id"), vb["home_team"], size=20)
+    pk_away = render_team_badge(vb.get("away_team_id"), vb["away_team"], size=20)
+
     # Card HTML — no leading indentation to avoid markdown code-block interpretation
     card_html = f"""<div class="bv-card" style="{border_style}">
 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
 <div>
 <span style="font-family: 'Inter', sans-serif; font-size: 16px; font-weight: 600; color: #E6EDF3;">
-{vb["home_team"]} vs {vb["away_team"]}
+{pk_home} vs {pk_away}
 </span>{result_badge_html}
 <br>
 <span style="font-family: 'Inter', sans-serif; font-size: 12px; color: #8B949E;">

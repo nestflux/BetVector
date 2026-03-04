@@ -3427,7 +3427,7 @@ The badges will be fetched from API-Football's `/teams` endpoint (which returns 
 **Type:** Enhancement — Dashboard
 **Depends on:** E28-01
 **MP refs:** §8 Design System
-**Status:** TODO
+**Status:** DONE — Badge helper with base64 encoding, memory cache, HTML escaping; Deep Dive badges in header (28px), H2H (20px), form (20px)
 
 **Changes:**
 
