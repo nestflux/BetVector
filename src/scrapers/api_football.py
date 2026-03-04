@@ -412,6 +412,87 @@ class APIFootballScraper(BaseScraper):
 
         return df
 
+    def fetch_team_logos(
+        self,
+        league_config: object,
+        season: str,
+    ) -> List[Dict[str, Any]]:
+        """Fetch team logo URLs from the API-Football /teams endpoint.
+
+        Returns a list of dicts with ``api_football_id`` and ``logo_url``
+        for every team in the league.  The caller (backfill script) is
+        responsible for matching these to local Team records and updating
+        the ``logo_url`` column.
+
+        Parameters
+        ----------
+        league_config : object
+            League config namespace with ``api_football_id`` attribute.
+        season : str
+            Season string (e.g., "2025-26").  Converted to API-Football's
+            integer year format (e.g., 2025).
+
+        Returns
+        -------
+        list[dict]
+            Each dict has keys: ``api_football_id`` (int), ``name`` (str),
+            ``logo_url`` (str).  Empty list if the request fails.
+
+        Notes
+        -----
+        Costs 1 API request per call.  The /teams endpoint returns all
+        teams for a league-season, including their logo URLs (PNG hosted
+        on media.api-sports.io).
+        """
+        if not self._check_api_key():
+            return []
+
+        api_league_id = getattr(league_config, "api_football_id", None)
+        if api_league_id is None:
+            logger.warning("[api_football] No api_football_id configured for league")
+            return []
+
+        api_season = self._convert_season(season)
+        league_name = getattr(league_config, "short_name", "unknown")
+
+        logger.info(
+            "[api_football] Fetching team logos for %s, season %s",
+            league_name, api_season,
+        )
+
+        data = self._api_request(
+            "/teams",
+            params={"league": api_league_id, "season": api_season},
+        )
+        if data is None:
+            return []
+
+        teams = data.get("response", [])
+        if not teams:
+            logger.warning("[api_football] No teams returned for %s %s", league_name, season)
+            return []
+
+        results = []
+        for entry in teams:
+            team_info = entry.get("team", {})
+            team_id = team_info.get("id")
+            team_name = team_info.get("name", "")
+            logo = team_info.get("logo", "")
+
+            if team_id and logo:
+                results.append({
+                    "api_football_id": team_id,
+                    "name": team_name,
+                    "logo_url": logo,
+                })
+
+        logger.info(
+            "[api_football] Found %d team logos for %s",
+            len(results), league_name,
+        )
+
+        return results
+
     # -----------------------------------------------------------------------
     # API request layer
     # -----------------------------------------------------------------------

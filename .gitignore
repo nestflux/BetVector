@@ -11,6 +11,9 @@ data/backups/
 # --- Raw scraped data (re-downloadable, don't bloat repo) ---
 data/raw/
 
+# --- Team badge images (cached from API-Football, re-downloadable) ---
+data/badges/
+
 # --- Python bytecode ---
 __pycache__/
 *.py[cod]

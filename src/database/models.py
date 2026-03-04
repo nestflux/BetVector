@@ -202,6 +202,9 @@ class Team(Base):
     # API-Football uses different team names than our canonical names
     # (e.g. "Tottenham" vs "Tottenham Hotspur"), so we store their version
     api_football_name = Column(String, nullable=True)
+    # Team crest/badge URL from API-Football.  Cached locally in
+    # data/badges/{team_id}.png for fast inline rendering on the dashboard.
+    logo_url = Column(String, nullable=True)
 
     # Relationships
     league = relationship("League", back_populates="teams")

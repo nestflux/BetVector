@@ -811,6 +811,47 @@ def main():
         out_hw.write_text(hw_html, encoding="utf-8")
         print(f"Written: {out_hw}  ({len(hw_html):,} bytes)")
 
+    # --- Data Sources Report ---
+    ds_path = root / "betvector_datasources_report.md"
+    if ds_path.exists():
+        ds_md = ds_path.read_text(encoding="utf-8")
+        ds_content, ds_toc = md_to_html(ds_md, doc_type="report")
+        ds_toc_html = build_toc_html(ds_toc)
+        ds_html = build_page("Data Sources Report", "Data Sources Report · v1.0", ds_content, ds_toc_html)
+        out_ds = root / "_deploy" / "betvector_datasources_report.html"
+        out_ds.write_text(ds_html, encoding="utf-8")
+        print(f"Written: {out_ds}  ({len(ds_html):,} bytes)")
+
+    # --- Odds & Model Improvement Report ---
+    om_path = root / "betvector_odds_and_model_improvement_report.md"
+    if om_path.exists():
+        om_md = om_path.read_text(encoding="utf-8")
+        om_content, om_toc = md_to_html(om_md, doc_type="report")
+        om_toc_html = build_toc_html(om_toc)
+        om_html = build_page(
+            "Odds & Model Improvement Report",
+            "Odds & Model Improvement Report · v1.0",
+            om_content, om_toc_html
+        )
+        out_om = root / "_deploy" / "betvector_odds_report.html"
+        out_om.write_text(om_html, encoding="utf-8")
+        print(f"Written: {out_om}  ({len(om_html):,} bytes)")
+
+    # --- Cloud Migration Strategy Report ---
+    cm_path = root / "betvector_cloud_migration_report.md"
+    if cm_path.exists():
+        cm_md = cm_path.read_text(encoding="utf-8")
+        cm_content, cm_toc = md_to_html(cm_md, doc_type="report")
+        cm_toc_html = build_toc_html(cm_toc)
+        cm_html = build_page(
+            "Cloud Migration Strategy",
+            "Cloud Migration Strategy · v1.0",
+            cm_content, cm_toc_html
+        )
+        out_cm = root / "_deploy" / "betvector_cloud_migration_report.html"
+        out_cm.write_text(cm_html, encoding="utf-8")
+        print(f"Written: {out_cm}  ({len(cm_html):,} bytes)")
+
 
 if __name__ == "__main__":
     main()

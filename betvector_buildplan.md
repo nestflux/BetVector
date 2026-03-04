@@ -3363,3 +3363,180 @@ E27-01 (deep dive value bets + FanDuel default) → E27-02 (O/U 1.5 markets)
 ```
 
 E27-01 fixes the most impactful UX issue (bookmaker clutter). E27-02 adds the missing market. E27-03 ensures learning support across all pages. E27-04 validates everything.
+
+---
+
+## E28 — Team Badges (Crests) Beside All Team Names
+
+### Motivation
+
+Every major sports app shows team crests beside team names — it's a visual anchor that makes scanning fixtures, picks, and results dramatically faster. BetVector currently displays team names as plain text everywhere. Adding badges transforms the dashboard from a data spreadsheet into something that *looks* like a professional sports product.
+
+The badges will be fetched from API-Football's `/teams` endpoint (which returns a `logo` URL for every team), cached locally as PNG/SVG files so they load instantly, and rendered inline via HTML `<img>` tags beside team names across all dashboard pages.
+
+---
+
+### E28-01 — Add logo_url to Team Model + Fetch from API-Football
+
+**Type:** Data — Schema + Scraper Enhancement
+**Depends on:** E27-04
+**MP refs:** §5 Data Sources (API-Football), §6 Schema (teams table)
+**Status:** TODO
+
+**Changes:**
+
+1. **Add `logo_url` column to Team model** (`src/database/models.py`):
+   - `logo_url = Column(String, nullable=True)` — URL to the team's crest image from API-Football
+   - Nullable because not every team may have a logo available
+
+2. **Add `fetch_team_logos()` method to API-Football scraper** (`src/scrapers/api_football.py`):
+   - Endpoint: `GET /teams?league={league_id}&season={year}`
+   - Extract `team.id` and `team.logo` from the response
+   - Match API-Football teams to local Team records via `api_football_id`
+   - Update `logo_url` on the Team record
+   - Rate-limited: 1 request per league (costs 1 of 100 daily budget)
+
+3. **Add local badge caching**:
+   - Create `data/badges/` directory
+   - After fetching `logo_url`, download the image to `data/badges/{team_id}.png`
+   - Store the local path for offline/fast rendering
+   - Add `data/badges/` to `.gitignore` (binary files, don't commit)
+
+4. **One-time backfill script** (`scripts/backfill_team_logos.py`):
+   - For all active leagues, call `fetch_team_logos()`
+   - Download all logo images to `data/badges/`
+   - Idempotent: skips teams that already have logos cached
+
+**API Budget:** ~3 requests (1 per active league × 3 leagues max). Well within the 100/day free tier.
+
+**Files:** `src/database/models.py`, `src/scrapers/api_football.py`, `scripts/backfill_team_logos.py`
+
+**Acceptance Criteria:**
+- [ ] Team model has `logo_url` column (nullable String)
+- [ ] `fetch_team_logos()` fetches logos from API-Football `/teams` endpoint
+- [ ] Logos downloaded to `data/badges/{team_id}.png` as local cache
+- [ ] `data/badges/` directory created and added to `.gitignore`
+- [ ] Backfill script updates all teams in active leagues
+- [ ] Rate limiting respected (2s between requests)
+- [ ] Idempotent: re-running doesn't duplicate or overwrite unchanged logos
+
+---
+
+### E28-02 — Badge Rendering Helper + Deep Dive Integration
+
+**Type:** Enhancement — Dashboard
+**Depends on:** E28-01
+**MP refs:** §8 Design System
+**Status:** TODO
+
+**Changes:**
+
+1. **Create `_render_team_badge()` helper** in a shared module (`src/delivery/views/_badge_helper.py` or inline):
+   - Input: `team_id` (int), `team_name` (str), `size` (int, default 20px)
+   - Output: HTML `<img>` tag with the badge, falling back to plain text if no badge exists
+   - Template: `<img src="data:image/png;base64,{b64}" style="height:{size}px; vertical-align: middle; margin-right: 4px;" alt="{team_name}"> {team_name}`
+   - Base64-encode the local PNG file for inline Streamlit rendering (Streamlit can't serve static files directly in `unsafe_allow_html` without base64)
+   - Cache loaded images in memory (dict keyed by team_id) to avoid re-reading files on every render
+
+2. **Integrate into Deep Dive page** (`src/delivery/views/match_detail.py`):
+   - Match header: replace plain `{home_team} vs {away_team}` with badge + name
+   - Head-to-head section: badges beside each historical match listing
+   - Team form section headers: badges beside team names
+
+**Design tokens (MP §8):**
+- Badge size: 20px height for inline, 28px for match header
+- `vertical-align: middle` to align with text baseline
+- `margin-right: 4px` spacing between badge and name
+- If badge file missing: graceful fallback to text-only (no broken image icon)
+
+**Files:** `src/delivery/views/match_detail.py`, new helper module
+
+**Acceptance Criteria:**
+- [ ] `_render_team_badge()` returns HTML with base64-encoded PNG inline
+- [ ] Falls back to plain team name when no badge file exists
+- [ ] Badge images cached in memory (not re-read from disk per render)
+- [ ] Deep Dive match header shows badges beside both team names
+- [ ] Deep Dive H2H section shows badges
+- [ ] Deep Dive form section headers show badges
+- [ ] Badge sizes follow design system (20px inline, 28px header)
+- [ ] No broken image icons when badge file is missing
+
+---
+
+### E28-03 — Badges on Fixtures, Picks, and League Explorer Pages
+
+**Type:** Enhancement — Dashboard
+**Depends on:** E28-02
+**MP refs:** §8 Design System
+**Status:** TODO
+
+**Changes:**
+
+Integrate `_render_team_badge()` across the remaining dashboard pages:
+
+1. **Fixtures page** (`src/delivery/views/fixtures.py`):
+   - Fixture cards: badges beside home and away team names
+   - Top Picks banner: badges beside team names in pick cards
+
+2. **Today's Picks page** (`src/delivery/views/picks.py`):
+   - Pick cards: badges beside team names
+
+3. **League Explorer** (`src/delivery/views/leagues.py`):
+   - League standings table: badge beside each team name
+   - Recent results list: badges beside team names
+   - Upcoming fixtures: badges beside team names
+
+4. **Performance Tracker** (`src/delivery/views/performance.py`):
+   - Recent bets table: badges beside team names (if data available)
+
+5. **Bankroll Manager** (`src/delivery/views/bankroll.py`):
+   - Bet history table: badges beside team names
+
+**Data flow:** Each page needs access to team IDs (not just team names) to look up badge files. For pages that already join with the Team model (fixtures, picks, match_detail, leagues), the team_id is available. For pages that only store team names as strings (performance, bankroll via BetLog), we'll need to add team_id to the query or do a name-based lookup.
+
+**Files:** `src/delivery/views/fixtures.py`, `src/delivery/views/picks.py`, `src/delivery/views/leagues.py`, `src/delivery/views/performance.py`, `src/delivery/views/bankroll.py`
+
+**Acceptance Criteria:**
+- [ ] Fixtures page shows badges beside team names in fixture cards
+- [ ] Top Picks banner shows badges beside team names
+- [ ] Picks page shows badges on pick cards
+- [ ] League Explorer shows badges in standings, results, and fixtures
+- [ ] Performance page shows badges in recent bets table (when team data available)
+- [ ] Bankroll page shows badges in bet history (when team data available)
+- [ ] All badges are 20px height with consistent spacing
+- [ ] Pages load without performance degradation (badges cached in memory)
+- [ ] Graceful fallback to text when team badge unavailable
+
+---
+
+### E28-04 — Integration Test
+
+**Type:** QA — Dashboard Integration
+**Depends on:** E28-01, E28-02, E28-03
+**MP refs:** §8 Design System
+**Status:** TODO
+
+Run the dashboard end-to-end and verify badges display correctly on all pages.
+
+**Acceptance Criteria:**
+- [ ] Team model has `logo_url` populated for all EPL teams
+- [ ] Badge files exist in `data/badges/` for all active teams
+- [ ] Deep Dive page shows badges in header, H2H, and form sections
+- [ ] Fixtures page shows badges in fixture cards and top picks
+- [ ] Picks page shows badges on pick cards
+- [ ] League Explorer shows badges in standings and match lists
+- [ ] Performance and Bankroll pages show badges where team data available
+- [ ] No broken images or rendering errors on any page
+- [ ] Dashboard loads within acceptable time (<3s per page)
+- [ ] Design system compliance (sizing, spacing, colours)
+
+---
+
+### Implementation Sequence
+
+```
+E28-01 (schema + fetch logos) → E28-02 (render helper + Deep Dive)
+→ E28-03 (all other pages) → E28-04 (integration test)
+```
+
+E28-01 gets the data. E28-02 builds the rendering helper and proves it on the most important page. E28-03 rolls it out everywhere. E28-04 validates everything.
