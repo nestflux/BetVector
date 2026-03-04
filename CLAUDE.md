@@ -90,7 +90,8 @@ E24-01 → E24-02 → E24-03 → E24-04 → E24-05 →
 E25-01 → E25-02 → E25-03 → E25-04 →
 E26-01 → E26-02 → E26-03 → E26-04 →
 E27-01 → E27-02 → E27-03 → E27-04 →
-E28-01 → E28-02 → E28-03 → E28-04
+E28-01 → E28-02 → E28-03 → E28-04 →
+E29-01 → E29-02 → E29-03 → E29-04
 ```
 
 The sequence is the law. Auto-advance after gates pass. Only stop for
@@ -299,8 +300,8 @@ Wait for owner to respond with approval before making the change.
 ## Current Status
 
 Last completed: E28-04 (Integration Test)
-Currently working: (none — critical path complete through E28)
-Next up: (none — awaiting new epics)
+Currently working: E29-01 (Deep Dive Model's Top Pick)
+Next up: E29-02 (Fixtures Preferred Bet Ring + Rich Tooltips)
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
@@ -318,7 +319,8 @@ E25 complete: All 4 issues done ✅ (XGBoost ensemble model — Poisson wins bac
 E26 complete: All 4 issues done ✅ (Dashboard UX Overhaul — picks dedup, deep dive nav, fixtures landing, integration test)
 E27 complete: All 4 issues done ✅ (Deep Dive FanDuel default, O/U 1.5 markets, glossary completeness, integration test)
 E28 complete: All 4 issues done ✅ (Team Badges — logo fetch, badge helper, page rollout, integration test)
-Total issues: 105 — ALL COMPLETE ✅
+E29 in progress: Dashboard UX Polish (4 issues — model clarity, badge ring, perf/bankroll badges, bankroll reset)
+Total issues: 109 (105 complete + 4 in progress)
 
 ---
 

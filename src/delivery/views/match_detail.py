@@ -1,5 +1,5 @@
 """
-BetVector — Match Deep Dive View (E9-05, E26-02, E27-01, E28-02)
+BetVector — Match Deep Dive View (E9-05, E26-02, E27-01, E28-02, E29-01)
 ==================================================================
 Comprehensive analysis for a single match.  Accessible from Today's Picks
 cards and Fixtures page via ``st.session_state["deep_dive_match_id"]``
@@ -237,6 +237,7 @@ def load_match_data(match_id: int) -> Optional[Dict]:
                 "bookmaker": vb.bookmaker,
                 "bookmaker_odds": vb.bookmaker_odds,
                 "edge": vb.edge,
+                "expected_value": vb.expected_value,
                 "confidence": vb.confidence,
                 "explanation": vb.explanation,
             }
@@ -847,7 +848,8 @@ else:
         # Pre-compute the preferred bookmaker name in lowercase for matching
         _pref_lower = PREFERRED_BOOKMAKER.lower()
 
-        for (mkt, sel), vb_list in sorted_groups:
+        for group_idx, ((mkt, sel), vb_list) in enumerate(sorted_groups):
+            is_top_pick = group_idx == 0
             sel_label = SELECTION_LABELS.get(
                 (mkt, sel), f"{mkt}/{sel}",
             )
@@ -893,6 +895,24 @@ else:
                     unsafe_allow_html=True,
                 )
 
+            # ----------------------------------------------------------
+            # "MODEL'S TOP PICK" banner for the first group (E29-01).
+            # The first group has the highest edge — it IS the model's
+            # top recommendation.  We render a green pill label above
+            # the card and add a green left border + glow to the card.
+            # ----------------------------------------------------------
+            if is_top_pick:
+                st.markdown(
+                    f'<div style="display: inline-block; '
+                    f'font-family: Inter, sans-serif; font-size: 10px; font-weight: 700; '
+                    f'color: {COLOURS["bg"]}; background-color: {COLOURS["green"]}; '
+                    f'border-radius: 4px 4px 0 0; padding: 2px 10px; '
+                    f'text-transform: uppercase; letter-spacing: 1px; '
+                    f'margin-bottom: 0;">'
+                    f"MODEL'S TOP PICK</div>",
+                    unsafe_allow_html=True,
+                )
+
             for vb in display_vbs:
                 conf_colour = CONFIDENCE_COLOURS.get(
                     vb["confidence"], COLOURS["border"],
@@ -912,6 +932,18 @@ else:
                         f'margin-left: 8px;">'
                         f'Model {model_prob_pct:.0f}% vs Implied {implied_prob:.0f}%'
                         f'</span>'
+                    )
+
+                # Expected Value — shown on the top pick card for extra
+                # context.  EV = (model_prob × odds) - 1, expressed as %.
+                ev_text = ""
+                if is_top_pick and vb.get("expected_value") is not None:
+                    ev_pct = vb["expected_value"] * 100
+                    ev_text = (
+                        f'<span style="font-family: JetBrains Mono, monospace; '
+                        f'font-size: 11px; color: {COLOURS["text_secondary"]}; '
+                        f'margin-left: 8px;">'
+                        f'EV: {ev_pct:+.1f}%</span>'
                     )
 
                 # Alt bookmakers count (only in single-card views)
@@ -939,8 +971,15 @@ else:
                         f'({PREFERRED_BOOKMAKER} N/A)</span>'
                     )
 
+                # Top pick card styling: green left border + subtle glow
+                top_style = (
+                    f"border-left: 3px solid {COLOURS['green']}; "
+                    f"box-shadow: 0 0 8px rgba(63, 185, 80, 0.15); "
+                    f"margin-top: 0; border-top-left-radius: 0;"
+                ) if is_top_pick else ""
+
                 st.markdown(
-                    f'<div class="bv-card" style="padding: 10px 14px; margin-bottom: 6px;">'
+                    f'<div class="bv-card" style="padding: 10px 14px; margin-bottom: 6px; {top_style}">'
                     f'<div style="display: flex; justify-content: space-between; align-items: center;">'
                     f'<div>'
                     f'<span style="font-family: Inter, sans-serif; font-size: 14px; '
@@ -951,6 +990,7 @@ else:
                     f'{vb["bookmaker"]} @ {vb["bookmaker_odds"]:.2f}</span>'
                     f'{bk_indicator}'
                     f'{prob_text}'
+                    f'{ev_text}'
                     f'</div>'
                     f'<div style="display: flex; align-items: center; gap: 12px;">'
                     f'<span style="font-family: JetBrains Mono, monospace; font-size: 14px; '

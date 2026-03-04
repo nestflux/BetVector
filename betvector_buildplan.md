@@ -3549,3 +3549,134 @@ E28-01 (schema + fetch logos) → E28-02 (render helper + Deep Dive)
 ```
 
 E28-01 gets the data. E28-02 builds the rendering helper and proves it on the most important page. E28-03 rolls it out everywhere. E28-04 validates everything.
+
+---
+
+## Epic 29 — Dashboard UX Polish: Model Clarity + Badges Everywhere
+
+### Motivation
+
+The dashboard displays value bets but doesn't make it immediately obvious *which* bet the model recommends most. Additionally, the Performance and Bankroll pages are the only two without team badges, and the Settings page lacks a bankroll reset function. Four targeted changes to polish the UX.
+
+---
+
+### E29-01 — Deep Dive: Model's Top Pick Indicator
+
+**Type:** Enhancement — Dashboard
+**Depends on:** E28-04 (badges complete)
+**MP refs:** §8 Design System
+**Status:** TODO
+
+Add a visual "MODEL'S TOP PICK" indicator to the first value bet card in the Deep Dive page. The value bets are already sorted by edge descending — the first card IS the best bet, but it looks identical to the rest.
+
+**Changes:**
+- Add `enumerate()` to the sorted_groups loop
+- Render a green "MODEL'S TOP PICK" pill label above the first card
+- Add green left border + subtle glow to the first card
+- Pass `expected_value` from ValueBet model to the template
+- Show EV on the top pick card
+
+**Files:** `src/delivery/views/match_detail.py`
+
+**Acceptance Criteria:**
+- [ ] First value bet card has green "MODEL'S TOP PICK" banner above it
+- [ ] First card has green left border and subtle glow (box-shadow)
+- [ ] EV percentage shown on top pick card (e.g., "EV: +15.5%")
+- [ ] Remaining cards unchanged
+- [ ] Zero value bets → no change (empty state preserved)
+- [ ] Single value bet → still gets top pick treatment
+
+---
+
+### E29-02 — Fixtures: Preferred Bet Ring + Rich Tooltips
+
+**Type:** Enhancement — Dashboard
+**Depends on:** E29-01
+**MP refs:** §8 Design System
+**Status:** TODO
+
+Add a glowing green ring around the model's preferred market badge on fixture cards, and enhance tooltips to show model probability and confidence level.
+
+**Changes:**
+- Enrich `get_all_upcoming_fixtures()` data loading to include per-market model_prob and confidence from ValueBet records
+- Extract model probabilities from Prediction using existing PRED_PROB_MAP
+- Modify `_render_market_badges()` to identify the best badge and add a CSS box-shadow ring
+- Enhanced tooltips: "H: +8.2% edge | Model: 58% | Confidence: High | ★ Model's Pick"
+- Update the colour legend to explain the ring indicator
+
+**Files:** `src/delivery/views/fixtures.py`
+
+**Acceptance Criteria:**
+- [ ] Best market badge has a green ring (box-shadow) on fixture cards
+- [ ] Hover tooltip shows model probability (e.g., "Model: 58%")
+- [ ] Hover tooltip shows confidence level for value bets (e.g., "Confidence: High")
+- [ ] Best badge tooltip includes "★ Model's Pick" label
+- [ ] Non-value badges show model probability in tooltip (but no confidence)
+- [ ] Legend updated with "★ Model's Pick" entry
+- [ ] No ring shown when no badges have positive edge ≥ threshold
+
+---
+
+### E29-03 — Performance + Bankroll: Team Badges
+
+**Type:** Enhancement — Dashboard
+**Depends on:** E29-02
+**MP refs:** §8 Design System
+**Status:** TODO
+
+Add team crest badges to the bet history tables on the Performance and Bankroll pages — the only two pages still missing badges.
+
+**Changes:**
+- Import `render_team_badge` and `Match` model
+- Batch-load team IDs via BetLog.match_id → Match → Team join
+- Replace `st.dataframe()` with HTML table via `st.markdown()` for badge support
+- 16px badges for table density
+- P&L column with green/red coloring
+
+**Files:** `src/delivery/views/performance.py`, `src/delivery/views/bankroll.py`
+
+**Acceptance Criteria:**
+- [ ] Performance page recent bets table shows 16px team badges inline
+- [ ] Bankroll page bet history table shows 16px team badges inline
+- [ ] Badges use batch Match lookup (no N+1 queries)
+- [ ] P&L column is green for positive, red for negative
+- [ ] Table follows design system (dark theme, JetBrains Mono for data, Inter for text)
+- [ ] Monthly P&L breakdown table unchanged (aggregated, no per-match data)
+- [ ] Graceful fallback for missing badges or orphaned match_ids
+
+---
+
+### E29-04 — Settings: Bankroll Reset Button
+
+**Type:** Enhancement — Dashboard
+**Depends on:** E29-03
+**MP refs:** §3 Flow 6 (First-Time Setup), §8 Design System
+**Status:** TODO
+
+Add a bankroll reset feature to the Settings page with two-step confirmation.
+
+**Changes:**
+- Add `reset_bankroll(user_id)` backend function
+- Add "Bankroll Management" subsection after Starting Bankroll input
+- Show current vs starting bankroll comparison
+- Red "Reset Bankroll" button with two-step confirmation (prevents accidental clicks)
+- Resets `current_bankroll` to `starting_bankroll`; preserves all bet history
+
+**Files:** `src/delivery/views/settings.py`
+
+**Acceptance Criteria:**
+- [ ] "Reset Bankroll" button visible in Settings after Starting Bankroll input
+- [ ] First click shows warning message + "Confirm Reset" button
+- [ ] Confirm resets `current_bankroll` to `starting_bankroll` in database
+- [ ] Success toast shown after reset
+- [ ] Bet history (BetLog) is NOT deleted
+- [ ] Two-step confirmation prevents accidental resets
+
+---
+
+### Implementation Sequence
+
+```
+E29-01 (Deep Dive top pick) → E29-02 (Fixtures ring + tooltips)
+→ E29-03 (Performance/Bankroll badges) → E29-04 (Settings bankroll reset)
+```
