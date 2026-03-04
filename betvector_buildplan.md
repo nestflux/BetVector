@@ -3738,7 +3738,7 @@ Refactor the edge threshold into a runtime slider and make the model's best-badg
 **Type:** Enhancement — Dashboard
 **Depends on:** E30-01
 **MP refs:** §3 Flow 4, §8 Design System
-**Status:** TODO
+**Status:** DONE ✅
 
 Add a "Recent Results" toggle to the Fixtures page showing completed matches from the last 30 days with actual scores, model predictions, and correctness indicators.
 
@@ -3755,17 +3755,19 @@ Add a "Recent Results" toggle to the Fixtures page showing completed matches fro
 
 **Files:** `src/delivery/views/fixtures.py`
 
+**Results:** Historical view implemented with toggle, summary metrics, scored fixture cards with ✅/❌ indicators, and graceful empty states. Reuses `_find_best_badge()` and `_render_market_badges()` from E30-01.
+
 **Acceptance Criteria:**
-- [ ] "Upcoming" / "Recent Results" radio toggle visible below page title
-- [ ] "Recent Results" shows completed matches from last 30 days
-- [ ] Each match shows actual score prominently (JetBrains Mono 18px bold)
-- [ ] Predicted score shown below actual (muted text)
-- [ ] ✅ indicator when model's top pick was correct, ❌ when wrong
-- [ ] Summary metrics: Matches, Top Pick Accuracy, VB Record, VB Hit Rate
-- [ ] Market badges show pre-match edges with ring (same logic as E30-01)
-- [ ] Green left border for profitable VB matches, red for unprofitable VB matches
-- [ ] Toggle back to "Upcoming" shows normal view with Top Picks banner
-- [ ] Graceful empty states for missing predictions/odds/results
+- [x] "Upcoming" / "Recent Results" radio toggle visible below page title
+- [x] "Recent Results" shows completed matches from last 30 days
+- [x] Each match shows actual score prominently (JetBrains Mono 18px bold)
+- [x] Predicted score shown below actual (muted text)
+- [x] ✅ indicator when model's top pick was correct, ❌ when wrong
+- [x] Summary metrics: Matches, Top Pick Accuracy, VB Record, VB Hit Rate
+- [x] Market badges show pre-match edges with ring (same logic as E30-01)
+- [x] Green left border for profitable VB matches, red for unprofitable VB matches
+- [x] Toggle back to "Upcoming" shows normal view with Top Picks banner
+- [x] Graceful empty states for missing predictions/odds/results
 
 ---
 

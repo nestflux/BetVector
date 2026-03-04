@@ -1,6 +1,6 @@
 """
-BetVector — Fixtures Page (E17-04, E24-03, E24-04, E26-03, E29-02, E30-01)
-==========================================================================
+BetVector — Fixtures Page (E17-04, E24-03, E24-04, E26-03, E29-02, E30-01, E30-02)
+==================================================================================
 All upcoming matches across active leagues, grouped by date.
 **E26-03: Now the dashboard landing page.**
 
@@ -42,6 +42,15 @@ E30-01: Always-ring best badge + editable threshold:
 - _find_best_badge() extracted as standalone helper for reuse
   records.  Best badge tooltip appends "★ Model's Pick".
 - Legend updated with a ringed swatch for "★ Model's Pick".
+
+E30-02: Historical fixtures view (Recent Results):
+- "Upcoming" / "Recent Results" toggle at the top of the page
+- Recent Results shows completed matches from the last 30 days
+- Actual score (bold) vs predicted score (muted) with ✅/❌ indicator
+- Summary metrics: Matches, Top Pick Accuracy, VB Record, VB Hit Rate
+- Green/red/blue left borders based on VB profitability
+- Market badges show pre-match edges with ring (same as upcoming)
+- Graceful handling for missing predictions, odds, or results
 
 Master Plan refs: MP §3 Flow 4 (Dashboard Exploration), MP §8 Design System
 """
@@ -292,6 +301,215 @@ def get_all_upcoming_fixtures(days_ahead: int = 14) -> List[Dict]:
                 "market_probs": market_probs,
                 "predicted_home_goals": pred_home_goals,
                 "predicted_away_goals": pred_away_goals,
+            })
+
+    return results
+
+
+# ── Actual outcome maps (E30-02) ───────────────────────────────────────
+# Given a final score, determine the correct selection for each market.
+# Used to compare the model's best pick against reality.
+
+def _determine_actual_outcomes(
+    home_goals: int, away_goals: int,
+) -> Dict[str, str]:
+    """Map a finished score to the correct selection per market.
+
+    Returns a dict keyed by market_type → winning selection, e.g.
+    ``{"1X2": "home", "OU15": "over", "OU25": "under", "BTTS": "no"}``.
+
+    Parameters
+    ----------
+    home_goals, away_goals : int
+        Final score of the match.
+
+    Returns
+    -------
+    dict[str, str]
+        Market type → actual winning selection.
+    """
+    total = home_goals + away_goals
+    both_scored = home_goals > 0 and away_goals > 0
+
+    # 1X2: who won?
+    if home_goals > away_goals:
+        result_1x2 = "home"
+    elif home_goals == away_goals:
+        result_1x2 = "draw"
+    else:
+        result_1x2 = "away"
+
+    return {
+        "1X2": result_1x2,
+        "OU15": "over" if total > 1.5 else "under",
+        "OU25": "over" if total > 2.5 else "under",
+        "BTTS": "yes" if both_scored else "no",
+    }
+
+
+def get_recent_results(days_back: int = 30) -> List[Dict]:
+    """Fetch completed matches from the last ``days_back`` days.
+
+    E30-02: Parallel to ``get_all_upcoming_fixtures()`` but queries
+    finished matches.  Enriches each result with:
+    - Actual score (home_goals, away_goals)
+    - Predicted score (from Prediction record)
+    - Per-market edges (same computation as upcoming fixtures)
+    - Model's best pick correctness (did the top pick match reality?)
+    - Value bet profitability (did any VB selection match reality?)
+
+    Parameters
+    ----------
+    days_back : int
+        How many days into the past to look (default 30).
+
+    Returns
+    -------
+    list[dict]
+        Recent results enriched with prediction and accuracy data,
+        sorted by date descending (most recent first).
+    """
+    HomeTeam = aliased(Team)
+    AwayTeam = aliased(Team)
+
+    today_str = date.today().isoformat()
+    cutoff_str = (date.today() - timedelta(days=days_back)).isoformat()
+
+    with get_session() as session:
+        matches = (
+            session.query(Match, HomeTeam, AwayTeam, League)
+            .join(HomeTeam, Match.home_team_id == HomeTeam.id)
+            .join(AwayTeam, Match.away_team_id == AwayTeam.id)
+            .join(League, Match.league_id == League.id)
+            .filter(
+                Match.status == "finished",
+                Match.date >= cutoff_str,
+                Match.date <= today_str,
+                Match.home_goals.isnot(None),
+            )
+            .order_by(Match.date.desc(), Match.kickoff_time.desc())
+            .all()
+        )
+
+        results = []
+        for match, home_team, away_team, league in matches:
+            # Load ValueBet rows (same pattern as upcoming fixtures)
+            vb_rows = (
+                session.query(ValueBet)
+                .filter_by(match_id=match.id)
+                .all()
+            )
+            vb_count = len(vb_rows)
+
+            # Load prediction (most recent model)
+            prediction = (
+                session.query(Prediction)
+                .filter_by(match_id=match.id)
+                .order_by(Prediction.created_at.desc())
+                .first()
+            )
+
+            # Check odds availability
+            odds_count = (
+                session.query(Odds)
+                .filter_by(match_id=match.id)
+                .count()
+            )
+
+            # Compute per-market edges (same as upcoming)
+            market_edges: Dict[Tuple[str, str], Optional[float]] = {}
+            for market_type, selection, _label in MARKET_BADGES:
+                edge = _compute_edge(
+                    session, match.id, prediction, market_type, selection,
+                )
+                market_edges[(market_type, selection)] = edge
+
+            # ValueBet info for tooltips (same as upcoming)
+            market_vb_info: Dict[Tuple[str, str], Dict] = {}
+            for vb in vb_rows:
+                key = (vb.market_type, vb.selection)
+                if key not in market_vb_info or vb.edge > market_vb_info[key]["edge"]:
+                    market_vb_info[key] = {
+                        "model_prob": vb.model_prob,
+                        "confidence": vb.confidence,
+                        "edge": vb.edge,
+                    }
+
+            # Model probabilities from Prediction (for non-VB badges)
+            market_probs: Dict[Tuple[str, str], float] = {}
+            if prediction is not None:
+                for (mt, sel), attr in PRED_PROB_MAP.items():
+                    val = getattr(prediction, attr, None)
+                    if val is not None:
+                        market_probs[(mt, sel)] = val
+
+            # Predicted goals
+            pred_home_goals = None
+            pred_away_goals = None
+            if prediction is not None:
+                pred_home_goals = getattr(prediction, "predicted_home_goals", None)
+                pred_away_goals = getattr(prediction, "predicted_away_goals", None)
+
+            # ── Actual outcome analysis ─────────────────────────────────
+            actual_outcomes = _determine_actual_outcomes(
+                match.home_goals, match.away_goals,
+            )
+
+            # Did the model's top pick (highest edge badge) match reality?
+            best_key, best_edge = _find_best_badge(market_edges)
+            top_pick_correct: Optional[bool] = None
+            if best_key is not None:
+                best_market, best_sel = best_key
+                actual_sel = actual_outcomes.get(best_market)
+                if actual_sel is not None:
+                    top_pick_correct = (best_sel == actual_sel)
+
+            # Did any value bet selection match reality?
+            # A value bet is "profitable" if its selection was the actual outcome.
+            vb_profitable: Optional[bool] = None
+            vb_wins = 0
+            vb_total = 0
+            if vb_rows:
+                # Deduplicate by (market_type, selection) — same logic as Top Picks
+                seen_vb_keys: set = set()
+                for vb in vb_rows:
+                    vb_key = (vb.market_type, vb.selection)
+                    if vb_key in seen_vb_keys:
+                        continue
+                    seen_vb_keys.add(vb_key)
+                    actual_sel = actual_outcomes.get(vb.market_type)
+                    if actual_sel is not None:
+                        vb_total += 1
+                        if vb.selection == actual_sel:
+                            vb_wins += 1
+                vb_profitable = vb_wins > 0 if vb_total > 0 else None
+
+            results.append({
+                "match_id": match.id,
+                "date": match.date,
+                "kickoff": html_escape(match.kickoff_time or "FT"),
+                "home_team": home_team.name,
+                "away_team": away_team.name,
+                "home_team_id": home_team.id,
+                "away_team_id": away_team.id,
+                "league": html_escape(league.short_name),
+                "league_name": html_escape(league.name),
+                "home_goals": match.home_goals,
+                "away_goals": match.away_goals,
+                "has_value_bets": vb_count > 0,
+                "value_bet_count": vb_count,
+                "has_prediction": prediction is not None,
+                "has_odds": odds_count > 0,
+                "odds_count": odds_count,
+                "market_edges": market_edges,
+                "market_vb_info": market_vb_info,
+                "market_probs": market_probs,
+                "predicted_home_goals": pred_home_goals,
+                "predicted_away_goals": pred_away_goals,
+                "top_pick_correct": top_pick_correct,
+                "vb_profitable": vb_profitable,
+                "vb_wins": vb_wins,
+                "vb_total": vb_total,
             })
 
     return results
@@ -601,105 +819,375 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ── E26-03: Top Picks Banner ─────────────────────────────────────────────
-# Show the 3-5 highest-edge value bets as a compact banner at the top of
-# the page.  This gives users an immediate view of the best opportunities.
-with st.spinner("Loading top picks..."):
-    top_picks = get_top_picks(max_picks=5)
+# ── E30-02: View mode toggle ─────────────────────────────────────────────
+# "Upcoming" (default) shows scheduled matches with Top Picks and pipeline health.
+# "Recent Results" shows completed matches with actual vs predicted scores,
+# correctness indicators, and accuracy metrics.
+view_mode = st.radio(
+    "View",
+    ["Upcoming", "Recent Results"],
+    horizontal=True,
+    label_visibility="collapsed",
+)
 
-if top_picks:
-    st.markdown(
-        f'<div style="font-family: Inter, sans-serif; font-size: 14px; '
-        f'font-weight: 700; color: {COLOURS["green"]}; text-transform: uppercase; '
-        f'letter-spacing: 0.5px; margin-bottom: 8px;">'
-        f'Top Picks</div>',
-        unsafe_allow_html=True,
-    )
+if view_mode == "Upcoming":
+    # ══════════════════════════════════════════════════════════════════════
+    # UPCOMING VIEW — scheduled matches (existing behaviour)
+    # ══════════════════════════════════════════════════════════════════════
 
-    # Render each top pick as a compact inline card
-    picks_html_parts = []
-    for pick in top_picks:
-        sel_label = _SELECTION_LABELS.get(
-            (pick["market_type"], pick["selection"]),
-            f'{pick["market_type"]}/{pick["selection"]}',
-        )
-        edge_pct = pick["edge"] * 100
-        # Green if edge is at least 2× the configured threshold (strong pick),
-        # yellow otherwise (still a value bet, but less emphatic).
-        # _config_edge_threshold is loaded from config at module level (e.g. 0.05 = 5%).
-        # Top Picks uses the *config* threshold, not the user's slider — system
-        # picks are stable and shouldn't shift when the slider moves.
-        _strong_edge_pct = _config_edge_threshold * 200  # 2× threshold as percentage
-        edge_colour = COLOURS["green"] if edge_pct >= _strong_edge_pct else COLOURS["yellow"]
-        conf_colour = (
-            COLOURS["green"] if pick["confidence"] == "high"
-            else COLOURS["yellow"] if pick["confidence"] == "medium"
-            else COLOURS["grey"]
+    # ── E26-03: Top Picks Banner ─────────────────────────────────────
+    # Show the 3-5 highest-edge value bets as a compact banner.
+    with st.spinner("Loading top picks..."):
+        top_picks = get_top_picks(max_picks=5)
+
+    if top_picks:
+        st.markdown(
+            f'<div style="font-family: Inter, sans-serif; font-size: 14px; '
+            f'font-weight: 700; color: {COLOURS["green"]}; text-transform: uppercase; '
+            f'letter-spacing: 0.5px; margin-bottom: 8px;">'
+            f'Top Picks</div>',
+            unsafe_allow_html=True,
         )
 
-        # Render badges beside team names in top picks (20px inline)
-        tp_home = render_team_badge(pick["home_team_id"], pick["home_team"], size=20)
-        tp_away = render_team_badge(pick["away_team_id"], pick["away_team"], size=20)
+        # Render each top pick as a compact inline card
+        picks_html_parts = []
+        for pick in top_picks:
+            sel_label = _SELECTION_LABELS.get(
+                (pick["market_type"], pick["selection"]),
+                f'{pick["market_type"]}/{pick["selection"]}',
+            )
+            edge_pct = pick["edge"] * 100
+            # Green if edge is at least 2× the configured threshold (strong pick),
+            # yellow otherwise (still a value bet, but less emphatic).
+            # _config_edge_threshold is loaded from config at module level (e.g. 0.05 = 5%).
+            # Top Picks uses the *config* threshold, not the user's slider — system
+            # picks are stable and shouldn't shift when the slider moves.
+            _strong_edge_pct = _config_edge_threshold * 200  # 2× threshold as %
+            edge_colour = COLOURS["green"] if edge_pct >= _strong_edge_pct else COLOURS["yellow"]
+            conf_colour = (
+                COLOURS["green"] if pick["confidence"] == "high"
+                else COLOURS["yellow"] if pick["confidence"] == "medium"
+                else COLOURS["grey"]
+            )
 
-        picks_html_parts.append(
+            # Render badges beside team names in top picks (20px inline)
+            tp_home = render_team_badge(pick["home_team_id"], pick["home_team"], size=20)
+            tp_away = render_team_badge(pick["away_team_id"], pick["away_team"], size=20)
+
+            picks_html_parts.append(
+                f'<div style="background-color: {COLOURS["surface"]}; '
+                f'border: 1px solid {COLOURS["border"]}; border-radius: 8px; '
+                f'padding: 10px 14px; flex: 1 1 220px; min-width: 220px;">'
+                f'<div style="font-family: Inter, sans-serif; font-size: 13px; '
+                f'font-weight: 600; color: {COLOURS["text"]}; margin-bottom: 4px;">'
+                f'{tp_home} vs {tp_away}</div>'
+                f'<div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">'
+                f'<span style="font-family: Inter, sans-serif; font-size: 12px; '
+                f'color: {COLOURS["text_secondary"]};">{sel_label}</span>'
+                f'<span style="font-family: JetBrains Mono, monospace; font-size: 12px; '
+                f'color: {COLOURS["text"]};">{pick["bookmaker_odds"]:.2f}</span>'
+                f'<span style="font-family: JetBrains Mono, monospace; font-size: 12px; '
+                f'font-weight: 700; color: {edge_colour};">+{edge_pct:.1f}%</span>'
+                f'<span style="font-family: Inter, sans-serif; font-size: 10px; '
+                f'color: {COLOURS["text_secondary"]};">{pick["bookmaker"]}</span>'
+                f'<span style="display: inline-block; width: 8px; height: 8px; '
+                f'border-radius: 50%; background-color: {conf_colour};"></span>'
+                f'</div>'
+                f'</div>'
+            )
+
+        st.markdown(
+            f'<div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px;">'
+            f'{"".join(picks_html_parts)}'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        # Empty state: no value bets found across upcoming fixtures
+        st.markdown(
             f'<div style="background-color: {COLOURS["surface"]}; '
             f'border: 1px solid {COLOURS["border"]}; border-radius: 8px; '
-            f'padding: 10px 14px; flex: 1 1 220px; min-width: 220px;">'
-            f'<div style="font-family: Inter, sans-serif; font-size: 13px; '
-            f'font-weight: 600; color: {COLOURS["text"]}; margin-bottom: 4px;">'
-            f'{tp_home} vs {tp_away}</div>'
-            f'<div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">'
-            f'<span style="font-family: Inter, sans-serif; font-size: 12px; '
-            f'color: {COLOURS["text_secondary"]};">{sel_label}</span>'
-            f'<span style="font-family: JetBrains Mono, monospace; font-size: 12px; '
-            f'color: {COLOURS["text"]};">{pick["bookmaker_odds"]:.2f}</span>'
-            f'<span style="font-family: JetBrains Mono, monospace; font-size: 12px; '
-            f'font-weight: 700; color: {edge_colour};">+{edge_pct:.1f}%</span>'
-            f'<span style="font-family: Inter, sans-serif; font-size: 10px; '
-            f'color: {COLOURS["text_secondary"]};">{pick["bookmaker"]}</span>'
-            f'<span style="display: inline-block; width: 8px; height: 8px; '
-            f'border-radius: 50%; background-color: {conf_colour};"></span>'
-            f'</div>'
-            f'</div>'
+            f'padding: 14px 18px; margin-bottom: 16px; text-align: center;">'
+            f'<span style="font-family: Inter, sans-serif; font-size: 13px; '
+            f'color: {COLOURS["text_secondary"]};">'
+            f'No value bets found across upcoming fixtures. '
+            f'The pipeline will identify opportunities when odds are available.</span>'
+            f'</div>',
+            unsafe_allow_html=True,
         )
 
+    st.divider()
+
+    # ── E30-01: Dual sliders — days ahead + edge threshold ─────────────
+    # Side-by-side controls: left = date range, right = value threshold.
+    col_days, col_edge = st.columns(2)
+    with col_days:
+        days_ahead = st.slider(
+            "Days ahead",
+            min_value=7,
+            max_value=28,
+            value=14,
+            step=7,
+            help="How far ahead to show fixtures.",
+        )
+    with col_edge:
+        edge_threshold_pct = st.slider(
+            "Edge threshold (%)",
+            min_value=1,
+            max_value=15,
+            value=int(_config_edge_threshold * 100),
+            step=1,
+            help=(
+                "Minimum edge to colour a badge green (value bet). "
+                "Lower it to see near-misses; raise it to be stricter."
+            ),
+        )
+    # Convert percentage to decimal for internal use
+    edge_threshold = edge_threshold_pct / 100.0
+
+    # Legend — explains the badge colour coding (dynamic threshold).
     st.markdown(
-        f'<div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px;">'
-        f'{"".join(picks_html_parts)}'
-        f'</div>',
+        '<div style="font-family: Inter, sans-serif; font-size: 12px; '
+        f'color: {COLOURS["text_secondary"]}; margin-bottom: 16px; '
+        'display: flex; gap: 16px; flex-wrap: wrap; align-items: center;">'
+        '<span style="font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; '
+        'margin-right: 4px;">Legend:</span>'
+        f'<span><span style="display: inline-block; width: 10px; height: 10px; '
+        f'border-radius: 2px; background-color: {COLOURS["green"]}; margin-right: 4px; '
+        f'vertical-align: middle;"></span>Value (edge &ge; {edge_threshold_pct}%)</span>'
+        f'<span><span style="display: inline-block; width: 10px; height: 10px; '
+        f'border-radius: 2px; background-color: {COLOURS["yellow"]}; margin-right: 4px; '
+        f'vertical-align: middle;"></span>Marginal (0–{edge_threshold_pct}%)</span>'
+        f'<span><span style="display: inline-block; width: 10px; height: 10px; '
+        f'border-radius: 2px; background-color: {COLOURS["red"]}; margin-right: 4px; '
+        f'vertical-align: middle;"></span>No Value (&le; 0%)</span>'
+        f'<span><span style="display: inline-block; width: 10px; height: 10px; '
+        f'border-radius: 2px; background-color: {COLOURS["grey"]}; margin-right: 4px; '
+        f'vertical-align: middle;"></span>No Data</span>'
+        f'<span><span style="display: inline-block; width: 10px; height: 10px; '
+        f'border-radius: 2px; background-color: {COLOURS["green"]}; margin-right: 4px; '
+        f'vertical-align: middle; '
+        f'box-shadow: 0 0 0 2px {COLOURS["green"]}, 0 0 4px rgba(63, 185, 80, 0.4); '
+        f'"></span>\u2605 Model\'s Pick</span>'
+        f'<span><span style="display: inline-block; width: 10px; height: 10px; '
+        f'border-radius: 2px; background-color: {COLOURS["yellow"]}; margin-right: 4px; '
+        f'vertical-align: middle; '
+        f'box-shadow: 0 0 0 2px {COLOURS["grey"]}, 0 0 4px rgba(72, 79, 88, 0.3); '
+        f'"></span>Best Guess (below threshold)</span>'
+        '</div>',
         unsafe_allow_html=True,
     )
+
+    # Load fixtures
+    with st.spinner("Loading fixtures..."):
+        fixtures = get_all_upcoming_fixtures(days_ahead=days_ahead)
+
+    if not fixtures:
+        st.markdown(
+            '<div class="bv-empty-state">'
+            "No upcoming fixtures found. The season may be between matchdays, "
+            "or the pipeline hasn't scraped fixture data yet."
+            "</div>",
+            unsafe_allow_html=True,
+        )
+    else:
+        # ────────────────────────────────────────────────────────────────
+        # Pipeline Health Summary (E24-04)
+        # ────────────────────────────────────────────────────────────────
+        total = len(fixtures)
+        with_prediction = sum(1 for f in fixtures if f["has_prediction"])
+        with_odds = sum(1 for f in fixtures if f["has_odds"])
+        with_value = sum(1 for f in fixtures if f["has_value_bets"])
+        full_data = sum(
+            1 for f in fixtures if f["has_prediction"] and f["has_odds"]
+        )
+
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Upcoming Matches", total)
+        with col2:
+            st.metric("With Predictions", with_prediction)
+        with col3:
+            st.metric("With Odds", with_odds)
+        with col4:
+            st.metric("With Value Bets", with_value)
+
+        # Pipeline health bar
+        if total > 0:
+            coverage_pct = (full_data / total) * 100
+            if coverage_pct >= 70:
+                bar_colour = COLOURS["green"]
+            elif coverage_pct >= 30:
+                bar_colour = COLOURS["yellow"]
+            else:
+                bar_colour = COLOURS["red"]
+
+            st.markdown(
+                f'<div style="font-family: Inter, sans-serif; font-size: 12px; '
+                f'color: {COLOURS["text_secondary"]}; margin: 8px 0 4px;">'
+                f'Pipeline Coverage: <strong style="color: {COLOURS["text"]};">'
+                f'{full_data}/{total}</strong> fixtures have full prediction + odds data'
+                f'</div>'
+                f'<div style="background-color: {COLOURS["border"]}; border-radius: 4px; '
+                f'height: 6px; overflow: hidden; margin-bottom: 8px;">'
+                f'<div style="width: {coverage_pct:.0f}%; height: 100%; '
+                f'background-color: {bar_colour}; border-radius: 4px; '
+                f'transition: width 0.3s ease;"></div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+            if coverage_pct < 70:
+                st.markdown(
+                    f'<div style="font-family: Inter, sans-serif; font-size: 11px; '
+                    f'color: {COLOURS["text_secondary"]}; margin-bottom: 12px; '
+                    f'padding: 6px 10px; border-left: 2px solid {COLOURS["blue"]}; '
+                    f'background-color: rgba(88, 166, 255, 0.05);">'
+                    f'\U0001F4A1 Bookmakers typically price matches 1\u20132 weeks ahead. '
+                    f'Fixtures further out show grey badges until odds become available. '
+                    f'The pipeline refreshes odds automatically each morning.'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+
+        st.divider()
+
+        # Group fixtures by date and render
+        for match_date, group in groupby(fixtures, key=lambda x: x["date"]):
+            st.markdown(
+                f'<div style="font-family: Inter, sans-serif; font-size: 14px; '
+                f'font-weight: 600; color: {COLOURS["text"]}; '
+                f'margin: 20px 0 10px; text-transform: uppercase; '
+                f'letter-spacing: 0.5px;">{match_date}</div>',
+                unsafe_allow_html=True,
+            )
+
+            for fix in group:
+                # Left border colour: green = value bets, blue = full data, none = partial
+                if fix["has_value_bets"]:
+                    border_style = f"border-left: 3px solid {COLOURS['green']};"
+                elif fix["has_prediction"] and fix["has_odds"]:
+                    border_style = f"border-left: 3px solid {COLOURS['blue']};"
+                else:
+                    border_style = ""
+
+                kickoff_html = ""
+                if fix["kickoff"] and fix["kickoff"] != "TBD":
+                    kickoff_html = (
+                        f'<span style="font-family: JetBrains Mono, monospace; font-size: 13px; '
+                        f'color: {COLOURS["text_secondary"]}; min-width: 50px;">'
+                        f'{fix["kickoff"]}</span>'
+                    )
+
+                league_badge = (
+                    f'<span class="bv-badge" style="background-color: {COLOURS["border"]}; '
+                    f'color: {COLOURS["text_secondary"]};">{fix["league"]}</span>'
+                )
+
+                # Diagnostic badges (E24-04)
+                diag_badges = []
+                if not fix["has_prediction"]:
+                    diag_badges.append(
+                        f'<span title="No prediction available" style="'
+                        f"display: inline-block; padding: 1px 5px; margin-left: 4px; "
+                        f"border-radius: 3px; font-family: 'JetBrains Mono', monospace; "
+                        f"font-size: 9px; font-weight: 600; color: {COLOURS['red']}; "
+                        f'border: 1px solid {COLOURS["red"]}; cursor: help;">'
+                        f"No pred</span>"
+                    )
+                if not fix["has_odds"]:
+                    diag_badges.append(
+                        f'<span title="No odds loaded" style="'
+                        f"display: inline-block; padding: 1px 5px; margin-left: 4px; "
+                        f"border-radius: 3px; font-family: 'JetBrains Mono', monospace; "
+                        f"font-size: 9px; font-weight: 600; color: {COLOURS['yellow']}; "
+                        f'border: 1px solid {COLOURS["yellow"]}; cursor: help;">'
+                        f"No odds</span>"
+                    )
+                if fix["has_prediction"] and fix["has_odds"]:
+                    vb_label = (
+                        f'{fix["value_bet_count"]} VB'
+                        if fix["has_value_bets"]
+                        else "Full data"
+                    )
+                    vb_title = (
+                        f'{fix["value_bet_count"]} value bet(s) identified'
+                        if fix["has_value_bets"]
+                        else "Prediction + odds loaded"
+                    )
+                    diag_badges.append(
+                        f'<span title="{vb_title}" style="'
+                        f"display: inline-block; padding: 1px 5px; margin-left: 4px; "
+                        f"border-radius: 3px; font-family: 'JetBrains Mono', monospace; "
+                        f"font-size: 9px; font-weight: 600; color: {COLOURS['green']}; "
+                        f'border: 1px solid {COLOURS["green"]}; cursor: help;">'
+                        f"{vb_label}</span>"
+                    )
+                diag_html = "".join(diag_badges)
+
+                # Market badges with dynamic threshold (E30-01)
+                market_html = _render_market_badges(
+                    fix["market_edges"],
+                    market_vb_info=fix.get("market_vb_info"),
+                    market_probs=fix.get("market_probs"),
+                    threshold=edge_threshold,
+                )
+
+                # Predicted score inline
+                pred_html = ""
+                pred_h = fix.get("predicted_home_goals")
+                pred_a = fix.get("predicted_away_goals")
+                if pred_h is not None and pred_a is not None:
+                    pred_html = (
+                        f'<span style="font-family: JetBrains Mono, monospace; '
+                        f'font-size: 11px; color: {COLOURS["text_secondary"]}; '
+                        f'margin-left: 12px;" '
+                        f'title="Model predicted expected goals (xG-based)">'
+                        f'Model: {pred_h:.1f} \u2013 {pred_a:.1f}</span>'
+                    )
+
+                fix_home = render_team_badge(fix["home_team_id"], fix["home_team"], size=20)
+                fix_away = render_team_badge(fix["away_team_id"], fix["away_team"], size=20)
+
+                # Fixture card
+                st.markdown(
+                    f'<div class="bv-card" style="padding: 12px 16px; {border_style}">'
+                    f'<div style="display: flex; justify-content: space-between; '
+                    f'align-items: center; margin-bottom: 6px;">'
+                    f'<div style="display: flex; align-items: center; gap: 12px;">'
+                    f'{kickoff_html}'
+                    f'<span style="font-family: Inter, sans-serif; font-size: 15px; '
+                    f'font-weight: 600; color: {COLOURS["text"]};">'
+                    f'{fix_home} vs {fix_away}</span>'
+                    f'{pred_html}'
+                    f'</div>'
+                    f'<div style="display: flex; align-items: center;">'
+                    f'{league_badge}{diag_html}'
+                    f'</div>'
+                    f'</div>'
+                    f'<div style="display: flex; align-items: center; gap: 4px; '
+                    f'padding-left: 62px;">'
+                    f'{market_html}'
+                    f'</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+
+                # Deep Dive button
+                if st.button(
+                    "\U0001F50D Deep Dive",
+                    key=f"fixture_dive_{fix['match_id']}",
+                    type="secondary",
+                ):
+                    st.session_state["deep_dive_match_id"] = fix["match_id"]
+                    st.switch_page("views/match_detail.py")
+
 else:
-    # Empty state: no value bets found across upcoming fixtures
-    st.markdown(
-        f'<div style="background-color: {COLOURS["surface"]}; '
-        f'border: 1px solid {COLOURS["border"]}; border-radius: 8px; '
-        f'padding: 14px 18px; margin-bottom: 16px; text-align: center;">'
-        f'<span style="font-family: Inter, sans-serif; font-size: 13px; '
-        f'color: {COLOURS["text_secondary"]};">'
-        f'No value bets found across upcoming fixtures. '
-        f'The pipeline will identify opportunities when odds are available.</span>'
-        f'</div>',
-        unsafe_allow_html=True,
-    )
+    # ══════════════════════════════════════════════════════════════════════
+    # RECENT RESULTS VIEW (E30-02) — completed matches
+    # ══════════════════════════════════════════════════════════════════════
 
-st.divider()
-
-# ── E30-01: Dual sliders — days ahead + edge threshold ─────────────────
-# Side-by-side controls: left controls date range, right controls what
-# counts as a "value" bet.  The edge threshold dynamically recolours badges
-# and updates the legend text below.
-col_days, col_edge = st.columns(2)
-with col_days:
-    days_ahead = st.slider(
-        "Days ahead",
-        min_value=7,
-        max_value=28,
-        value=14,
-        step=7,
-        help="How far ahead to show fixtures.",
-    )
-with col_edge:
+    # ── Edge threshold slider (shared with Upcoming) ─────────────────
     edge_threshold_pct = st.slider(
         "Edge threshold (%)",
         min_value=1,
@@ -708,288 +1196,185 @@ with col_edge:
         step=1,
         help=(
             "Minimum edge to colour a badge green (value bet). "
-            "Lower it to see near-misses; raise it to be stricter."
+            "Controls badge colours and ring styles for historical matches."
         ),
+        key="recent_edge_threshold",
     )
-# Convert percentage to decimal for internal use
-edge_threshold = edge_threshold_pct / 100.0
+    edge_threshold = edge_threshold_pct / 100.0
 
-# Legend — explains the badge colour coding.
-# E30-01: Placed AFTER sliders so it can reference the dynamic threshold.
-# Added grey-ringed "Best Guess" swatch alongside the existing green-ringed
-# "Model's Pick" to explain the two ring styles.
-st.markdown(
-    '<div style="font-family: Inter, sans-serif; font-size: 12px; '
-    f'color: {COLOURS["text_secondary"]}; margin-bottom: 16px; '
-    'display: flex; gap: 16px; flex-wrap: wrap; align-items: center;">'
-    '<span style="font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; '
-    'margin-right: 4px;">Legend:</span>'
-    # Green swatch — value bet (edge ≥ threshold)
-    f'<span><span style="display: inline-block; width: 10px; height: 10px; '
-    f'border-radius: 2px; background-color: {COLOURS["green"]}; margin-right: 4px; '
-    f'vertical-align: middle;"></span>Value (edge &ge; {edge_threshold_pct}%)</span>'
-    # Yellow swatch — marginal positive edge (0 to threshold)
-    f'<span><span style="display: inline-block; width: 10px; height: 10px; '
-    f'border-radius: 2px; background-color: {COLOURS["yellow"]}; margin-right: 4px; '
-    f'vertical-align: middle;"></span>Marginal (0–{edge_threshold_pct}%)</span>'
-    # Red swatch — no value (negative edge)
-    f'<span><span style="display: inline-block; width: 10px; height: 10px; '
-    f'border-radius: 2px; background-color: {COLOURS["red"]}; margin-right: 4px; '
-    f'vertical-align: middle;"></span>No Value (&le; 0%)</span>'
-    # Grey swatch — no data
-    f'<span><span style="display: inline-block; width: 10px; height: 10px; '
-    f'border-radius: 2px; background-color: {COLOURS["grey"]}; margin-right: 4px; '
-    f'vertical-align: middle;"></span>No Data</span>'
-    # Green-ringed swatch — model's top pick that meets threshold
-    f'<span><span style="display: inline-block; width: 10px; height: 10px; '
-    f'border-radius: 2px; background-color: {COLOURS["green"]}; margin-right: 4px; '
-    f'vertical-align: middle; '
-    f'box-shadow: 0 0 0 2px {COLOURS["green"]}, 0 0 4px rgba(63, 185, 80, 0.4); '
-    f'"></span>\u2605 Model\'s Pick</span>'
-    # Grey-ringed swatch — model's best guess, below threshold
-    f'<span><span style="display: inline-block; width: 10px; height: 10px; '
-    f'border-radius: 2px; background-color: {COLOURS["yellow"]}; margin-right: 4px; '
-    f'vertical-align: middle; '
-    f'box-shadow: 0 0 0 2px {COLOURS["grey"]}, 0 0 4px rgba(72, 79, 88, 0.3); '
-    f'"></span>Best Guess (below threshold)</span>'
-    '</div>',
-    unsafe_allow_html=True,
-)
+    # Load recent results
+    with st.spinner("Loading recent results..."):
+        recent = get_recent_results(days_back=30)
 
-# Load fixtures
-with st.spinner("Loading fixtures..."):
-    fixtures = get_all_upcoming_fixtures(days_ahead=days_ahead)
-
-if not fixtures:
-    st.markdown(
-        '<div class="bv-empty-state">'
-        "No upcoming fixtures found. The season may be between matchdays, "
-        "or the pipeline hasn't scraped fixture data yet."
-        "</div>",
-        unsafe_allow_html=True,
-    )
-else:
-    # ----------------------------------------------------------------
-    # Pipeline Health Summary (E24-04)
-    # Shows data coverage at a glance so the user knows if the pipeline
-    # has run recently and which fixtures have full model + odds data.
-    # ----------------------------------------------------------------
-    total = len(fixtures)
-    with_prediction = sum(1 for f in fixtures if f["has_prediction"])
-    with_odds = sum(1 for f in fixtures if f["has_odds"])
-    with_value = sum(1 for f in fixtures if f["has_value_bets"])
-    # "Full data" means both prediction AND odds exist — edge computation possible
-    full_data = sum(
-        1 for f in fixtures if f["has_prediction"] and f["has_odds"]
-    )
-
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Upcoming Matches", total)
-    with col2:
-        st.metric("With Predictions", with_prediction)
-    with col3:
-        st.metric("With Odds", with_odds)
-    with col4:
-        st.metric("With Value Bets", with_value)
-
-    # Pipeline health bar — shows how many fixtures have full model + odds data.
-    # Green when most fixtures are covered, yellow when partial, red when sparse.
-    if total > 0:
-        coverage_pct = (full_data / total) * 100
-        # Choose bar colour based on coverage percentage
-        if coverage_pct >= 70:
-            bar_colour = COLOURS["green"]
-        elif coverage_pct >= 30:
-            bar_colour = COLOURS["yellow"]
-        else:
-            bar_colour = COLOURS["red"]
-
+    if not recent:
         st.markdown(
-            f'<div style="font-family: Inter, sans-serif; font-size: 12px; '
-            f'color: {COLOURS["text_secondary"]}; margin: 8px 0 4px;">'
-            f'Pipeline Coverage: <strong style="color: {COLOURS["text"]};">'
-            f'{full_data}/{total}</strong> fixtures have full prediction + odds data'
-            f'</div>'
-            f'<div style="background-color: {COLOURS["border"]}; border-radius: 4px; '
-            f'height: 6px; overflow: hidden; margin-bottom: 8px;">'
-            f'<div style="width: {coverage_pct:.0f}%; height: 100%; '
-            f'background-color: {bar_colour}; border-radius: 4px; '
-            f'transition: width 0.3s ease;"></div>'
-            f'</div>',
+            '<div class="bv-empty-state">'
+            "No completed matches found in the last 30 days. "
+            "Results will appear here once matches have been played."
+            "</div>",
             unsafe_allow_html=True,
         )
+    else:
+        # ── Summary metrics (E30-02) ─────────────────────────────────
+        # Replace Pipeline Health with accuracy metrics for historical view.
+        total_recent = len(recent)
+        # Top Pick accuracy: how often was the model's best badge correct?
+        tp_with_data = [r for r in recent if r["top_pick_correct"] is not None]
+        tp_correct = sum(1 for r in tp_with_data if r["top_pick_correct"])
+        tp_total = len(tp_with_data)
 
-        # Tip when coverage is low — explain why some fixtures lack odds
-        if coverage_pct < 70:
+        # Value bet record: wins / total across all matches with VB
+        vb_matches = [r for r in recent if r["vb_total"] > 0]
+        total_vb_wins = sum(r["vb_wins"] for r in vb_matches)
+        total_vb_bets = sum(r["vb_total"] for r in vb_matches)
+        vb_hit_rate = (total_vb_wins / total_vb_bets * 100) if total_vb_bets > 0 else 0.0
+
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Matches", total_recent)
+        with col2:
+            st.metric(
+                "Top Pick Accuracy",
+                f"{tp_correct}/{tp_total}" if tp_total > 0 else "N/A",
+            )
+        with col3:
+            st.metric(
+                "VB Record",
+                f"{total_vb_wins}/{total_vb_bets}" if total_vb_bets > 0 else "N/A",
+            )
+        with col4:
+            st.metric(
+                "VB Hit Rate",
+                f"{vb_hit_rate:.0f}%" if total_vb_bets > 0 else "N/A",
+            )
+
+        st.divider()
+
+        # ── Render completed fixture cards ───────────────────────────
+        for match_date, group in groupby(recent, key=lambda x: x["date"]):
             st.markdown(
-                f'<div style="font-family: Inter, sans-serif; font-size: 11px; '
-                f'color: {COLOURS["text_secondary"]}; margin-bottom: 12px; '
-                f'padding: 6px 10px; border-left: 2px solid {COLOURS["blue"]}; '
-                f'background-color: rgba(88, 166, 255, 0.05);">'
-                f'💡 Bookmakers typically price matches 1–2 weeks ahead. '
-                f'Fixtures further out show grey badges until odds become available. '
-                f'The pipeline refreshes odds automatically each morning.'
-                f'</div>',
+                f'<div style="font-family: Inter, sans-serif; font-size: 14px; '
+                f'font-weight: 600; color: {COLOURS["text"]}; '
+                f'margin: 20px 0 10px; text-transform: uppercase; '
+                f'letter-spacing: 0.5px;">{match_date}</div>',
                 unsafe_allow_html=True,
             )
 
-    st.divider()
+            for fix in group:
+                # Left border: green if VB profitable, red if VB existed
+                # but lost, blue if full data but no VB
+                if fix["vb_profitable"] is True:
+                    border_style = f"border-left: 3px solid {COLOURS['green']};"
+                elif fix["vb_profitable"] is False:
+                    border_style = f"border-left: 3px solid {COLOURS['red']};"
+                elif fix["has_prediction"] and fix["has_odds"]:
+                    border_style = f"border-left: 3px solid {COLOURS['blue']};"
+                else:
+                    border_style = ""
 
-    # Group fixtures by date and render
-    for match_date, group in groupby(fixtures, key=lambda x: x["date"]):
-        # Date header
-        st.markdown(
-            f'<div style="font-family: Inter, sans-serif; font-size: 14px; '
-            f'font-weight: 600; color: {COLOURS["text"]}; '
-            f'margin: 20px 0 10px; text-transform: uppercase; '
-            f'letter-spacing: 0.5px;">{match_date}</div>',
-            unsafe_allow_html=True,
-        )
-
-        for fix in group:
-            # Green left border for matches with value bets,
-            # blue for full data (prediction + odds) but no value bets yet
-            if fix["has_value_bets"]:
-                border_style = f"border-left: 3px solid {COLOURS['green']};"
-            elif fix["has_prediction"] and fix["has_odds"]:
-                border_style = f"border-left: 3px solid {COLOURS['blue']};"
-            else:
-                border_style = ""
-
-            # Kickoff time — only show the time slot if we actually have one
-            kickoff_html = ""
-            if fix["kickoff"] and fix["kickoff"] != "TBD":
-                kickoff_html = (
-                    f'<span style="font-family: JetBrains Mono, monospace; font-size: 13px; '
-                    f'color: {COLOURS["text_secondary"]}; min-width: 50px;">'
-                    f'{fix["kickoff"]}</span>'
-                )
-
-            # League badge
-            league_badge = (
-                f'<span class="bv-badge" style="background-color: {COLOURS["border"]}; '
-                f'color: {COLOURS["text_secondary"]};">{fix["league"]}</span>'
-            )
-
-            # --------------------------------------------------------
-            # Diagnostic status badges (E24-04)
-            # Show small status pills next to the league badge so the
-            # user can immediately see which fixtures have full data,
-            # which are missing odds, and which lack predictions.
-            # --------------------------------------------------------
-            diag_badges = []
-            if not fix["has_prediction"]:
-                # Red — model hasn't generated predictions for this match
-                diag_badges.append(
-                    f'<span title="No prediction available — the model has not '
-                    f'generated probabilities for this match yet" style="'
-                    f"display: inline-block; padding: 1px 5px; margin-left: 4px; "
-                    f"border-radius: 3px; font-family: 'JetBrains Mono', monospace; "
-                    f"font-size: 9px; font-weight: 600; color: {COLOURS['red']}; "
-                    f'border: 1px solid {COLOURS["red"]}; cursor: help;">'
-                    f"No pred</span>"
-                )
-            if not fix["has_odds"]:
-                # Yellow — odds not yet loaded (bookmakers may not have priced it)
-                diag_badges.append(
-                    f'<span title="No odds loaded — bookmakers may not have '
-                    f'priced this fixture yet (typically available 1–2 weeks out)" '
-                    f'style="'
-                    f"display: inline-block; padding: 1px 5px; margin-left: 4px; "
-                    f"border-radius: 3px; font-family: 'JetBrains Mono', monospace; "
-                    f"font-size: 9px; font-weight: 600; color: {COLOURS['yellow']}; "
-                    f'border: 1px solid {COLOURS["yellow"]}; cursor: help;">'
-                    f"No odds</span>"
-                )
-            if fix["has_prediction"] and fix["has_odds"]:
-                # Green outline — full data, edge computation is live
-                vb_label = (
-                    f'{fix["value_bet_count"]} VB'
-                    if fix["has_value_bets"]
-                    else "Full data"
-                )
-                vb_title = (
-                    f'{fix["value_bet_count"]} value bet(s) identified'
-                    if fix["has_value_bets"]
-                    else "Prediction + odds loaded — edge computation is live"
-                )
-                diag_badges.append(
-                    f'<span title="{vb_title}" style="'
-                    f"display: inline-block; padding: 1px 5px; margin-left: 4px; "
-                    f"border-radius: 3px; font-family: 'JetBrains Mono', monospace; "
-                    f"font-size: 9px; font-weight: 600; color: {COLOURS['green']}; "
-                    f'border: 1px solid {COLOURS["green"]}; cursor: help;">'
-                    f"{vb_label}</span>"
-                )
-            diag_html = "".join(diag_badges)
-
-            # Market indicator badges — the 9 color-coded pills (E24-03)
-            # E30-01: Pass the user's slider-controlled threshold so badge
-            # colours and ring styles update dynamically.
-            market_html = _render_market_badges(
-                fix["market_edges"],
-                market_vb_info=fix.get("market_vb_info"),
-                market_probs=fix.get("market_probs"),
-                threshold=edge_threshold,
-            )
-
-            # E26-03: Predicted score inline — "Model: 1.4 – 0.8"
-            # Only shown when the prediction record has expected goals.
-            pred_html = ""
-            pred_h = fix.get("predicted_home_goals")
-            pred_a = fix.get("predicted_away_goals")
-            if pred_h is not None and pred_a is not None:
-                pred_html = (
+                # Actual score — displayed prominently
+                hg = fix["home_goals"]
+                ag = fix["away_goals"]
+                score_html = (
                     f'<span style="font-family: JetBrains Mono, monospace; '
-                    f'font-size: 11px; color: {COLOURS["text_secondary"]}; '
-                    f'margin-left: 12px;" '
-                    f'title="Model predicted expected goals (xG-based)">'
-                    f'Model: {pred_h:.1f} – {pred_a:.1f}</span>'
+                    f'font-size: 18px; font-weight: 700; color: {COLOURS["text"]}; '
+                    f'min-width: 60px; text-align: center;">'
+                    f'{hg} \u2013 {ag}</span>'
                 )
 
-            # Render badges beside team names in fixture card (20px inline)
-            fix_home = render_team_badge(fix["home_team_id"], fix["home_team"], size=20)
-            fix_away = render_team_badge(fix["away_team_id"], fix["away_team"], size=20)
+                # ✅/❌ indicator for top pick correctness
+                result_icon = ""
+                if fix["top_pick_correct"] is True:
+                    result_icon = (
+                        f'<span style="font-size: 16px; margin-left: 6px;" '
+                        f'title="Model\'s top pick was correct">\u2705</span>'
+                    )
+                elif fix["top_pick_correct"] is False:
+                    result_icon = (
+                        f'<span style="font-size: 16px; margin-left: 6px;" '
+                        f'title="Model\'s top pick was wrong">\u274C</span>'
+                    )
 
-            # Fixture card — three rows:
-            # Row 1: Kickoff + Teams (with badges) + Predicted Score + League badge + diagnostic badges
-            # Row 2: Market indicator badges (below the team names)
-            st.markdown(
-                f'<div class="bv-card" style="padding: 12px 16px; {border_style}">'
-                # Row 1: match header
-                f'<div style="display: flex; justify-content: space-between; '
-                f'align-items: center; margin-bottom: 6px;">'
-                f'<div style="display: flex; align-items: center; gap: 12px;">'
-                f'{kickoff_html}'
-                f'<span style="font-family: Inter, sans-serif; font-size: 15px; '
-                f'font-weight: 600; color: {COLOURS["text"]};">'
-                f'{fix_home} vs {fix_away}</span>'
-                f'{pred_html}'
-                f'</div>'
-                f'<div style="display: flex; align-items: center;">'
-                f'{league_badge}{diag_html}'
-                f'</div>'
-                f'</div>'
-                # Row 2: market badges
-                f'<div style="display: flex; align-items: center; gap: 4px; '
-                f'padding-left: 62px;">'
-                f'{market_html}'
-                f'</div>'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
+                # Predicted score (muted, below actual)
+                pred_text = ""
+                pred_h = fix.get("predicted_home_goals")
+                pred_a = fix.get("predicted_away_goals")
+                if pred_h is not None and pred_a is not None:
+                    pred_text = (
+                        f'<div style="font-family: JetBrains Mono, monospace; '
+                        f'font-size: 11px; color: {COLOURS["text_secondary"]}; '
+                        f'margin-top: 2px;">'
+                        f'Predicted: {pred_h:.1f} \u2013 {pred_a:.1f}</div>'
+                    )
+                elif not fix["has_prediction"]:
+                    pred_text = (
+                        f'<div style="font-family: Inter, sans-serif; '
+                        f'font-size: 11px; color: {COLOURS["text_secondary"]}; '
+                        f'margin-top: 2px;">No prediction</div>'
+                    )
 
-            # "Deep Dive" button — navigates to Match Deep Dive with match_id.
-            # E26-02: Use session_state to pass match_id across pages — query_params
-            # set before st.switch_page() are lost in Streamlit 1.41.
-            if st.button(
-                "\U0001F50D Deep Dive",
-                key=f"fixture_dive_{fix['match_id']}",
-                type="secondary",
-            ):
-                st.session_state["deep_dive_match_id"] = fix["match_id"]
-                st.switch_page("views/match_detail.py")
+                # League badge
+                league_badge = (
+                    f'<span class="bv-badge" style="background-color: {COLOURS["border"]}; '
+                    f'color: {COLOURS["text_secondary"]};">{fix["league"]}</span>'
+                )
+
+                # Market badges (pre-match edges, same ring logic)
+                market_html = _render_market_badges(
+                    fix["market_edges"],
+                    market_vb_info=fix.get("market_vb_info"),
+                    market_probs=fix.get("market_probs"),
+                    threshold=edge_threshold,
+                )
+
+                fix_home = render_team_badge(
+                    fix["home_team_id"], fix["home_team"], size=20,
+                )
+                fix_away = render_team_badge(
+                    fix["away_team_id"], fix["away_team"], size=20,
+                )
+
+                # Result card — four rows:
+                # Row 1: Teams + Score + Result icon + League badge
+                # Row 2: Predicted score (muted)
+                # Row 3: Market badges
+                st.markdown(
+                    f'<div class="bv-card" style="padding: 12px 16px; {border_style}">'
+                    # Row 1: match header with actual score
+                    f'<div style="display: flex; justify-content: space-between; '
+                    f'align-items: center; margin-bottom: 4px;">'
+                    f'<div style="display: flex; align-items: center; gap: 12px;">'
+                    f'<span style="font-family: Inter, sans-serif; font-size: 15px; '
+                    f'font-weight: 600; color: {COLOURS["text"]};">'
+                    f'{fix_home}</span>'
+                    f'{score_html}{result_icon}'
+                    f'<span style="font-family: Inter, sans-serif; font-size: 15px; '
+                    f'font-weight: 600; color: {COLOURS["text"]};">'
+                    f'{fix_away}</span>'
+                    f'</div>'
+                    f'<div style="display: flex; align-items: center;">'
+                    f'{league_badge}'
+                    f'</div>'
+                    f'</div>'
+                    # Row 2: predicted score
+                    f'<div style="padding-left: 4px;">{pred_text}</div>'
+                    # Row 3: market badges
+                    f'<div style="display: flex; align-items: center; gap: 4px; '
+                    f'margin-top: 6px; padding-left: 4px;">'
+                    f'{market_html}'
+                    f'</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+
+                # Deep Dive button (also available for completed matches)
+                if st.button(
+                    "\U0001F50D Deep Dive",
+                    key=f"result_dive_{fix['match_id']}",
+                    type="secondary",
+                ):
+                    st.session_state["deep_dive_match_id"] = fix["match_id"]
+                    st.switch_page("views/match_detail.py")
 
 # ============================================================================
 # Glossary — explains every term, badge, and indicator on this page (E27-03)

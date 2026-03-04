@@ -300,9 +300,9 @@ Wait for owner to respond with approval before making the change.
 
 ## Current Status
 
-Last completed: E30-01 (Always Ring Best Badge + Editable Threshold)
-Currently working: E30-02 (Historical Fixtures View)
-Next up: E30-03 (Logo Integration)
+Last completed: E30-02 (Historical Fixtures View)
+Currently working: E30-03 (Logo Integration)
+Next up: (none — E30 epic final issue)
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
