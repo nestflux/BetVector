@@ -3776,7 +3776,7 @@ Add a "Recent Results" toggle to the Fixtures page showing completed matches fro
 **Type:** Enhancement — Dashboard
 **Depends on:** (none — independent)
 **MP refs:** §8 Design System
-**Status:** TODO
+**Status:** DONE ✅
 
 Integrate the BetVector logo assets throughout the dashboard: favicon, sidebar, and login gate.
 
@@ -3792,12 +3792,14 @@ Integrate the BetVector logo assets throughout the dashboard: favicon, sidebar, 
 
 **Files:** `src/delivery/dashboard.py`, `src/delivery/views/onboarding.py` (optional)
 
+**Results:** Favicon, sidebar, and login gate all use the BetVector logos. `st.logo()` provides responsive sidebar branding (expanded = wordmark, collapsed = V icon). Logo paths are config-driven via PROJECT_ROOT.
+
 **Acceptance Criteria:**
-- [ ] Browser tab shows Bvlogo1.5 (V icon) instead of 📊 emoji
-- [ ] Sidebar shows Bvlogo3 (full wordmark) when expanded
-- [ ] Sidebar shows Bvlogo1.5 (V icon) when collapsed
-- [ ] Login page shows Bvlogo3 above password field
-- [ ] Logo renders correctly on dark background (#0D1117 / #161B22)
+- [x] Browser tab shows Bvlogo1.5 (V icon) instead of 📊 emoji
+- [x] Sidebar shows Bvlogo3 (full wordmark) when expanded
+- [x] Sidebar shows Bvlogo1.5 (V icon) when collapsed
+- [x] Login page shows Bvlogo3 above password field
+- [x] Logo renders correctly on dark background (#0D1117 / #161B22)
 
 ---
 

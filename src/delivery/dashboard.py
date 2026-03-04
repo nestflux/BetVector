@@ -1,6 +1,6 @@
 """
-BetVector — Dashboard Shell (E9-01)
-====================================
+BetVector — Dashboard Shell (E9-01, E30-03)
+=============================================
 Main Streamlit entry point.  Provides the dark-themed app shell with
 navigation, password gate, and custom CSS injection.
 
@@ -34,6 +34,11 @@ Six pages (MP §3 Flow 4):
 5. Bankroll Manager
 6. Settings
 
+E30-03: Logo integration:
+- Favicon: Bvlogo1.5 (V icon) replaces 📊 emoji
+- Sidebar: st.logo() with Bvlogo3 (expanded) / Bvlogo1.5 (collapsed)
+- Login gate: Bvlogo3 image replaces text heading
+
 Master Plan refs: MP §8 Design System, MP §3 Flow 4
 """
 
@@ -43,10 +48,21 @@ from pathlib import Path
 from dotenv import load_dotenv
 import streamlit as st
 
+from src.config import PROJECT_ROOT
+
 # Load .env file so DASHBOARD_PASSWORD and other secrets are available
 # even when running via `streamlit run` directly (without the Desktop launcher).
 _env_path = Path(__file__).resolve().parents[2] / ".env"
 load_dotenv(_env_path)
+
+# ============================================================================
+# Logo assets (E30-03)
+# Bvlogo3.png  = full wordmark "BetVector" with lightning-slash V (sidebar expanded, login)
+# Bvlogo1.5.png = standalone V icon with green arrow (favicon, sidebar collapsed)
+# ============================================================================
+_LOGO_DIR = PROJECT_ROOT / "docs" / "logo"
+_LOGO_WORDMARK = str(_LOGO_DIR / "Bvlogo3.png")
+_LOGO_ICON = str(_LOGO_DIR / "Bvlogo1.5.png")
 
 # ============================================================================
 # Page Config — must be first Streamlit call
@@ -54,7 +70,7 @@ load_dotenv(_env_path)
 
 st.set_page_config(
     page_title="BetVector",
-    page_icon="📊",
+    page_icon=_LOGO_ICON,
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -302,11 +318,8 @@ def check_password() -> bool:
     if st.session_state.get("authenticated", False):
         return True
 
-    # Show login form
-    st.markdown(
-        '<div class="bv-page-title">BetVector</div>',
-        unsafe_allow_html=True,
-    )
+    # Show login form — E30-03: logo replaces text heading for a polished login screen
+    st.image(_LOGO_WORDMARK, width=280)
     st.markdown(
         '<p class="text-muted">Quantitative edge in football betting</p>',
         unsafe_allow_html=True,
@@ -394,12 +407,21 @@ def get_pages() -> list:
 # ============================================================================
 
 def render_sidebar() -> None:
-    """Render the sidebar with branding and info."""
+    """Render the sidebar with branding and info.
+
+    E30-03: Uses ``st.logo()`` to show the full wordmark (Bvlogo3) when
+    the sidebar is expanded, and the V icon (Bvlogo1.5) when collapsed.
+    This replaces the plain-text "BetVector" heading.
+    """
+    # st.logo() is a Streamlit 1.31+ feature that places a persistent
+    # logo at the top of the sidebar.  It accepts two images:
+    #   image      = shown when sidebar is expanded (full wordmark)
+    #   icon_image = shown when sidebar is collapsed (compact V icon)
+    st.logo(
+        image=_LOGO_WORDMARK,
+        icon_image=_LOGO_ICON,
+    )
     with st.sidebar:
-        st.markdown(
-            '<div class="bv-page-title">BetVector</div>',
-            unsafe_allow_html=True,
-        )
         st.markdown(
             '<p class="text-muted">Quantitative edge in football betting</p>',
             unsafe_allow_html=True,
