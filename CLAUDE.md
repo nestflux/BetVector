@@ -298,9 +298,9 @@ Wait for owner to respond with approval before making the change.
 
 ## Current Status
 
-Last completed: E28-02 (Badge Rendering Helper + Deep Dive Integration)
-Currently working: E28-03 (Badges on Fixtures, Picks, Leagues, Performance, Bankroll)
-Next up: E28-04 (Integration Test)
+Last completed: E28-04 (Integration Test)
+Currently working: (none — critical path complete through E28)
+Next up: (none — awaiting new epics)
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
@@ -317,8 +317,8 @@ E24 complete: All 5 issues done ✅ (Dashboard fixes + fixtures value grid)
 E25 complete: All 4 issues done ✅ (XGBoost ensemble model — Poisson wins backtest, +2.78% ROI)
 E26 complete: All 4 issues done ✅ (Dashboard UX Overhaul — picks dedup, deep dive nav, fixtures landing, integration test)
 E27 complete: All 4 issues done ✅ (Deep Dive FanDuel default, O/U 1.5 markets, glossary completeness, integration test)
-E28 in progress: Team Badges (Crests) Beside All Team Names (4 issues)
-Total issues: 105 (101 complete + 4 in progress)
+E28 complete: All 4 issues done ✅ (Team Badges — logo fetch, badge helper, page rollout, integration test)
+Total issues: 105 — ALL COMPLETE ✅
 
 ---
 

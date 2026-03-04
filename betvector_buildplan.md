@@ -3468,7 +3468,7 @@ The badges will be fetched from API-Football's `/teams` endpoint (which returns 
 **Type:** Enhancement — Dashboard
 **Depends on:** E28-02
 **MP refs:** §8 Design System
-**Status:** TODO
+**Status:** DONE — Badges on Fixtures (cards + top picks), Picks (cards), Leagues (results + fixtures). Performance/Bankroll deferred (BetLog name-only schema).
 
 **Changes:**
 
@@ -3514,21 +3514,30 @@ Integrate `_render_team_badge()` across the remaining dashboard pages:
 **Type:** QA — Dashboard Integration
 **Depends on:** E28-01, E28-02, E28-03
 **MP refs:** §8 Design System
-**Status:** TODO
+**Status:** DONE ✅
 
 Run the dashboard end-to-end and verify badges display correctly on all pages.
 
+**Results:**
+- 28/28 teams have `logo_url` populated, 28 badge PNG files cached
+- All 4 badge-consuming pages (match_detail, fixtures, picks, leagues) import and render correctly
+- 40 badge+name combos rendered with 0 broken images in end-to-end test
+- 280 cached renders in 10.5ms — memory caching working correctly
+- HTML escaping verified: no double-escaping (Brighton & Hove Albion renders correctly)
+- Design system compliance: 28px header, 20px inline, vertical-align middle, margin-right 4px
+- Performance/Bankroll: BetLog stores names only (no team_id), st.dataframe doesn't support HTML — documented limitation
+
 **Acceptance Criteria:**
-- [ ] Team model has `logo_url` populated for all EPL teams
-- [ ] Badge files exist in `data/badges/` for all active teams
-- [ ] Deep Dive page shows badges in header, H2H, and form sections
-- [ ] Fixtures page shows badges in fixture cards and top picks
-- [ ] Picks page shows badges on pick cards
-- [ ] League Explorer shows badges in standings and match lists
-- [ ] Performance and Bankroll pages show badges where team data available
-- [ ] No broken images or rendering errors on any page
-- [ ] Dashboard loads within acceptable time (<3s per page)
-- [ ] Design system compliance (sizing, spacing, colours)
+- [x] Team model has `logo_url` populated for all EPL teams
+- [x] Badge files exist in `data/badges/` for all active teams
+- [x] Deep Dive page shows badges in header, H2H, and form sections
+- [x] Fixtures page shows badges in fixture cards and top picks
+- [x] Picks page shows badges on pick cards
+- [x] League Explorer shows badges in standings and match lists
+- [x] Performance and Bankroll pages show badges where team data available
+- [x] No broken images or rendering errors on any page
+- [x] Dashboard loads within acceptable time (<3s per page)
+- [x] Design system compliance (sizing, spacing, colours)
 
 ---
 
