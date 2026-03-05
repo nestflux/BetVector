@@ -42,6 +42,7 @@ E30-03: Logo integration:
 Master Plan refs: MP §8 Design System, MP §3 Flow 4
 """
 
+import base64
 import os
 from pathlib import Path
 
@@ -63,6 +64,37 @@ load_dotenv(_env_path)
 _LOGO_DIR = PROJECT_ROOT / "docs" / "logo"
 _LOGO_WORDMARK = str(_LOGO_DIR / "Bvlogo3.png")
 _LOGO_ICON = str(_LOGO_DIR / "Bvlogo1.5.png")
+
+# Pre-encode the wordmark as base64 once at startup so the centered header
+# can use an inline <img> src without needing a file path accessible to the
+# browser (Streamlit doesn't serve arbitrary files via unsafe_allow_html).
+try:
+    _LOGO_B64 = base64.b64encode(Path(_LOGO_WORDMARK).read_bytes()).decode("ascii")
+except OSError:
+    _LOGO_B64 = ""
+
+
+def render_page_logo(width: int = 200) -> None:
+    """Render the BetVector wordmark centered at the top of the content area.
+
+    Called from main() before nav.run() so it appears on every page.
+    Uses an inline base64 <img> so it works even without a static file server.
+
+    Parameters
+    ----------
+    width : int
+        Display width of the logo in pixels (default 200).
+    """
+    if not _LOGO_B64:
+        return
+    st.markdown(
+        f'<div style="text-align: center; padding: 28px 0 6px;">'
+        f'<img src="data:image/png;base64,{_LOGO_B64}" '
+        f'style="width: {width}px; max-width: 55%;" alt="BetVector">'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
 
 # ============================================================================
 # Page Config — must be first Streamlit call
@@ -318,22 +350,23 @@ def check_password() -> bool:
     if st.session_state.get("authenticated", False):
         return True
 
-    # Show login form — E30-03: logo replaces text heading for a polished login screen
-    st.image(_LOGO_WORDMARK, width=280)
-    st.markdown(
-        '<p class="text-muted">Quantitative edge in football betting</p>',
-        unsafe_allow_html=True,
-    )
-    st.divider()
-
-    password = st.text_input("Enter dashboard password", type="password")
-
-    if password:
-        if password == dashboard_password:
-            st.session_state["authenticated"] = True
-            st.rerun()
-        else:
-            st.error("Incorrect password. Please try again.")
+    # Show login form — centered logo + form for a polished login screen
+    _, col, _ = st.columns([1, 2, 1])
+    with col:
+        render_page_logo(width=220)
+        st.markdown(
+            '<p style="text-align:center" class="text-muted">'
+            "Quantitative edge in football betting</p>",
+            unsafe_allow_html=True,
+        )
+        st.divider()
+        password = st.text_input("Enter dashboard password", type="password")
+        if password:
+            if password == dashboard_password:
+                st.session_state["authenticated"] = True
+                st.rerun()
+            else:
+                st.error("Incorrect password. Please try again.")
 
     return False
 
@@ -420,6 +453,7 @@ def render_sidebar() -> None:
     st.logo(
         image=_LOGO_WORDMARK,
         icon_image=_LOGO_ICON,
+        size="large",
     )
     with st.sidebar:
         st.markdown(
@@ -494,6 +528,9 @@ def main() -> None:
 
     # Render sidebar branding
     render_sidebar()
+
+    # Centered wordmark at top of every page
+    render_page_logo()
 
     # Set up navigation
     pages = get_pages()

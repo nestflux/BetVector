@@ -3794,12 +3794,19 @@ Integrate the BetVector logo assets throughout the dashboard: favicon, sidebar, 
 
 **Results:** Favicon, sidebar, and login gate all use the BetVector logos. `st.logo()` provides responsive sidebar branding (expanded = wordmark, collapsed = V icon). Logo paths are config-driven via PROJECT_ROOT.
 
+**Post-launch additions (March 2026):**
+- All four logo PNGs had mismatched background colours (`#181d24`, `#252d2f`, `#1e2227`) relative to the app background (`#0D1117`). Flood-fill from corners removed backgrounds — now fully transparent PNGs.
+- Added `render_page_logo()` helper (base64 inline `<img>`) that centres the wordmark at the top of every main page.
+- Added `size="large"` to `st.logo()` for a more prominent sidebar logo.
+- Login gate redesigned: centred columns layout with logo + subtitle above the password field, all in the middle third of the viewport.
+
 **Acceptance Criteria:**
 - [x] Browser tab shows Bvlogo1.5 (V icon) instead of 📊 emoji
 - [x] Sidebar shows Bvlogo3 (full wordmark) when expanded
 - [x] Sidebar shows Bvlogo1.5 (V icon) when collapsed
-- [x] Login page shows Bvlogo3 above password field
-- [x] Logo renders correctly on dark background (#0D1117 / #161B22)
+- [x] Login page shows Bvlogo3 above password field, fully centred
+- [x] Logo renders correctly on dark background (#0D1117 / #161B22) — transparent PNG, no halo
+- [x] Centred BetVector wordmark appears at top of every authenticated page
 
 ---
 
@@ -3926,3 +3933,68 @@ E31-01 (Badge ring redesign) → E31-02 (Card value highlight)
 E31-03 (League Explorer badges) — independent, can run after E31-01
 E31-04 (Integration test) — after all three
 ```
+
+---
+
+## Post-Critical-Path — Presentation & Demo Assets
+
+**Completed: March 2026**
+
+These items were created after the E1-E31 critical path completed. They are not product features — they support investor demos and sharing.
+
+### Demo App (`demo_app.py`) — DONE ✅
+
+Self-contained interactive Streamlit app that runs without a database or pipeline. Uses mock/seed data for EPL GW29 2025-26.
+
+**Pages:** Fixtures · Today's Picks · Performance · League Explorer · Model Health · Bankroll Manager · Match Deep Dive
+
+**Key design choices:**
+- Single-file, no imports from `src/` — portable anywhere
+- Real team badge PNGs loaded from `data/badges/{team_id}.png` with graceful text fallback
+- Same CSS design tokens as production (`#0D1117`, `#161B22`, `#3FB950`, etc.)
+- Navigation via `st.radio` in sidebar (simpler than `st.navigation` for a standalone file)
+- Runs on port 8502 (`venv/bin/streamlit run demo_app.py --server.port 8502`)
+- Launch config added to `.claude/launch.json` under the `"demo"` key
+
+**Files:** `demo_app.py`, `.claude/launch.json`
+
+---
+
+### Demo GIF (`demo_walkthrough.gif`) — DONE ✅
+
+Animated GIF walkthrough of all 7 demo pages. 36 frames · 960×600 px · ~40s · ~0.4 MB.
+
+**Capture script:** `scripts/capture_demo_gif.py`
+- Uses Playwright (headless Chromium) to screenshot each page
+- Scrolls each page step-by-step (380 px/step) with pauses
+- Adds a unique progress bar overlay to each frame to prevent Pillow's GIF optimizer from collapsing near-identical frames
+- Variable frame durations: 2 s top-hold, 0.7 s per scroll step, 1.5 s bottom-hold
+
+**Files:** `demo_walkthrough.gif`, `scripts/capture_demo_gif.py`, `demo_walkthrough_frames/` (7 individual PNG stills)
+
+---
+
+### Logo Transparency Fix — DONE ✅
+
+All four logo PNGs in `docs/logo/` had mismatched background colours that produced a visible halo on the dark dashboard background.
+
+| File | Old background | Pixels removed |
+|------|---------------|---------------|
+| `Bvlogo1.png` | `#181d24` | 85.2% |
+| `Bvlogo1.5.png` | `#181d24` | 85.2% |
+| `Bvlogo2.png` | `#1e2227` | 97.7% |
+| `Bvlogo3.png` | `#252d2f` | 94.4% |
+
+**Method:** BFS flood-fill from image corners (and additional seed points for logos with 1-px edge artefacts). All logos now render cleanly as transparent PNGs on `#0D1117`.
+
+---
+
+### Logo Centering in Dashboard (`dashboard.py`) — DONE ✅
+
+Extended E30-03 logo integration with three additional changes:
+
+1. **`render_page_logo(width=200)`** — new helper that encodes the wordmark as base64 and injects a centred `<img>` via `st.markdown(unsafe_allow_html=True)`. Called in `main()` before `nav.run()` so it appears on every authenticated page.
+2. **Sidebar logo size** — added `size="large"` to `st.logo()` call for more prominent branding.
+3. **Login gate centring** — replaced `st.image(_LOGO_WORDMARK, width=280)` with a `st.columns([1,2,1])` layout: centred logo (via `render_page_logo`), centred subtitle, centred password field.
+
+**Files:** `src/delivery/dashboard.py`

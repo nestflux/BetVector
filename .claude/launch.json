@@ -6,6 +6,12 @@
       "runtimeExecutable": "venv/bin/streamlit",
       "runtimeArgs": ["run", "src/delivery/dashboard.py", "--server.port", "8501"],
       "port": 8501
+    },
+    {
+      "name": "demo",
+      "runtimeExecutable": "venv/bin/streamlit",
+      "runtimeArgs": ["run", "demo_app.py", "--server.port", "8502"],
+      "port": 8502
     }
   ]
 }

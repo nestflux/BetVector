@@ -326,9 +326,43 @@ E30 complete: All 3 issues done ✅ (Fixtures Enhancements + Logo — threshold/
 E31 complete: All 4 issues done ✅ (Badge Ring Redesign + League Explorer Badges — blue/green rings, card borders, team badges in all tables)
 Total issues: 116 — ALL COMPLETE ✅
 
+Post-critical-path (March 2026):
+- Logo transparency fix ✅ — all 4 logo PNGs de-haloed (flood-fill BFS from corners)
+- Logo centering ✅ — wordmark centred at top of every authenticated page + login gate redesigned
+- Demo app ✅ — `demo_app.py` (port 8502) self-contained with mock data, no DB/pipeline needed
+- Demo GIF ✅ — `demo_walkthrough.gif` (36 frames, 40s, 0.4 MB) via `scripts/capture_demo_gif.py`
+
 ---
 
 ## Handoff Notes (Cowork → Claude Code)
+
+### Post-critical-path assets (March 2026)
+
+**Logo transparency fix ✅**
+- All four `docs/logo/` PNGs had background colours (`#181d24`, `#252d2f`, `#1e2227`) inconsistent with the app bg (`#0D1117`), producing a visible halo.
+- Fixed with a BFS flood-fill from image corners (PIL + NumPy). Bvlogo2 required inner seeds due to a 1-px edge artefact.
+- Files modified: `Bvlogo1.png`, `Bvlogo1.5.png`, `Bvlogo2.png`, `Bvlogo3.png`
+
+**Logo centering (`src/delivery/dashboard.py`) ✅**
+- Added `import base64`, `_LOGO_B64` pre-encoded constant, `render_page_logo()` helper.
+- `render_page_logo()` injects a centred base64 `<img>` via `st.markdown(unsafe_allow_html=True)` — works without a static file server.
+- Called in `main()` before `nav.run()` → appears on every authenticated page.
+- `st.logo()` updated with `size="large"` for a more prominent sidebar logo.
+- Login gate: replaced `st.image(_LOGO_WORDMARK, width=280)` with `st.columns([1,2,1])` layout → logo, subtitle, and password field all centred.
+
+**Demo app (`demo_app.py`) ✅**
+- Self-contained single-file Streamlit app (port 8502). No `src/` imports, no DB.
+- Mock data: EPL GW29 2025-26, 7 pages matching production layout.
+- Real team badge PNGs from `data/badges/{team_id}.png` with text fallback.
+- Launch config added to `.claude/launch.json` under key `"demo"`.
+
+**Demo GIF (`demo_walkthrough.gif`) ✅**
+- 36-frame animated GIF, 960×600 px, ~40 s, ~0.4 MB.
+- Script: `scripts/capture_demo_gif.py` (Playwright headless Chromium + PIL).
+- Per-frame green progress bar added to defeat Pillow's GIF frame-collapse optimiser.
+- Individual page PNGs in `demo_walkthrough_frames/`.
+
+---
 
 ### What's done
 

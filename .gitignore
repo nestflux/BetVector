@@ -11,8 +11,8 @@ data/backups/
 # --- Raw scraped data (re-downloadable, don't bloat repo) ---
 data/raw/
 
-# --- Team badge images (cached from API-Football, re-downloadable) ---
-data/badges/
+# --- Team badge images (tracked for Streamlit Cloud deployment) ---
+# data/badges/
 
 # --- Python bytecode ---
 __pycache__/
