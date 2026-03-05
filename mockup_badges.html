@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>BetVector — Badge Ring Mockup v2</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0D1117;
+    color: #E6EDF3;
+    font-family: 'Inter', sans-serif;
+    padding: 32px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 22px; margin-bottom: 8px; }
+  h2 { font-size: 16px; color: #3FB950; margin: 36px 0 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  h3 { font-size: 13px; color: #8B949E; margin: 16px 0 8px; }
+  .subtitle { color: #8B949E; font-size: 13px; margin-bottom: 32px; }
+  .note { color: #8B949E; font-size: 12px; margin-bottom: 14px; line-height: 1.5; }
+
+  /* ── Base fixture card ── */
+  .fixture-card {
+    background: #161B22;
+    border: 1px solid #30363D;
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin-bottom: 14px;
+  }
+
+  /* ── Card-level value indicator ── */
+  .card-has-value {
+    border: 1.5px solid #3FB950;
+    box-shadow: 0 0 0 1px rgba(63, 185, 80, 0.2), 0 0 12px rgba(63, 185, 80, 0.12);
+  }
+  .card-no-value {
+    border: 1px solid #30363D;
+  }
+
+  .fixture-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .fixture-teams {
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .fixture-meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: #8B949E;
+  }
+  .predicted-score {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: #8B949E;
+    margin-bottom: 8px;
+  }
+  .badge-row { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+
+  /* ── Base badge ── */
+  .b {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    color: #fff;
+    cursor: help;
+    transition: transform 0.15s;
+  }
+  .b:hover { transform: scale(1.1); }
+  .bg-green { background-color: #3FB950; }
+  .bg-yellow { background-color: #D29922; }
+  .bg-red { background-color: #F85149; }
+  .bg-grey { background-color: #484F58; }
+
+  /* ── Option C badge rings ── */
+  .pick-value {
+    box-shadow: 0 0 0 2px #3FB950, 0 0 0 4px rgba(63, 185, 80, 0.35), 0 0 10px rgba(63, 185, 80, 0.4);
+  }
+  .pick-bestguess {
+    box-shadow: 0 0 0 2px #58A6FF, 0 0 6px rgba(88, 166, 255, 0.35);
+  }
+
+  /* ── Diagnostic tags ── */
+  .diag-tag {
+    display: inline-block; padding: 1px 5px; margin-left: 6px;
+    border-radius: 3px; font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; font-weight: 600;
+  }
+  .diag-full { color: #3FB950; border: 1px solid rgba(63,185,80,0.4); }
+  .diag-vb { color: #3FB950; background: rgba(63,185,80,0.12); border: 1px solid rgba(63,185,80,0.3); }
+
+  /* ── Layout ── */
+  hr { border: none; border-top: 1px solid #30363D; margin: 32px 0; }
+
+  .legend-row {
+    display: flex; align-items: center; gap: 16px; margin-top: 10px;
+    flex-wrap: wrap;
+  }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #8B949E; }
+  .legend-swatch {
+    display: inline-block; width: 34px; height: 18px; border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 600;
+    color: #fff; text-align: center; line-height: 18px;
+  }
+  .legend-card-swatch {
+    display: inline-block; width: 40px; height: 24px; border-radius: 5px;
+    background: #161B22;
+  }
+
+  .date-header {
+    font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    margin: 24px 0 10px; color: #E6EDF3;
+  }
+  .kickoff {
+    font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    color: #8B949E; min-width: 45px; display: inline-block;
+  }
+</style>
+</head>
+<body>
+
+<h1>🎯 Final Design — Option C + Fixture-Level Highlight</h1>
+<p class="subtitle">Two-level visual hierarchy: green-bordered cards for value fixtures, ★ starred badges for the model's pick.</p>
+
+<hr>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>Simulated Fixtures Page</h2>
+<p class="note">
+  Scan the page → green-bordered cards jump out = "value here."<br>
+  Look inside → the ★ double-green-ring badge = "bet THIS specific market."<br>
+  Grey-bordered cards = no value, but ★ blue-ring shows the model's best guess.
+</p>
+
+<div class="date-header">2026-03-08</div>
+
+<!-- ── FIXTURE 1: Has value bets → green card border ── -->
+<div class="fixture-card card-has-value">
+  <div class="fixture-header">
+    <div class="fixture-teams">
+      <span class="kickoff">15:00</span>
+      Arsenal vs Chelsea
+    </div>
+    <div>
+      <span class="diag-tag diag-vb">2 VB</span>
+      <span class="diag-tag diag-full">Full data</span>
+    </div>
+  </div>
+  <div class="predicted-score">Model: 1.5 – 1.2</div>
+  <div class="badge-row">
+    <span class="b bg-green pick-value" title="★ Model's Pick | H: +8.2% edge | Model: 58% | Confidence: High">★ H</span>
+    <span class="b bg-red" title="D: -4.1% edge | Model: 24%">D</span>
+    <span class="b bg-red" title="A: -6.3% edge | Model: 18%">A</span>
+    <span class="b bg-yellow" title="O1.5: +3.1% edge | Model: 72%">O1.5</span>
+    <span class="b bg-red" title="U1.5: -8.2% edge">U1.5</span>
+    <span class="b bg-green" title="O2.5: +5.4% edge | Model: 61%">O2.5</span>
+    <span class="b bg-red" title="U2.5: -5.4% edge">U2.5</span>
+    <span class="b bg-yellow" title="BTTS Y: +2.8% edge | Model: 56%">BTTS Y</span>
+    <span class="b bg-red" title="BTTS N: -2.8% edge">BTTS N</span>
+  </div>
+</div>
+
+<!-- ── FIXTURE 2: Has value bet → green card border ── -->
+<div class="fixture-card card-has-value">
+  <div class="fixture-header">
+    <div class="fixture-teams">
+      <span class="kickoff">15:00</span>
+      Liverpool vs Burnley
+    </div>
+    <div>
+      <span class="diag-tag diag-vb">1 VB</span>
+      <span class="diag-tag diag-full">Full data</span>
+    </div>
+  </div>
+  <div class="predicted-score">Model: 2.1 – 0.8</div>
+  <div class="badge-row">
+    <span class="b bg-yellow" title="H: +4.1% edge | Model: 65%">H</span>
+    <span class="b bg-red" title="D: -5.3% edge">D</span>
+    <span class="b bg-red" title="A: -8.0% edge">A</span>
+    <span class="b bg-green" title="O1.5: +2.9% edge | Model: 81%">O1.5</span>
+    <span class="b bg-red" title="U1.5: -9.1% edge">U1.5</span>
+    <span class="b bg-green pick-value" title="★ Model's Pick | O2.5: +7.1% edge | Model: 68% | Confidence: High">★ O2.5</span>
+    <span class="b bg-red" title="U2.5: -7.1% edge">U2.5</span>
+    <span class="b bg-yellow" title="BTTS Y: +1.4% edge | Model: 48%">BTTS Y</span>
+    <span class="b bg-red" title="BTTS N: -1.4% edge">BTTS N</span>
+  </div>
+</div>
+
+<!-- ── FIXTURE 3: NO value bets → normal card border ── -->
+<div class="fixture-card card-no-value">
+  <div class="fixture-header">
+    <div class="fixture-teams">
+      <span class="kickoff">17:30</span>
+      Fulham vs West Ham United
+    </div>
+    <div>
+      <span class="diag-tag diag-full">Full data</span>
+    </div>
+  </div>
+  <div class="predicted-score">Model: 1.3 – 1.4</div>
+  <div class="badge-row">
+    <span class="b bg-red" title="H: -1.2% edge | Model: 38%">H</span>
+    <span class="b bg-yellow pick-bestguess" title="★ Model's Pick | D: +2.1% edge | Model: 29%">★ D</span>
+    <span class="b bg-red" title="A: -3.5% edge | Model: 33%">A</span>
+    <span class="b bg-red" title="O1.5: -0.8% edge">O1.5</span>
+    <span class="b bg-yellow" title="U1.5: +0.8% edge">U1.5</span>
+    <span class="b bg-red" title="O2.5: -2.1% edge">O2.5</span>
+    <span class="b bg-yellow" title="U2.5: +2.1% edge">U2.5</span>
+    <span class="b bg-red" title="BTTS Y: -1.9% edge">BTTS Y</span>
+    <span class="b bg-yellow" title="BTTS N: +1.9% edge">BTTS N</span>
+  </div>
+</div>
+
+<!-- ── FIXTURE 4: NO value bets → normal card border ── -->
+<div class="fixture-card card-no-value">
+  <div class="fixture-header">
+    <div class="fixture-teams">
+      <span class="kickoff">20:00</span>
+      Nottingham Forest vs Sunderland
+    </div>
+    <div>
+      <span class="diag-tag diag-full">Full data</span>
+    </div>
+  </div>
+  <div class="predicted-score">Model: 1.6 – 1.1</div>
+  <div class="badge-row">
+    <span class="b bg-yellow pick-bestguess" title="★ Model's Pick | H: +3.8% edge | Model: 48%">★ H</span>
+    <span class="b bg-red" title="D: -2.1% edge | Model: 26%">D</span>
+    <span class="b bg-red" title="A: -4.5% edge | Model: 26%">A</span>
+    <span class="b bg-yellow" title="O1.5: +1.5% edge">O1.5</span>
+    <span class="b bg-red" title="U1.5: -3.8% edge">U1.5</span>
+    <span class="b bg-red" title="O2.5: -0.5% edge">O2.5</span>
+    <span class="b bg-yellow" title="U2.5: +0.5% edge">U2.5</span>
+    <span class="b bg-yellow" title="BTTS Y: +1.2% edge">BTTS Y</span>
+    <span class="b bg-red" title="BTTS N: -1.2% edge">BTTS N</span>
+  </div>
+</div>
+
+<!-- ── FIXTURE 5: NO value, no real edge → normal card ── -->
+<div class="fixture-card card-no-value">
+  <div class="fixture-header">
+    <div class="fixture-teams">
+      <span class="kickoff">20:00</span>
+      Wolves vs Brighton & Hove Albion
+    </div>
+    <div>
+      <span class="diag-tag diag-full">Full data</span>
+    </div>
+  </div>
+  <div class="predicted-score">Model: 1.1 – 1.5</div>
+  <div class="badge-row">
+    <span class="b bg-red" title="H: -3.8% edge">H</span>
+    <span class="b bg-red" title="D: -1.5% edge">D</span>
+    <span class="b bg-yellow pick-bestguess" title="★ Model's Pick | A: +1.2% edge | Model: 42%">★ A</span>
+    <span class="b bg-red" title="O1.5: -1.1% edge">O1.5</span>
+    <span class="b bg-red" title="U1.5: -2.2% edge">U1.5</span>
+    <span class="b bg-red" title="O2.5: -3.1% edge">O2.5</span>
+    <span class="b bg-yellow" title="U2.5: +0.9% edge">U2.5</span>
+    <span class="b bg-red" title="BTTS Y: -0.5% edge">BTTS Y</span>
+    <span class="b bg-red" title="BTTS N: -0.4% edge">BTTS N</span>
+  </div>
+</div>
+
+<hr>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<h2>Legend</h2>
+
+<div style="margin-bottom: 14px;">
+  <div style="font-size: 12px; color: #E6EDF3; font-weight: 600; margin-bottom: 6px;">Fixture Cards</div>
+  <div class="legend-row">
+    <div class="legend-item">
+      <span class="legend-card-swatch card-has-value"></span>
+      Value bet found
+    </div>
+    <div class="legend-item">
+      <span class="legend-card-swatch card-no-value"></span>
+      No value bets
+    </div>
+  </div>
+</div>
+
+<div style="margin-bottom: 14px;">
+  <div style="font-size: 12px; color: #E6EDF3; font-weight: 600; margin-bottom: 6px;">Market Badges</div>
+  <div class="legend-row">
+    <div class="legend-item"><span class="legend-swatch bg-green">H</span> Value (edge ≥ 5%)</div>
+    <div class="legend-item"><span class="legend-swatch bg-yellow">D</span> Marginal (0–5%)</div>
+    <div class="legend-item"><span class="legend-swatch bg-red">A</span> No Value (≤ 0%)</div>
+    <div class="legend-item"><span class="legend-swatch bg-grey">?</span> No Data</div>
+  </div>
+</div>
+
+<div>
+  <div style="font-size: 12px; color: #E6EDF3; font-weight: 600; margin-bottom: 6px;">Model's Pick (per fixture)</div>
+  <div class="legend-row">
+    <div class="legend-item">
+      <span class="legend-swatch bg-green pick-value">★ H</span>
+      ★ Model's Pick — value bet (green double ring)
+    </div>
+    <div class="legend-item">
+      <span class="legend-swatch bg-yellow pick-bestguess">★ D</span>
+      ★ Model's Pick — best guess (blue ring)
+    </div>
+  </div>
+</div>
+
+<hr>
+
+<h2>Design Summary</h2>
+<table style="border-collapse:collapse; width:100%; font-size:12px; color:#8B949E;">
+  <tr style="border-bottom:1px solid #30363D;">
+    <th style="text-align:left; padding:8px; color:#E6EDF3;">Signal</th>
+    <th style="text-align:left; padding:8px; color:#E6EDF3;">Visual Treatment</th>
+    <th style="text-align:left; padding:8px; color:#E6EDF3;">Meaning</th>
+  </tr>
+  <tr style="border-bottom:1px solid #21262D;">
+    <td style="padding:8px;">Card green border</td>
+    <td style="padding:8px;">1.5px solid #3FB950 + subtle glow</td>
+    <td style="padding:8px;">"This fixture has ≥1 value bet — look here first"</td>
+  </tr>
+  <tr style="border-bottom:1px solid #21262D;">
+    <td style="padding:8px;">Card grey border</td>
+    <td style="padding:8px;">1px solid #30363D (default)</td>
+    <td style="padding:8px;">"No value bets, but model's best guess is marked"</td>
+  </tr>
+  <tr style="border-bottom:1px solid #21262D;">
+    <td style="padding:8px;">★ badge + green double ring</td>
+    <td style="padding:8px;">★ prefix + 2px #3FB950 + 4px glow ring + outer glow</td>
+    <td style="padding:8px;">"Bet THIS — value bet, model's top pick"</td>
+  </tr>
+  <tr style="border-bottom:1px solid #21262D;">
+    <td style="padding:8px;">★ badge + blue ring</td>
+    <td style="padding:8px;">★ prefix + 2px #58A6FF + blue glow</td>
+    <td style="padding:8px;">"Model's best guess, but below your threshold"</td>
+  </tr>
+  <tr>
+    <td style="padding:8px;">Plain badge (no star, no ring)</td>
+    <td style="padding:8px;">Background colour only (green/yellow/red/grey)</td>
+    <td style="padding:8px;">"Other markets — colour shows edge direction"</td>
+  </tr>
+</table>
+
+<hr>
+<p style="color:#484F58; font-size:11px;">Hover any ★ badge to see the enriched tooltip with edge %, model probability, and confidence level.</p>
+
+</body>
+</html>

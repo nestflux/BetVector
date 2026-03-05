@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BetVector — Cloud Migration Strategy</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #0D1117;
+      color: #E6EDF3;
+      line-height: 1.7;
+      font-size: 16px;
+    }
+
+    /* --- Top Nav --- */
+    .top-nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: #0D1117;
+      border-bottom: 1px solid #30363D;
+      padding: 0.75rem 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+      backdrop-filter: blur(12px);
+    }
+    .top-nav .logo {
+      font-size: 1.3rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #3FB950, #58a6ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-decoration: none;
+    }
+    .top-nav .page-title {
+      color: #8B949E;
+      font-size: 1rem;
+      font-weight: 500;
+    }
+    .hamburger {
+      display: none;
+      background: none;
+      border: none;
+      color: #E6EDF3;
+      font-size: 1.5rem;
+      cursor: pointer;
+      margin-left: auto;
+    }
+
+    /* --- Layout --- */
+    .layout {
+      display: flex;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    /* --- Sidebar TOC --- */
+    .sidebar {
+      width: 280px;
+      min-width: 280px;
+      position: sticky;
+      top: 52px;
+      height: calc(100vh - 52px);
+      overflow-y: auto;
+      border-right: 1px solid #30363D;
+      padding: 1.5rem 0;
+      scrollbar-width: thin;
+      scrollbar-color: #30363D transparent;
+    }
+    .sidebar::-webkit-scrollbar { width: 4px; }
+    .sidebar::-webkit-scrollbar-track { background: transparent; }
+    .sidebar::-webkit-scrollbar-thumb { background: #30363D; border-radius: 2px; }
+    .sidebar .toc-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #8B949E;
+      padding: 0 1.25rem;
+      margin-bottom: 0.75rem;
+    }
+    .toc-item {
+      display: block;
+      padding: 0.35rem 1.25rem;
+      color: #8B949E;
+      text-decoration: none;
+      font-size: 0.85rem;
+      border-left: 2px solid transparent;
+      transition: all 0.15s;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .toc-item:hover {
+      color: #E6EDF3;
+      background: #161B22;
+    }
+    .toc-item.active {
+      color: #3FB950;
+      border-left-color: #3FB950;
+    }
+    .toc-h3 { padding-left: 2.25rem; font-size: 0.8rem; }
+
+    /* --- Main Content --- */
+    .content {
+      flex: 1;
+      min-width: 0;
+      padding: 2rem 3rem;
+      max-width: 900px;
+    }
+
+    /* --- Typography --- */
+    .md-h2.section-header {
+      font-size: 1.75rem;
+      font-weight: 700;
+      margin: 2.5rem 0 1rem;
+      padding: 0.5rem 0 0.5rem 1rem;
+      border-left: 4px solid #3FB950;
+    }
+    .md-h3.subsection-header {
+      font-size: 1.3rem;
+      font-weight: 600;
+      margin: 2rem 0 0.75rem;
+      color: #58a6ff;
+    }
+    .md-h4 { font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
+    .md-h5 { font-size: 1rem; font-weight: 600; margin: 1rem 0 0.5rem; color: #8B949E; }
+    .md-p { margin-bottom: 1rem; }
+    .md-p strong { color: #fff; }
+
+    /* --- Links --- */
+    .md-link { color: #58a6ff; text-decoration: none; }
+    .md-link:hover { text-decoration: underline; }
+
+    /* --- Lists --- */
+    .md-list {
+      margin: 0.5rem 0 1rem 1.5rem;
+    }
+    .md-list li {
+      margin-bottom: 0.4rem;
+      padding-left: 0.25rem;
+    }
+
+    /* --- Checkboxes --- */
+    .checkbox {
+      font-family: 'JetBrains Mono', monospace;
+      color: #8B949E;
+      margin-right: 0.3rem;
+    }
+    .checkbox.checked { color: #3FB950; }
+
+    /* --- Code --- */
+    .inline-code {
+      font-family: 'JetBrains Mono', monospace;
+      background: #161B22;
+      border: 1px solid #30363D;
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      font-size: 0.88em;
+      color: #58a6ff;
+    }
+    .code-block {
+      position: relative;
+      background: #161B22;
+      border: 1px solid #30363D;
+      border-radius: 8px;
+      margin: 1rem 0;
+      overflow-x: auto;
+    }
+    .code-block pre {
+      padding: 1.25rem;
+      margin: 0;
+      overflow-x: auto;
+    }
+    .code-block code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      line-height: 1.6;
+      color: #E6EDF3;
+    }
+    .code-lang {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.75rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      color: #8B949E;
+      text-transform: uppercase;
+    }
+    .code-keyword { color: #ff7b72; font-weight: 500; }
+    .code-string { color: #a5d6ff; }
+    .code-comment { color: #8B949E; font-style: italic; }
+    .code-decorator { color: #D29922; }
+
+    /* --- Tables --- */
+    .table-wrapper {
+      overflow-x: auto;
+      margin: 1rem 0;
+      border-radius: 8px;
+      border: 1px solid #30363D;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    thead th {
+      background: #161B22;
+      padding: 0.75rem 1rem;
+      text-align: left;
+      font-weight: 600;
+      color: #E6EDF3;
+      border-bottom: 1px solid #30363D;
+      white-space: nowrap;
+    }
+    tbody td {
+      padding: 0.6rem 1rem;
+      border-bottom: 1px solid #30363D;
+    }
+    tbody tr:nth-child(even) {
+      background: rgba(22, 27, 34, 0.5);
+    }
+    tbody tr:hover {
+      background: rgba(63, 185, 80, 0.05);
+    }
+
+    /* --- Blockquotes --- */
+    .md-blockquote {
+      border-left: 3px solid #58a6ff;
+      padding: 0.75rem 1.25rem;
+      margin: 1rem 0;
+      background: #161B22;
+      border-radius: 0 8px 8px 0;
+      color: #8B949E;
+      font-style: italic;
+    }
+
+    /* --- Horizontal rules --- */
+    .md-hr {
+      border: none;
+      border-top: 1px solid #30363D;
+      margin: 2rem 0;
+    }
+
+    /* --- Badges --- */
+    .badge {
+      display: inline-block;
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 0.2rem 0.6rem;
+      border-radius: 12px;
+      vertical-align: middle;
+      margin-left: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .badge-completed {
+      background: rgba(63, 185, 80, 0.15);
+      color: #3FB950;
+      border: 1px solid rgba(63, 185, 80, 0.3);
+    }
+
+    /* --- Back to top --- */
+    .back-to-top {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: #3FB950;
+      color: #0D1117;
+      border: none;
+      cursor: pointer;
+      font-size: 1.25rem;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      transition: transform 0.2s;
+      z-index: 50;
+    }
+    .back-to-top:hover { transform: scale(1.1); }
+    .back-to-top.visible { display: flex; }
+
+    /* --- Mobile --- */
+    @media (max-width: 768px) {
+      .hamburger { display: block; }
+      .sidebar {
+        position: fixed;
+        top: 52px;
+        left: -300px;
+        width: 280px;
+        min-width: 280px;
+        height: calc(100vh - 52px);
+        background: #0D1117;
+        z-index: 90;
+        transition: left 0.3s ease;
+        border-right: 1px solid #30363D;
+      }
+      .sidebar.open { left: 0; }
+      .sidebar-overlay {
+        display: none;
+        position: fixed;
+        top: 52px;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 80;
+      }
+      .sidebar-overlay.open { display: block; }
+      .content {
+        padding: 1.5rem 1rem;
+      }
+      .md-h2.section-header { font-size: 1.4rem; }
+    }
+    </style>
+</head>
+<body>
+  <nav class="top-nav">
+    <a href="index.html" class="logo">BetVector</a>
+    <span class="page-title">Cloud Migration Strategy · v1.0</span>
+    <button class="hamburger" id="hamburger">&#9776;</button>
+  </nav>
+
+  <div class="sidebar-overlay" id="overlay"></div>
+
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="toc-title">Contents</div>
+      <a href="#executive-summary" class="toc-item toc-h2">Executive Summary</a>
+<a href="#1-current-architecture-analysis" class="toc-item toc-h2">§1 — Current Architecture Analysis</a>
+<a href="#what-runs-today" class="toc-item toc-h3">What runs today</a>
+<a href="#resource-requirements-measured-from-codebase-analysis" class="toc-item toc-h3">Resource requirements (measured from codebase analysis)</a>
+<a href="#system-dependencies-for-containerisation" class="toc-item toc-h3">System dependencies for containerisation</a>
+<a href="#2-postgresql-migration-the-critical-prerequisite" class="toc-item toc-h2">§2 — PostgreSQL Migration (The Critical Prerequisite)</a>
+<a href="#what-actually-needs-to-change" class="toc-item toc-h3">What actually needs to change</a>
+<a href="#what-does-not-change" class="toc-item toc-h3">What does NOT change</a>
+<a href="#effort-estimate-2-4-hours" class="toc-item toc-h3">Effort estimate: 2-4 hours</a>
+<a href="#workflow-simplification" class="toc-item toc-h3">Workflow simplification</a>
+<a href="#3-cloud-platform-evaluation" class="toc-item toc-h2">§3 — Cloud Platform Evaluation</a>
+<a href="#managed-postgresql-free-tiers" class="toc-item toc-h3">Managed PostgreSQL (Free Tiers)</a>
+<a href="#app-hosting-platforms" class="toc-item toc-h3">App Hosting Platforms</a>
+<a href="#vps-options" class="toc-item toc-h3">VPS Options</a>
+<a href="#4-recommended-architectures-ranked" class="toc-item toc-h2">§4 — Recommended Architectures (Ranked)</a>
+<a href="#architecture-a-hybrid-free-tier-0mo-recommended-for-now" class="toc-item toc-h3">Architecture A: Hybrid Free Tier ($0/mo) — RECOMMENDED FOR NOW</a>
+<a href="#architecture-b-railway-all-in-one-10-25mo-recommended-for-growth" class="toc-item toc-h3">Architecture B: Railway All-in-One (~$10-25/mo) — RECOMMENDED FOR GROWTH</a>
+<a href="#architecture-c-flyio-global-15-40mo-for-scale" class="toc-item toc-h3">Architecture C: Fly.io Global (~$15-40/mo) — FOR SCALE</a>
+<a href="#architecture-d-hetzner-vps-4mo-for-full-control" class="toc-item toc-h3">Architecture D: Hetzner VPS (~$4/mo) — FOR FULL CONTROL</a>
+<a href="#5-comparative-pricing-matrix" class="toc-item toc-h2">§5 — Comparative Pricing Matrix</a>
+<a href="#monthly-cost-at-different-scales" class="toc-item toc-h3">Monthly Cost at Different Scales</a>
+<a href="#18-month-cost-projection" class="toc-item toc-h3">18-Month Cost Projection</a>
+<a href="#6-platform-reliability-comparison" class="toc-item toc-h2">§6 — Platform Reliability Comparison</a>
+<a href="#7-multi-user-authentication-strategy" class="toc-item toc-h2">§7 — Multi-User Authentication Strategy</a>
+<a href="#current-state" class="toc-item toc-h3">Current state</a>
+<a href="#recommended-upgrade-path" class="toc-item toc-h3">Recommended upgrade path</a>
+<a href="#what-the-codebase-needs-for-true-multi-user" class="toc-item toc-h3">What the codebase needs for true multi-user</a>
+<a href="#8-migration-roadmap" class="toc-item toc-h2">§8 — Migration Roadmap</a>
+<a href="#phase-1-postgresql-migration-free-tier-deployment-week-1" class="toc-item toc-h3">Phase 1: PostgreSQL Migration + Free Tier Deployment (Week 1)</a>
+<a href="#phase-2-railway-migration-month-3-6" class="toc-item toc-h3">Phase 2: Railway Migration (Month 3-6)</a>
+<a href="#phase-3-production-scale-month-6" class="toc-item toc-h3">Phase 3: Production Scale (Month 6+)</a>
+<a href="#9-platform-specific-gotchas" class="toc-item toc-h2">§9 — Platform-Specific Gotchas</a>
+<a href="#neon-postgresql" class="toc-item toc-h3">Neon PostgreSQL</a>
+<a href="#streamlit-community-cloud" class="toc-item toc-h3">Streamlit Community Cloud</a>
+<a href="#railway" class="toc-item toc-h3">Railway</a>
+<a href="#github-actions-current-retained-in-phase-1" class="toc-item toc-h3">GitHub Actions (current, retained in Phase 1)</a>
+<a href="#10-security-considerations" class="toc-item toc-h2">§10 — Security Considerations</a>
+<a href="#secrets-management-across-platforms" class="toc-item toc-h3">Secrets management across platforms</a>
+<a href="#key-security-principles-for-cloud-deployment" class="toc-item toc-h3">Key security principles for cloud deployment</a>
+<a href="#11-decision-framework" class="toc-item toc-h2">§11 — Decision Framework</a>
+<a href="#when-to-upgrade-from-phase-1-to-phase-2" class="toc-item toc-h3">When to upgrade from Phase 1 to Phase 2</a>
+<a href="#when-to-upgrade-from-phase-2-to-phase-3" class="toc-item toc-h3">When to upgrade from Phase 2 to Phase 3</a>
+<a href="#platforms-to-avoid" class="toc-item toc-h3">Platforms to avoid</a>
+<a href="#12-final-recommendation" class="toc-item toc-h2">§12 — Final Recommendation</a>
+<a href="#start-with-architecture-a-hybrid-free-tier" class="toc-item toc-h3">Start with Architecture A (Hybrid Free Tier)</a>
+<a href="#appendix-a-docker-configuration" class="toc-item toc-h2">Appendix A — Docker Configuration</a>
+<a href="#appendix-b-neon-connection-configuration" class="toc-item toc-h2">Appendix B — Neon Connection Configuration</a>
+<a href="#appendix-c-simplified-github-actions-workflow-post-migration" class="toc-item toc-h2">Appendix C — Simplified GitHub Actions Workflow (Post-Migration)</a>
+<a href="#appendix-d-railway-configuration" class="toc-item toc-h2">Appendix D — Railway Configuration</a>
+<a href="#appendix-e-verification-checklist" class="toc-item toc-h2">Appendix E — Verification Checklist</a>
+    </aside>
+    <main class="content">
+      <h1 id="betvector-cloud-migration-strategy-report" class="md-h1">BetVector &mdash; Cloud Migration Strategy Report</h1>
+<p class="md-p">Version 1.0 · March 2026</p>
+<hr class='md-hr'>
+<h2 id="executive-summary" class="md-h2 section-header">Executive Summary</h2>
+<p class="md-p">BetVector is a production-grade football betting intelligence system running locally on macOS with GitHub Actions for scheduling. This report evaluates every viable path to move BetVector to the cloud &mdash; enabling multi-user access, eliminating SQLite limitations, and establishing a reliable hosting foundation for the testing and growth phases.</p>
+<p class="md-p"><strong>Key finding:</strong> BetVector's architecture is already cloud-ready. The SQLAlchemy ORM, config-driven design, and <code class="inline-code">user_id</code>-scoped database schema mean the migration is primarily an infrastructure decision, not a code rewrite. The single most impactful change is moving from SQLite-in-git to PostgreSQL &mdash; this unlocks every hosting option and eliminates binary merge conflicts in GitHub Actions.</p>
+<p class="md-p"><strong>Recommended path:</strong></p>
+<ol class='md-list'><li><strong>Phase 1 (Now, $0/mo):</strong> Streamlit Community Cloud + Neon PostgreSQL + GitHub Actions</li>
+<li><strong>Phase 2 (Growth, ~$10-25/mo):</strong> Railway all-in-one PaaS</li>
+<li><strong>Phase 3 (Scale, ~$40-70/mo):</strong> Fly.io with global distribution</li></ol>
+<hr class='md-hr'>
+<h2 id="1-current-architecture-analysis" class="md-h2 section-header">§1 &mdash; Current Architecture Analysis</h2>
+<h3 id="what-runs-today" class="md-h3 subsection-header">What runs today</h3>
+<div class='table-wrapper'><table><thead><tr><th>Component</th><th>Current Solution</th><th>Limitation</th></tr></thead><tbody><tr><td>Database</td><td>SQLite 9.1 MB, WAL mode, committed to git</td><td>Binary merge conflicts, single-writer, no concurrent access</td></tr><tr><td>Dashboard</td><td>Streamlit 1.28+ on localhost:8501</td><td>Only accessible locally, password gate</td></tr><tr><td>Pipelines</td><td>3 GitHub Actions cron jobs (06:00, 13:00, 22:00 UTC)</td><td>Actions commits .db back to git, 540+ lines of migration hacks</td></tr><tr><td>Email</td><td>Gmail SMTP via smtplib</td><td>Works fine, no change needed</td></tr><tr><td>Config</td><td>YAML files + .env</td><td>Works fine, cloud-compatible</td></tr><tr><td>Auth</td><td>Single shared password (DASHBOARD_PASSWORD)</td><td>No per-user identity</td></tr></tbody></table></div>
+<h3 id="resource-requirements-measured-from-codebase-analysis" class="md-h3 subsection-header">Resource requirements (measured from codebase analysis)</h3>
+<div class='table-wrapper'><table><thead><tr><th>Metric</th><th>Pipeline (morning)</th><th>Dashboard (10 users)</th><th>Both on one instance</th></tr></thead><tbody><tr><td>RAM (minimum)</td><td>512 MB</td><td>512 MB</td><td>1.5 GB</td></tr><tr><td>RAM (recommended)</td><td>1 GB</td><td>1 GB</td><td>2 GB</td></tr><tr><td>CPU</td><td>1 vCPU (I/O bound)</td><td>1 vCPU (GIL-bound)</td><td>2 vCPU</td></tr><tr><td>Disk</td><td>3 GB minimum</td><td>3 GB minimum</td><td>10 GB recommended</td></tr><tr><td>Runtime</td><td>2-10 min per run</td><td>Always-on</td><td>Always-on + 3x burst</td></tr><tr><td>Network</td><td>Outbound HTTPS to 9 APIs</td><td>Inbound port 8501</td><td>Both</td></tr></tbody></table></div>
+<h3 id="system-dependencies-for-containerisation" class="md-h3 subsection-header">System dependencies for containerisation</h3>
+<p class="md-p">The entire stack runs on <code class="inline-code">python:3.11-slim</code> with one additional system package:</p>
+<div class="code-block"><pre><code>apt-get install -y --no-install-recommends libgomp1</code></pre></div>
+<p class="md-p">This single line covers xgboost and lightgbm. All other packages (pandas, scipy, statsmodels, streamlit, plotly) install cleanly from PyPI wheels with zero system dependencies.</p>
+<hr class='md-hr'>
+<h2 id="2-postgresql-migration-the-critical-prerequisite" class="md-h2 section-header">§2 &mdash; PostgreSQL Migration (The Critical Prerequisite)</h2>
+<p class="md-p">Moving from SQLite to PostgreSQL is the <strong>single most impactful change</strong> and prerequisite for every cloud architecture. The CLAUDE.md claim "only the connection string changes" is 95% true.</p>
+<h3 id="what-actually-needs-to-change" class="md-h3 subsection-header">What actually needs to change</h3>
+<div class='table-wrapper'><table><thead><tr><th>File</th><th>Change</th><th>Effort</th></tr></thead><tbody><tr><td><code class="inline-code">requirements.txt</code></td><td>Add <code class="inline-code">psycopg2-binary==2.9.10</code></td><td>1 line</td></tr><tr><td><code class="inline-code">src/database/db.py</code> line ~148</td><td>Guard <code class="inline-code">mkdir</code> call to SQLite-only</td><td>3 lines</td></tr><tr><td><code class="inline-code">src/database/models.py</code></td><td>Replace 25× <code class="inline-code">server_default=sa_text("(datetime('now'))")</code> with <code class="inline-code">func.now()</code></td><td>25 lines</td></tr><tr><td><code class="inline-code">.github/workflows/*.yml</code></td><td>Remove "Commit database changes" steps, remove inline <code class="inline-code">sqlite3</code> migrations</td><td>Delete ~540 lines</td></tr><tr><td>New: <code class="inline-code">alembic.ini</code> + <code class="inline-code">migrations/</code></td><td>Replace ad-hoc PRAGMA migrations with Alembic</td><td>New file</td></tr><tr><td><code class="inline-code">config/settings.yaml</code></td><td>Add <code class="inline-code">DATABASE_URL</code> env var support</td><td>2 lines</td></tr></tbody></table></div>
+<h3 id="what-does-not-change" class="md-h3 subsection-header">What does NOT change</h3>
+<ul class='md-list'><li>All 23 ORM models &mdash; zero changes (standard SQL types, no SQLite-specific constructs)</li>
+<li>All scrapers, feature engineers, models, evaluation &mdash; zero changes</li>
+<li>All dashboard pages &mdash; zero changes</li>
+<li>Pipeline orchestrator &mdash; zero changes (reads/writes via SQLAlchemy session)</li></ul>
+<h3 id="effort-estimate-2-4-hours" class="md-h3 subsection-header">Effort estimate: 2-4 hours</h3>
+<p class="md-p">The <code class="inline-code">datetime('now')</code> server defaults are the one real migration issue. PostgreSQL uses <code class="inline-code">now()</code> or <code class="inline-code">CURRENT_TIMESTAMP</code>. The clean fix is replacing all 25 instances with SQLAlchemy's dialect-agnostic <code class="inline-code">func.now()</code>.</p>
+<h3 id="workflow-simplification" class="md-h3 subsection-header">Workflow simplification</h3>
+<p class="md-p">After PostgreSQL, the morning.yml workflow drops from 288 lines to ~30:</p>
+<div class="code-block"><span class="code-lang">YAML</span><pre><code>name: Morning Pipeline
+on:
+  schedule:
+    - cron: &quot;0 6 * * *&quot;
+jobs:
+  morning:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+      THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: &quot;3.11&quot;
+          cache: &quot;pip&quot;
+      - run: pip install -r requirements.txt &amp;&amp; pip install -e .
+      - run: python run_pipeline.py morning</code></pre></div>
+<p class="md-p">No SQLite migrations. No binary file commits. No merge conflict handling.</p>
+<hr class='md-hr'>
+<h2 id="3-cloud-platform-evaluation" class="md-h2 section-header">§3 &mdash; Cloud Platform Evaluation</h2>
+<h3 id="managed-postgresql-free-tiers" class="md-h3 subsection-header">Managed PostgreSQL (Free Tiers)</h3>
+<div class='table-wrapper'><table><thead><tr><th>Provider</th><th>Free Storage</th><th>Compute</th><th>Sleep Behaviour</th><th>Always Free?</th><th>Best For</th></tr></thead><tbody><tr><td><strong>Neon</strong></td><td>512 MB</td><td>191.9 hrs/mo (0.25 vCPU)</td><td>Scales to zero after 5 min, <500ms cold start</td><td>Yes</td><td>BetVector (recommended)</td></tr><tr><td><strong>Supabase</strong></td><td>500 MB</td><td>Shared nano</td><td>Pauses after 1 week inactivity</td><td>Yes</td><td>Active projects (daily pipelines keep it awake)</td></tr><tr><td><strong>CockroachDB</strong></td><td>10 GiB</td><td>50M request units/mo</td><td>No sleep</td><td>Yes</td><td>If storage becomes a concern</td></tr><tr><td><strong>Aiven</strong></td><td>1 GB</td><td>Limited (25 connections)</td><td>No SLA</td><td>Yes</td><td>Backup option</td></tr><tr><td><strong>Tembo</strong></td><td>10 GB</td><td>1 vCPU, 1 GB RAM</td><td>No sleep reported</td><td>Verify</td><td>Generous if it persists</td></tr><tr><td>ElephantSQL</td><td>—</td><td>—</td><td>—</td><td><strong>Shut down Jan 2025</strong></td><td>Do not use</td></tr></tbody></table></div>
+<p class="md-p"><strong>Recommendation: Neon.</strong> Serverless architecture, sub-second cold starts, 512 MB storage (BetVector needs ~50 MB), point-in-time restore via branches, and standard PostgreSQL wire protocol. SQLAlchemy works with <code class="inline-code">psycopg2</code> driver &mdash; set <code class="inline-code">pool_pre_ping=True</code> and reduce pool size for serverless connections.</p>
+<h3 id="app-hosting-platforms" class="md-h3 subsection-header">App Hosting Platforms</h3>
+<h4 id="streamlit-community-cloud-free" class="md-h4">Streamlit Community Cloud (Free)</h4>
+<div class='table-wrapper'><table><thead><tr><th>Aspect</th><th>Detail</th></tr></thead><tbody><tr><td>Cost</td><td>$0/mo</td></tr><tr><td>RAM</td><td>~1 GB shared</td></tr><tr><td>Sleep</td><td>After several days of no visitors (wake-up ~10 sec)</td></tr><tr><td>Secrets</td><td>Built-in secrets management</td></tr><tr><td>Deployment</td><td>Direct from GitHub repo (1-click)</td></tr><tr><td>PostgreSQL</td><td>None &mdash; bring your own (Neon)</td></tr><tr><td>Cron jobs</td><td>None &mdash; keep GitHub Actions</td></tr><tr><td>Private apps</td><td>1 private app per account</td></tr></tbody></table></div>
+<p class="md-p"><strong>Verdict:</strong> Strong for Phase 1. Handles the dashboard layer for free. Sleep behaviour is acceptable during testing phase &mdash; daily visits wake it in seconds.</p>
+<h4 id="railway-hobby-plan-5-10mo" class="md-h4">Railway (Hobby Plan ~$5-10/mo)</h4>
+<div class='table-wrapper'><table><thead><tr><th>Aspect</th><th>Detail</th></tr></thead><tbody><tr><td>Base cost</td><td>$5/mo flat + usage (~$0.000463/vCPU-minute)</td></tr><tr><td>Total for BetVector</td><td>~$10-18/mo (web + DB + 3 cron jobs)</td></tr><tr><td>RAM</td><td>Up to 8 GB per service</td></tr><tr><td>Sleep</td><td>None &mdash; always-on</td></tr><tr><td>Secrets</td><td>First-class env var support</td></tr><tr><td>PostgreSQL</td><td>Managed plugin included</td></tr><tr><td>Cron jobs</td><td>Native support, define schedule per service</td></tr><tr><td>Deployment</td><td>Auto-deploy on GitHub push</td></tr><tr><td>DX Score</td><td>9/10</td></tr></tbody></table></div>
+<p class="md-p"><strong>Verdict:</strong> Best all-in-one platform for Phase 2. Single vendor, excellent developer experience, native cron, managed PostgreSQL. Migration from Phase 1 takes ~10 minutes &mdash; push code, set DB URL, done.</p>
+<h4 id="flyio-free-allowance-usage" class="md-h4">Fly.io (Free Allowance + Usage)</h4>
+<div class='table-wrapper'><table><thead><tr><th>Aspect</th><th>Detail</th></tr></thead><tbody><tr><td>Free compute</td><td>3 shared-CPU VMs (256 MB each)</td></tr><tr><td>Free storage</td><td>3 GB persistent volume</td></tr><tr><td>Free bandwidth</td><td>160 GB/mo outbound</td></tr><tr><td>Total for BetVector</td><td>$10-17/mo (minimal) or $40-70/mo (growth)</td></tr><tr><td>Cron jobs</td><td>No built-in &mdash; use Fly Machines on schedule or external trigger</td></tr><tr><td>DX Score</td><td>6.5/10 (CLI-first, steeper learning curve)</td></tr></tbody></table></div>
+<p class="md-p"><strong>Verdict:</strong> Best for Phase 3 when global distribution and auto-scaling matter. 256 MB RAM per VM may be tight for Python's scientific stack &mdash; monitor carefully.</p>
+<h4 id="render" class="md-h4">Render</h4>
+<div class='table-wrapper'><table><thead><tr><th>Aspect</th><th>Detail</th></tr></thead><tbody><tr><td>Free web service</td><td>Spins down after 15 min inactivity (30-60 sec cold start)</td></tr><tr><td>Free PostgreSQL</td><td><strong>Expires after 90 days</strong> (deleted unless upgraded)</td></tr><tr><td>Paid total</td><td>$34/mo minimum for reliable operation</td></tr></tbody></table></div>
+<p class="md-p"><strong>Verdict:</strong> Not recommended. The 90-day PostgreSQL expiry is a showstopper. Free tier spin-down makes Streamlit unusable.</p>
+<h4 id="koyeb-free-nano" class="md-h4">Koyeb (Free Nano)</h4>
+<div class='table-wrapper'><table><thead><tr><th>Aspect</th><th>Detail</th></tr></thead><tbody><tr><td>Free tier</td><td>1 nano instance: 0.1 vCPU, 512 MB RAM, always-on</td></tr><tr><td>Sleep</td><td>None on free tier (always-on)</td></tr><tr><td>PostgreSQL</td><td>None &mdash; bring your own</td></tr></tbody></table></div>
+<p class="md-p"><strong>Verdict:</strong> Viable alternative to Streamlit Community Cloud for hosting the dashboard. 512 MB RAM is tight but workable for Streamlit alone. No cron support on free tier.</p>
+<h3 id="vps-options" class="md-h3 subsection-header">VPS Options</h3>
+<div class='table-wrapper'><table><thead><tr><th>Provider</th><th>Cheapest Tier</th><th>RAM</th><th>CPU</th><th>Storage</th><th>Monthly Cost</th><th>Always Free?</th></tr></thead><tbody><tr><td><strong>Oracle Cloud</strong></td><td>ARM A1</td><td>24 GB</td><td>4 OCPU</td><td>200 GB</td><td>$0</td><td>Yes (but hard to provision)</td></tr><tr><td><strong>GCP</strong></td><td>e2-micro</td><td>1 GB</td><td>2 vCPU (burst)</td><td>30 GB HDD</td><td>$0</td><td>Yes (US regions only)</td></tr><tr><td><strong>Hetzner</strong></td><td>CAX11 ARM</td><td>4 GB</td><td>2 vCPU</td><td>40 GB NVMe</td><td>~$4/mo</td><td>No</td></tr><tr><td><strong>DigitalOcean</strong></td><td>Basic Droplet</td><td>1 GB</td><td>1 vCPU</td><td>25 GB SSD</td><td>$6/mo</td><td>No</td></tr><tr><td><strong>AWS</strong></td><td>t3.micro</td><td>1 GB</td><td>2 vCPU</td><td>30 GB</td><td>$0 (12 mo only)</td><td>No &mdash; expires</td></tr><tr><td><strong>Vultr/Linode</strong></td><td>Smallest</td><td>1 GB</td><td>1 vCPU</td><td>25 GB</td><td>$5-6/mo</td><td>No</td></tr></tbody></table></div>
+<p class="md-p"><strong>Oracle Cloud Always Free:</strong> Most powerful free option (4 OCPU, 24 GB RAM, 200 GB disk) but availability is severely constrained &mdash; provisioning ARM instances may take days of repeated attempts. Developer experience is poor (DX: 1/10). High lock-in risk.</p>
+<p class="md-p"><strong>Hetzner CAX11:</strong> Best cost-to-capability ratio of any paid option. 4 GB RAM for ~$4/mo runs everything comfortably: Streamlit + PostgreSQL + cron jobs. Full root access, no artificial constraints. Requires Linux sysadmin skills.</p>
+<p class="md-p"><strong>GCP e2-micro:</strong> 1 GB RAM is genuinely tight for Python's scientific stack. Suitable for pipeline execution only, not for hosting both dashboard and pipelines. The 3 free Cloud Scheduler jobs coincidentally match BetVector's 3 daily pipelines.</p>
+<hr class='md-hr'>
+<h2 id="4-recommended-architectures-ranked" class="md-h2 section-header">§4 &mdash; Recommended Architectures (Ranked)</h2>
+<h3 id="architecture-a-hybrid-free-tier-0mo-recommended-for-now" class="md-h3 subsection-header">Architecture A: Hybrid Free Tier ($0/mo) &mdash; RECOMMENDED FOR NOW</h3>
+<div class="code-block"><pre><code>┌─────────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│  Streamlit Community │────▶│  Neon PostgreSQL  │◀────│  GitHub Actions  │
+│       Cloud          │     │   (free tier)     │     │  (3 cron jobs)   │
+│   (dashboard)        │     │   512 MB storage  │     │  morning/mid/eve │
+└─────────────────────┘     └──────────────────┘     └─────────────────┘</code></pre></div>
+<div class='table-wrapper'><table><thead><tr><th>Component</th><th>Service</th><th>Cost</th></tr></thead><tbody><tr><td>Dashboard</td><td>Streamlit Community Cloud</td><td>$0</td></tr><tr><td>Database</td><td>Neon free PostgreSQL</td><td>$0</td></tr><tr><td>Pipelines</td><td>GitHub Actions (existing)</td><td>$0</td></tr><tr><td>Email</td><td>Gmail SMTP (existing)</td><td>$0</td></tr><tr><td>Secrets</td><td>GitHub Secrets + Streamlit Secrets</td><td>$0</td></tr><tr><td><strong>Total</strong></td><td></td><td><strong>$0/mo</strong></td></tr></tbody></table></div>
+<p class="md-p"><strong>Pros:</strong></p>
+<ul class='md-list'><li>Zero cost, zero financial risk</li>
+<li>Leverages existing GitHub Actions workflows (already working)</li>
+<li>Neon's serverless Postgres eliminates SQLite's single-writer limitation</li>
+<li>Multi-user access immediately &mdash; dashboard is publicly accessible</li>
+<li>No infrastructure to maintain</li>
+<li>Pipeline results available to dashboard within seconds (shared DB)</li></ul>
+<p class="md-p"><strong>Cons:</strong></p>
+<ul class='md-list'><li>Streamlit Community Cloud sleeps after inactivity (10 sec wake-up)</li>
+<li>GitHub Actions cron can have 15-30 min delays during peak load</li>
+<li>Free tier policies can change (monitor quarterly)</li>
+<li>1 private app limit on Streamlit Community Cloud (use password gate for auth)</li></ul>
+<p class="md-p"><strong>Migration effort:</strong> ~4 hours (PostgreSQL migration + deploy to Streamlit Cloud)</p>
+<h3 id="architecture-b-railway-all-in-one-10-25mo-recommended-for-growth" class="md-h3 subsection-header">Architecture B: Railway All-in-One (~$10-25/mo) &mdash; RECOMMENDED FOR GROWTH</h3>
+<div class="code-block"><pre><code>┌──────────────────────────────────────────────┐
+│                  Railway                       │
+│  ┌────────────┐  ┌──────────┐  ┌───────────┐ │
+│  │  Streamlit  │  │ PostgreSQL│  │ 3× Cron   │ │
+│  │  Web Svc    │  │  Plugin   │  │ Services  │ │
+│  │ (always-on) │  │ (managed) │  │ (scheduled)│ │
+│  └────────────┘  └──────────┘  └───────────┘ │
+└──────────────────────────────────────────────┘</code></pre></div>
+<div class='table-wrapper'><table><thead><tr><th>Component</th><th>Service</th><th>Cost</th></tr></thead><tbody><tr><td>Dashboard</td><td>Railway Web Service (256 MB RAM)</td><td>~$5-8/mo</td></tr><tr><td>Database</td><td>Railway PostgreSQL Plugin (1 GB)</td><td>~$5-7/mo</td></tr><tr><td>Pipelines</td><td>Railway Cron Services (3×)</td><td>~$2-3/mo</td></tr><tr><td>Email</td><td>Gmail SMTP (unchanged)</td><td>$0</td></tr><tr><td>Secrets</td><td>Railway Environment Variables</td><td>Included</td></tr><tr><td><strong>Total</strong></td><td></td><td><strong>$12-18/mo</strong></td></tr></tbody></table></div>
+<p class="md-p"><strong>Pros:</strong></p>
+<ul class='md-list'><li>Always-on, no sleep or cold starts</li>
+<li>Single vendor &mdash; one dashboard for everything</li>
+<li>Native cron support &mdash; no more GitHub Actions workflow complexity</li>
+<li>Auto-deploy on git push</li>
+<li>Managed PostgreSQL with daily backups</li>
+<li>Best developer experience (DX: 9/10)</li></ul>
+<p class="md-p"><strong>Cons:</strong></p>
+<ul class='md-list'><li>$12-18/mo recurring cost</li>
+<li>Railway-proprietary deployment format (medium lock-in)</li>
+<li>99.5% uptime (not SLA-guaranteed)</li></ul>
+<p class="md-p"><strong>Migration from Architecture A:</strong> ~10 minutes (push to Railway, point DATABASE_URL to Railway Postgres or keep Neon)</p>
+<h3 id="architecture-c-flyio-global-15-40mo-for-scale" class="md-h3 subsection-header">Architecture C: Fly.io Global (~$15-40/mo) &mdash; FOR SCALE</h3>
+<div class='table-wrapper'><table><thead><tr><th>Component</th><th>Service</th><th>Cost</th></tr></thead><tbody><tr><td>Dashboard</td><td>Fly Machine (shared-cpu-2x, 512 MB)</td><td>~$3-10/mo</td></tr><tr><td>Database</td><td>Neon PostgreSQL (or Fly Postgres)</td><td>$0-12/mo</td></tr><tr><td>Pipelines</td><td>Fly Scheduled Machines (3×)</td><td>~$2-5/mo</td></tr><tr><td><strong>Total</strong></td><td></td><td><strong>$10-17/mo (min), $40-70/mo (growth)</strong></td></tr></tbody></table></div>
+<p class="md-p"><strong>Pros:</strong></p>
+<ul class='md-list'><li>Multi-region deployment (global edge)</li>
+<li>Excellent auto-scaling</li>
+<li>No cold starts (Fly Machines are warm)</li>
+<li>99.9% uptime (best-effort)</li></ul>
+<p class="md-p"><strong>Cons:</strong></p>
+<ul class='md-list'><li>CLI-first workflow (steeper learning curve)</li>
+<li>No built-in cron &mdash; requires Fly Machines scheduling or external trigger</li>
+<li>Egress bandwidth charges ($0.02/GB) can add up</li>
+<li>Fly Postgres is self-managed (reliability complaints)</li></ul>
+<h3 id="architecture-d-hetzner-vps-4mo-for-full-control" class="md-h3 subsection-header">Architecture D: Hetzner VPS (~$4/mo) &mdash; FOR FULL CONTROL</h3>
+<div class='table-wrapper'><table><thead><tr><th>Component</th><th>Service</th><th>Cost</th></tr></thead><tbody><tr><td>Everything</td><td>Hetzner CAX11 (4 GB RAM, 2 ARM vCPU)</td><td>~$4/mo</td></tr><tr><td>Dashboard</td><td>Streamlit via systemd + Caddy reverse proxy</td><td>Included</td></tr><tr><td>Database</td><td>PostgreSQL 16 self-hosted</td><td>Included</td></tr><tr><td>Pipelines</td><td>systemd timers (3×)</td><td>Included</td></tr><tr><td><strong>Total</strong></td><td></td><td><strong>~$4/mo</strong></td></tr></tbody></table></div>
+<p class="md-p"><strong>Pros:</strong></p>
+<ul class='md-list'><li>Best cost-to-capability ratio ($4 for 4 GB RAM, 2 vCPU, 40 GB SSD)</li>
+<li>Full root access, no artificial constraints</li>
+<li>No vendor lock-in (standard Linux)</li>
+<li>No free tier policy risk</li>
+<li>Fastest possible deployment (all services local)</li></ul>
+<p class="md-p"><strong>Cons:</strong></p>
+<ul class='md-list'><li>You manage OS updates, security patches, SSL certs, backups</li>
+<li>Manual deployment pipeline (or set up Coolify for UI)</li>
+<li>No HA or failover without extra work</li>
+<li>Requires Linux sysadmin knowledge (DX: 2/10)</li></ul>
+<hr class='md-hr'>
+<h2 id="5-comparative-pricing-matrix" class="md-h2 section-header">§5 &mdash; Comparative Pricing Matrix</h2>
+<h3 id="monthly-cost-at-different-scales" class="md-h3 subsection-header">Monthly Cost at Different Scales</h3>
+<div class='table-wrapper'><table><thead><tr><th>Architecture</th><th>1-5 Users</th><th>10-50 Users</th><th>100+ Users</th><th>DX Score</th></tr></thead><tbody><tr><td><strong>A: Hybrid Free</strong></td><td>$0</td><td>$0-5</td><td>Not suitable</td><td>9/10</td></tr><tr><td><strong>B: Railway</strong></td><td>$12-18</td><td>$21-35</td><td>$50-80</td><td>9/10</td></tr><tr><td><strong>C: Fly.io</strong></td><td>$10-17</td><td>$40-70</td><td>$80-150</td><td>6.5/10</td></tr><tr><td><strong>D: Hetzner VPS</strong></td><td>$4</td><td>$4-12</td><td>$12-30</td><td>2/10</td></tr><tr><td>AWS (ECS+RDS)</td><td>$22-30</td><td>$70-110</td><td>$150+</td><td>4/10</td></tr><tr><td>GCP (Run+SQL)</td><td>$25-40</td><td>$81-122</td><td>$150+</td><td>5/10</td></tr><tr><td>Azure</td><td>$33-52</td><td>$82-135</td><td>$200+</td><td>3/10</td></tr></tbody></table></div>
+<h3 id="18-month-cost-projection" class="md-h3 subsection-header">18-Month Cost Projection</h3>
+<div class='table-wrapper'><table><thead><tr><th>Scenario</th><th>Strategy</th><th>Total Cost</th></tr></thead><tbody><tr><td><strong>A: Stay Free</strong></td><td>Hybrid forever</td><td>$0</td></tr><tr><td><strong>B: Free → Railway at month 6</strong></td><td>Hybrid → Railway</td><td>$300</td></tr><tr><td><strong>C: Free → Railway → Fly.io</strong></td><td>Hybrid → Railway (6 mo) → Fly.io (6 mo)</td><td>$450</td></tr><tr><td><strong>D: Jump to AWS</strong></td><td>AWS from day 1</td><td>$780+</td></tr></tbody></table></div>
+<hr class='md-hr'>
+<h2 id="6-platform-reliability-comparison" class="md-h2 section-header">§6 &mdash; Platform Reliability Comparison</h2>
+<div class='table-wrapper'><table><thead><tr><th>Platform</th><th>Uptime SLA</th><th>Cold Starts</th><th>Sleep Policy</th><th>Pipeline Reliability</th></tr></thead><tbody><tr><td>Streamlit Cloud</td><td>~99.5% (community)</td><td>10 sec wake-up</td><td>After days of no visits</td><td>N/A (no cron)</td></tr><tr><td>GitHub Actions</td><td>99.95%</td><td>30-60 sec runner start</td><td>N/A</td><td>15-30 min delays at peak</td></tr><tr><td>Neon</td><td>99.95%</td><td><500 ms</td><td>Scales to zero after 5 min</td><td>Always available</td></tr><tr><td>Railway</td><td>99.5% (not guaranteed)</td><td>None (always-on)</td><td>None</td><td>Native cron, reliable</td></tr><tr><td>Fly.io</td><td>99.9% (best-effort)</td><td>None (warm machines)</td><td>None</td><td>Scheduled machines</td></tr><tr><td>Hetzner</td><td>99.5% (not guaranteed)</td><td>None (bare metal)</td><td>None</td><td>systemd timers, most reliable</td></tr><tr><td>Render</td><td>99.95% (paid SLA)</td><td>30-60 sec (free)</td><td>After 15 min inactivity</td><td>Cold start delays</td></tr><tr><td>Oracle Cloud</td><td>99.5%</td><td>None</td><td>Auto-stop after 7 days idle</td><td>Unreliable free tier</td></tr></tbody></table></div>
+<hr class='md-hr'>
+<h2 id="7-multi-user-authentication-strategy" class="md-h2 section-header">§7 &mdash; Multi-User Authentication Strategy</h2>
+<h3 id="current-state" class="md-h3 subsection-header">Current state</h3>
+<p class="md-p">The dashboard has a single shared password (<code class="inline-code">DASHBOARD_PASSWORD</code>) with no per-user identity. Auth is stored in <code class="inline-code">st.session_state["authenticated"]</code>. The database schema already has <code class="inline-code">user_id</code> on all personal tables (bet_log, bankroll, notifications).</p>
+<h3 id="recommended-upgrade-path" class="md-h3 subsection-header">Recommended upgrade path</h3>
+<div class='table-wrapper'><table><thead><tr><th>Phase</th><th>Approach</th><th>Users</th><th>Code Changes</th><th>Cost</th></tr></thead><tbody><tr><td><strong>Testing (now)</strong></td><td>Shared password (current)</td><td>2-5 trusted</td><td>None</td><td>$0</td></tr><tr><td><strong>Growth</strong></td><td><code class="inline-code">streamlit-authenticator</code></td><td>5-20</td><td>~50 lines + users.yaml</td><td>$0</td></tr><tr><td><strong>Production</strong></td><td>Supabase Auth or Cloudflare Access</td><td>Unlimited</td><td>~100 lines</td><td>$0 (free tier)</td></tr></tbody></table></div>
+<h3 id="what-the-codebase-needs-for-true-multi-user" class="md-h3 subsection-header">What the codebase needs for true multi-user</h3>
+<ol class='md-list'><li>Replace <code class="inline-code">user_id=1</code> hardcode in dashboard.py + page modules with session-based user resolution</li>
+<li>Add password column (hashed) to User model</li>
+<li>Thread <code class="inline-code">user_id</code> through all page queries that currently hardcode <code class="inline-code">1</code></li>
+<li>Add <code class="inline-code">WHERE user_id = :uid</code> filters to bet_log, bankroll, value_bets queries</li></ol>
+<p class="md-p">The schema is already prepared &mdash; this is a query filter change, not a schema change.</p>
+<hr class='md-hr'>
+<h2 id="8-migration-roadmap" class="md-h2 section-header">§8 &mdash; Migration Roadmap</h2>
+<h3 id="phase-1-postgresql-migration-free-tier-deployment-week-1" class="md-h3 subsection-header">Phase 1: PostgreSQL Migration + Free Tier Deployment (Week 1)</h3>
+<p class="md-p"><strong>Effort: ~4 hours</strong></p>
+<ol class='md-list'><li>Add <code class="inline-code">psycopg2-binary</code> to requirements.txt</li>
+<li>Replace 25 <code class="inline-code">datetime('now')</code> server defaults with <code class="inline-code">func.now()</code> in models.py</li>
+<li>Guard SQLite-specific <code class="inline-code">mkdir</code> in db.py</li>
+<li>Add <code class="inline-code">DATABASE_URL</code> environment variable support to db.py</li>
+<li>Provision Neon free PostgreSQL instance</li>
+<li>Run schema creation against Neon (<code class="inline-code">python run_pipeline.py setup</code>)</li>
+<li>Migrate existing data: SQLite → PostgreSQL (pgloader or custom script)</li>
+<li>Deploy dashboard to Streamlit Community Cloud</li>
+<li>Update GitHub Actions workflows to connect to Neon</li>
+<li>Remove <code class="inline-code">git add data/betvector.db</code> from all workflows</li></ol>
+<p class="md-p"><strong>Validation:</strong></p>
+<ul class='md-list'><li>Morning pipeline runs via GitHub Actions, writes to Neon PostgreSQL</li>
+<li>Dashboard on Streamlit Community Cloud reads from same Neon instance</li>
+<li>Share dashboard URL with 2-3 test users</li>
+<li>Verify password gate works on public deployment</li></ul>
+<h3 id="phase-2-railway-migration-month-3-6" class="md-h3 subsection-header">Phase 2: Railway Migration (Month 3-6)</h3>
+<p class="md-p"><strong>Trigger: When free tier limitations become frustrating</strong></p>
+<ul class='md-list'><li>Streamlit sleep disrupts user access</li>
+<li>GitHub Actions delays affect morning email timing</li>
+<li>You want a single-vendor operational view</li></ul>
+<p class="md-p"><strong>Effort: ~1 hour</strong></p>
+<ol class='md-list'><li>Create Railway project, connect GitHub repo</li>
+<li>Add PostgreSQL plugin (or keep Neon)</li>
+<li>Set environment variables</li>
+<li>Configure 3 cron services (morning/midday/evening)</li>
+<li>DNS switch (if using custom domain)</li></ol>
+<h3 id="phase-3-production-scale-month-6" class="md-h3 subsection-header">Phase 3: Production Scale (Month 6+)</h3>
+<p class="md-p"><strong>Trigger: When you have 10+ regular users or need global access</strong></p>
+<p class="md-p">Options:</p>
+<ul class='md-list'><li><strong>Stay on Railway</strong> &mdash; just increase resources ($25-35/mo)</li>
+<li><strong>Move to Fly.io</strong> &mdash; for global distribution ($40-70/mo)</li>
+<li><strong>Move to Hetzner VPS</strong> &mdash; for maximum control ($4-12/mo)</li></ul>
+<hr class='md-hr'>
+<h2 id="9-platform-specific-gotchas" class="md-h2 section-header">§9 &mdash; Platform-Specific Gotchas</h2>
+<h3 id="neon-postgresql" class="md-h3 subsection-header">Neon PostgreSQL</h3>
+<ul class='md-list'><li>Use <code class="inline-code">pool_pre_ping=True</code> in SQLAlchemy engine config (handles connection drops on scale-to-zero)</li>
+<li>Reduce pool size to 3-5 connections (free tier limit)</li>
+<li>The <code class="inline-code">psycopg2</code> driver works fine; no special serverless driver needed for this workload</li>
+<li>Neon branches give you free staging environments &mdash; branch before schema changes</li></ul>
+<h3 id="streamlit-community-cloud" class="md-h3 subsection-header">Streamlit Community Cloud</h3>
+<ul class='md-list'><li>App must be in a GitHub repo (private requires Pro account; use password gate for access control)</li>
+<li>No file system persistence between restarts &mdash; this is fine since everything is in PostgreSQL</li>
+<li>Secrets are configured via the web UI (Settings → Secrets), stored as TOML format</li>
+<li>Maximum ~1 GB RAM &mdash; sufficient for dashboard but not for pipeline execution</li></ul>
+<h3 id="railway" class="md-h3 subsection-header">Railway</h3>
+<ul class='md-list'><li>Hobby plan requires credit card even with $5 free credit</li>
+<li>Each cron service is a separate container &mdash; environment variables must be duplicated or linked</li>
+<li>PostgreSQL plugin provisions a shared instance &mdash; not suitable for production SLA, but fine for testing</li>
+<li>Monitor compute usage: 3 cron jobs × 10 min × 3x/day = ~90 minutes/day of compute</li></ul>
+<h3 id="github-actions-current-retained-in-phase-1" class="md-h3 subsection-header">GitHub Actions (current, retained in Phase 1)</h3>
+<ul class='md-list'><li>Cron schedules can be delayed 15-30 minutes during peak GitHub load (mornings EST)</li>
+<li>Actions on free plan get 2,000 minutes/month; your 3 daily pipelines use ~900 minutes/month (plenty of headroom)</li>
+<li>Python dependency caching (<code class="inline-code">setup-python</code> with <code class="inline-code">cache: pip</code>) reduces install time from ~90 sec to ~10 sec</li></ul>
+<hr class='md-hr'>
+<h2 id="10-security-considerations" class="md-h2 section-header">§10 &mdash; Security Considerations</h2>
+<h3 id="secrets-management-across-platforms" class="md-h3 subsection-header">Secrets management across platforms</h3>
+<div class='table-wrapper'><table><thead><tr><th>Secret</th><th>Current Location</th><th>Phase 1 Location</th><th>Phase 2 Location</th></tr></thead><tbody><tr><td><code class="inline-code">DATABASE_URL</code></td><td>N/A (local SQLite)</td><td>GitHub Secrets + Streamlit Secrets</td><td>Railway env vars</td></tr><tr><td><code class="inline-code">GMAIL_APP_PASSWORD</code></td><td><code class="inline-code">.env</code> file</td><td>GitHub Secrets</td><td>Railway env vars</td></tr><tr><td><code class="inline-code">DASHBOARD_PASSWORD</code></td><td><code class="inline-code">.env</code> file</td><td>Streamlit Secrets</td><td>Railway env vars</td></tr><tr><td><code class="inline-code">THE_ODDS_API_KEY</code></td><td><code class="inline-code">.env</code> file</td><td>GitHub Secrets</td><td>Railway env vars</td></tr><tr><td><code class="inline-code">API_FOOTBALL_KEY</code></td><td><code class="inline-code">.env</code> file</td><td>GitHub Secrets</td><td>Railway env vars</td></tr></tbody></table></div>
+<h3 id="key-security-principles-for-cloud-deployment" class="md-h3 subsection-header">Key security principles for cloud deployment</h3>
+<ul class='md-list'><li>Never commit <code class="inline-code">.env</code> or secrets to git (already enforced via .gitignore)</li>
+<li>Use HTTPS for all dashboard access (Streamlit Cloud provides this; Railway provides this; Neon connections use TLS by default)</li>
+<li>Rotate database credentials quarterly</li>
+<li>Set Neon IP allowlist if using static GitHub Actions runners</li>
+<li>Keep the password gate on the dashboard even when publicly accessible</li>
+<li>Consider Cloudflare Access (free for up to 50 users) as a zero-trust gateway in front of the dashboard</li></ul>
+<hr class='md-hr'>
+<h2 id="11-decision-framework" class="md-h2 section-header">§11 &mdash; Decision Framework</h2>
+<h3 id="when-to-upgrade-from-phase-1-to-phase-2" class="md-h3 subsection-header">When to upgrade from Phase 1 to Phase 2</h3>
+<p class="md-p">Upgrade to Railway when ANY of these become true:</p>
+<div class="code-block"><pre><code>IF dashboard_sleep_disrupts_users
+  OR github_actions_delays_affect_morning_emails
+  OR you_want_single_vendor_simplicity
+  OR you_need_24/7_always_on_dashboard
+THEN upgrade_to_railway ($12-18/mo)</code></pre></div>
+<h3 id="when-to-upgrade-from-phase-2-to-phase-3" class="md-h3 subsection-header">When to upgrade from Phase 2 to Phase 3</h3>
+<p class="md-p">Upgrade to Fly.io or scale Railway when:</p>
+<div class="code-block"><pre><code>IF users_span_multiple_continents
+  OR you_need_99.9%_uptime
+  OR you_need_horizontal_autoscaling
+  OR you_hit_railway_resource_limits
+THEN upgrade_to_flyio_or_scale_railway ($40-70/mo)</code></pre></div>
+<h3 id="platforms-to-avoid" class="md-h3 subsection-header">Platforms to avoid</h3>
+<div class='table-wrapper'><table><thead><tr><th>Platform</th><th>Reason</th></tr></thead><tbody><tr><td><strong>Oracle Cloud Always Free</strong></td><td>Extremely difficult to provision ARM instances, Oracle-proprietary tooling (DX: 1/10), auto-stop after 7 days idle, extreme lock-in</td></tr><tr><td><strong>Render (free tier)</strong></td><td>90-day PostgreSQL expiry is a showstopper, 15-min spin-down kills Streamlit usability</td></tr><tr><td><strong>AWS/GCP/Azure (native)</strong></td><td>Massive over-engineering for this scale ($25-135/mo), steep learning curves, high lock-in</td></tr><tr><td><strong>Heroku</strong></td><td>No free tier since Nov 2022, minimum $12/mo for basic functionality</td></tr></tbody></table></div>
+<hr class='md-hr'>
+<h2 id="12-final-recommendation" class="md-h2 section-header">§12 &mdash; Final Recommendation</h2>
+<h3 id="start-with-architecture-a-hybrid-free-tier" class="md-h3 subsection-header">Start with Architecture A (Hybrid Free Tier)</h3>
+<p class="md-p">The migration effort is approximately 4 hours:</p>
+<ol class='md-list'><li>Add <code class="inline-code">psycopg2-binary</code> to requirements</li>
+<li>Fix 25 <code class="inline-code">datetime('now')</code> server defaults in models.py</li>
+<li>Add <code class="inline-code">DATABASE_URL</code> env var support to db.py</li>
+<li>Provision Neon free PostgreSQL</li>
+<li>Migrate 9.1 MB of data</li>
+<li>Deploy dashboard to Streamlit Community Cloud</li>
+<li>Simplify GitHub Actions workflows</li>
+<li>Remove <code class="inline-code">data/betvector.db</code> from git tracking</li></ol>
+<p class="md-p">Then, when testing with multiple users reveals the limitations of the free tier, upgrade to Railway (~$10-25/mo). The transition from A to B requires zero code changes &mdash; just moving the Streamlit process from Community Cloud to Railway and pointing the same <code class="inline-code">DATABASE_URL</code> at Railway's managed PostgreSQL (or keep Neon).</p>
+<p class="md-p"><strong>The single most impactful change is SQLite → PostgreSQL.</strong> It eliminates binary merge conflicts, enables true multi-user concurrent access, removes 540+ lines of SQLite migration hacks from GitHub Actions, and unlocks every cloud hosting option.</p>
+<hr class='md-hr'>
+<h2 id="appendix-a-docker-configuration" class="md-h2 section-header">Appendix A &mdash; Docker Configuration</h2>
+<div class="code-block"><span class="code-lang">DOCKERFILE</span><pre><code>FROM python:3.11-slim
+
+# Only system dependency needed for xgboost + lightgbm
+RUN apt-get update &amp;&amp; \
+    apt-get install -y --no-install-recommends libgomp1 &amp;&amp; \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install Python dependencies first (layer caching)
+COPY requirements.txt pyproject.toml ./
+RUN pip install --no-cache-dir -r requirements.txt &amp;&amp; pip install -e .
+
+# Copy application code
+COPY . .
+
+# Streamlit configuration
+ENV MPLBACKEND=Agg
+EXPOSE 8501
+
+CMD [&quot;streamlit&quot;, &quot;run&quot;, &quot;src/delivery/dashboard.py&quot;, \
+     &quot;--server.port=8501&quot;, &quot;--server.address=0.0.0.0&quot;, \
+     &quot;--server.headless=true&quot;]</code></pre></div>
+<h2 id="appendix-b-neon-connection-configuration" class="md-h2 section-header">Appendix B &mdash; Neon Connection Configuration</h2>
+<div class="code-block"><span class="code-lang">PYTHON</span><pre><code><span class="code-comment"># src/database/db.py — PostgreSQL-compatible engine creation</span>
+<span class="code-keyword">from</span> sqlalchemy <span class="code-keyword">import</span> create_engine
+
+engine = create_engine(
+    os.environ[&quot;DATABASE_URL&quot;],
+    pool_pre_ping=<span class="code-keyword">True</span>,      # Handle serverless connection drops
+    pool_size=3,              # Conservative <span class="code-keyword">for</span> Neon free tier
+    max_overflow=2,           # Allow brief burst connections
+    pool_recycle=300,         # Recycle connections every 5 min
+)</code></pre></div>
+<h2 id="appendix-c-simplified-github-actions-workflow-post-migration" class="md-h2 section-header">Appendix C &mdash; Simplified GitHub Actions Workflow (Post-Migration)</h2>
+<div class="code-block"><span class="code-lang">YAML</span><pre><code>name: Morning Pipeline
+on:
+  schedule:
+    - cron: &quot;0 6 * * *&quot;
+  workflow_dispatch:
+
+concurrency:
+  group: betvector-morning
+  cancel-in-progress: false
+
+jobs:
+  morning:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+      FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
+      API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+      FOOTBALL_DATA_ORG_KEY: ${{ secrets.FOOTBALL_DATA_ORG_KEY }}
+      THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: &quot;3.11&quot;
+          cache: &quot;pip&quot;
+      - name: Install dependencies
+        run: pip install -r requirements.txt &amp;&amp; pip install -e .
+      - name: Run morning pipeline
+        run: python run_pipeline.py morning</code></pre></div>
+<h2 id="appendix-d-railway-configuration" class="md-h2 section-header">Appendix D &mdash; Railway Configuration</h2>
+<div class="code-block"><span class="code-lang">TOML</span><pre><code># railway.toml
+[build]
+builder = &quot;DOCKERFILE&quot;
+dockerfilePath = &quot;Dockerfile&quot;
+
+[deploy]
+startCommand = &quot;streamlit run src/delivery/dashboard.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true&quot;
+healthcheckPath = &quot;/&quot;
+healthcheckTimeout = 30
+restartPolicyType = &quot;ON_FAILURE&quot;
+restartPolicyMaxRetries = 3</code></pre></div>
+<h2 id="appendix-e-verification-checklist" class="md-h2 section-header">Appendix E &mdash; Verification Checklist</h2>
+<p class="md-p">Before making a final platform decision, verify these items directly on each platform's pricing page (free tier policies change frequently):</p>
+<ul class='md-list'><li><span class="checkbox">☐</span> Neon free tier: Confirm 512 MB storage and 191.9 compute-hours/mo at neon.tech/pricing</li>
+<li><span class="checkbox">☐</span> Supabase free tier: Confirm 500 MB storage and pause behaviour at supabase.com/pricing</li>
+<li><span class="checkbox">☐</span> Streamlit Community Cloud: Confirm free tier for private apps at streamlit.io/cloud</li>
+<li><span class="checkbox">☐</span> Railway Hobby plan: Confirm $5/mo base and cron availability at railway.app/pricing</li>
+<li><span class="checkbox">☐</span> GitHub Actions: Confirm 2,000 min/mo free at github.com/pricing</li>
+<li><span class="checkbox">☐</span> Fly.io free allowance: Confirm 3 shared-CPU VMs at fly.io/docs/about/pricing</li></ul>
+    </main>
+  </div>
+
+  <button class="back-to-top" id="backToTop" title="Back to top">&uarr;</button>
+
+  <script>
+    // Hamburger toggle
+    const hamburger = document.getElementById('hamburger');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('overlay');
+
+    if (hamburger) {
+      hamburger.addEventListener('click', () => {
+        sidebar.classList.toggle('open');
+        overlay.classList.toggle('open');
+      });
+    }
+    if (overlay) {
+      overlay.addEventListener('click', () => {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('open');
+      });
+    }
+
+    // Close sidebar on link click (mobile)
+    document.querySelectorAll('.toc-item').forEach(link => {
+      link.addEventListener('click', () => {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('open');
+      });
+    });
+
+    // Back to top
+    const btt = document.getElementById('backToTop');
+    window.addEventListener('scroll', () => {
+      if (window.scrollY > 400) {
+        btt.classList.add('visible');
+      } else {
+        btt.classList.remove('visible');
+      }
+    });
+    btt.addEventListener('click', () => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    // Active TOC highlighting
+    const tocLinks = document.querySelectorAll('.toc-item');
+    const headings = [];
+    tocLinks.forEach(link => {
+      const id = link.getAttribute('href').substring(1);
+      const el = document.getElementById(id);
+      if (el) headings.push({ el, link });
+    });
+
+    function updateActiveToc() {
+      let current = null;
+      for (const h of headings) {
+        if (h.el.getBoundingClientRect().top <= 100) {
+          current = h;
+        }
+      }
+      tocLinks.forEach(l => l.classList.remove('active'));
+      if (current) current.link.classList.add('active');
+    }
+    window.addEventListener('scroll', updateActiveToc);
+    updateActiveToc();
+    </script>
+</body>
+</html>
