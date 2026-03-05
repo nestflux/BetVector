@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BetVector — Data Intelligence Overview</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #0D1117;
+    --surface:   #161B22;
+    --surface2:  #1C2333;
+    --border:    #30363D;
+    --border2:   #21262D;
+    --text:      #E6EDF3;
+    --muted:     #8B949E;
+    --green:     #3FB950;
+    --green-dim: rgba(63,185,80,0.12);
+    --green-glow:rgba(63,185,80,0.25);
+    --blue:      #58A6FF;
+    --blue-dim:  rgba(88,166,255,0.12);
+    --yellow:    #D29922;
+    --red:       #F85149;
+    --radius:    10px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { font-size: 15px; scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Subtle grid background ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background-image:
+      linear-gradient(rgba(63,185,80,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(63,185,80,0.03) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+
+  .wrap {
+    position: relative; z-index: 1;
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 0 32px 64px;
+  }
+
+  /* ══════════════════════════════
+     HEADER
+  ══════════════════════════════ */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 36px 0 40px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 48px;
+    opacity: 0; animation: fadeUp 0.6s ease 0.1s forwards;
+  }
+
+  .logo-text {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    color: var(--text);
+  }
+  .logo-text span { color: var(--green); }
+
+  .header-pill {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--green);
+    background: var(--green-dim);
+    border: 1px solid rgba(63,185,80,0.3);
+    padding: 5px 14px;
+    border-radius: 20px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  /* ══════════════════════════════
+     THESIS
+  ══════════════════════════════ */
+  .thesis {
+    margin-bottom: 52px;
+    opacity: 0; animation: fadeUp 0.6s ease 0.2s forwards;
+  }
+  .thesis h1 {
+    font-size: clamp(28px, 4vw, 42px);
+    font-weight: 800;
+    line-height: 1.15;
+    letter-spacing: -1px;
+    margin-bottom: 18px;
+    max-width: 720px;
+  }
+  .thesis h1 em {
+    font-style: normal;
+    color: var(--green);
+  }
+  .thesis p {
+    font-size: 16px;
+    line-height: 1.7;
+    color: var(--muted);
+    max-width: 640px;
+    font-weight: 400;
+  }
+
+  /* ══════════════════════════════
+     STATS BAR
+  ══════════════════════════════ */
+  .stats-bar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 2px;
+    background: var(--border2);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 56px;
+    opacity: 0; animation: fadeUp 0.6s ease 0.3s forwards;
+  }
+  .stat-cell {
+    background: var(--surface);
+    padding: 20px 24px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .stat-cell:first-child { border-radius: var(--radius) 0 0 var(--radius); }
+  .stat-cell:last-child  { border-radius: 0 var(--radius) var(--radius) 0; }
+  .stat-num {
+    font-family: 'Space Mono', monospace;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--green);
+    letter-spacing: -1px;
+  }
+  .stat-label {
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    font-weight: 600;
+  }
+
+  /* ══════════════════════════════
+     SECTION LABELS
+  ══════════════════════════════ */
+  .section-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--muted);
+    margin-bottom: 20px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ══════════════════════════════
+     PIPELINE DIAGRAM
+  ══════════════════════════════ */
+  .pipeline-wrap {
+    margin-bottom: 56px;
+    opacity: 0; animation: fadeUp 0.6s ease 0.4s forwards;
+  }
+
+  .pipeline {
+    display: grid;
+    grid-template-columns: 2fr 40px 1.4fr 40px 1.4fr 40px 1.4fr 40px 1.4fr;
+    align-items: stretch;
+    gap: 0;
+    min-height: 180px;
+  }
+
+  .pipe-node {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 16px;
+    display: flex; flex-direction: column; justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .pipe-node::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--color, var(--border));
+    opacity: 0.6;
+  }
+
+  .pipe-node.node-sources { --color: var(--blue); border-color: rgba(88,166,255,0.25); }
+  .pipe-node.node-db      { --color: var(--muted); text-align: center; }
+  .pipe-node.node-feat    { --color: var(--yellow); border-color: rgba(210,153,34,0.25); text-align: center; }
+  .pipe-node.node-model   { --color: var(--green); border-color: rgba(63,185,80,0.3); text-align: center; }
+  .pipe-node.node-output  { --color: var(--green); border-color: rgba(63,185,80,0.4); background: var(--green-dim); text-align: center; }
+
+  .pipe-arrow {
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .pipe-arrow svg { flex-shrink: 0; }
+
+  /* Animated dot along arrow */
+  .pipe-arrow::before {
+    content: '';
+    position: absolute;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: slideRight 2.4s ease-in-out infinite;
+    animation-delay: var(--d, 0s);
+  }
+
+  @keyframes slideRight {
+    0%   { left: -10%; opacity: 0; }
+    15%  { opacity: 1; }
+    85%  { opacity: 1; }
+    100% { left: 110%; opacity: 0; }
+  }
+
+  .pipe-arrow:nth-child(2) { --d: 0s; }
+  .pipe-arrow:nth-child(4) { --d: 0.6s; }
+  .pipe-arrow:nth-child(6) { --d: 1.2s; }
+  .pipe-arrow:nth-child(8) { --d: 1.8s; }
+
+  .pipe-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  .pipe-main {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--text);
+    line-height: 1.2;
+    margin-bottom: 6px;
+  }
+
+  .pipe-sub {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .source-chips {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .source-chip {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 11.5px;
+    color: var(--text);
+    font-weight: 500;
+  }
+  .source-chip .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--blue);
+    flex-shrink: 0;
+    box-shadow: 0 0 5px var(--blue);
+  }
+
+  /* ══════════════════════════════
+     SOURCES GRID
+  ══════════════════════════════ */
+  .sources-section {
+    margin-bottom: 56px;
+    opacity: 0; animation: fadeUp 0.6s ease 0.5s forwards;
+  }
+
+  .sources-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+
+  .source-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    display: grid;
+    grid-template-columns: 36px 1fr;
+    gap: 12px;
+    align-items: start;
+    transition: border-color 0.2s, background 0.2s;
+    cursor: default;
+  }
+  .source-card:hover {
+    border-color: var(--blue);
+    background: var(--surface2);
+  }
+
+  .source-icon {
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    background: var(--blue-dim);
+    border: 1px solid rgba(88,166,255,0.2);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .source-icon svg { width: 18px; height: 18px; stroke: var(--blue); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+  .source-icon.green-icon {
+    background: var(--green-dim);
+    border-color: rgba(63,185,80,0.2);
+  }
+  .source-icon.green-icon svg { stroke: var(--green); }
+
+  .source-card-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 3px;
+  }
+  .source-card-desc {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+    font-weight: 400;
+  }
+  .source-tag {
+    display: inline-block;
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    color: var(--green);
+    background: var(--green-dim);
+    border: 1px solid rgba(63,185,80,0.2);
+    padding: 1px 7px;
+    border-radius: 3px;
+    margin-top: 6px;
+    letter-spacing: 0.3px;
+  }
+
+  /* ══════════════════════════════
+     FEATURES + MODEL (split)
+  ══════════════════════════════ */
+  .intel-split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 56px;
+    opacity: 0; animation: fadeUp 0.6s ease 0.6s forwards;
+  }
+
+  .intel-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .intel-card::after {
+    content: '';
+    position: absolute; bottom: 0; left: 0; right: 0;
+    height: 60px;
+    background: linear-gradient(transparent, rgba(13,17,23,0.3));
+    pointer-events: none;
+  }
+
+  .intel-card-title {
+    font-size: 17px;
+    font-weight: 800;
+    margin-bottom: 6px;
+    color: var(--text);
+  }
+  .intel-card-sub {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 22px;
+    font-weight: 400;
+    line-height: 1.5;
+  }
+
+  /* Feature category pills */
+  .feat-cats {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .feat-cat {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 14px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+  }
+  .feat-cat-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .feat-cat-name::before {
+    content: '';
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--cat-color, var(--blue));
+    box-shadow: 0 0 6px var(--cat-color, var(--blue));
+    flex-shrink: 0;
+  }
+  .feat-count {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  /* Model section */
+  .model-desc {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.65;
+    font-weight: 400;
+    margin-bottom: 20px;
+  }
+
+  /* Mini 7×7 matrix */
+  .matrix-wrap {
+    margin-bottom: 16px;
+  }
+  .matrix-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+  }
+  .matrix-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+  }
+  .matrix-cell {
+    aspect-ratio: 1;
+    border-radius: 3px;
+    background: rgba(63,185,80, var(--alpha, 0.05));
+  }
+
+  /* Markets derived */
+  .markets-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .market-pill {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    letter-spacing: 0.3px;
+  }
+  .market-pill.active {
+    border-color: rgba(63,185,80,0.4);
+    color: var(--green);
+    background: var(--green-dim);
+  }
+
+  /* ══════════════════════════════
+     PERFORMANCE FOOTER
+  ══════════════════════════════ */
+  .perf-section {
+    opacity: 0; animation: fadeUp 0.6s ease 0.7s forwards;
+  }
+
+  .perf-bar {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px 32px;
+    display: grid;
+    grid-template-columns: 1fr 1px 1fr 1px 1fr 1px 1fr;
+    gap: 0;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .perf-bar::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--green), transparent);
+  }
+
+  .perf-divider {
+    height: 40px;
+    width: 1px;
+    background: var(--border);
+  }
+
+  .perf-item {
+    padding: 0 28px;
+    text-align: center;
+  }
+  .perf-item:first-child { padding-left: 0; text-align: left; }
+  .perf-item:last-child  { padding-right: 0; text-align: right; }
+
+  .perf-value {
+    font-family: 'Space Mono', monospace;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--green);
+    margin-bottom: 4px;
+    letter-spacing: -0.5px;
+  }
+  .perf-key {
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .perf-note {
+    font-size: 11px;
+    color: var(--border);
+    margin-top: 2px;
+  }
+
+  /* ══════════════════════════════
+     HOW VALUE IS FOUND
+  ══════════════════════════════ */
+  .edge-explainer {
+    display: grid;
+    grid-template-columns: 1fr 24px 1fr 24px 1fr;
+    gap: 0;
+    align-items: center;
+    margin-top: 20px;
+  }
+  .edge-box {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    text-align: center;
+  }
+  .edge-box-val {
+    font-family: 'Space Mono', monospace;
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 3px;
+  }
+  .edge-box-label {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+  }
+  .edge-op {
+    text-align: center;
+    font-family: 'Space Mono', monospace;
+    font-size: 18px;
+    color: var(--muted);
+    font-weight: 700;
+  }
+
+  /* ══════════════════════════════
+     ANIMATIONS
+  ══════════════════════════════ */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ══════════════════════════════
+     RESPONSIVE
+  ══════════════════════════════ */
+  @media (max-width: 800px) {
+    .pipeline { display: flex; flex-direction: column; gap: 8px; }
+    .pipe-arrow { display: none; }
+    .sources-grid { grid-template-columns: 1fr 1fr; }
+    .intel-split { grid-template-columns: 1fr; }
+    .stats-bar { grid-template-columns: 1fr 1fr; }
+    .perf-bar { grid-template-columns: 1fr 1fr; gap: 16px; }
+    .perf-divider { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ── HEADER ── -->
+  <header>
+    <div class="logo-text">Bet<span>Vector</span></div>
+    <div class="header-pill">Data Intelligence Overview</div>
+  </header>
+
+  <!-- ── THESIS ── -->
+  <div class="thesis">
+    <h1>Eight data streams.<br>One <em>profitable</em> edge.</h1>
+    <p>BetVector automatically collects match results, advanced performance statistics, live bookmaker odds, squad valuations, and weather conditions from eight independent sources — every day, before every match. A statistical model processes over 50 signals per game to find moments where bookmakers have mispriced a market.</p>
+  </div>
+
+  <!-- ── STATS BAR ── -->
+  <div class="stats-bar">
+    <div class="stat-cell">
+      <span class="stat-num">8</span>
+      <span class="stat-label">Data Sources</span>
+    </div>
+    <div class="stat-cell">
+      <span class="stat-num">50+</span>
+      <span class="stat-label">Features per Match</span>
+    </div>
+    <div class="stat-cell">
+      <span class="stat-num">2,280+</span>
+      <span class="stat-label">Matches in Database</span>
+    </div>
+    <div class="stat-cell">
+      <span class="stat-num">+2.78%</span>
+      <span class="stat-label">Backtest ROI</span>
+    </div>
+  </div>
+
+  <!-- ── PIPELINE ── -->
+  <div class="pipeline-wrap">
+    <div class="section-label">How Data Moves Through the System</div>
+    <div class="pipeline">
+
+      <!-- Sources node -->
+      <div class="pipe-node node-sources">
+        <div class="pipe-title">Step 1 — Collect</div>
+        <div class="pipe-main" style="margin-bottom:14px;">8 Live Sources</div>
+        <div class="source-chips">
+          <div class="source-chip"><span class="dot"></span>Match results & odds</div>
+          <div class="source-chip"><span class="dot"></span>xG & pressing stats</div>
+          <div class="source-chip"><span class="dot"></span>Live bookmaker prices</div>
+          <div class="source-chip"><span class="dot"></span>Elo team ratings</div>
+          <div class="source-chip"><span class="dot"></span>Squad market values</div>
+          <div class="source-chip"><span class="dot"></span>Kickoff weather</div>
+        </div>
+      </div>
+
+      <!-- Arrow 1 -->
+      <div class="pipe-arrow">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M3 8h10M9 4l4 4-4 4" stroke="#3FB950" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+
+      <!-- DB node -->
+      <div class="pipe-node node-db">
+        <div class="pipe-title">Step 2 — Store</div>
+        <div class="pipe-main">Structured<br>Database</div>
+        <div class="pipe-sub" style="margin-top:10px;">34,000+ odds records<br>4,360+ stat records<br>17,965 Elo snapshots</div>
+      </div>
+
+      <!-- Arrow 2 -->
+      <div class="pipe-arrow" style="--d:0.6s">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M3 8h10M9 4l4 4-4 4" stroke="#3FB950" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+
+      <!-- Features node -->
+      <div class="pipe-node node-feat">
+        <div class="pipe-title">Step 3 — Engineer</div>
+        <div class="pipe-main">50+ Features</div>
+        <div class="pipe-sub" style="margin-top:10px;">Form, xG, pressing,<br>H2H, Elo, odds,<br>weather, squad value</div>
+      </div>
+
+      <!-- Arrow 3 -->
+      <div class="pipe-arrow" style="--d:1.2s">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M3 8h10M9 4l4 4-4 4" stroke="#3FB950" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+
+      <!-- Model node -->
+      <div class="pipe-node node-model">
+        <div class="pipe-title">Step 4 — Predict</div>
+        <div class="pipe-main">Poisson<br>Model</div>
+        <div class="pipe-sub" style="margin-top:10px;">7×7 scoreline<br>probability matrix<br>→ all markets</div>
+      </div>
+
+      <!-- Arrow 4 -->
+      <div class="pipe-arrow" style="--d:1.8s">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M3 8h10M9 4l4 4-4 4" stroke="#3FB950" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+
+      <!-- Output node -->
+      <div class="pipe-node node-output">
+        <div class="pipe-title">Step 5 — Act</div>
+        <div class="pipe-main">Value<br>Bets</div>
+        <div class="pipe-sub" style="margin-top:10px;">Edge ≥ 5%<br>flagged across<br>50+ bookmakers</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SOURCES GRID ── -->
+  <div class="sources-section">
+    <div class="section-label">The 8 Data Sources</div>
+    <div class="sources-grid">
+
+      <div class="source-card">
+        <div class="source-icon">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3c0 0 4 4 4 9s-4 9-4 9M3 12h18M4.5 7.5h15M4.5 16.5h15"/></svg>
+        </div>
+        <div>
+          <div class="source-card-title">Football-Data.co.uk</div>
+          <div class="source-card-desc">Six seasons of EPL match results, half-time scores, referee names, and opening odds from Bet365, Pinnacle, and William Hill.</div>
+          <span class="source-tag">6 SEASONS · CSV</span>
+        </div>
+      </div>
+
+      <div class="source-card">
+        <div class="source-icon">
+          <svg viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        </div>
+        <div>
+          <div class="source-card-title">Football-Data.org API</div>
+          <div class="source-card-desc">Real-time result updates. Solves the 2–4 day lag on the CSV source — results are available minutes after the final whistle.</div>
+          <span class="source-tag">REAL-TIME · JSON</span>
+        </div>
+      </div>
+
+      <div class="source-card">
+        <div class="source-icon green-icon">
+          <svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 16l4-4 4 4 4-4"/></svg>
+        </div>
+        <div>
+          <div class="source-card-title">Understat</div>
+          <div class="source-card-desc">Advanced analytics: Expected Goals (xG), non-penalty xG, pressing intensity (PPDA), deep completions, set-piece vs open-play xG breakdown.</div>
+          <span class="source-tag">ADVANCED STATS · DAILY</span>
+        </div>
+      </div>
+
+      <div class="source-card">
+        <div class="source-icon">
+          <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        </div>
+        <div>
+          <div class="source-card-title">The Odds API</div>
+          <div class="source-card-desc">Live odds from 50+ bookmakers across UK, US, and European markets. Covers 1X2, Over/Under 1.5, 2.5, 3.5, and BTTS markets.</div>
+          <span class="source-tag">50+ BOOKMAKERS · LIVE</span>
+        </div>
+      </div>
+
+      <div class="source-card">
+        <div class="source-icon">
+          <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        </div>
+        <div>
+          <div class="source-card-title">API-Football</div>
+          <div class="source-card-desc">Full fixture list with kickoff times, real-time scores, injury and suspension reports, and team crest images.</div>
+          <span class="source-tag">FIXTURES · INJURIES</span>
+        </div>
+      </div>
+
+      <div class="source-card">
+        <div class="source-icon green-icon">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="6"/><path d="M8.56 2.75c4.37 6.03 6.02 9.42 8.03 17.72m2.54-15.38c-3.72 4.35-8.94 5.66-16.88 5.85m19.5 1.9c-3.5-.93-6.63-.82-8.94 0-2.58.92-5.01 2.86-7.44 6.32"/></svg>
+        </div>
+        <div>
+          <div class="source-card-title">ClubElo</div>
+          <div class="source-card-desc">Daily Elo ratings for every European club. Long-term team strength signal — especially valuable for newly promoted sides early in a season.</div>
+          <span class="source-tag">ELO RATINGS · DAILY</span>
+        </div>
+      </div>
+
+      <div class="source-card">
+        <div class="source-icon">
+          <svg viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        </div>
+        <div>
+          <div class="source-card-title">Transfermarkt</div>
+          <div class="source-card-desc">Squad market values in EUR for all EPL teams. Richer squads systematically outperform — value ratio vs opponent is a strong predictor.</div>
+          <span class="source-tag">SQUAD VALUES · WEEKLY</span>
+        </div>
+      </div>
+
+      <div class="source-card">
+        <div class="source-icon">
+          <svg viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z"/><path d="M11 13v4M9 15h4"/></svg>
+        </div>
+        <div>
+          <div class="source-card-title">Open-Meteo</div>
+          <div class="source-card-desc">Hourly weather at every EPL stadium at kickoff. Temperature, wind, precipitation, and humidity — heavy rain and wind measurably reduce goal counts.</div>
+          <span class="source-tag">WEATHER · PER MATCH</span>
+        </div>
+      </div>
+
+      <div class="source-card">
+        <div class="source-icon green-icon">
+          <svg viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+        </div>
+        <div>
+          <div class="source-card-title">Injury Flags</div>
+          <div class="source-card-desc">Owner-entered flags for key player absences. Each absence is scored 0–1 for impact; a flag ≥ 0.7 triggers a binary "key player out" signal in the model.</div>
+          <span class="source-tag">MANUAL · AS NEEDED</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── FEATURES + MODEL ── -->
+  <div class="intel-split">
+
+    <!-- Features -->
+    <div class="intel-card">
+      <div class="intel-card-title">The Intelligence Layer</div>
+      <div class="intel-card-sub">Raw data is transformed into 50+ features before the model ever sees it. Features fall into six categories, each adding a different dimension of signal.</div>
+      <div class="feat-cats">
+        <div class="feat-cat">
+          <div class="feat-cat-name" style="--cat-color:#58A6FF;">Form &amp; Goals</div>
+          <div class="feat-count">10 features · last 5 &amp; 10 games</div>
+        </div>
+        <div class="feat-cat">
+          <div class="feat-cat-name" style="--cat-color:#3FB950;">Advanced Stats (xG)</div>
+          <div class="feat-count">10 features · xG, NPxG, PPDA, deep</div>
+        </div>
+        <div class="feat-cat">
+          <div class="feat-cat-name" style="--cat-color:#D29922;">Head-to-Head History</div>
+          <div class="feat-count">5 features · last 5 meetings</div>
+        </div>
+        <div class="feat-cat">
+          <div class="feat-cat-name" style="--cat-color:#F85149;">Team Strength</div>
+          <div class="feat-count">4 features · Elo + squad value ratio</div>
+        </div>
+        <div class="feat-cat">
+          <div class="feat-cat-name" style="--cat-color:#3FB950;">Market Intelligence</div>
+          <div class="feat-count">4 features · Pinnacle odds + AH line</div>
+        </div>
+        <div class="feat-cat">
+          <div class="feat-cat-name" style="--cat-color:#8B949E;">Conditions &amp; Context</div>
+          <div class="feat-count">9 features · weather, rest, referee, injury</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Model -->
+    <div class="intel-card">
+      <div class="intel-card-title">The Prediction Model</div>
+      <div class="model-desc">A <strong style="color:var(--text)">Poisson regression model</strong> predicts how many goals each team is likely to score — separately for home and away — based on ~25 of the features above. From those two numbers, every possible scoreline (0–0 through 6–6) is assigned a probability, forming a 7×7 grid. Every betting market is simply a sum of cells in that grid.</div>
+
+      <div class="matrix-wrap">
+        <div class="matrix-label">7×7 Scoreline Probability Matrix (illustrative)</div>
+        <div class="matrix-grid" id="matrix"></div>
+      </div>
+
+      <div style="margin-bottom:14px;">
+        <div class="matrix-label">Markets derived from the matrix</div>
+        <div class="markets-row">
+          <span class="market-pill active">Home Win</span>
+          <span class="market-pill active">Draw</span>
+          <span class="market-pill active">Away Win</span>
+          <span class="market-pill active">Over 1.5</span>
+          <span class="market-pill active">Over 2.5</span>
+          <span class="market-pill active">Over 3.5</span>
+          <span class="market-pill active">Under 1.5</span>
+          <span class="market-pill active">Under 2.5</span>
+          <span class="market-pill active">BTTS Yes</span>
+          <span class="market-pill active">BTTS No</span>
+        </div>
+      </div>
+
+      <div class="matrix-label" style="margin-bottom:8px;">How a value bet is identified</div>
+      <div class="edge-explainer">
+        <div class="edge-box">
+          <div class="edge-box-val" style="color:var(--green)">62%</div>
+          <div class="edge-box-label">Model prob</div>
+        </div>
+        <div class="edge-op">−</div>
+        <div class="edge-box">
+          <div class="edge-box-val" style="color:var(--muted)">48%</div>
+          <div class="edge-box-label">Bookmaker impl.</div>
+        </div>
+        <div class="edge-op">=</div>
+        <div class="edge-box" style="border-color:rgba(63,185,80,0.4);background:var(--green-dim)">
+          <div class="edge-box-val" style="color:var(--green)">+14%</div>
+          <div class="edge-box-label">Edge → BET</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── PERFORMANCE ── -->
+  <div class="perf-section">
+    <div class="section-label">Verified Performance — EPL Backtest 2024-25</div>
+    <div class="perf-bar">
+      <div class="perf-item">
+        <div class="perf-value">+2.78%</div>
+        <div class="perf-key">Return on Investment</div>
+        <div class="perf-note">Breakeven = 0%</div>
+      </div>
+      <div class="perf-divider"></div>
+      <div class="perf-item">
+        <div class="perf-value">0.578</div>
+        <div class="perf-key">Brier Score</div>
+        <div class="perf-note">Lower = more accurate · Baseline 0.667</div>
+      </div>
+      <div class="perf-divider"></div>
+      <div class="perf-item">
+        <div class="perf-value">5</div>
+        <div class="perf-key">Training Seasons</div>
+        <div class="perf-note">2020-21 through 2024-25</div>
+      </div>
+      <div class="perf-divider"></div>
+      <div class="perf-item">
+        <div class="perf-value">3×</div>
+        <div class="perf-key">Daily Pipeline Runs</div>
+        <div class="perf-note">Morning · Midday · Evening</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /wrap -->
+
+<script>
+  // Build the heatmap matrix
+  (function() {
+    const grid = document.getElementById('matrix');
+    // Approximate Poisson distribution for Arsenal (λ_home=1.4) vs Brighton (λ_away=0.9)
+    function poisson(k, lambda) {
+      let e = Math.exp(-lambda), p = e;
+      for(let i = 0; i < k; i++) p *= lambda / (i + 1);
+      return p;
+    }
+    const lh = 1.38, la = 0.88;
+    let vals = [];
+    for(let h = 0; h < 7; h++) for(let a = 0; a < 7; a++) vals.push(poisson(h,lh)*poisson(a,la));
+    const max = Math.max(...vals);
+    vals.forEach(v => {
+      const cell = document.createElement('div');
+      cell.className = 'matrix-cell';
+      const alpha = 0.06 + (v/max) * 0.85;
+      cell.style.setProperty('--alpha', alpha.toFixed(2));
+      grid.appendChild(cell);
+    });
+  })();
+</script>
+</body>
+</html>
