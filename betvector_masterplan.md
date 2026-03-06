@@ -251,7 +251,7 @@ This is the most important flow — it's what happens every match day.
 - Player-level features (impact of missing key players on team xG)
 - Market-specific models (dedicated O/U and BTTS models)
 - Live odds monitoring (continuous odds checking, not just 2–3 times per day)
-- Migration from SQLite to Supabase PostgreSQL
+- Migration from SQLite to Neon PostgreSQL ✅ (completed E33, March 2026)
 - Telegram bot integration for real-time alerts
 - Feature evolution: automated testing of new feature combinations (requires 6+ months of data and a robust evaluation framework — speculative, not committed)
 
@@ -295,13 +295,23 @@ The system is designed as a set of independent, composable modules connected thr
 - `xgboost` 2.0+ — future model (post-launch, but install now)
 - `lightgbm` 4.0+ — future model (post-launch, but install now)
 
-### Database: SQLite → Supabase PostgreSQL
+### Database: SQLite → Neon PostgreSQL
 
 **MVP:** SQLite. Single file (`data/betvector.db`) in the project folder. Zero configuration. Perfect for single-user, single-process pipeline.
 **Why SQLite first:** No server to run, no account to create, no connection strings. The owner can inspect the database with DB Browser for SQLite. It's a file — it can be copied, backed up, committed to Git.
-**Migration trigger:** When either (a) the Streamlit Cloud dashboard needs to read the database while GitHub Actions is writing to it (concurrent access), or (b) the database exceeds 100 MB, migrate to Supabase PostgreSQL free tier (500 MB, hosted, concurrent access, backups).
-**Migration path:** SQLAlchemy is used from day one. Switching from SQLite to PostgreSQL requires only changing the connection string in `config/settings.yaml`. No code changes.
+**Migration trigger (actual, March 2026):** SQLite caused binary merge conflicts in git when GitHub Actions wrote to the DB and the owner pulled locally. This made multi-device use impractical and polluted the git history with binary diffs. Migrated to Neon PostgreSQL (E33) at this point — not Supabase as originally planned.
+**Migration path:** SQLAlchemy is used from day one. Switching from SQLite to PostgreSQL requires only changing the connection string — either via `DATABASE_URL` environment variable (highest priority) or `config/settings.yaml`. No code changes required.
+**Why Neon (not Supabase):** Neon's free tier offers 0.5 GB storage, serverless connection pooling, and automatic branching. Crucially it allows pooled connections compatible with Streamlit Cloud's ephemeral compute. The connection string format is standard PostgreSQL — no vendor lock-in.
 **Why SQLAlchemy:** Provides database-agnostic ORM. Write code once, run against SQLite or PostgreSQL without modification. Also provides migration support via Alembic if schema changes are needed later.
+
+**Schema Drift Warning (lesson from E33 migration, March 2026):**
+SQLite does not enforce schema migrations automatically. Columns added to ORM
+models after initial `create_all()` must be applied to existing SQLite databases
+manually via `ALTER TABLE ... ADD COLUMN`. If the live DB and a backup diverge
+from the ORM model, the migration script (`scripts/migrate_sqlite_to_postgres.py`)
+will fail with `no such column` errors. Use `scripts/fix_sqlite_schema.py` to
+patch a stale SQLite backup before running migration. All added columns are
+nullable so the pipeline backfills them on the next run.
 
 ### Authentication: Simple Token
 

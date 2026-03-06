@@ -43,9 +43,21 @@ E30-03: Logo integration:
 Master Plan refs: MP §8 Design System, MP §3 Flow 4
 """
 
+import sys
 import base64
 import os
 from pathlib import Path
+
+# ---------------------------------------------------------------------------
+# Streamlit Cloud sys.path fix
+# On Streamlit Cloud the repo root (/mount/src/betvector/) is NOT added to
+# sys.path automatically, so `from src.config import ...` fails with
+# ModuleNotFoundError.  Insert it explicitly before any src.* imports.
+# This is a no-op when running locally (the editable install handles it).
+# ---------------------------------------------------------------------------
+_repo_root = Path(__file__).resolve().parents[2]
+if str(_repo_root) not in sys.path:
+    sys.path.insert(0, str(_repo_root))
 
 from dotenv import load_dotenv
 import streamlit as st

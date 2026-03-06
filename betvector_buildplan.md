@@ -4172,8 +4172,9 @@ One-time script to export all data from local SQLite (~9 MB, 23 tables) and impo
 
 **Changes:**
 - New: `scripts/migrate_sqlite_to_postgres.py` — reads from SQLite (config), writes to PostgreSQL (`DATABASE_URL`). Migrates 23 tables in FK order. Batch inserts (500 rows). Resets PG sequences. Prints validation report.
+- New: `scripts/fix_sqlite_schema.py` — pre-migration patch script (see Schema Drift note below).
 
-**Files:** `scripts/migrate_sqlite_to_postgres.py` (new)
+**Files:** `scripts/migrate_sqlite_to_postgres.py` (new), `scripts/fix_sqlite_schema.py` (new)
 
 **Acceptance Criteria:**
 - [ ] All 23 tables migrated in correct FK-dependency order
@@ -4183,6 +4184,35 @@ One-time script to export all data from local SQLite (~9 MB, 23 tables) and impo
 - [ ] Completes in < 5 minutes for current ~9 MB database
 
 **BLOCKER:** Owner must provision Neon PostgreSQL at neon.tech.
+
+**Schema Drift — Known Issue & Fix (March 2026)**
+
+The SQLite backup (`data/backups/betvector_2026-03-01_024926.db`) was created
+before E14–E22 applied incremental `ALTER TABLE` migrations to the live DB.
+The ORM models (current codebase) include all columns added across those epics,
+but the backup's physical schema is missing them, causing the migration script
+to fail with `sqlite3.OperationalError: no such column` on several tables,
+which then cascades to FK violations on `odds`, `predictions`, `value_bets`,
+and `bet_log` (because `matches` could not be read).
+
+**Missing items in the backup vs current ORM:**
+- `teams.api_football_name` (added E14), `teams.logo_url` (added E28)
+- `matches.referee` (added E21)
+- `match_stats`: `npxg`, `npxga`, `ppda_coeff`, `ppda_allowed_coeff`, `deep`, `deep_allowed`, `set_piece_xg`, `open_play_xg` (added E16/E22)
+- `features`: 40+ columns for NPxG, PPDA, deep, venue splits, Elo, referee stats, congestion, Pinnacle market features, weather, injury flags (added E16–E22)
+- Missing tables: `club_elo`, `team_market_values`, `team_injuries`, `injury_flags`, `weather`
+
+**Fix — run before migration:**
+```bash
+python scripts/fix_sqlite_schema.py
+DATABASE_URL="postgresql://..." python scripts/migrate_sqlite_to_postgres.py --force
+```
+
+`fix_sqlite_schema.py` adds all missing columns (NULL defaults) and creates
+missing empty tables directly against the SQLite backup via raw sqlite3
+`ALTER TABLE ... ADD COLUMN` and `CREATE TABLE IF NOT EXISTS`. All added
+columns are nullable — the pipeline will backfill real values on next run.
+The `--force` flag on the migration script truncates Neon and re-runs cleanly.
 
 ---
 
