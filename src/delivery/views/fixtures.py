@@ -723,6 +723,11 @@ def _render_market_badges(
     if it meets the threshold (value), blue ring if below (best guess).
     Threshold is now a runtime parameter driven by the user's slider.
 
+    E32-04: Replaced native ``title`` tooltips with CSS-styled dark surface
+    cards.  Hover reveals model probability, edge (colour-coded), confidence,
+    and Model's Pick indicator.  Uses ``.bv-badge-wrap`` / ``.bv-tooltip``
+    CSS classes injected at page level.
+
     Parameters
     ----------
     market_edges : dict
@@ -741,7 +746,7 @@ def _render_market_badges(
     Returns
     -------
     str
-        HTML string of badge spans.
+        HTML string of badge spans wrapped in tooltip containers.
     """
     _vb_info = market_vb_info or {}
     _probs = market_probs or {}
@@ -757,35 +762,68 @@ def _render_market_badges(
         edge = market_edges.get(key)
         bg = _edge_colour(edge, threshold=threshold)
 
-        # --- Tooltip text (enriched with model prob + confidence) ---
+        # --- Build CSS tooltip content (E32-04) ---
+        # Each line is a formatted HTML fragment shown inside the styled
+        # tooltip card on hover.  Replaces the old plain-text title attr.
+        tooltip_lines: list[str] = []
         if edge is not None:
             edge_pct = edge * 100
-            parts = [f"{label}: {edge_pct:+.1f}% edge"]
 
-            # Add model probability from ValueBet or Prediction
+            # Model probability — sourced from ValueBet first, then Prediction
             vb_data = _vb_info.get(key)
             prob = _probs.get(key)
+            prob_val: float | None = None
             if vb_data and vb_data.get("model_prob") is not None:
-                parts.append(f"Model: {vb_data['model_prob'] * 100:.0f}%")
+                prob_val = vb_data["model_prob"]
             elif prob is not None:
-                parts.append(f"Model: {prob * 100:.0f}%")
+                prob_val = prob
 
-            # Add confidence level (only for value bets with confidence data)
+            if prob_val is not None:
+                tooltip_lines.append(
+                    f'<span style="color: #8B949E;">Model:</span> '
+                    f'<span style="color: #E6EDF3; font-weight: 700;">'
+                    f'{prob_val * 100:.0f}%</span>'
+                )
+
+            # Edge — colour-coded green (positive) or red (negative)
+            edge_colour = COLOURS["green"] if edge_pct > 0 else COLOURS["red"]
+            tooltip_lines.append(
+                f'<span style="color: #8B949E;">Edge:</span> '
+                f'<span style="color: {edge_colour}; font-weight: 700;">'
+                f'{edge_pct:+.1f}%</span>'
+            )
+
+            # Confidence level (only for value bets with confidence data)
             if vb_data and vb_data.get("confidence"):
-                parts.append(f"Confidence: {vb_data['confidence'].capitalize()}")
+                conf = vb_data["confidence"].capitalize()
+                conf_colour = (
+                    COLOURS["green"] if conf == "High"
+                    else COLOURS["yellow"] if conf == "Medium"
+                    else "#8B949E"
+                )
+                tooltip_lines.append(
+                    f'<span style="color: #8B949E;">Confidence:</span> '
+                    f'<span style="color: {conf_colour}; font-weight: 600;">'
+                    f'{conf}</span>'
+                )
 
-            # Mark the best pick
+            # Model's Pick marker for the best badge
             if key == best_key:
-                parts.append("\u2605 Model\u2019s Pick")
-
-            title = html_escape(" | ".join(parts))
+                tooltip_lines.append(
+                    f'<span style="color: {COLOURS["green"]};">'
+                    f'\u2605 Model\u2019s Pick</span>'
+                )
         else:
-            title = html_escape(f"{label}: no data")
+            tooltip_lines.append(
+                '<span style="color: #8B949E;">No data</span>'
+            )
+
+        tooltip_html = "<br>".join(tooltip_lines)
 
         # --- Ring effect for the model's preferred bet (E31-01) ---
         # CSS box-shadow creates a ring without changing element size.
         # Two-tier system approved via owner mockup (Option C):
-        #   Green DOUBLE ring + glow = genuine value bet (edge ≥ threshold)
+        #   Green DOUBLE ring + glow = genuine value bet (edge >= threshold)
         #   Blue ring = model's best guess (below threshold)
         ring_style = ""
         if key == best_key and best_edge is not None:
@@ -811,15 +849,50 @@ def _render_market_badges(
         # "★ H" is immediately recognisable vs plain "H" even at small sizes.
         display_label = f"\u2605 {label}" if key == best_key else label
 
+        # E32-04: Wrap each badge in .bv-badge-wrap with a .bv-tooltip child.
+        # The CSS classes are injected at page level (see _TOOLTIP_CSS below).
         badges.append(
-            f'<span title="{title}" style="'
+            f'<span class="bv-badge-wrap">'
+            f'<span class="bv-tooltip">{tooltip_html}</span>'
+            f'<span style="'
             f"display: inline-block; padding: 2px 6px; margin: 0 2px; "
             f"border-radius: 4px; font-family: 'JetBrains Mono', monospace; "
             f"font-size: 10px; font-weight: 600; color: #fff; "
             f"background-color: {bg}; cursor: help; {ring_style}"
             f'">{display_label}</span>'
+            f'</span>'
         )
     return "".join(badges)
+
+
+# E32-04: CSS for styled tooltips on market badges.  Injected once at page
+# level via st.markdown().  Uses a nested .bv-tooltip span inside each
+# .bv-badge-wrap container — hover reveals the tooltip above the badge
+# with a dark surface card and small arrow pointer.
+_TOOLTIP_CSS = (
+    '<style>'
+    '.bv-badge-wrap { position: relative; display: inline-block; cursor: help; }'
+    '.bv-badge-wrap .bv-tooltip {'
+    '  visibility: hidden; opacity: 0;'
+    '  position: absolute; bottom: calc(100% + 6px); left: 50%;'
+    '  transform: translateX(-50%);'
+    '  background-color: #161B22; border: 1px solid #30363D;'
+    '  border-radius: 6px; padding: 6px 10px;'
+    '  font-family: "JetBrains Mono", monospace; font-size: 11px;'
+    '  color: #E6EDF3; white-space: normal; min-width: 120px; max-width: 200px;'
+    '  z-index: 1000; pointer-events: none;'
+    '  transition: opacity 0.15s ease-in-out, visibility 0.15s ease-in-out;'
+    '  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);'
+    '}'
+    '.bv-badge-wrap .bv-tooltip::after {'
+    '  content: ""; position: absolute; top: 100%; left: 50%;'
+    '  transform: translateX(-50%);'
+    '  border-width: 4px; border-style: solid;'
+    '  border-color: #30363D transparent transparent transparent;'
+    '}'
+    '.bv-badge-wrap:hover .bv-tooltip { visibility: visible; opacity: 1; }'
+    '</style>'
+)
 
 
 # ============================================================================
@@ -836,6 +909,8 @@ st.markdown(
     "</p>",
     unsafe_allow_html=True,
 )
+# E32-04: Inject CSS for styled tooltips on market badges.
+st.markdown(_TOOLTIP_CSS, unsafe_allow_html=True)
 
 # ── E30-02: View mode toggle ─────────────────────────────────────────────
 # "Upcoming" (default) shows scheduled matches with Top Picks and pipeline health.

@@ -37,8 +37,17 @@ This document breaks the BetVector masterplan into sequenced epics and issues th
 | E21 | External Ratings & Context | 3 | ClubElo scraper + Elo features, referee features, fixture congestion flag |
 | E22 | Advanced Features | 2 | Set-piece xG breakdown, injury impact flags (manual input) |
 | E23 | Historical Data Backfill | 7 | Load 4 missing seasons, Understat xG for all, shot-level xG, ClubElo, recompute features, backtest, Odds API verification |
+| E24 | Dashboard Fixes & Fixtures Value Grid | 5 | Dashboard bug fixes, fixtures value grid, integration test |
+| E25 | XGBoost Ensemble Model | 4 | XGBoost ensemble (Poisson wins backtest, +2.78% ROI) |
+| E26 | Dashboard UX Overhaul | 4 | Picks dedup, deep dive nav, fixtures landing, integration test |
+| E27 | Deep Dive Enhancements | 4 | FanDuel default, O/U 1.5 markets, glossary completeness, integration test |
+| E28 | Team Badges | 4 | Logo fetch, badge helper, page rollout, integration test |
+| E29 | Dashboard UX Polish | 4 | Model top pick, badge ring, perf/bankroll badges, bankroll reset |
+| E30 | Fixtures Enhancements & Logo | 3 | Threshold/ring, historical view, logo integration |
+| E31 | Badge Ring Redesign & League Explorer | 4 | Blue/green rings, card borders, team badges in all tables |
+| E32 | Dashboard Clarity & Tooltips | 5 | MODEL badge, CSS tooltips, picks crash fix, glossary updates |
 
-**Total: 23 epics, 84 issues** (45 original + 20 post-launch + 12 odds/model improvement + 7 data backfill)
+**Total: 32 epics, 121 issues** (45 original + 20 post-launch + 12 odds/model + 7 backfill + 16 dashboard UX + 5 clarity + 16 badges/polish)
 
 ---
 
@@ -3998,3 +4007,89 @@ Extended E30-03 logo integration with three additional changes:
 3. **Login gate centring** — replaced `st.image(_LOGO_WORDMARK, width=280)` with a `st.columns([1,2,1])` layout: centred logo (via `render_page_logo`), centred subtitle, centred password field.
 
 **Files:** `src/delivery/dashboard.py`
+
+---
+
+## E32 — Dashboard Clarity, Tooltips & Glossary — DONE ✅
+
+**Completed: March 2026**
+
+Makes it unmistakable that all market probabilities shown in the dashboard come from the BetVector Poisson model (not from bookmakers). Adds CSS-styled tooltips on Fixtures badges, fixes a crash on Today's Picks, and fills glossary gaps.
+
+---
+
+### E32-01 — Fix Today's Picks Crash + MODEL Badge on Picks Cards — DONE ✅
+
+**Problem:** `get_suggested_stake()` can return 0.0 when bankroll is depleted or safety limits produce zero stake. This was passed to `st.number_input(min_value=0.01, value=0.0)`, causing a `StreamlitValueBelowMinError` crash.
+
+**Fix:** `value=max(suggested_stake, 0.01)` — clamps suggested stake to the minimum.
+
+**MODEL badge:** Added green "MODEL" pill badge inline after the "Model Prob" label on pick cards, making it clear these probabilities come from the BetVector model.
+
+**Files:** `src/delivery/views/picks.py`
+
+---
+
+### E32-02 — MODEL Badge on Deep Dive Headers — DONE ✅
+
+Added `MODEL_BADGE_HTML` constant and applied it to two section headers in the Match Deep Dive page:
+
+- **Scoreline Probability Matrix** → `Scoreline Probability Matrix [MODEL]`
+- **Market Probabilities** → `Market Probabilities [MODEL]`
+
+Not applied to Value Bets, H2H, Team Form, or Squad Value sections (those aren't model probability outputs). Badge uses green `#3FB950` background with `#0D1117` text, JetBrains Mono 9px, matching the picks card badge.
+
+**Files:** `src/delivery/views/match_detail.py`
+
+---
+
+### E32-03 — Glossary Updates — DONE ✅
+
+Added 5 missing glossary terms across 2 files:
+
+| File | Section | Term | Definition |
+|------|---------|------|------------|
+| `match_detail.py` | Market Probabilities | Model-Generated | All probabilities come from BetVector Poisson model, NOT bookmaker odds |
+| `match_detail.py` | Market Probabilities | Asian Handicap | Virtual goal advantage market, eliminates the draw |
+| `match_detail.py` | Value Betting | Overround (vig/margin) | Bookmaker's built-in profit margin (implied probs sum to >100%) |
+| `match_detail.py` | Value Betting | Expected Value (EV) | Average profit per bet over time: (model_prob × payout) − stake |
+| `model_health.py` | Prediction Accuracy | Walk-Forward Validation | Train up to date T, test on T+1, advance and repeat |
+
+**Files:** `src/delivery/views/match_detail.py`, `src/delivery/views/model_health.py`
+
+---
+
+### E32-04 — CSS Styled Tooltips on Fixtures Market Badges — DONE ✅
+
+Replaced invisible native browser `title=""` attributes on all 9 market badges with CSS-only styled tooltips.
+
+**Tooltip content per badge:**
+- Model probability (always shown)
+- Edge % (colour-coded green/red)
+- Confidence level (for value bets with confidence data)
+- "★ Model's Pick" indicator (for the best badge)
+
+**Tooltip styling:** Dark surface `#161B22`, border `#30363D`, JetBrains Mono 11px, border-radius 6px, z-index 1000, 0.15s fade transition, positioned above badge with CSS arrow via `::after` pseudo-element.
+
+**Technical:** `.bv-badge-wrap` container with `.bv-tooltip` child, CSS `:hover` toggles visibility. No JavaScript required. Works on mobile via first-tap activation.
+
+**Files:** `src/delivery/views/fixtures.py`
+
+---
+
+### E32-05 — Integration Test — DONE ✅
+
+Verified all changes across the live dashboard:
+
+| Check | Result |
+|-------|--------|
+| Picks page loads without crash | ✅ No `StreamlitValueBelowMinError` |
+| MODEL badges on picks cards | ✅ 17 badges found |
+| MODEL badges on Deep Dive headers | ✅ Applied to Scoreline Matrix + Market Probabilities |
+| Glossary entries (Deep Dive) | ✅ Model-Generated, Asian Handicap, Overround, EV present |
+| Glossary entry (Model Health) | ✅ Walk-Forward Validation present |
+| CSS tooltips on Fixtures badges | ✅ 99 tooltip wrappers + 99 tooltips rendered |
+| Tooltip content (Model% + Edge) | ✅ Confirmed in DOM |
+| CSS hover rules in stylesheet | ✅ `.bv-badge-wrap:hover .bv-tooltip` rule loaded |
+| Python syntax check (all 4 files) | ✅ Zero errors |
+| Server error log | ✅ Zero errors |

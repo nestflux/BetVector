@@ -1089,6 +1089,13 @@ with st.expander("Glossary — What do these stats mean?", expanded=False):
         '<span style="color: #D29922;">Fair</span> (0.20\u20130.25), '
         '<span style="color: #F85149;">Poor</span> (&gt;0.25).</span>'
         '</div>'
+        '<div class="gloss-row">'
+        '  <span class="gloss-term">Walk-Forward</span>'
+        '  <span class="gloss-def">A backtesting method where the model is trained on data up '
+        'to date T, then tested on the next matchday (T+1). The training window advances and '
+        'the process repeats. This mimics real-world usage and prevents the model from '
+        '"seeing the future". BetVector uses walk-forward validation for all backtest metrics.</span>'
+        '</div>'
         '</div>',
         unsafe_allow_html=True,
     )

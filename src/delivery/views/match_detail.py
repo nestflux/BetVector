@@ -78,6 +78,17 @@ COLOURS = {
     "blue": "#58A6FF",
 }
 
+# Inline green pill badge indicating model-generated data (not bookmaker data).
+# Design system: #3FB950 bg, #0D1117 text, JetBrains Mono 9px, border-radius 4px.
+# Used on section headers where probabilities are the model's own predictions,
+# helping users distinguish model output from bookmaker-supplied numbers.
+MODEL_BADGE_HTML = (
+    '<span style="display: inline-block; background-color: #3FB950; color: #0D1117; '
+    "font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 700; "
+    'padding: 1px 5px; border-radius: 4px; vertical-align: middle; margin-left: 8px; '
+    'line-height: 1.3;">MODEL</span>'
+)
+
 MARKET_LABELS = {
     "1X2": "Match Result",
     "OU25": "O/U 2.5",
@@ -729,7 +740,7 @@ else:
     # --- Section 2: Scoreline Matrix ---
     if data["scoreline_matrix"]:
         st.markdown(
-            '<div class="bv-section-header">Scoreline Probability Matrix</div>',
+            f'<div class="bv-section-header">Scoreline Probability Matrix{MODEL_BADGE_HTML}</div>',
             unsafe_allow_html=True,
         )
 
@@ -757,7 +768,7 @@ else:
     pred = data["prediction"]
     if pred:
         st.markdown(
-            '<div class="bv-section-header">Market Probabilities</div>',
+            f'<div class="bv-section-header">Market Probabilities{MODEL_BADGE_HTML}</div>',
             unsafe_allow_html=True,
         )
 
@@ -1411,6 +1422,14 @@ else:
             '<div class="gloss-section">'
             '<div class="gloss-title">Market Probabilities</div>'
             '<div class="gloss-row">'
+            '  <span class="gloss-term">Model-Generated</span>'
+            '  <span class="gloss-def">All probabilities in this section come from the '
+            'BetVector Poisson model, <strong style="color: #E6EDF3;">NOT</strong> from bookmaker odds. '
+            'The model predicts each scoreline independently and derives all market probabilities '
+            '(1X2, O/U, BTTS) from the 7\u00D77 scoreline matrix. '
+            'Compare these to bookmaker implied probabilities in the Value Bets section below.</span>'
+            '</div>'
+            '<div class="gloss-row">'
             '  <span class="gloss-term">1X2</span>'
             '  <span class="gloss-def">The three possible match outcomes: '
             'Home Win (1), Draw (X), Away Win (2). The most common betting market.</span>'
@@ -1429,6 +1448,14 @@ else:
             '  <span class="gloss-term">BTTS</span>'
             '  <span class="gloss-def">Both Teams to Score \u2014 will each team get at least one goal? '
             'Derived from the scoreline matrix by summing all cells where both scores &gt; 0.</span>'
+            '</div>'
+            '<div class="gloss-row">'
+            '  <span class="gloss-term">Asian Handicap</span>'
+            '  <span class="gloss-def">A market where one team receives a virtual goal advantage or deficit '
+            'to even the match. E.g. \u22121.5 means the team must win by 2+ goals. '
+            'Eliminates the draw outcome \u2014 your bet either wins or loses. '
+            'The model uses Asian Handicap lines from Pinnacle as a feature but does not yet '
+            'generate its own AH probabilities.</span>'
             '</div>'
             '</div>',
             unsafe_allow_html=True,
@@ -1477,6 +1504,22 @@ else:
             '  <span class="gloss-term">Other Bookmakers</span>'
             '  <span class="gloss-def">How many additional bookmakers also offer value for this '
             'selection. More bookmakers = more confidence the value is real.</span>'
+            '</div>'
+            '<div class="gloss-row">'
+            '  <span class="gloss-term">Overround</span>'
+            '  <span class="gloss-def">Also called "vig" or "margin" \u2014 the bookmaker\'s '
+            'built-in profit. If you add up the implied probabilities for all outcomes of a market, '
+            'they total more than 100%. The excess is the overround. '
+            'E.g. Home (45%) + Draw (28%) + Away (32%) = 105% \u2014 the overround is 5%. '
+            'Lower overround = fairer odds for the bettor.</span>'
+            '</div>'
+            '<div class="gloss-row">'
+            '  <span class="gloss-term">Expected Value (EV)</span>'
+            '  <span class="gloss-def">The average profit or loss per bet over many repetitions. '
+            'EV = (model probability \u00D7 potential payout) \u2212 stake. '
+            '<span style="color: #3FB950;">Positive EV (+EV)</span> means the bet is profitable '
+            'long-term. Every value bet the model flags has positive expected value according to '
+            'the model\'s probabilities.</span>'
             '</div>'
             '</div>',
             unsafe_allow_html=True,

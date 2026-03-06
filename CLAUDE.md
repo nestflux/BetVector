@@ -93,7 +93,8 @@ E27-01 → E27-02 → E27-03 → E27-04 →
 E28-01 → E28-02 → E28-03 → E28-04 →
 E29-01 → E29-02 → E29-03 → E29-04 →
 E30-01 → E30-02 → E30-03 →
-E31-01 → E31-02 → E31-03 → E31-04
+E31-01 → E31-02 → E31-03 → E31-04 →
+E32-01 → E32-02 → E32-03 → E32-04 → E32-05
 ```
 
 The sequence is the law. Auto-advance after gates pass. Only stop for
@@ -301,8 +302,8 @@ Wait for owner to respond with approval before making the change.
 
 ## Current Status
 
-Last completed: E31-04 (Integration Test)
-Currently working: (none — critical path complete through E31)
+Last completed: E32-05 (Integration Test — Dashboard Clarity & Tooltips)
+Currently working: (none — E32 complete)
 Next up: (none — awaiting new epics)
 
 E1-E13 complete: 45 original issues ✅
@@ -324,7 +325,8 @@ E28 complete: All 4 issues done ✅ (Team Badges — logo fetch, badge helper, p
 E29 complete: All 4 issues done ✅ (Dashboard UX Polish — model top pick, badge ring, perf/bankroll badges, bankroll reset)
 E30 complete: All 3 issues done ✅ (Fixtures Enhancements + Logo — threshold/ring, historical view, logo integration)
 E31 complete: All 4 issues done ✅ (Badge Ring Redesign + League Explorer Badges — blue/green rings, card borders, team badges in all tables)
-Total issues: 116 — ALL COMPLETE ✅
+E32 complete: All 5 issues done ✅ (Dashboard Clarity & Tooltips — MODEL badge, CSS tooltips, picks crash fix, glossary updates)
+Total issues: 121 — ALL COMPLETE ✅
 
 Post-critical-path (March 2026):
 - Logo transparency fix ✅ — all 4 logo PNGs de-haloed (flood-fill BFS from corners)

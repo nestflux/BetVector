@@ -403,7 +403,7 @@ def render_value_bet_card(vb: Dict, idx) -> None:
 <span style="font-family: 'Inter', sans-serif; font-size: 14px; color: #E6EDF3;">{selection_label}</span>
 </div>
 <div>
-<span style="font-size: 11px; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px;">Model Prob</span><br>
+<span style="font-size: 11px; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px;">Model Prob <span style="display:inline-block; background:#3FB950; color:#0D1117; font-family:'JetBrains Mono',monospace; font-size:9px; font-weight:700; padding:1px 5px; border-radius:4px; vertical-align:middle; margin-left:4px; line-height:1.3;">MODEL</span></span><br>
 <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #E6EDF3;">{vb["model_prob"]:.1%}</span>
 </div>
 <div>
@@ -457,7 +457,7 @@ def render_value_bet_card(vb: Dict, idx) -> None:
                 actual_stake = st.number_input(
                     "Actual stake ($)",
                     min_value=0.01,
-                    value=suggested_stake,
+                    value=max(suggested_stake, 0.01),
                     step=1.0,
                     format="%.2f",
                     key=f"stake_{idx}",
