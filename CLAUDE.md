@@ -303,9 +303,9 @@ Wait for owner to respond with approval before making the change.
 
 ## Current Status
 
-Last completed: E33-05 (Streamlit Community Cloud Deployment — code changes)
-Currently working: E33-05/06 BLOCKED — awaiting owner to provision Neon + Streamlit Cloud
-Next up: E33-06 (Integration Test — full cloud stack)
+Last completed: E33-06 (Integration Test — full cloud stack) ✅
+Currently working: CRITICAL PATH COMPLETE — all 122 issues done ✅
+Next up: Post-launch maintenance / new feature proposals
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
@@ -327,13 +327,15 @@ E29 complete: All 4 issues done ✅ (Dashboard UX Polish — model top pick, bad
 E30 complete: All 3 issues done ✅ (Fixtures Enhancements + Logo — threshold/ring, historical view, logo integration)
 E31 complete: All 4 issues done ✅ (Badge Ring Redesign + League Explorer Badges — blue/green rings, card borders, team badges in all tables)
 E32 complete: All 5 issues done ✅ (Dashboard Clarity & Tooltips — MODEL badge, CSS tooltips, picks crash fix, glossary updates)
-Total issues: 121 — ALL COMPLETE ✅
+E33 complete: All 6 issues done ✅ (Cloud Migration — Neon PostgreSQL + Streamlit Community Cloud, pipeline running)
+Total issues: 127 — ALL COMPLETE ✅
 
 Post-critical-path (March 2026):
 - Logo transparency fix ✅ — all 4 logo PNGs de-haloed (flood-fill BFS from corners)
 - Logo centering ✅ — wordmark centred at top of every authenticated page + login gate redesigned
 - Demo app ✅ — `demo_app.py` (port 8502) self-contained with mock data, no DB/pipeline needed
 - Demo GIF ✅ — `demo_walkthrough.gif` (36 frames, 40s, 0.4 MB) via `scripts/capture_demo_gif.py`
+- Cloud migration ✅ — SQLite → Neon PostgreSQL, Streamlit Community Cloud deployment live
 
 ---
 
