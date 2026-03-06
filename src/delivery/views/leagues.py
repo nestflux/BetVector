@@ -66,6 +66,23 @@ def _get_current_season() -> str:
     return "2025-26"
 
 
+def get_latest_season_with_data(league_id: int) -> Optional[str]:
+    """Return the most recent season that has finished matches in the DB.
+
+    Used as a fallback when the current config season has no data yet
+    (e.g. before the pipeline has run against a fresh Neon database).
+    Returns None if no finished matches exist at all.
+    """
+    with get_session() as session:
+        row = (
+            session.query(Match.season)
+            .filter(Match.league_id == league_id, Match.status == "finished")
+            .order_by(Match.season.desc())
+            .first()
+        )
+    return row[0] if row else None
+
+
 def get_active_leagues() -> List[Dict]:
     """Get active leagues from config.
 
@@ -618,13 +635,29 @@ else:
     if league_id is None:
         st.error(f"League '{selected_short}' not found in database. Run the pipeline first.")
     else:
+        # Determine which season to display.  Prefer the current config season
+        # ("2025-26") but fall back to the most recent season with actual data
+        # in the DB — this handles a fresh Neon instance before the pipeline
+        # has run and populated the current season.
+        current_season = _get_current_season()
+        display_season = current_season
+        standings_check = calculate_standings(league_id, current_season)
+        if standings_check.empty:
+            fallback = get_latest_season_with_data(league_id)
+            if fallback and fallback != current_season:
+                display_season = fallback
+                st.caption(
+                    f"ℹ️ No {current_season} data yet — showing {fallback}. "
+                    "Run the pipeline to load current season data."
+                )
+
         # --- Standings ---
         st.markdown(
             '<div class="bv-section-header">Standings</div>',
             unsafe_allow_html=True,
         )
 
-        standings = calculate_standings(league_id)
+        standings = standings_check if display_season == current_season else calculate_standings(league_id, display_season)
         if standings.empty:
             st.info("No match results available to calculate standings.")
         else:
@@ -641,7 +674,7 @@ else:
             unsafe_allow_html=True,
         )
 
-        form_df = calculate_team_form(league_id)
+        form_df = calculate_team_form(league_id, season=display_season)
         if form_df.empty:
             st.info("No match data available for form calculation.")
         else:
@@ -684,7 +717,7 @@ else:
             unsafe_allow_html=True,
         )
 
-        npxg_df = calculate_npxg_rankings(league_id)
+        npxg_df = calculate_npxg_rankings(league_id, season=display_season)
         if npxg_df.empty:
             st.info(
                 "NPxG data not yet available. Understat data may not be loaded "
@@ -713,7 +746,7 @@ else:
             unsafe_allow_html=True,
         )
 
-        results = get_recent_results(league_id)
+        results = get_recent_results(league_id, season=display_season)
         if not results:
             st.info("No completed matches found.")
         else:
