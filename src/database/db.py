@@ -6,9 +6,9 @@ schema initialisation.  Every other module that touches the database imports
 from here — never constructs its own engine or session.
 
 Architecture notes (MP §5):
-- SQLite for MVP, PostgreSQL later — only the connection string changes.
-- WAL mode enabled for better concurrent-read performance on SQLite.
-- Connection string read from ``config/settings.yaml``, never hardcoded.
+- Dual-database support: SQLite for local dev, PostgreSQL for cloud.
+- Connection resolved via: DATABASE_URL env var → Streamlit secrets → config file.
+- WAL mode enabled for SQLite only (PostgreSQL handles concurrency natively).
 - Every function that touches the database handles connection errors and
   retries once (CLAUDE.md Rule 6).
 
@@ -27,6 +27,7 @@ Usage::
 from __future__ import annotations
 
 import logging
+import os
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -66,18 +67,27 @@ _SessionFactory: sessionmaker | None = None
 # ============================================================================
 
 def _build_connection_url() -> str:
-    """Construct a SQLAlchemy connection URL from config or Streamlit secrets.
+    """Construct a SQLAlchemy connection URL.
 
-    Resolution order:
-      1. Streamlit Cloud secrets (``st.secrets["database"]["connection_string"]``)
-         — used when deployed to Streamlit Cloud with a Supabase PostgreSQL DB.
-      2. Config file (``config/settings.yaml`` → ``database.path``)
+    Resolution order (highest priority first):
+      1. ``DATABASE_URL`` environment variable — primary mechanism for cloud
+         deployment (GitHub Actions pipelines + Neon PostgreSQL).
+      2. Streamlit Cloud secrets (``st.secrets["database"]["connection_string"]``)
+         — used when deployed to Streamlit Community Cloud.
+      3. Config file (``config/settings.yaml`` → ``database.path``)
          — default for local development with SQLite.
 
     For SQLite this produces ``sqlite:///absolute/path/to/betvector.db``.
-    For PostgreSQL (Streamlit Cloud) it returns the connection string as-is.
+    For PostgreSQL it returns the connection string as-is (e.g.
+    ``postgresql://user:pass@host/dbname?sslmode=require``).
     """
-    # Check Streamlit Cloud secrets first (only available when running in
+    # Priority 1: DATABASE_URL env var (GitHub Actions, Docker, any cloud)
+    database_url = os.environ.get("DATABASE_URL")
+    if database_url:
+        logger.info("Using database connection from DATABASE_URL env var")
+        return database_url
+
+    # Priority 2: Streamlit Cloud secrets (only available when running in
     # Streamlit, not during pipeline CLI runs).
     # We only attempt to read st.secrets when a secrets.toml file actually
     # exists — accessing st.secrets without one triggers a visible
@@ -96,7 +106,7 @@ def _build_connection_url() -> str:
         # Not running in Streamlit context (CLI pipeline, tests, etc.)
         pass
 
-    # Fall back to config file (local SQLite)
+    # Priority 3: Fall back to config file (local SQLite)
     db_path = config.settings.database.path
     full_path = (PROJECT_ROOT / db_path).resolve()
     return f"sqlite:///{full_path}"
@@ -142,11 +152,18 @@ def get_engine(force_new: bool = False) -> Engine:
         return _engine
 
     url = _build_connection_url()
-    logger.info("Creating database engine: %s", url)
+    # Mask password in log output for PostgreSQL connection strings
+    _log_url = url
+    if "postgresql" in url and "@" in url:
+        # postgresql://user:PASSWORD@host/db → postgresql://user:***@host/db
+        _log_url = url.split("@")[0].rsplit(":", 1)[0] + ":***@" + url.split("@", 1)[1]
+    logger.info("Creating database engine: %s", _log_url)
 
-    # Ensure the parent directory exists so SQLite can create the file
-    db_file = Path(url.replace("sqlite:///", ""))
-    db_file.parent.mkdir(parents=True, exist_ok=True)
+    # Ensure the parent directory exists so SQLite can create the file.
+    # PostgreSQL doesn't use file paths — skip this for non-SQLite URLs.
+    if url.startswith("sqlite"):
+        db_file = Path(url.replace("sqlite:///", ""))
+        db_file.parent.mkdir(parents=True, exist_ok=True)
 
     try:
         engine = _create_engine_with_retry(url)
@@ -171,16 +188,23 @@ def _create_engine_with_retry(url: str, max_retries: int = 1) -> Engine:
     last_error: Exception | None = None
     for attempt in range(max_retries + 1):
         try:
-            engine = create_engine(
-                url,
-                echo=False,
-                # Pool settings — for SQLite we use a single-connection pool
-                # to avoid "database is locked" errors.  PostgreSQL migration
-                # would switch to QueuePool with higher pool_size.
-                pool_pre_ping=True,
-            )
+            # Pool settings differ by backend:
+            # - SQLite: single-connection pool to avoid "database is locked"
+            # - PostgreSQL: QueuePool sized for Neon serverless free tier
+            #   (pool_size=3 keeps within Neon's connection limits, pool_recycle
+            #   handles serverless scale-to-zero reconnects)
+            engine_kwargs: dict = {"echo": False, "pool_pre_ping": True}
+            if url.startswith("postgresql"):
+                engine_kwargs.update({
+                    "pool_size": 3,
+                    "max_overflow": 2,
+                    "pool_recycle": 300,
+                })
+
+            engine = create_engine(url, **engine_kwargs)
             # Register the WAL/FK pragma listener BEFORE the first connection
             # so every connection (including the verification below) gets WAL.
+            # Only applies to SQLite — PostgreSQL handles concurrency natively.
             if url.startswith("sqlite"):
                 event.listen(engine, "connect", _enable_sqlite_wal)
             # Verify the connection actually works

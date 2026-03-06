@@ -44,6 +44,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    func,
     text as sa_text,
 )
 from sqlalchemy.orm import relationship
@@ -90,10 +91,10 @@ class User(Base):
     notify_weekly = Column(Integer, nullable=False, server_default="1")
     is_active = Column(Integer, nullable=False, server_default="1")
     created_at = Column(
-        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+        String, nullable=False, server_default=func.now(),
     )
     updated_at = Column(
-        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+        String, nullable=False, server_default=func.now(),
     )
 
     __table_args__ = (
@@ -134,7 +135,7 @@ class League(Base):
     api_football_id = Column(Integer, nullable=True)      # e.g. 39
     is_active = Column(Integer, nullable=False, server_default="1")
     created_at = Column(
-        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+        String, nullable=False, server_default=func.now(),
     )
 
     # Relationships
@@ -253,10 +254,10 @@ class Match(Base):
         String, nullable=False, server_default="scheduled",
     )
     created_at = Column(
-        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+        String, nullable=False, server_default=func.now(),
     )
     updated_at = Column(
-        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+        String, nullable=False, server_default=func.now(),
     )
 
     # Relationships
@@ -351,7 +352,7 @@ class MatchStat(Base):
     red_cards = Column(Integer, nullable=True)
     source = Column(String, nullable=False, server_default="fbref")
     created_at = Column(
-        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+        String, nullable=False, server_default=func.now(),
     )
 
     # Relationships
@@ -402,7 +403,7 @@ class Odds(Base):
     implied_prob = Column(Float, nullable=False)
     is_opening = Column(Integer, nullable=False, server_default="0")
     captured_at = Column(
-        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+        String, nullable=False, server_default=func.now(),
     )
     source = Column(String, nullable=False, server_default="football_data")
 
@@ -466,7 +467,7 @@ class ClubElo(Base):
     rank = Column(Integer, nullable=True)  # Global rank (may not always be available)
     rating_date = Column(String, nullable=False)  # ISO date (YYYY-MM-DD)
     created_at = Column(
-        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+        String, nullable=False, server_default=func.now(),
     )
 
     # Relationships
@@ -681,7 +682,7 @@ class Feature(Base):
     key_player_out = Column(Integer, nullable=True)
 
     computed_at = Column(
-        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+        String, nullable=False, server_default=func.now(),
     )
 
     # Relationships
@@ -746,7 +747,7 @@ class Prediction(Base):
 
     is_ensemble = Column(Integer, nullable=False, server_default="0")
     created_at = Column(
-        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+        String, nullable=False, server_default=func.now(),
     )
 
     # Relationships
@@ -807,7 +808,7 @@ class ValueBet(Base):
     # Human-readable explanation of why this is a value bet
     explanation = Column(Text, nullable=True)
     detected_at = Column(
-        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+        String, nullable=False, server_default=func.now(),
     )
 
     # Relationships
@@ -901,10 +902,10 @@ class BetLog(Base):
     clv = Column(Float, nullable=True)
     resolved_at = Column(String, nullable=True)
     created_at = Column(
-        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+        String, nullable=False, server_default=func.now(),
     )
     updated_at = Column(
-        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+        String, nullable=False, server_default=func.now(),
     )
 
     # Relationships
@@ -968,7 +969,7 @@ class ModelPerformance(Base):
     win_rate_ou = Column(Float, nullable=True)
     win_rate_btts = Column(Float, nullable=True)
     computed_at = Column(
-        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+        String, nullable=False, server_default=func.now(),
     )
 
     __table_args__ = (
@@ -1004,7 +1005,7 @@ class PipelineRun(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     run_type = Column(String, nullable=False)
     started_at = Column(
-        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+        String, nullable=False, server_default=func.now(),
     )
     completed_at = Column(String, nullable=True)
     status = Column(
@@ -1064,7 +1065,7 @@ class CalibrationHistory(Base):
     is_active = Column(Integer, nullable=False, server_default="1")
     rolled_back = Column(Integer, nullable=False, server_default="0")
     created_at = Column(
-        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+        String, nullable=False, server_default=func.now(),
     )
 
     __table_args__ = (
@@ -1103,7 +1104,7 @@ class FeatureImportanceLog(Base):
     importance_gain = Column(Float, nullable=False)
     importance_rank = Column(Integer, nullable=False)      # 1 = most important
     created_at = Column(
-        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+        String, nullable=False, server_default=func.now(),
     )
 
     __table_args__ = (
@@ -1144,7 +1145,7 @@ class EnsembleWeightHistory(Base):
     previous_weight = Column(Float, nullable=True)
     reason = Column(String, nullable=False)
     created_at = Column(
-        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+        String, nullable=False, server_default=func.now(),
     )
 
     def __repr__(self) -> str:
@@ -1184,7 +1185,7 @@ class MarketPerformance(Base):
     roi_ci_upper = Column(Float, nullable=True)            # 95% CI upper bound
     assessment = Column(String, nullable=False)
     computed_at = Column(
-        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+        String, nullable=False, server_default=func.now(),
     )
 
     __table_args__ = (
@@ -1230,7 +1231,7 @@ class RetrainHistory(Base):
     training_samples = Column(Integer, nullable=False)
     was_rolled_back = Column(Integer, nullable=False, server_default="0")
     created_at = Column(
-        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+        String, nullable=False, server_default=func.now(),
     )
 
     __table_args__ = (
@@ -1284,7 +1285,7 @@ class Weather(Base):
     weather_category = Column(String, nullable=True)
     source = Column(String, nullable=False, server_default="open_meteo")
     created_at = Column(
-        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+        String, nullable=False, server_default=func.now(),
     )
 
     # Relationships
@@ -1343,7 +1344,7 @@ class TeamMarketValue(Base):
     evaluated_at = Column(String, nullable=False)
     source = Column(String, nullable=False, server_default="transfermarkt_datasets")
     created_at = Column(
-        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+        String, nullable=False, server_default=func.now(),
     )
 
     # Relationships
@@ -1404,7 +1405,7 @@ class TeamInjury(Base):
     expected_return = Column(String, nullable=True)
     source = Column(String, nullable=False, server_default="transfermarkt")
     created_at = Column(
-        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+        String, nullable=False, server_default=func.now(),
     )
 
     # Relationships
@@ -1479,10 +1480,10 @@ class InjuryFlag(Base):
     impact_rating = Column(Float, nullable=False)
 
     created_at = Column(
-        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+        String, nullable=False, server_default=func.now(),
     )
     updated_at = Column(
-        String, nullable=False, server_default=sa_text("(datetime('now'))"),
+        String, nullable=False, server_default=func.now(),
     )
 
     # Relationships

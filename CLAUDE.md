@@ -94,7 +94,8 @@ E28-01 → E28-02 → E28-03 → E28-04 →
 E29-01 → E29-02 → E29-03 → E29-04 →
 E30-01 → E30-02 → E30-03 →
 E31-01 → E31-02 → E31-03 → E31-04 →
-E32-01 → E32-02 → E32-03 → E32-04 → E32-05
+E32-01 → E32-02 → E32-03 → E32-04 → E32-05 →
+E33-01 → E33-02 → E33-03 → E33-04 → E33-05 → E33-06
 ```
 
 The sequence is the law. Auto-advance after gates pass. Only stop for
@@ -302,9 +303,9 @@ Wait for owner to respond with approval before making the change.
 
 ## Current Status
 
-Last completed: E32-05 (Integration Test — Dashboard Clarity & Tooltips)
-Currently working: (none — E32 complete)
-Next up: (none — awaiting new epics)
+Last completed: E33-05 (Streamlit Community Cloud Deployment — code changes)
+Currently working: E33-05/06 BLOCKED — awaiting owner to provision Neon + Streamlit Cloud
+Next up: E33-06 (Integration Test — full cloud stack)
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)

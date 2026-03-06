@@ -46,8 +46,9 @@ This document breaks the BetVector masterplan into sequenced epics and issues th
 | E30 | Fixtures Enhancements & Logo | 3 | Threshold/ring, historical view, logo integration |
 | E31 | Badge Ring Redesign & League Explorer | 4 | Blue/green rings, card borders, team badges in all tables |
 | E32 | Dashboard Clarity & Tooltips | 5 | MODEL badge, CSS tooltips, picks crash fix, glossary updates |
+| E33 | Cloud Migration | 6 | SQLite → PostgreSQL + Neon, dual-DB engine, data migration, workflow simplification, Streamlit Cloud deploy |
 
-**Total: 32 epics, 121 issues** (45 original + 20 post-launch + 12 odds/model + 7 backfill + 16 dashboard UX + 5 clarity + 16 badges/polish)
+**Total: 33 epics, 127 issues** (45 original + 20 post-launch + 12 odds/model + 7 backfill + 16 dashboard UX + 5 clarity + 16 badges/polish + 6 cloud migration)
 
 ---
 
@@ -82,7 +83,13 @@ E19-01 → E19-02 → E19-03 → E19-04 →
 E20-01 → E20-02 → E20-03 →
 E21-01 → E21-02 → E21-03 →
 E22-01 → E22-02 →
-E23-01 → E23-02 → E23-03 → E23-04 → E23-05 → E23-06 → E23-07
+E23-01 → E23-02 → E23-03 → E23-04 → E23-05 → E23-06 → E23-07 →
+E24-01 → ... → E24-05 → E25-01 → ... → E25-04 →
+E26-01 → ... → E26-04 → E27-01 → ... → E27-04 →
+E28-01 → ... → E28-04 → E29-01 → ... → E29-04 →
+E30-01 → E30-02 → E30-03 → E31-01 → ... → E31-04 →
+E32-01 → ... → E32-05 →
+E33-01 → E33-02 → E33-03 → E33-04 → E33-05 → E33-06
 ```
 
 ---
@@ -4093,3 +4100,171 @@ Verified all changes across the live dashboard:
 | CSS hover rules in stylesheet | ✅ `.bv-badge-wrap:hover .bv-tooltip` rule loaded |
 | Python syntax check (all 4 files) | ✅ Zero errors |
 | Server error log | ✅ Zero errors |
+
+---
+
+## E33 — Cloud Migration: SQLite → PostgreSQL + Neon + Streamlit Community Cloud
+
+BetVector's SQLite database is committed to git and pushed back by GitHub Actions after every pipeline run. This causes binary merge conflicts, blocks multi-user access, and requires 540+ lines of raw `sqlite3` migration hacks across 3 workflow files. Architecture A (Hybrid Free Tier, $0/mo) moves the database to Neon PostgreSQL, the dashboard to Streamlit Community Cloud, and simplifies the GitHub Actions workflows from 735 lines to ~135 lines.
+
+**MP refs:** MP §5 Architecture (Database, Scheduling), MP §6 Database Schema
+
+---
+
+### E33-01 — PostgreSQL ORM Compatibility — DONE
+
+**Type:** Refactor
+**Depends on:** E32-05
+**Master Plan:** MP §5 Architecture (Database), MP §6 Schema
+
+Replace 26 SQLite-specific `server_default=sa_text("(datetime('now'))")` expressions with dialect-agnostic `func.now()`. Add PostgreSQL driver. Column types remain `String` (not changed to `DateTime`) to preserve compatibility with 20+ files that write timestamps as `.isoformat()` strings.
+
+**Changes:**
+- `src/database/models.py` — 26× replace `server_default=sa_text("(datetime('now'))")` with `server_default=func.now()`. Add `from sqlalchemy import func` to imports.
+- `requirements.txt` — Add `psycopg2-binary==2.9.10`
+
+**Files:** `src/database/models.py`, `requirements.txt`
+
+**Acceptance Criteria:**
+- [ ] Zero instances of `sa_text("(datetime('now'))")` remain in models.py
+- [ ] All 26 timestamp columns use `server_default=func.now()`
+- [ ] Column types remain `String` (NOT changed to DateTime)
+- [ ] `psycopg2-binary==2.9.10` in requirements.txt
+- [ ] `init_db()` succeeds against a fresh SQLite database (backward compat)
+- [ ] `python -c "from src.database.models import *; print('OK')"` succeeds
+
+---
+
+### E33-02 — Dual-Database Engine Support — DONE
+
+**Type:** Infrastructure
+**Depends on:** E33-01
+**Master Plan:** MP §5 Architecture (Config-driven, Database)
+
+Add `DATABASE_URL` environment variable as highest-priority connection source. Guard all SQLite-specific code behind dialect checks. Configure PostgreSQL pool settings for Neon's serverless architecture.
+
+**Changes:**
+- `src/database/db.py` — Add `DATABASE_URL` env var check (priority 1) to `_build_connection_url()`. Guard `mkdir` for SQLite-only. Add PG pool config: `pool_size=3, max_overflow=2, pool_recycle=300, pool_pre_ping=True`.
+- `src/config.py` — Update `get_database_url()` to check `DATABASE_URL` env var first.
+- `config/settings.yaml` — Add comment documenting `DATABASE_URL` precedence.
+
+**Files:** `src/database/db.py`, `src/config.py`, `config/settings.yaml`
+
+**Acceptance Criteria:**
+- [ ] `DATABASE_URL` env var takes highest priority
+- [ ] Streamlit secrets takes second priority
+- [ ] Config file SQLite path is the fallback
+- [ ] `mkdir` only runs for SQLite connections
+- [ ] WAL mode only enabled for SQLite connections
+- [ ] PostgreSQL connections use `pool_size=3, max_overflow=2, pool_recycle=300`
+- [ ] Setting `DATABASE_URL=postgresql://...` connects to PostgreSQL
+- [ ] Unsetting `DATABASE_URL` connects to SQLite (backward compat)
+
+---
+
+### E33-03 — Data Migration Script — DONE
+
+**Type:** DevOps
+**Depends on:** E33-02
+**Master Plan:** MP §5 Architecture (Database), MP §6 Schema
+
+One-time script to export all data from local SQLite (~9 MB, 23 tables) and import into Neon PostgreSQL. Pure SQLAlchemy, FK-dependency-ordered, batch inserts, sequence resets, idempotent.
+
+**Changes:**
+- New: `scripts/migrate_sqlite_to_postgres.py` — reads from SQLite (config), writes to PostgreSQL (`DATABASE_URL`). Migrates 23 tables in FK order. Batch inserts (500 rows). Resets PG sequences. Prints validation report.
+
+**Files:** `scripts/migrate_sqlite_to_postgres.py` (new)
+
+**Acceptance Criteria:**
+- [ ] All 23 tables migrated in correct FK-dependency order
+- [ ] Row counts match between SQLite and PostgreSQL for every table
+- [ ] PostgreSQL sequences reset to max(id) + 1
+- [ ] Script is idempotent (re-run skips populated tables, `--force` truncates)
+- [ ] Completes in < 5 minutes for current ~9 MB database
+
+**BLOCKER:** Owner must provision Neon PostgreSQL at neon.tech.
+
+---
+
+### E33-04 — GitHub Actions Workflow Simplification — DONE
+
+**Type:** DevOps
+**Depends on:** E33-03
+**Master Plan:** MP §5 Architecture (Scheduling)
+
+Rewrite all 3 workflows to remove SQLite migration hacks, binary DB commits, and merge conflict resolution. Each drops from 200-288 lines to ~40-50 lines.
+
+**Changes:**
+- `.github/workflows/morning.yml` — 288 → ~50 lines. Remove sqlite3 migrations + DB commit step. Add `DATABASE_URL` env. Upgrade to Python 3.11.
+- `.github/workflows/midday.yml` — 218 → ~40 lines. Same simplification.
+- `.github/workflows/evening.yml` — 229 → ~45 lines. Same simplification. Neon handles backups.
+- `.gitignore` — Stop force-tracking `data/betvector.db`.
+- `git rm --cached data/betvector.db` — Remove from git tracking.
+
+**Files:** `.github/workflows/morning.yml`, `.github/workflows/midday.yml`, `.github/workflows/evening.yml`, `.gitignore`
+
+**Acceptance Criteria:**
+- [ ] Each workflow under 55 lines, zero `sqlite3` imports
+- [ ] No `git add data/betvector.db` in any workflow
+- [ ] No merge conflict resolution in any workflow
+- [ ] All 3 have `DATABASE_URL` in env block
+- [ ] Python 3.11 in all 3 workflows
+- [ ] Failure notification step preserved
+- [ ] `data/betvector.db` removed from git tracking
+
+**BLOCKER:** Owner must add `DATABASE_URL` to GitHub repo Secrets.
+
+---
+
+### E33-05 — Streamlit Community Cloud Deployment — DONE (code; deployment blocked on owner)
+
+**Type:** DevOps
+**Depends on:** E33-04
+**Master Plan:** MP §5 Architecture (Deployment)
+
+Deploy dashboard to Streamlit Community Cloud. Configure secrets. Verify public access.
+
+**Changes:**
+- New: `.streamlit/secrets.toml.example` — committed template with `[database]` and `[auth]` sections.
+- `src/delivery/dashboard.py` — Update SQLite-specific comments to be database-agnostic.
+
+**Files:** `.streamlit/secrets.toml.example` (new), `src/delivery/dashboard.py` (comments)
+
+**Acceptance Criteria:**
+- [ ] Dashboard deploys on Streamlit Community Cloud
+- [ ] Connects to Neon PostgreSQL via Streamlit secrets
+- [ ] Password gate works
+- [ ] All 7 pages load without errors
+- [ ] Team badges render
+- [ ] Accessible from phone browser
+
+**BLOCKER:** Owner must create Streamlit Cloud account and deploy.
+
+---
+
+### E33-06 — Integration Test: Full Cloud Stack — PLANNED
+
+**Type:** QA
+**Depends on:** E33-05
+**Master Plan:** MP §5 Architecture, MP §7 Pipeline
+
+Trigger morning pipeline via GitHub Actions → writes to Neon → verify dashboard on Streamlit Cloud shows fresh data.
+
+**Acceptance Criteria:**
+- [ ] Morning pipeline completes via GitHub Actions with PostgreSQL
+- [ ] Zero `sqlite3` references in pipeline logs
+- [ ] Dashboard on Streamlit Cloud shows data from latest pipeline run
+- [ ] All 7 pages load without errors on cloud
+- [ ] Local SQLite development still works (backward compat)
+- [ ] Pipeline runtime < 30 minutes
+- [ ] Dashboard page load < 5 seconds on warm connection
+
+---
+
+### Implementation Sequence
+
+```
+E33-01 (ORM compat) → E33-02 (Dual-DB engine) → E33-03 (Data migration script)
+→ E33-04 (Workflow simplification) → E33-05 (Streamlit Cloud deploy)
+→ E33-06 (Integration test)
+```

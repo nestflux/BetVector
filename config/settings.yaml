@@ -13,11 +13,18 @@
 # ---------------------------------------------------------------------------
 # Database
 # ---------------------------------------------------------------------------
-# SQLite for MVP.  When migrating to PostgreSQL, change connection_string
-# and set enable_wal to false (PostgreSQL handles concurrency differently).
+# Dual-database support (E33):
+#   Priority 1: DATABASE_URL env var (cloud — GitHub Actions + Neon PostgreSQL)
+#   Priority 2: Streamlit secrets (Streamlit Community Cloud)
+#   Priority 3: This config file (local development with SQLite)
+#
+# For cloud deployment, set DATABASE_URL in your environment:
+#   export DATABASE_URL="postgresql://user:pass@host/dbname?sslmode=require"
+#
+# The path below is only used when DATABASE_URL is not set (local dev).
 database:
   path: "data/betvector.db"
-  enable_wal: true
+  enable_wal: true  # SQLite only — ignored when using PostgreSQL
 
 # ---------------------------------------------------------------------------
 # Feature Engineering

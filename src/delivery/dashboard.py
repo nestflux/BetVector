@@ -1,12 +1,13 @@
 """
-BetVector — Dashboard Shell (E9-01, E30-03)
-=============================================
+BetVector — Dashboard Shell (E9-01, E30-03, E33-05)
+====================================================
 Main Streamlit entry point.  Provides the dark-themed app shell with
 navigation, password gate, and custom CSS injection.
 
-Run with::
-
-    streamlit run src/delivery/dashboard.py
+Deployment:
+- **Local:** ``streamlit run src/delivery/dashboard.py`` (SQLite via config)
+- **Streamlit Cloud:** Deploy from GitHub repo; database connection via
+  ``st.secrets["database"]["connection_string"]`` (Neon PostgreSQL)
 
 Design System
 -------------
@@ -496,8 +497,8 @@ def main() -> None:
         return
 
     # Verify database is accessible before loading pages.
-    # On Streamlit Cloud the SQLite file may not exist yet — show a
-    # friendly message instead of crashing with a traceback.
+    # On Streamlit Cloud we connect to Neon PostgreSQL via secrets.
+    # Show a friendly message instead of crashing with a traceback.
     try:
         from src.database.db import get_engine
         engine = get_engine()
@@ -509,9 +510,10 @@ def main() -> None:
             "BetVector could not connect to the database. "
             "This usually means:\n\n"
             "- **Local:** Run `python run_pipeline.py setup` first to "
-            "create the database.\n"
-            "- **Streamlit Cloud:** Configure a PostgreSQL connection "
-            "string in Settings → Secrets under `[database]`.\n\n"
+            "create the SQLite database.\n"
+            "- **Streamlit Cloud:** Configure your Neon PostgreSQL "
+            "connection string in Settings → Secrets under `[database]` "
+            "→ `connection_string`.\n\n"
             f"Error: `{db_err}`"
         )
         return

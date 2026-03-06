@@ -1,9 +1,9 @@
 # ===== BetVector .gitignore =====
 
 # --- Database files ---
-# The main database IS tracked so GitHub Actions has it.
-# WAL/SHM are temp files and should not be committed.
-!data/betvector.db
+# After E33 cloud migration, the database lives in Neon PostgreSQL.
+# The local SQLite file is for development only — not tracked in git.
+data/betvector.db
 data/*.db-wal
 data/*.db-shm
 data/backups/

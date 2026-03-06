@@ -310,11 +310,20 @@ class BetVectorConfig:
         return [lg for lg in self.leagues if lg.is_active]
 
     def get_database_url(self) -> str:
-        """Build a SQLAlchemy connection URL from the database config.
+        """Build a SQLAlchemy connection URL.
 
-        For SQLite this is ``sqlite:///path/to/db``.  When switching to
-        PostgreSQL, this method is the only thing that needs updating.
+        Resolution order (matches ``db.py._build_connection_url()``):
+          1. ``DATABASE_URL`` env var — cloud deployment (GitHub Actions, Docker)
+          2. Config file SQLite path — local development fallback
+
+        Note: Streamlit secrets are handled separately in ``db.py`` because
+        this config module is loaded before Streamlit is available.
         """
+        import os
+        database_url = os.environ.get("DATABASE_URL")
+        if database_url:
+            return database_url
+        # Fall back to config file (local SQLite)
         db_path = self.settings.database.path
         # Resolve relative paths against the project root
         full_path = PROJECT_ROOT / db_path
