@@ -5500,19 +5500,21 @@ This keeps the output format identical to the Poisson model and reuses
 **Files:** new `src/models/xgboost_model.py`, `config/settings.yaml`,
 `src/models/storage.py`
 
+**Status: DONE ✅** — 4,148 matched training rows (EPL + Championship + La Liga), 66 features (33 home + 33 away, including league_home_adv_5 and is_newly_promoted), early stopping with 10% temporal validation split, model saved to data/models/xgboost_v1.pkl (570 KB). 72/72 tests passing.
+
 **Acceptance Criteria:**
-- [ ] `XGBoostModel` class implements the `BaseModel` interface (`train`,
+- [x] `XGBoostModel` class implements the `BaseModel` interface (`train`,
   `predict`, `save`, `load`)
-- [ ] `predict()` returns a valid 7×7 numpy array for every input row (all
+- [x] `predict()` returns a valid 7×7 numpy array for every input row (all
   probabilities ≥ 0, matrix sums within ±0.01 of 1.0)
-- [ ] Model trains successfully on the full multi-league feature DataFrame
+- [x] Model trains successfully on the full multi-league feature DataFrame
   without NaN errors (uses `fillna(mean).fillna(0.0)` same as Poisson)
-- [ ] Trained model saved to `data/models/xgboost_v1.pkl`
-- [ ] All XGBoost hyperparameters read from `config/settings.yaml` — nothing
+- [x] Trained model saved to `data/models/xgboost_v1.pkl`
+- [x] All XGBoost hyperparameters read from `config/settings.yaml` — nothing
   hardcoded in `xgboost_model.py`
-- [ ] `min_train_samples` guard: `train()` raises `ValueError` with a clear
+- [x] `min_train_samples` guard: `train()` raises `ValueError` with a clear
   message if fewer than 500 training matches are provided
-- [ ] `derive_market_probabilities()` called on XGBoost matrix output produces
+- [x] `derive_market_probabilities()` called on XGBoost matrix output produces
   valid 1X2, Over/Under, BTTS probabilities (same function, no changes needed)
 
 ---

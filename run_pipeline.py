@@ -124,6 +124,23 @@ def main() -> int:
         help="Enable DEBUG-level logging",
     )
 
+    # --- train ---
+    sub_train = subparsers.add_parser(
+        "train",
+        help=(
+            "Train a model on the combined multi-league dataset. "
+            "E37-01: XGBoost on ~9,000 matches across EPL, Championship, La Liga."
+        ),
+    )
+    sub_train.add_argument(
+        "--model", default="xgboost_v1",
+        help="Model key to train (default: xgboost_v1)",
+    )
+    sub_train.add_argument(
+        "--verbose", "-v", action="store_true",
+        help="Enable DEBUG-level logging",
+    )
+
     # --- setup ---
     sub_setup = subparsers.add_parser(
         "setup",
@@ -164,6 +181,8 @@ def main() -> int:
             season=args.season,
             training_seasons=getattr(args, "seasons", None),
         )
+    elif args.command == "train":
+        return _run_train(model_key=args.model)
     else:
         parser.print_help()
         return 1
@@ -233,6 +252,19 @@ def _run_backtest(
         season=season,
         training_seasons=training_seasons,
     )
+    return 0 if result.status == "completed" else 1
+
+
+def _run_train(model_key: str = "xgboost_v1") -> int:
+    """Train a model on the combined multi-league dataset.
+
+    E37-01: Loads Feature rows from ALL active leagues (EPL, Championship,
+    La Liga), trains XGBoost on the ~9,000+ match combined dataset, and saves
+    the trained model to data/models/{model_key}.pkl.
+    """
+    from src.pipeline import Pipeline
+    pipeline = Pipeline()
+    result = pipeline.run_train(model_key=model_key)
     return 0 if result.status == "completed" else 1
 
 

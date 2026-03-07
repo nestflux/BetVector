@@ -1,10 +1,18 @@
 """
-BetVector — XGBoost Scoreline Model (E25-01)
-==============================================
+BetVector — XGBoost Scoreline Model (E25-01, updated E37-01)
+=============================================================
 Gradient-boosted decision tree model for predicting expected goals.
 Trains two XGBRegressor models (home goals, away goals) on the same
 feature matrix as the Poisson GLM, then generates the 7×7 scoreline
 probability matrix via Poisson distribution from the predicted λ values.
+
+E37-01 Updates (Multi-League Dataset):
+- Trained on all 3 leagues combined (~9,000 matches) instead of EPL only
+- Deeper trees (max_depth 5 vs 4) and more estimators (400 vs 200)
+- Early stopping with validation set to prevent over-training
+- Added E36-03 features: league_home_adv_5, is_newly_promoted
+- min_train_samples raised to 500 (config-driven), preventing training on
+  per-league subsets that are too small for reliable tree splits
 
 Why XGBoost After Poisson?
 --------------------------
@@ -87,14 +95,16 @@ def _get_xgb_hyperparams() -> Dict:
     - reg_lambda=1.0: L2 regularisation (shrinks extreme coefficients)
     """
     defaults = {
-        "max_depth": 4,
-        "n_estimators": 200,
+        "max_depth": 5,
+        "n_estimators": 400,
         "learning_rate": 0.05,
         "min_child_weight": 5,
         "subsample": 0.8,
         "colsample_bytree": 0.8,
         "reg_alpha": 0.1,
         "reg_lambda": 1.0,
+        "early_stopping_rounds": 30,  # Stop if val loss stagnates for 30 rounds
+        "min_train_samples": 500,     # Refuse training on tiny datasets
     }
 
     try:
@@ -169,10 +179,19 @@ class XGBoostModel(BaseModel):
         # Drop rows with missing target (unplayed matches)
         df = df.dropna(subset=["home_goals", "away_goals"])
 
-        if len(df) < 50:
+        # Read the minimum sample size from config.
+        # Default is 500 for the multi-league dataset — XGBoost needs enough
+        # data to build meaningful tree splits and avoid overfitting.
+        # (E25 on EPL-only ~1,900 matches was borderline; 9,000+ across 3
+        # leagues gives the model room to learn cross-league patterns.)
+        params = _get_xgb_hyperparams()
+        min_train_samples = int(params.get("min_train_samples", 500))
+
+        if len(df) < min_train_samples:
             raise ValueError(
                 f"Not enough training data: {len(df)} matches "
-                f"(XGBoost needs at least 50 for meaningful tree splits)"
+                f"(XGBoost requires at least {min_train_samples} for reliable "
+                f"tree splits — train on all active leagues combined, not per-league)"
             )
 
         # Select feature columns using the same logic as Poisson
@@ -184,21 +203,52 @@ class XGBoostModel(BaseModel):
             set(home_feature_cols) | set(away_feature_cols)
         )
 
-        # Prepare feature matrices
-        # XGBoost handles NaN natively — no need for fillna/imputation.
-        # We only convert to numeric to ensure no string columns slip through.
+        # Prepare feature matrices.
+        # XGBoost handles NaN natively (routes to the optimal split direction),
+        # so we do NOT fillna — NaN features like Championship xG (not available
+        # via Understat) will be handled internally.  We only convert to numeric
+        # to ensure string columns don't slip through.
         X_home = df[home_feature_cols].apply(pd.to_numeric, errors="coerce")
         X_away = df[away_feature_cols].apply(pd.to_numeric, errors="coerce")
 
         y_home = df["home_goals"].astype(float)
         y_away = df["away_goals"].astype(float)
 
-        # Get hyperparameters from config
-        params = _get_xgb_hyperparams()
+        # Params were already loaded above for min_train_samples check
         logger.info(
-            "XGBoost hyperparams: max_depth=%d, n_estimators=%d, lr=%.3f",
+            "XGBoost hyperparams: max_depth=%d, n_estimators=%d, lr=%.3f, "
+            "early_stopping_rounds=%s",
             params["max_depth"], params["n_estimators"], params["learning_rate"],
+            params.get("early_stopping_rounds", "disabled"),
         )
+
+        # Early stopping: hold out 10% of training data as validation set.
+        # If the validation loss doesn't improve for early_stopping_rounds
+        # consecutive boosting rounds, training stops early — preventing
+        # over-training on the noise in the training set.
+        early_stopping_rounds = int(params.get("early_stopping_rounds", 0)) or None
+        eval_set_home = None
+        eval_set_away = None
+
+        if early_stopping_rounds is not None and len(X_home) >= 100:
+            # 10% val split — sort by index so the most recent matches are
+            # the validation set (temporal integrity)
+            n_val = max(1, int(len(X_home) * 0.1))
+            X_home_train = X_home.iloc[:-n_val]
+            y_home_train = y_home.iloc[:-n_val]
+            eval_set_home = [(X_home.iloc[-n_val:], y_home.iloc[-n_val:])]
+
+            X_away_train = X_away.iloc[:-n_val]
+            y_away_train = y_away.iloc[:-n_val]
+            eval_set_away = [(X_away.iloc[-n_val:], y_away.iloc[-n_val:])]
+
+            logger.info(
+                "Early stopping enabled: %d val matches held out (temporal split)",
+                n_val,
+            )
+        else:
+            X_home_train, y_home_train = X_home, y_home
+            X_away_train, y_away_train = X_away, y_away
 
         # --- Fit home goals model ---
         # objective="count:poisson" uses a Poisson regression loss, which is
@@ -216,15 +266,19 @@ class XGBoostModel(BaseModel):
             colsample_bytree=params["colsample_bytree"],
             reg_alpha=params["reg_alpha"],
             reg_lambda=params["reg_lambda"],
+            early_stopping_rounds=early_stopping_rounds,
             random_state=42,
             verbosity=0,  # Suppress XGBoost's internal logging
         )
 
         logger.info(
-            "Fitting home goals model (%d features, %d samples)",
-            len(home_feature_cols), len(X_home),
+            "Fitting home goals model (%d features, %d train samples)",
+            len(home_feature_cols), len(X_home_train),
         )
-        self._home_model.fit(X_home, y_home)
+        fit_kwargs_home: Dict = {"verbose": False}
+        if eval_set_home is not None:
+            fit_kwargs_home["eval_set"] = eval_set_home
+        self._home_model.fit(X_home_train, y_home_train, **fit_kwargs_home)
 
         # --- Fit away goals model ---
         self._away_model = XGBRegressor(
@@ -237,15 +291,19 @@ class XGBoostModel(BaseModel):
             colsample_bytree=params["colsample_bytree"],
             reg_alpha=params["reg_alpha"],
             reg_lambda=params["reg_lambda"],
+            early_stopping_rounds=early_stopping_rounds,
             random_state=42,
             verbosity=0,
         )
 
         logger.info(
-            "Fitting away goals model (%d features, %d samples)",
-            len(away_feature_cols), len(X_away),
+            "Fitting away goals model (%d features, %d train samples)",
+            len(away_feature_cols), len(X_away_train),
         )
-        self._away_model.fit(X_away, y_away)
+        fit_kwargs_away: Dict = {"verbose": False}
+        if eval_set_away is not None:
+            fit_kwargs_away["eval_set"] = eval_set_away
+        self._away_model.fit(X_away_train, y_away_train, **fit_kwargs_away)
 
         self._home_feature_cols = home_feature_cols
         self._away_feature_cols = away_feature_cols
@@ -456,6 +514,16 @@ class XGBoostModel(BaseModel):
             # Injury impact (E22-02)
             f"{attack_prefix}injury_impact",
             f"{attack_prefix}key_player_out",
+            # Multi-league context (E36-03):
+            # league_home_adv_5: home advantage over the last 5 home matches,
+            #   per league — captures that Championship has higher home advantage
+            #   than La Liga.  Stored on the home team's feature row.
+            # is_newly_promoted: 1 if this team just entered the division (either
+            #   relegated from a higher league or promoted from a lower one).
+            #   New teams face a quality step-up that goals-based features can't
+            #   capture in the first few matches of their new season.
+            f"{attack_prefix}league_home_adv_5",
+            f"{attack_prefix}is_newly_promoted",
         ]
 
         # Only include columns that exist in the DataFrame

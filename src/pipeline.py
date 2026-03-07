@@ -1106,6 +1106,166 @@ class Pipeline:
 
         return result
 
+    def run_train(self, model_key: str = "xgboost_v1") -> PipelineResult:
+        """Train a model on the combined multi-league dataset and save to disk.
+
+        E37-01: XGBoost on Multi-League Dataset
+        ----------------------------------------
+        Loads Feature rows and Match results from ALL active leagues, combines
+        them into a single training DataFrame (~9,000+ matches across EPL,
+        Championship, La Liga), trains the model, and saves to
+        ``data/models/{model_key}.pkl``.
+
+        Why multi-league training?
+          - EPL alone provides ~1,900 training matches → XGBoost overfits (E25-03)
+          - Three leagues combined → ~9,000+ matches → enough for reliable splits
+          - Cross-league patterns (home advantage, promotion effects) generalise
+            better when the model has seen multiple league contexts
+
+        Parameters
+        ----------
+        model_key : str
+            Config key for the model to train.  Supported: "xgboost_v1".
+            Defaults to "xgboost_v1" (the only non-Poisson model currently active).
+
+        Returns
+        -------
+        PipelineResult
+            Contains training sample count in predictions_made field.
+        """
+        import os
+        import time as time_mod
+
+        import pandas as pd
+
+        from src.config import config as cfg
+        from src.database.db import get_session
+        from src.database.models import Match
+        from src.features.engineer import compute_all_features
+
+        t0 = time_mod.time()
+        errors: List[str] = []
+
+        logger.info("run_train: training model '%s' on multi-league dataset", model_key)
+
+        # --- Instantiate model ---
+        model = self._create_model(model_key)
+        if model is None:
+            msg = f"Unknown model key: {model_key!r}. Supported: xgboost_v1"
+            logger.error(msg)
+            return PipelineResult(run_type="train", status="failed", errors=[msg])
+
+        # --- Load features + results from ALL active leagues ---
+        all_feature_dfs: List[pd.DataFrame] = []
+        all_results_rows: List[dict] = []
+
+        active_leagues = cfg.get_active_leagues()
+        for league_cfg in active_leagues:
+            league_id = self._get_league_id(league_cfg.short_name)
+            if league_id is None:
+                logger.warning("League not found in DB: %s", league_cfg.short_name)
+                continue
+
+            # Load all historical seasons for this league
+            for season in getattr(league_cfg, "seasons", []):
+                try:
+                    feat_df = compute_all_features(league_id, season)
+                    if feat_df.empty:
+                        continue
+                    all_feature_dfs.append(feat_df)
+                    logger.debug(
+                        "Loaded %d feature rows for %s %s",
+                        len(feat_df), league_cfg.short_name, season,
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "Could not load features for %s %s: %s",
+                        league_cfg.short_name, season, exc,
+                    )
+
+            # Load match results for this league
+            try:
+                with get_session() as session:
+                    finished = (
+                        session.query(Match)
+                        .filter(
+                            Match.league_id == league_id,
+                            Match.status == "finished",
+                        )
+                        .all()
+                    )
+                    for m in finished:
+                        if m.home_goals is not None and m.away_goals is not None:
+                            all_results_rows.append({
+                                "match_id": m.id,
+                                "home_goals": m.home_goals,
+                                "away_goals": m.away_goals,
+                            })
+            except Exception as exc:
+                msg = f"Could not load results for {league_cfg.short_name}: {exc}"
+                logger.error(msg)
+                errors.append(msg)
+
+        if not all_feature_dfs:
+            msg = "No feature rows found across any active league — cannot train"
+            logger.error(msg)
+            return PipelineResult(run_type="train", status="failed", errors=[msg])
+
+        combined_features = pd.concat(all_feature_dfs, ignore_index=True)
+        results_df = pd.DataFrame(all_results_rows)
+
+        logger.info(
+            "run_train: combined %d feature rows, %d result rows across %d leagues",
+            len(combined_features), len(results_df), len(active_leagues),
+        )
+
+        # --- Train the model ---
+        try:
+            model.train(combined_features, results_df)
+        except ValueError as exc:
+            msg = f"Training failed: {exc}"
+            logger.error(msg)
+            return PipelineResult(run_type="train", status="failed", errors=[msg])
+        except Exception as exc:
+            msg = f"Unexpected training error: {exc}"
+            logger.error(msg)
+            errors.append(msg)
+            return PipelineResult(run_type="train", status="failed", errors=errors)
+
+        # --- Save to disk ---
+        model_dir = "data/models"
+        os.makedirs(model_dir, exist_ok=True)
+        model_path = f"{model_dir}/{model_key}.pkl"
+
+        try:
+            from pathlib import Path
+            model.save(Path(model_path))
+            logger.info("Saved trained model to %s", model_path)
+        except Exception as exc:
+            msg = f"Could not save model to {model_path}: {exc}"
+            logger.error(msg)
+            errors.append(msg)
+
+        duration = time_mod.time() - t0
+        n_train = len(combined_features[
+            combined_features["match_id"].isin(results_df["match_id"])
+        ]) if not results_df.empty else 0
+
+        print(f"\nTrain pipeline complete in {duration:.1f}s")
+        print(f"  Model: {model_key}")
+        print(f"  Training matches: {n_train}")
+        print(f"  Saved to: {model_path}")
+        if errors:
+            print(f"  Errors: {len(errors)}")
+
+        status = "failed" if errors else "completed"
+        return PipelineResult(
+            run_type="train",
+            status=status,
+            predictions_made=n_train,
+            errors=errors,
+        )
+
     def run_backtest(
         self,
         league: str = "EPL",

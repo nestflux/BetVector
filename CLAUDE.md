@@ -308,9 +308,9 @@ Wait for owner to respond with approval before making the change.
 
 ## Current Status
 
-Last completed: E36-04 (Multi-League Integration Test — 28/28 tests passing, La Liga Brier 0.5741 ✅, ROI +4.71% ✅, 72/72 full suite) ✅
-Currently working: E37-01 — XGBoost Model on Multi-League Dataset
-Next up: E37-02 — Walk-Forward Backtest XGBoost vs Poisson
+Last completed: E37-01 (XGBoost Model on Multi-League Dataset — 4,148 matches, 66 features, saved to data/models/xgboost_v1.pkl, 72/72 tests) ✅
+Currently working: E37-02 — Walk-Forward Backtest XGBoost vs Poisson
+Next up: E37-03 — Ensemble Poisson + XGBoost Adaptive Blend
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
@@ -366,9 +366,9 @@ E36 — League Expansion: ALL 4 issues done ✅
 - E36-03: Multi-league feature adjustments ✅ (league_home_adv_5, is_newly_promoted, per-league edge threshold, backfill bug fix)
 - E36-04: Integration test + backtest ✅ (28/28 tests, La Liga Brier 0.5741 ±0.04 of EPL, ROI +4.71%, 72/72 full suite)
 
-E37 — Model Improvement: 0 / 4 issues — 📋 Planned
-- E37-01: XGBoost model on multi-league dataset — TODO
-- E37-02: Walk-forward backtest XGBoost vs Poisson — TODO
+E37 — Model Improvement: 1 / 4 issues — 🔜 In progress
+- E37-01: XGBoost model on multi-league dataset ✅ (4,148 matches, 66 features, early stopping, saved to data/models/xgboost_v1.pkl)
+- E37-02: Walk-forward backtest XGBoost vs Poisson — 🔜 Starting now
 - E37-03: Ensemble Poisson + XGBoost adaptive blend — TODO
 - E37-04: Integration test — TODO
 
