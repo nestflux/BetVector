@@ -644,8 +644,16 @@ else:
     st.divider()
 
     # --- Recent Bets Table (E29-03: HTML table with inline team badges) ---
+    # E35-02: To edit stake/odds/bookmaker or void a bet, visit My Bets ↗
     st.markdown(
         '<div class="bv-section-header">Recent Bets</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<p style="font-family: Inter, sans-serif; font-size: 12px; '
+        'color: #8B949E; margin-bottom: 8px;">'
+        'To edit or void a bet, visit <a href="#" style="color: #58A6FF;">My Bets ↗</a>'
+        '</p>',
         unsafe_allow_html=True,
     )
     bets_html = create_bets_table_html(df)

@@ -4808,11 +4808,13 @@ not just model picks — directly from the dashboard.
 
 ---
 
-### E35-02 — Bet Slip with Edit and Void
+### E35-02 — Bet Slip with Edit and Void ✅ DONE
 
 **Type:** Frontend + Backend
 **Depends on:** E35-01
 **Master Plan:** MP §6 Schema (bet_log table), MP §9 Dashboard
+
+**Results:** Bet slip table added above the entry form. 4 summary metric tiles (Open Today, Today's P&L, Week P&L, All-time P&L). Status filter tabs (All/Pending/Won/Lost/Void). Paginated table (20 rows/page) with inline edit and void for pending bets. Void requires confirmation checkbox. Both `odds_at_detection` and `odds_at_placement` returned as separate dict fields for CLV support. Fixed operator-precedence bug in `est_return` calculation.
 
 The My Bets page gains a full bet slip table above the entry form. Users
 can see all their logged bets, edit mistakes, and void cancelled bets.
