@@ -63,7 +63,10 @@ from dotenv import load_dotenv
 import streamlit as st
 
 from src.config import PROJECT_ROOT
-from src.auth import is_authenticated, set_session_user, get_session_user_id
+from src.auth import (
+    is_authenticated, set_session_user, get_session_user_id,
+    get_user_by_email, verify_password,
+)
 
 # Load .env file so DASHBOARD_PASSWORD and other secrets are available
 # even when running via `streamlit run` directly (without the Desktop launcher).
@@ -336,47 +339,62 @@ def inject_custom_css() -> None:
 # Password Gate
 # ============================================================================
 
-def check_password() -> bool:
-    """Emergency-fallback password gate using the DASHBOARD_PASSWORD env var.
+def _get_emergency_password() -> str:
+    """Read the DASHBOARD_PASSWORD emergency owner credential.
 
-    This is the *owner-only emergency path* — it grants owner-level access
-    using the single shared password from the environment.  Once multi-user
-    login (E34-02) is complete, regular users will authenticate via email +
-    password instead; this path stays as a guaranteed owner recovery route.
-
-    Session state contract (E34-01):
-    - On success sets ``st.session_state["user_id"] = 1`` and
-      ``st.session_state["user_role"] = "owner"`` via ``set_session_user()``.
-    - ``is_authenticated()`` replaces the old boolean ``authenticated`` flag.
-
-    Returns True if authenticated (session already active or just verified),
-    False if the login form is being displayed.
+    Resolution order: environment variable → Streamlit secrets.
+    Returns an empty string if neither is configured (open local dev mode).
     """
-    # Check env var first, then Streamlit secrets (for Streamlit Cloud).
-    # We only check st.secrets when a secrets file actually exists —
-    # accessing st.secrets without one triggers a visible Streamlit warning.
-    dashboard_password = os.environ.get("DASHBOARD_PASSWORD", "")
-    if not dashboard_password:
+    pwd = os.environ.get("DASHBOARD_PASSWORD", "")
+    if not pwd:
         try:
             secrets_path = Path(__file__).resolve().parents[2] / ".streamlit" / "secrets.toml"
             home_secrets = Path.home() / ".streamlit" / "secrets.toml"
             if secrets_path.exists() or home_secrets.exists():
-                dashboard_password = st.secrets.get("DASHBOARD_PASSWORD", "")
+                pwd = st.secrets.get("DASHBOARD_PASSWORD", "")
         except Exception:
-            dashboard_password = ""
-    if not dashboard_password:
-        # No password configured — open access for local dev (no credentials set)
-        if not is_authenticated():
-            set_session_user(1, "owner")
-        return True
+            pwd = ""
+    return pwd
+
+
+def check_password() -> bool:
+    """Multi-user login gate with emergency owner fallback (E34-02).
+
+    Authentication flow
+    -------------------
+    On form submit, two paths are tried in order:
+
+    1. **Email + password** (primary path) — looks up the user by email in
+       the ``users`` table, verifies the PBKDF2 hash, and sets
+       ``user_id`` + ``user_role`` in session state.  Inactive users and
+       unknown emails both show the same generic error (no user enumeration).
+
+    2. **Emergency owner fallback** — if the entered password matches the
+       ``DASHBOARD_PASSWORD`` environment variable and no email match was
+       found, grants owner-level access as ``user_id=1``.  This path exists
+       so the owner can always recover access even if the DB is empty or
+       the owner's password_hash is not yet set.
+
+    If neither credential source is configured (no users in DB, no env var)
+    the dashboard is open — useful for local development before any setup.
+
+    Returns True if authenticated this session, False while showing the form.
+    """
+    emergency_pwd = _get_emergency_password()
 
     # Already authenticated in this browser session — skip the form
     if is_authenticated():
         return True
 
-    # Inject login-specific CSS — styles the ENTER button to feel like a
-    # proper gateway rather than a default Streamlit button.  The selector
-    # targets only buttons inside the login form so other pages aren't affected.
+    # No password configured — open dev access (no credentials set up yet)
+    if not emergency_pwd:
+        set_session_user(1, "owner")
+        return True
+
+    # ------------------------------------------------------------------ #
+    # Login form CSS — scoped to [data-testid="stForm"] so it only applies
+    # on this page and does not bleed into other pages' buttons/inputs.
+    # ------------------------------------------------------------------ #
     st.markdown("""
     <style>
     /* ENTER button — full-width, green-bordered, JetBrains Mono */
@@ -403,15 +421,14 @@ def check_password() -> bool:
     [data-testid="stForm"] .stFormSubmitButton > button:active {
         background: rgba(63, 185, 80, 0.15);
     }
-    /* Remove the default red error colour from the password input border */
+    /* Suppress Streamlit's default red border on password inputs */
     [data-testid="stForm"] [data-baseweb="input"] {
         border-color: #30363D !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
-    # Show login form — centered logo + form for a polished login screen.
-    # Using st.form so pressing Enter key on the keyboard also submits.
+    # Centred logo + subtitle + login form
     _, col, _ = st.columns([1, 2, 1])
     with col:
         render_page_logo(width=220)
@@ -422,24 +439,66 @@ def check_password() -> bool:
             unsafe_allow_html=True,
         )
         st.divider()
+
         with st.form("login_form", border=False):
+            email = st.text_input(
+                "Email",
+                placeholder="your@email.com",
+                label_visibility="collapsed",
+            )
             password = st.text_input(
                 "Password",
                 type="password",
-                placeholder="Enter password",
+                placeholder="Password",
                 label_visibility="collapsed",
             )
             submitted = st.form_submit_button("ENTER")
-            if submitted:
-                if password == dashboard_password:
-                    # Emergency fallback — grant owner access via env var password.
-                    # set_session_user stores user_id + user_role in session state.
-                    set_session_user(1, "owner")
-                    st.rerun()
-                elif password:
-                    st.error("Incorrect password. Try again.")
+
+        if submitted and password:
+            _handle_login(email.strip(), password, emergency_pwd)
+        elif submitted:
+            # Blank password field — give clear feedback rather than silent no-op
+            st.error("Password is required.")
 
     return False
+
+
+def _handle_login(email: str, password: str, emergency_pwd: str) -> None:
+    """Process a login submission and update session state on success.
+
+    Tries the DB user path first, then falls back to the emergency password.
+    Shows a single generic error on failure (no enumeration of valid emails).
+
+    Parameters
+    ----------
+    email : str
+        Email address entered by the user (already stripped).
+    password : str
+        Password entered by the user.
+    emergency_pwd : str
+        The DASHBOARD_PASSWORD value (may be empty string).
+    """
+    # Path 1: email + password against the users table
+    if email:
+        user = get_user_by_email(email)
+        if user is not None:
+            if user.password_hash and verify_password(password, user.password_hash):
+                # Successful DB login — set session and reload
+                set_session_user(user.id, user.role)
+                st.rerun()
+                return
+            # User found but password wrong or not set — fall through to
+            # the generic error (do NOT reveal whether the email was found)
+        # Unknown email — also falls through to generic error or emergency path
+
+    # Path 2: emergency owner fallback (password-only, no email required)
+    if emergency_pwd and password == emergency_pwd:
+        set_session_user(1, "owner")
+        st.rerun()
+        return
+
+    # Both paths failed — show generic error (no user enumeration)
+    st.error("Incorrect email or password. Try again.")
 
 
 # ============================================================================
