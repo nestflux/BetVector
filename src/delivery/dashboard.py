@@ -363,23 +363,68 @@ def check_password() -> bool:
     if st.session_state.get("authenticated", False):
         return True
 
-    # Show login form — centered logo + form for a polished login screen
+    # Inject login-specific CSS — styles the ENTER button to feel like a
+    # proper gateway rather than a default Streamlit button.  The selector
+    # targets only buttons inside the login form so other pages aren't affected.
+    st.markdown("""
+    <style>
+    /* ENTER button — full-width, green-bordered, JetBrains Mono */
+    [data-testid="stForm"] .stFormSubmitButton > button {
+        width: 100%;
+        background: transparent;
+        border: 1px solid #3FB950;
+        color: #3FB950;
+        font-family: 'JetBrains Mono', monospace !important;
+        font-size: 12px !important;
+        font-weight: 700 !important;
+        letter-spacing: 4px;
+        text-transform: uppercase;
+        padding: 14px 24px !important;
+        border-radius: 6px;
+        margin-top: 4px;
+        cursor: pointer;
+        transition: background 0.2s ease, box-shadow 0.2s ease;
+    }
+    [data-testid="stForm"] .stFormSubmitButton > button:hover {
+        background: rgba(63, 185, 80, 0.08);
+        box-shadow: 0 0 18px rgba(63, 185, 80, 0.18);
+    }
+    [data-testid="stForm"] .stFormSubmitButton > button:active {
+        background: rgba(63, 185, 80, 0.15);
+    }
+    /* Remove the default red error colour from the password input border */
+    [data-testid="stForm"] [data-baseweb="input"] {
+        border-color: #30363D !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Show login form — centered logo + form for a polished login screen.
+    # Using st.form so pressing Enter key on the keyboard also submits.
     _, col, _ = st.columns([1, 2, 1])
     with col:
         render_page_logo(width=220)
         st.markdown(
-            '<p style="text-align:center" class="text-muted">'
+            '<p style="text-align:center; font-family: Inter, sans-serif; '
+            'font-size: 13px; color: #8B949E; margin-bottom: 24px;">'
             "Quantitative edge in football betting</p>",
             unsafe_allow_html=True,
         )
         st.divider()
-        password = st.text_input("Enter dashboard password", type="password")
-        if password:
-            if password == dashboard_password:
-                st.session_state["authenticated"] = True
-                st.rerun()
-            else:
-                st.error("Incorrect password. Please try again.")
+        with st.form("login_form", border=False):
+            password = st.text_input(
+                "Password",
+                type="password",
+                placeholder="Enter password",
+                label_visibility="collapsed",
+            )
+            submitted = st.form_submit_button("ENTER")
+            if submitted:
+                if password == dashboard_password:
+                    st.session_state["authenticated"] = True
+                    st.rerun()
+                elif password:
+                    st.error("Incorrect password. Try again.")
 
     return False
 
