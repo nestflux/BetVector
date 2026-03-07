@@ -120,6 +120,15 @@ def main() -> int:
         ),
     )
     sub_backtest.add_argument(
+        "--model", default="poisson",
+        choices=["poisson", "xgboost"],
+        help=(
+            "Prediction model to use for the backtest (default: poisson). "
+            "Use 'xgboost' to run the E37-02 XGBoost vs Poisson comparison. "
+            "Example: python run_pipeline.py backtest --league EPL --model xgboost"
+        ),
+    )
+    sub_backtest.add_argument(
         "--verbose", "-v", action="store_true",
         help="Enable DEBUG-level logging",
     )
@@ -180,6 +189,7 @@ def main() -> int:
             league=args.league,
             season=args.season,
             training_seasons=getattr(args, "seasons", None),
+            model_name=getattr(args, "model", "poisson"),
         )
     elif args.command == "train":
         return _run_train(model_key=args.model)
@@ -239,11 +249,19 @@ def _run_backtest(
     league: str,
     season: str,
     training_seasons: Optional[list] = None,
+    model_name: str = "poisson",
 ) -> int:
     """Run a walk-forward backtest.
 
     If training_seasons is None, the pipeline auto-discovers all seasons
     from config up to and including the target season (E23-06).
+
+    Parameters
+    ----------
+    model_name : str
+        Model to use for the backtest: "poisson" (default) or "xgboost".
+        E37-02 comparison: run with "xgboost" to generate XGBoost metrics
+        alongside the Poisson baseline.
     """
     from src.pipeline import Pipeline
     pipeline = Pipeline()
@@ -251,6 +269,7 @@ def _run_backtest(
         league=league,
         season=season,
         training_seasons=training_seasons,
+        model_name=model_name,
     )
     return 0 if result.status == "completed" else 1
 

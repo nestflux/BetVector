@@ -1271,6 +1271,7 @@ class Pipeline:
         league: str = "EPL",
         season: str = "2024-25",
         training_seasons: Optional[List[str]] = None,
+        model_name: str = "poisson",
     ) -> PipelineResult:
         """Run a walk-forward backtest via the backtester module.
 
@@ -1287,6 +1288,17 @@ class Pipeline:
         If not provided, the method automatically discovers all seasons from
         ``config/leagues.yaml`` that are before or equal to the target season.
 
+        Model Selection (E37-02)
+        ------------------------
+        ``model_name`` selects which prediction model is used for each
+        walk-forward iteration:
+          - ``"poisson"`` (default) — Poisson GLM (production model, E20)
+          - ``"xgboost"`` — XGBoost regressors trained on multi-league data (E37)
+
+        XGBoost requires ≥ 500 training samples (from ``config.yaml``).
+        With multi-season pre-loading, this is satisfied from day 1 of 2024-25
+        since 2020-21 through 2023-24 (~1,520+ matches) are always available.
+
         Parameters
         ----------
         league : str
@@ -1296,6 +1308,8 @@ class Pipeline:
         training_seasons : list[str] or None
             Seasons to include in training.  If None, auto-discovers from
             league config — all seasons up to and including ``season``.
+        model_name : str
+            Model key to use: "poisson" or "xgboost" (default: "poisson").
 
         Returns
         -------
@@ -1326,7 +1340,15 @@ class Pipeline:
         if training_seasons is None:
             training_seasons = self._get_training_seasons(league, season)
 
-        print(f"Running walk-forward backtest: {league} {season}")
+        # Map the short model key ("poisson" / "xgboost") to the versioned
+        # DB key ("poisson_v1" / "xgboost_v1") used in model_performance.
+        _model_key_map = {
+            "poisson": "poisson_v1",
+            "xgboost": "xgboost_v1",
+        }
+        _model_version_key = _model_key_map.get(model_name, "poisson_v1")
+
+        print(f"Running walk-forward backtest: {league} {season} [{_model_version_key}]")
         print(f"  Training on {len(training_seasons)} season(s)")
         try:
             from src.evaluation.backtester import (
@@ -1339,6 +1361,14 @@ class Pipeline:
                 plot_backtest_results,
             )
             from src.models.poisson import PoissonModel
+
+            # Select model class based on model_name (E37-02).
+            # Poisson is the default; XGBoost is used for comparison backtests.
+            if model_name == "xgboost":
+                from src.models.xgboost_model import XGBoostModel
+                model_class = XGBoostModel
+            else:
+                model_class = PoissonModel
 
             # Read staking config
             bankroll_cfg = config.settings.bankroll
@@ -1353,32 +1383,47 @@ class Pipeline:
                 if bt_league_cfg else global_threshold
             )
 
+            # For XGBoost, train on ALL active leagues to mirror production.
+            # EPL's local SQLite only has 2024-25 data; Championship and La
+            # Liga provide 2,000+ pre-season matches that are temporally safe.
+            # Temporal integrity is enforced inside bt_run via
+            # _get_match_ids_before_date_multi(all_league_ids, matchday_date).
+            training_league_ids = None
+            if model_name == "xgboost":
+                training_league_ids = self._get_all_active_league_ids()
+
             bt_result = bt_run(
                 league_id=league_id,
                 season=season,
-                model_class=PoissonModel,
+                model_class=model_class,
                 edge_threshold=edge_threshold,
                 staking_method=bankroll_cfg.staking_method,
                 stake_percentage=bankroll_cfg.stake_percentage,
                 starting_bankroll=bankroll_cfg.starting_amount,
                 training_seasons=training_seasons,
+                training_league_ids=training_league_ids,
             )
 
             # Print and save the report.
-            # Use a league-specific filename so Championship/La Liga reports
-            # do not overwrite each other or the EPL report.
+            # Include the model name in the filename so XGBoost and Poisson
+            # reports can coexist in data/predictions/ without overwriting.
             _safe_league = league.replace(" ", "_").replace("/", "_")
+            _model_suffix = (
+                f"xgb" if model_name == "xgboost" else "poisson"
+            )
             _report_path = (
-                f"data/predictions/backtest_report_{_safe_league}_{season}.json"
+                f"data/predictions/backtest_report_{_model_suffix}_{_safe_league}_{season}.json"
             )
             print_backtest_report(bt_result)
             save_backtest_report(bt_result, filepath=_report_path)
             plot_backtest_results(bt_result)
 
-            # Save results to model_performance table for dashboard display
+            # Save results to model_performance table for dashboard display.
+            # Using the versioned key (e.g. "xgboost_v1") so the Model Health
+            # page can find calibration data for the right model.
             save_backtest_to_model_performance(
                 bt_result, season,
-                model_name="poisson_v1",
+                model_name=_model_version_key,
                 training_seasons=training_seasons,
             )
 
@@ -1729,6 +1774,29 @@ class Pipeline:
         with get_session() as session:
             league = session.query(League).filter_by(short_name=short_name).first()
             return league.id if league else None
+
+    @staticmethod
+    def _get_all_active_league_ids() -> List[int]:
+        """Get database IDs for all active leagues in config.
+
+        E37-02: Used by the XGBoost walk-forward backtester to load training
+        features from all leagues simultaneously, mirroring production.
+
+        Returns
+        -------
+        list[int]
+            League IDs for all active leagues (EPL, Championship, La Liga).
+            Returns empty list if database lookup fails.
+        """
+        ids: List[int] = []
+        with get_session() as session:
+            for lg in config.leagues:
+                row = session.query(League).filter_by(
+                    short_name=lg.short_name
+                ).first()
+                if row:
+                    ids.append(row.id)
+        return ids
 
     @staticmethod
     def _get_training_seasons(league_short: str, target_season: str) -> List[str]:

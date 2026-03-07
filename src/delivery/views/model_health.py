@@ -76,20 +76,55 @@ ASSESSMENT_COLOURS = {
 # Data Loading
 # ============================================================================
 
-def load_calibration_data() -> Optional[Dict]:
+def load_calibration_data(preferred_model: Optional[str] = None) -> Optional[Dict]:
     """Load the most recent calibration data from model_performance.
 
     The calibration_json field stores binned calibration stats —
     predicted_avg vs actual_rate for each probability bin.
     Returns None if no calibration data exists.
+
+    E37-02: When XGBoost is active or ``preferred_model`` is provided,
+    this function first tries to find calibration data for that model
+    before falling back to the most recent entry.  This ensures the
+    calibration curve tracks the model that's actually making picks.
+
+    Parameters
+    ----------
+    preferred_model : str, optional
+        Model name prefix to prefer (e.g. "xgboost_v1", "poisson_v1").
+        If None, auto-reads from ``config.settings.models.active_models``.
     """
+    # Determine which model to prefer: use the first active model from config.
+    # E37-02: if XGBoost is in active_models, we prefer xgboost_v1* entries.
+    if preferred_model is None:
+        try:
+            from src.config import config as _cfg
+            active = getattr(_cfg.settings.models, "active_models", ["poisson_v1"])
+            preferred_model = active[0] if active else "poisson_v1"
+        except Exception:
+            preferred_model = "poisson_v1"
+
     with get_session() as session:
-        mp = (
+        base_q = (
             session.query(ModelPerformance)
             .filter(ModelPerformance.calibration_json.isnot(None))
-            .order_by(ModelPerformance.computed_at.desc())
-            .first()
         )
+
+        # Try to find calibration data for the preferred model first.
+        # model_performance rows are named "{model_key}_{n_seasons}s" (e.g.
+        # "xgboost_v1_5s"), so we match by prefix using Python filtering.
+        all_rows = base_q.order_by(ModelPerformance.computed_at.desc()).limit(20).all()
+
+        mp = None
+        for row in all_rows:
+            if row.model_name and row.model_name.startswith(preferred_model):
+                mp = row
+                break
+
+        # Fall back to the most recent entry if no match for preferred model.
+        if mp is None and all_rows:
+            mp = all_rows[0]
+
         if not mp or not mp.calibration_json:
             return None
 

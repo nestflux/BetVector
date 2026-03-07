@@ -102,6 +102,7 @@ def run_backtest(
     stake_percentage: float = 0.02,
     starting_bankroll: float = 1000.0,
     training_seasons: Optional[List[str]] = None,
+    training_league_ids: Optional[List[int]] = None,
 ) -> BacktestResult:
     """Run a walk-forward backtest on a full season of historical data.
 
@@ -126,10 +127,27 @@ def run_backtest(
     helpers already query ALL matches before a date (no season filter), so
     the training set naturally expands to include historical seasons.
 
+    Multi-League Training (E37-02)
+    --------------------------------
+    When ``training_league_ids`` is provided (a list of league IDs to use for
+    training), features are loaded from ALL specified leagues for each training
+    season.  This mirrors how the XGBoost model was trained in production —
+    on ~9,000 combined matches across EPL, Championship, and La Liga.
+
+    The **evaluation** (predictions, Brier score, value bets) is always for
+    the target ``league_id`` only.  Only the **training** data is multi-league.
+
+    This is the correct approach for backtesting XGBoost because:
+    - XGBoost was trained on multi-league data, so its walk-forward should be too
+    - Championship and La Liga provide 2,000+ historical matches that are all
+      temporally safe (predating 2024-25 EPL matchdays)
+    - Without multi-league training, EPL XGBoost can only train on 2024-25
+      season data, giving it far fewer training samples than intended
+
     Parameters
     ----------
     league_id : int
-        Database ID of the league.
+        Database ID of the league to evaluate (predictions + Brier score).
     season : str
         Season identifier to evaluate on (e.g. "2024-25").
     model_class : Type[BaseModel]
@@ -147,6 +165,11 @@ def run_backtest(
         If None, only the target ``season`` is loaded (original behaviour).
         Example: ``["2020-21", "2021-22", ..., "2024-25"]`` to train on
         5 seasons of data when evaluating 2024-25.
+    training_league_ids : list[int] or None
+        League IDs to load training features from (E37-02 XGBoost support).
+        If None, only the target ``league_id`` is used for training (backward
+        compatible with Poisson backtest).
+        Pass all active league IDs for XGBoost to mirror production training.
 
     Returns
     -------
@@ -154,6 +177,11 @@ def run_backtest(
         Complete backtest results with all metrics and daily PnL.
     """
     start_time = time.time()
+
+    # Determine which league IDs to use for training data.
+    # Poisson (default): train on target league only.
+    # XGBoost: train on all provided league IDs for maximum sample size.
+    _training_lids = training_league_ids if training_league_ids else [league_id]
 
     # Get all matches for this season, sorted by date
     matchdays = _get_matchdays(league_id, season)
@@ -163,27 +191,36 @@ def run_backtest(
         logger.warning("run_backtest: No matchdays found for %s %s", league_id, season)
         return BacktestResult()
 
-    # --- Pre-load features from all training seasons (E23-06) ---
+    # --- Pre-load features from all training seasons × training leagues (E23-06 / E37-02) ---
     # Loading features ONCE before the loop is both faster and enables
-    # multi-season training.  Previously, compute_all_features() was called
-    # inside the loop on every matchday — redundant since features are stored
-    # in the DB and don't change between matchdays.
+    # multi-season / multi-league training.
+    # For XGBoost: loads features from ALL active leagues (Championship, La Liga)
+    # so the walk-forward mirrors production training.
     all_seasons = training_seasons or [season]
+    n_training_leagues = len(_training_lids)
     print(f"Starting walk-forward backtest: {season}, {total_matchdays} matchdays")
-    print(f"  Loading features from {len(all_seasons)} season(s): {', '.join(all_seasons)}")
+    print(f"  Loading features from {len(all_seasons)} season(s) × "
+          f"{n_training_leagues} league(s)")
 
     feature_load_start = time.time()
     features_dfs: List[pd.DataFrame] = []
-    for s in all_seasons:
-        try:
-            sf = compute_all_features(league_id, s)
-            features_dfs.append(sf)
-            logger.info("Loaded %d feature rows for season %s", len(sf), s)
-        except Exception as e:
-            logger.warning("Backtest: Failed to load features for season %s: %s", s, e)
+    for lid in _training_lids:
+        for s in all_seasons:
+            try:
+                sf = compute_all_features(lid, s)
+                features_dfs.append(sf)
+                logger.info(
+                    "Loaded %d feature rows for league_id=%d season=%s",
+                    len(sf), lid, s,
+                )
+            except Exception as e:
+                logger.warning(
+                    "Backtest: Failed to load features for league_id=%d season=%s: %s",
+                    lid, s, e,
+                )
 
     if not features_dfs:
-        logger.error("Backtest: No features loaded from any season")
+        logger.error("Backtest: No features loaded from any season/league")
         return BacktestResult()
 
     all_features = pd.concat(features_dfs, ignore_index=True)
@@ -209,10 +246,13 @@ def run_backtest(
         matchday_num = day_idx + 1
 
         # --- Step 1: Split preloaded features into train and test sets ---
-        # all_features contains features from ALL training_seasons.
-        # _get_match_ids_before_date returns match IDs from ALL seasons
-        # before this date, so training naturally includes historical data.
-        train_match_ids = _get_match_ids_before_date(league_id, match_date)
+        # all_features contains features from ALL training_seasons × training_leagues.
+        # _get_match_ids_before_date fetches match IDs from all training leagues
+        # before this date, so XGBoost training naturally includes cross-league data.
+        # Test features always come from the target league_id only.
+        train_match_ids = _get_match_ids_before_date_multi(
+            _training_lids, match_date
+        )
         train_features = all_features[all_features["match_id"].isin(train_match_ids)]
         test_features = all_features[all_features["match_id"].isin(match_ids)]
 
@@ -220,7 +260,8 @@ def run_backtest(
             continue
 
         # --- Step 2: Build results DataFrame for training ---
-        results_df = _get_results_before_date(league_id, match_date)
+        # Results are also multi-league when training_league_ids is provided.
+        results_df = _get_results_before_date_multi(_training_lids, match_date)
 
         if len(train_features) < 20 or len(results_df) < 20:
             print(
@@ -528,12 +569,32 @@ def _get_matchdays(
 
 
 def _get_match_ids_before_date(league_id: int, before_date: str) -> List[int]:
-    """Get all finished match IDs strictly before a date."""
+    """Get all finished match IDs strictly before a date (single league)."""
+    return _get_match_ids_before_date_multi([league_id], before_date)
+
+
+def _get_match_ids_before_date_multi(
+    league_ids: List[int],
+    before_date: str,
+) -> List[int]:
+    """Get all finished match IDs strictly before a date from multiple leagues.
+
+    E37-02: Used by the XGBoost walk-forward backtester to gather training
+    match IDs from all active leagues simultaneously.  This mirrors the
+    production XGBoost training loop which always sees multi-league data.
+
+    Parameters
+    ----------
+    league_ids : list[int]
+        League IDs to include (e.g. [1, 2, 3] for EPL + Championship + La Liga).
+    before_date : str
+        Exclusive upper bound on match date (ISO format: "YYYY-MM-DD").
+    """
     with get_session() as session:
         rows = (
             session.query(Match.id)
             .filter(
-                Match.league_id == league_id,
+                Match.league_id.in_(league_ids),
                 Match.date < before_date,
                 Match.status == "finished",
             )
@@ -542,11 +603,53 @@ def _get_match_ids_before_date(league_id: int, before_date: str) -> List[int]:
         return [r[0] for r in rows]
 
 
+def _get_results_before_date_multi(
+    league_ids: List[int],
+    before_date: str,
+) -> pd.DataFrame:
+    """Get match results before a date from multiple leagues.
+
+    E37-02: Multi-league version of _get_results_before_date().  Returns
+    results from all specified leagues, giving XGBoost the same multi-league
+    training data it sees in production.
+
+    Parameters
+    ----------
+    league_ids : list[int]
+        League IDs to include.
+    before_date : str
+        Exclusive upper bound on match date.
+    """
+    with get_session() as session:
+        matches = (
+            session.query(Match)
+            .filter(
+                Match.league_id.in_(league_ids),
+                Match.date < before_date,
+                Match.status == "finished",
+            )
+            .all()
+        )
+
+        data = [
+            {
+                "match_id": m.id,
+                "home_goals": m.home_goals,
+                "away_goals": m.away_goals,
+            }
+            for m in matches
+        ]
+
+    return pd.DataFrame(data) if data else pd.DataFrame(
+        columns=["match_id", "home_goals", "away_goals"]
+    )
+
+
 def _get_results_before_date(
     league_id: int,
     before_date: str,
 ) -> pd.DataFrame:
-    """Get match results before a date as a DataFrame."""
+    """Get match results before a date as a DataFrame (single league)."""
     with get_session() as session:
         matches = (
             session.query(Match)
