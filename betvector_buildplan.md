@@ -5088,7 +5088,14 @@ Championship.
 
 ---
 
-### E36-03 — Multi-League Feature Adjustments
+### E36-03 — Multi-League Feature Adjustments ✅ DONE
+
+**Results:** league_home_adv_5 (avg: EPL=+0.01, Championship=+0.35, La Liga=+0.36 goals/match).
+is_newly_promoted correctly identifies EPL 2025-26 (Burnley/Leeds/Sunderland), La Liga 2023-24
+(Alaves/Granada/Las Palmas), La Liga 2024-25 (Espanol/Leganes/Valladolid), etc. Edge threshold:
+Championship 3%, EPL/La Liga 5% — all config-driven from leagues.yaml.
+Bug fix: backfill_historical.py backfill_features() delete now scoped by league_id (previously
+wiped other leagues' features for same season). Gates: 1[PASS 5/5], 2[CLEAN], 3[APPROVED].
 
 **Type:** Feature Engineering
 **Depends on:** E36-02
