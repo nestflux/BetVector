@@ -25,7 +25,7 @@ import streamlit as st
 
 from src.auth import get_session_user_id
 from src.database.db import get_session
-from src.database.models import InjuryFlag, League, Team, User
+from src.database.models import BetLog, InjuryFlag, League, Team, User
 
 
 # ============================================================================
@@ -170,6 +170,77 @@ def reset_bankroll(user_id: int) -> bool:
                 return False
             user.current_bankroll = user.starting_bankroll
             user.updated_at = datetime.utcnow().isoformat()
+            session.commit()
+        return True
+    except Exception:
+        return False
+
+
+def clear_bet_history(user_id: int) -> int:
+    """Delete all user_placed BetLog rows for the given user.
+
+    E34-04: Clears the user's personal bet history while preserving system
+    picks.  System picks (bet_type='system_pick') record model performance
+    and are global — never scoped to or deleted by a single user.
+
+    Parameters
+    ----------
+    user_id : int
+        The user whose personal bet log entries should be deleted.
+
+    Returns
+    -------
+    int
+        Number of rows deleted, or -1 on failure.
+    """
+    try:
+        with get_session() as session:
+            deleted = (
+                session.query(BetLog)
+                .filter(
+                    BetLog.user_id == user_id,
+                    BetLog.bet_type == "user_placed",
+                )
+                .delete(synchronize_session=False)
+            )
+            session.commit()
+            return deleted
+    except Exception:
+        return -1
+
+
+def reset_everything(user_id: int) -> bool:
+    """Atomically reset the bankroll AND clear bet history for the user.
+
+    E34-04: Both operations (bankroll reset + bet history clear) execute
+    in a single database transaction.  If either fails, both roll back so
+    the data is never left in a partially-reset state.  System picks are
+    always preserved.
+
+    Parameters
+    ----------
+    user_id : int
+        The user to fully reset.
+
+    Returns
+    -------
+    bool
+        True if both operations committed successfully, False otherwise.
+    """
+    try:
+        with get_session() as session:
+            user = session.get(User, user_id)
+            if not user:
+                return False
+            # 1. Reset bankroll counter
+            user.current_bankroll = user.starting_bankroll
+            user.updated_at = datetime.utcnow().isoformat()
+            # 2. Clear personal bet history (system picks untouched)
+            session.query(BetLog).filter(
+                BetLog.user_id == user_id,
+                BetLog.bet_type == "user_placed",
+            ).delete(synchronize_session=False)
+            # Both changes committed in one atomic transaction
             session.commit()
         return True
     except Exception:
@@ -1018,3 +1089,149 @@ else:
                     st.error(
                         "Failed to create user. The email may already be in use."
                     )
+
+    # ==================================================================
+    # Section 6: Danger Zone — Per-User Reset Controls (E34-04)
+    # ==================================================================
+    # Always visible to all authenticated users (not owner-only).
+    # Every action scopes to the currently logged-in user and requires
+    # explicit confirmation before executing.  System picks are NEVER
+    # deleted — only the user's personal user_placed bet log rows.
+    st.divider()
+    st.markdown(
+        '<div class="bv-section-header" style="color: #F85149;">⚠️ Danger Zone</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f'<p style="font-family: Inter, sans-serif; font-size: 13px; '
+        f'color: {COLOURS["text_secondary"]}; margin-bottom: 16px;">'
+        f'These actions affect your personal data only. System model picks '
+        f'are never deleted. All actions are irreversible — confirm carefully.'
+        f'</p>',
+        unsafe_allow_html=True,
+    )
+
+    danger_col1, danger_col2, danger_col3 = st.columns(3)
+
+    # ---- 6a: Reset Bankroll ----
+    with danger_col1:
+        st.markdown(
+            f'<div style="background: {COLOURS["surface"]}; border: 1px solid '
+            f'{COLOURS["border"]}; border-radius: 8px; padding: 16px; height: 100%;">'
+            f'<div style="font-family: Inter, sans-serif; font-size: 14px; '
+            f'font-weight: 600; color: {COLOURS["text"]}; margin-bottom: 6px;">Reset Bankroll</div>'
+            f'<div style="font-family: Inter, sans-serif; font-size: 12px; '
+            f'color: {COLOURS["text_secondary"]}; margin-bottom: 12px;">'
+            f'Resets your current bankroll to ${user_data["starting_bankroll"]:.2f} '
+            f'(your starting amount). Bet history is kept.</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+        confirm_br = st.checkbox(
+            "I understand this will reset my bankroll",
+            key="dz_confirm_reset_br",
+        )
+        if st.button(
+            "Reset Bankroll",
+            key="dz_reset_bankroll_btn",
+            type="secondary",
+            disabled=not confirm_br,
+            use_container_width=True,
+        ):
+            if reset_bankroll(user_data["id"]):
+                st.toast(
+                    f"Bankroll reset to ${user_data['starting_bankroll']:.2f}",
+                    icon="✅",
+                )
+                st.rerun()
+            else:
+                st.error("Failed to reset bankroll. Please try again.")
+
+    # ---- 6b: Clear Bet History ----
+    with danger_col2:
+        # Count how many user_placed rows exist for informational display.
+        # This runs at render time — cheap single COUNT query.
+        try:
+            with get_session() as _s:
+                placed_count = (
+                    _s.query(BetLog)
+                    .filter(
+                        BetLog.user_id == user_data["id"],
+                        BetLog.bet_type == "user_placed",
+                    )
+                    .count()
+                )
+        except Exception:
+            placed_count = 0
+
+        st.markdown(
+            f'<div style="background: {COLOURS["surface"]}; border: 1px solid '
+            f'{COLOURS["border"]}; border-radius: 8px; padding: 16px; height: 100%;">'
+            f'<div style="font-family: Inter, sans-serif; font-size: 14px; '
+            f'font-weight: 600; color: {COLOURS["text"]}; margin-bottom: 6px;">Clear Bet History</div>'
+            f'<div style="font-family: Inter, sans-serif; font-size: 12px; '
+            f'color: {COLOURS["text_secondary"]}; margin-bottom: 12px;">'
+            f'Deletes your {placed_count} manually-placed bet record(s). '
+            f'System model picks are never deleted. Bankroll is unaffected.</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+        confirm_hist = st.checkbox(
+            "I understand this will delete my bet history",
+            key="dz_confirm_clear_hist",
+        )
+        if st.button(
+            "Clear Bet History",
+            key="dz_clear_history_btn",
+            type="secondary",
+            disabled=not confirm_hist,
+            use_container_width=True,
+        ):
+            deleted = clear_bet_history(user_data["id"])
+            if deleted >= 0:
+                st.toast(
+                    f"Cleared {deleted} bet record(s) from your history.",
+                    icon="✅",
+                )
+                st.rerun()
+            else:
+                st.error("Failed to clear bet history. Please try again.")
+
+    # ---- 6c: Reset Everything ----
+    with danger_col3:
+        st.markdown(
+            f'<div style="background: {COLOURS["surface"]}; border: 1px solid '
+            f'rgba(248, 81, 73, 0.4); border-radius: 8px; padding: 16px; height: 100%;">'
+            f'<div style="font-family: Inter, sans-serif; font-size: 14px; '
+            f'font-weight: 600; color: {COLOURS["red"]}; margin-bottom: 6px;">Reset Everything</div>'
+            f'<div style="font-family: Inter, sans-serif; font-size: 12px; '
+            f'color: {COLOURS["text_secondary"]}; margin-bottom: 12px;">'
+            f'Resets your bankroll AND clears your bet history in one atomic '
+            f'action. Type <strong style="color: {COLOURS["text"]}; '
+            f'font-family: JetBrains Mono, monospace;">RESET</strong> to confirm.'
+            f'</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+        reset_confirm_text = st.text_input(
+            "Type RESET to confirm",
+            placeholder="RESET",
+            key="dz_reset_all_text",
+            label_visibility="collapsed",
+        )
+        reset_all_enabled = reset_confirm_text.strip() == "RESET"
+        if st.button(
+            "Reset Everything",
+            key="dz_reset_all_btn",
+            type="primary",
+            disabled=not reset_all_enabled,
+            use_container_width=True,
+        ):
+            if reset_everything(user_data["id"]):
+                st.toast(
+                    "All personal data reset. Bankroll and bet history cleared.",
+                    icon="✅",
+                )
+                st.rerun()
+            else:
+                st.error("Reset failed. Please try again.")

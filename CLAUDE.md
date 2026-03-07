@@ -303,9 +303,9 @@ Wait for owner to respond with approval before making the change.
 
 ## Current Status
 
-Last completed: E34-03 (Scope all dashboard queries to logged-in user) ✅
-Currently working: E34-04 — Per-user reset controls
-Next up: E34-05 — Owner admin page
+Last completed: E34-04 (Per-user reset controls — Danger Zone section) ✅
+Currently working: E34-05 — Owner admin page
+Next up: E34-06 — Integration test
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
@@ -338,11 +338,11 @@ Post-critical-path (March 2026):
 - PC-05: Login ENTER button ✅ — styled green-bordered `st.form_submit_button`, JetBrains Mono, glow on hover
 - PC-06: Fixture stub auto-creation ✅ — `load_odds_the_odds_api` creates scheduled stubs; fixes Today's Picks
 
-E34 — Multi-User Authentication: 3 / 6 issues done 🔄
+E34 — Multi-User Authentication: 4 / 6 issues done 🔄
 - E34-01: Password storage + session overhaul ✅
 - E34-02: Per-user login page ✅
 - E34-03: Scope all dashboard queries to logged-in user ✅
-- E34-04: Per-user reset controls — TODO
+- E34-04: Per-user reset controls ✅
 - E34-05: Owner admin page — TODO
 - E34-06: Integration test — TODO
 

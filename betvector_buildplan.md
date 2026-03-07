@@ -4601,7 +4601,7 @@ and notification preferences must all read from and write to the correct user.
 
 ---
 
-### E34-04 — Per-User Reset Controls — TODO
+### E34-04 — Per-User Reset Controls — DONE ✅
 
 **Type:** Frontend / UX
 **Depends on:** E34-03
@@ -4611,25 +4611,26 @@ Add reset controls to the Settings page so users can wipe their own data
 and start fresh. Each action requires explicit confirmation before executing.
 
 **Changes:**
-- `src/delivery/pages/settings.py` — Add "Danger Zone" section with three actions:
-  1. **Reset Bankroll** — sets `current_bankroll = starting_bankroll` for the
-     logged-in user. Shows current vs starting bankroll. Requires confirmation checkbox.
-  2. **Clear Bet History** — deletes all `bet_log` rows where
-     `user_id = session_user_id AND bet_type = 'user_placed'`. Does NOT delete
-     system picks. Requires confirmation checkbox.
-  3. **Reset Everything** — both of the above in one action. Requires typing
-     "RESET" in a text field to confirm (stronger guard).
+- `src/delivery/views/settings.py` — Added `clear_bet_history(user_id)` and
+  `reset_everything(user_id)` backend functions; added Section 6 "Danger Zone"
+  UI with three reset actions in a 3-column card layout.
+  1. **Reset Bankroll** — checkbox confirm, resets current_bankroll to starting_bankroll
+  2. **Clear Bet History** — checkbox confirm, deletes user_placed rows (shows count); system picks preserved
+  3. **Reset Everything** — must type "RESET" to confirm, atomically does both
 
-**Files:** `src/delivery/pages/settings.py`
+**Results:**
+- 7/7 ACs pass; Gate 2 CLEAN, Gate 3 APPROVED
+- Atomic transaction via single get_session() context in reset_everything()
+- system_pick rows protected by bet_type == "user_placed" filter (double safety: also user_id scoped)
 
 **Acceptance Criteria:**
-- [ ] "Reset Bankroll" button resets `current_bankroll` to `starting_bankroll`
-- [ ] "Clear Bet History" deletes only `user_placed` bet_log rows for that user
-- [ ] "Reset Everything" performs both resets atomically
-- [ ] All three actions require explicit confirmation before executing
-- [ ] "Reset Everything" requires typing "RESET" to confirm
-- [ ] System picks (`bet_type='system_pick'`) are never deleted by user resets
-- [ ] Success message shown after each reset
+- [x] "Reset Bankroll" button resets `current_bankroll` to `starting_bankroll`
+- [x] "Clear Bet History" deletes only `user_placed` bet_log rows for that user
+- [x] "Reset Everything" performs both resets atomically
+- [x] All three actions require explicit confirmation before executing
+- [x] "Reset Everything" requires typing "RESET" to confirm
+- [x] System picks (`bet_type='system_pick'`) are never deleted by user resets
+- [x] Success message shown after each reset
 
 ---
 
