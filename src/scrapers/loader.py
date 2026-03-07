@@ -769,17 +769,68 @@ def load_odds_the_odds_api(
             )
 
             if match is None:
-                # Match not in our DB — could be a different league or
-                # a newly announced fixture not yet in the database.
-                # Log at WARNING (not DEBUG) for pipeline visibility (E23-07).
-                no_match_count += len(group_df)
-                logger.warning(
-                    "load_odds_the_odds_api: No match found for %s %s vs %s "
-                    "— skipping %d odds records.  Check team name mapping "
-                    "or run API-Football scraper to create the fixture.",
-                    match_date, home_name, away_name, len(group_df),
-                )
-                continue
+                # Match not in our DB yet.  Before giving up, attempt to
+                # auto-create a scheduled fixture stub so that The Odds API
+                # can serve as the source of truth for upcoming fixtures —
+                # avoiding dependence on API-Football or Football-Data.org
+                # just to get a row in the matches table.
+                home_team = session.query(Team).filter_by(
+                    name=home_name, league_id=league_id,
+                ).first()
+                away_team = session.query(Team).filter_by(
+                    name=away_name, league_id=league_id,
+                ).first()
+
+                if home_team is None or away_team is None:
+                    # One or both team names are genuinely unknown — the
+                    # team_name_map in odds_api.py needs updating.
+                    no_match_count += len(group_df)
+                    logger.warning(
+                        "load_odds_the_odds_api: Unknown team(s) for %s "
+                        "%s vs %s (home_found=%s, away_found=%s) "
+                        "— skipping %d odds records.  "
+                        "Update TEAM_NAME_MAP in odds_api.py.",
+                        match_date, home_name, away_name,
+                        home_team is not None, away_team is not None,
+                        len(group_df),
+                    )
+                    continue
+
+                # Both teams exist — derive the EPL season from the match date.
+                # EPL runs Aug–May, so Aug 2025 → "2025-26", Mar 2026 → "2025-26".
+                match_dt = pd.to_datetime(match_date)
+                if match_dt.month >= 8:
+                    season = f"{match_dt.year}-{str(match_dt.year + 1)[2:]}"
+                else:
+                    season = f"{match_dt.year - 1}-{str(match_dt.year)[2:]}"
+
+                # Idempotency guard — a concurrent session may have already
+                # inserted this stub; use filter_by to avoid duplicate-key error.
+                existing = session.query(Match).filter_by(
+                    league_id=league_id,
+                    date=match_date,
+                    home_team_id=home_team.id,
+                    away_team_id=away_team.id,
+                ).first()
+
+                if existing:
+                    match = existing
+                else:
+                    match = Match(
+                        league_id=league_id,
+                        season=season,
+                        date=match_date,
+                        home_team_id=home_team.id,
+                        away_team_id=away_team.id,
+                        status="scheduled",
+                    )
+                    session.add(match)
+                    session.flush()  # populate match.id before inserting odds
+                    logger.info(
+                        "load_odds_the_odds_api: Created scheduled fixture "
+                        "stub — %s %s vs %s (match_id=%d, season=%s)",
+                        match_date, home_name, away_name, match.id, season,
+                    )
 
             # Insert each odds record for this match
             for _, row in group_df.iterrows():
