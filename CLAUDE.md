@@ -308,9 +308,9 @@ Wait for owner to respond with approval before making the change.
 
 ## Current Status
 
-Last completed: E35-07 (Integration Test v2 — 10 scenarios, 44/44 tests passing across E34+E35+E35v2 suites) ✅
-Currently working: E36-04 — Integration Test + Backtest
-Next up: E37-01 — XGBoost Model on Multi-League Dataset
+Last completed: E36-04 (Multi-League Integration Test — 28/28 tests passing, La Liga Brier 0.5741 ✅, ROI +4.71% ✅, 72/72 full suite) ✅
+Currently working: E37-01 — XGBoost Model on Multi-League Dataset
+Next up: E37-02 — Walk-Forward Backtest XGBoost vs Poisson
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
@@ -360,11 +360,11 @@ E35 — Bet Tracker UX: ALL 7 issues done ✅
 - E35-06: Quick-log from Fixtures page ✅ (Add-to-Slip button + inline expander, sidebar slip badge, shared session state)
 - E35-07: Integration test v2 ✅ (10 scenarios, 44/44 tests passing across full suite)
 
-E36 — League Expansion: 3 / 4 issues — 🔜 In progress
+E36 — League Expansion: ALL 4 issues done ✅
 - E36-01: Championship data pipeline ✅ (2,077 matches, 29,133 odds)
 - E36-02: La Liga data pipeline ✅ (1,400 matches, 19,704 odds, 26,750 ClubElo records, 2,800 features)
 - E36-03: Multi-league feature adjustments ✅ (league_home_adv_5, is_newly_promoted, per-league edge threshold, backfill bug fix)
-- E36-04: Integration test + backtest — 🔜 Starting now
+- E36-04: Integration test + backtest ✅ (28/28 tests, La Liga Brier 0.5741 ±0.04 of EPL, ROI +4.71%, 72/72 full suite)
 
 E37 — Model Improvement: 0 / 4 issues — 📋 Planned
 - E37-01: XGBoost model on multi-league dataset — TODO

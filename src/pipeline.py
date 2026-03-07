@@ -1204,9 +1204,15 @@ class Pipeline:
                 training_seasons=training_seasons,
             )
 
-            # Print and save the report
+            # Print and save the report.
+            # Use a league-specific filename so Championship/La Liga reports
+            # do not overwrite each other or the EPL report.
+            _safe_league = league.replace(" ", "_").replace("/", "_")
+            _report_path = (
+                f"data/predictions/backtest_report_{_safe_league}_{season}.json"
+            )
             print_backtest_report(bt_result)
-            save_backtest_report(bt_result)
+            save_backtest_report(bt_result, filepath=_report_path)
             plot_backtest_results(bt_result)
 
             # Save results to model_performance table for dashboard display
