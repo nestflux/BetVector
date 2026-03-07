@@ -82,7 +82,7 @@ UNDERSTAT_EPL_TEAM_MAP: Dict[str, str] = {
     "West Ham": "West Ham United",
     "Wolverhampton Wanderers": "Wolverhampton Wanderers",
 
-    # --- Recent/historical teams ---
+    # --- Recent/historical EPL teams ---
     "Leicester": "Leicester City",
     "Southampton": "Southampton",
     "Sheffield United": "Sheffield United",
@@ -93,6 +93,34 @@ UNDERSTAT_EPL_TEAM_MAP: Dict[str, str] = {
     "West Bromwich Albion": "West Bromwich Albion",
     "Huddersfield": "Huddersfield Town",
     "Cardiff": "Cardiff City",
+
+    # --- La Liga teams (E36-02) ---
+    # Understat uses full official names; Football-Data.co.uk uses short forms.
+    # DB canonical names follow Football-Data.co.uk (the primary scraper).
+    "Alaves": "Alaves",
+    "Almeria": "Almeria",
+    "Athletic Club": "Ath Bilbao",      # FD.co.uk: "Ath Bilbao"
+    "Atletico Madrid": "Ath Madrid",    # FD.co.uk: "Ath Madrid"
+    "Barcelona": "Barcelona",
+    "Cadiz": "Cadiz",
+    "Celta Vigo": "Celta",              # FD.co.uk: "Celta"
+    "Elche": "Elche",
+    "Espanyol": "Espanol",              # FD.co.uk: "Espanol" (no accent)
+    "Getafe": "Getafe",
+    "Girona": "Girona",
+    "Granada": "Granada",
+    "Las Palmas": "Las Palmas",
+    "Leganes": "Leganes",
+    "Mallorca": "Mallorca",
+    "Osasuna": "Osasuna",
+    "Rayo Vallecano": "Vallecano",      # FD.co.uk: "Vallecano"
+    "Real Betis": "Betis",              # FD.co.uk: "Betis"
+    "Real Madrid": "Real Madrid",
+    "Real Sociedad": "Sociedad",        # FD.co.uk: "Sociedad"
+    "Real Valladolid": "Valladolid",    # FD.co.uk: "Valladolid"
+    "Sevilla": "Sevilla",
+    "Valencia": "Valencia",
+    "Villarreal": "Villarreal",
 }
 
 

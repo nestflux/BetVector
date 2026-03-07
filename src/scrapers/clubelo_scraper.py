@@ -98,6 +98,38 @@ TEAM_NAME_MAP: Dict[str, str] = {
     "WestHam": "West Ham United",
     "SheffieldUtd": "Sheffield United",
     "WestBrom": "West Bromwich Albion",
+
+    # -------------------------------------------------------------------------
+    # La Liga teams (E36-02)
+    # ClubElo names verified against API for 2022-23, 2023-24, 2024-25 seasons.
+    # DB canonical names follow Football-Data.co.uk (primary match data source).
+    # -------------------------------------------------------------------------
+    # 2024-25 La Liga (20 teams)
+    "Real Madrid": "Real Madrid",
+    "Barcelona": "Barcelona",
+    "Atletico": "Ath Madrid",          # ClubElo: "Atletico" → FD.co.uk: "Ath Madrid"
+    "Girona": "Girona",
+    "Villarreal": "Villarreal",
+    "Bilbao": "Ath Bilbao",            # ClubElo: "Bilbao" → FD.co.uk: "Ath Bilbao"
+    "Sociedad": "Sociedad",
+    "Betis": "Betis",
+    "Sevilla": "Sevilla",
+    "Celta": "Celta",
+    "Alaves": "Alaves",
+    "Mallorca": "Mallorca",
+    "Valencia": "Valencia",
+    "Osasuna": "Osasuna",
+    "Getafe": "Getafe",
+    "Rayo Vallecano": "Vallecano",     # ClubElo: "Rayo Vallecano" → FD.co.uk: "Vallecano"
+    "Espanyol": "Espanol",             # ClubElo: "Espanyol" → FD.co.uk: "Espanol"
+    "Valladolid": "Valladolid",
+    "Las Palmas": "Las Palmas",
+    "Leganes": "Leganes",
+    # Historical La Liga teams (2022-24 seasons, now relegated)
+    "Almeria": "Almeria",
+    "Cadiz": "Cadiz",
+    "Elche": "Elche",
+    "Granada": "Granada",
 }
 
 

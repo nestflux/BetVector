@@ -58,21 +58,27 @@ leagues:
     edge_threshold_override: 0.03  # Lower threshold — Championship market less efficient than EPL
 
   # -------------------------------------------------------------------------
-  # La Liga (E36-02 — planned, not yet active)
-  # Uncomment and set is_active: true when ready to expand.
+  # La Liga (E36-02 — League Expansion)
+  # Football-Data.co.uk code: SP1 (same CSV format as EPL E0)
+  # 20 teams × 38 matches per team = 380 matches per season
+  # Well-served market (Pinnacle, Betway cover it well) → EPL-level 5% threshold
+  # Understat key: "La_Liga" (underscore + uppercase L — NOT "La liga")
+  # ClubElo covers La Liga teams fully
+  # Football-Data.org free tier covers PL only → football_data_org_code: null
   # -------------------------------------------------------------------------
-  # - name: "La Liga"
-  #   short_name: "LaLiga"
-  #   country: "Spain"
-  #   football_data_code: "SP1"
-  #   fbref_league_id: "ESP-La Liga"
-  #   api_football_id: 140
-  #   understat_league: "La liga"
-  #   is_active: false
-  #   seasons:
-  #     - "2022-23"
-  #     - "2023-24"
-  #     - "2024-25"
-  #     - "2025-26"
-  #   total_matchdays: 38
-  #   edge_threshold_override: 0.05   # EPL-level threshold — well-served market
+  - name: "La Liga"
+    short_name: "LaLiga"
+    country: "Spain"
+    football_data_code: "SP1"
+    fbref_league_id: "ESP-La Liga"
+    api_football_id: 140
+    understat_league: "La_Liga"   # Understat API key (verified: returns 380 matches/season)
+    football_data_org_code: null  # Football-Data.org free tier covers PL only
+    is_active: true
+    seasons:
+      - "2022-23"
+      - "2023-24"
+      - "2024-25"
+      - "2025-26"
+    total_matchdays: 38
+    edge_threshold_override: 0.05  # Same as EPL — well-served market
