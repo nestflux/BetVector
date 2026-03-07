@@ -4972,7 +4972,11 @@ attack/defence ratings per team, not per league. What needs adjustment:
 
 ---
 
-### E36-01 — Championship Data Pipeline
+### E36-01 — Championship Data Pipeline ✅ DONE
+
+**Result:** 2,077 Championship matches, 29,133 odds, 4,154 features, 421 predictions.
+Fixed critical bug in `football_data_org.py` (hardcoded "PL" caused EPL matches to load
+as Championship). Added `football_data_org_code` per-league config field. All 7 ACs pass.
 
 **Type:** Data / Scraper Config
 **Depends on:** E35-03

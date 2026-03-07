@@ -307,9 +307,9 @@ Wait for owner to respond with approval before making the change.
 
 ## Current Status
 
-Last completed: E35-03 (E35 Integration Test — 15/15 pass) ✅
-Currently working: E36-01 — Championship Data Pipeline
-Next up: E36-02 — Championship Historical Backfill
+Last completed: E36-01 (Championship Data Pipeline — 2077 matches, 29133 odds, bug fix in FD.org scraper) ✅
+Currently working: E36-02 — La Liga Data Pipeline
+Next up: E36-03 — Multi-League Feature Adjustments
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
