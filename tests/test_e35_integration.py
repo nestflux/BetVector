@@ -51,9 +51,12 @@ from unittest.mock import MagicMock
 def _make_st_mock() -> MagicMock:
     """Return a MagicMock that is safe enough for Streamlit page imports."""
     st = MagicMock()
-    # Actual dict so st.session_state.get("user_id", 1) → 1 (the default),
-    # which makes get_session_user_id() return int(1) instead of MagicMock().
-    st.session_state = {}
+    # Real dict so session_state.get("key", default) works correctly.
+    # user_id=99999 is intentionally a non-existent sentinel so page modules
+    # that call load_current_user(get_session_user_id()) receive None and skip
+    # their UI rendering sections — preventing widget mock bleed-through when
+    # settings.py or admin.py is first imported during test execution.
+    st.session_state = {"user_id": 99999}
     # st.columns([widths]) / st.columns(n) must return an iterable of the
     # correct length — otherwise tuple-unpacking at module level crashes.
     st.columns.side_effect = lambda spec: [
@@ -64,8 +67,13 @@ def _make_st_mock() -> MagicMock:
     # Form submit button should return False (not submitted) so the submission
     # code block does not execute during import.
     st.form_submit_button.return_value = False
-    # Status radio defaults to "All" so load_user_bets() receives a valid string.
-    st.radio.return_value = "All"
+    # radio.side_effect: return the first option in the options list so this mock
+    # works for ANY st.radio() call (my_bets date-window, settings staking method,
+    # etc.) without injecting a value that is invalid for other callers.
+    def _radio_side_effect(*args, **kwargs):
+        opts = kwargs.get("options") or (args[1] if len(args) > 1 else None)
+        return opts[0] if opts else None
+    st.radio.side_effect = _radio_side_effect
     return st
 
 

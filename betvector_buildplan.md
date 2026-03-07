@@ -49,11 +49,11 @@ This document breaks the BetVector masterplan into sequenced epics and issues th
 | E33 | Cloud Migration | 6 | SQLite → PostgreSQL + Neon, dual-DB engine, data migration, workflow simplification, Streamlit Cloud deploy |
 | PC | Post-Critical-Path Fixes | 6 | Logo transparency, logo centering, demo app, demo GIF, login ENTER button, fixture stub auto-creation |
 | E34 | Multi-User Authentication | 6 | Per-user login, hashed passwords, scoped bankroll/bet log, reset controls, owner admin page |
-| E35 | Bet Tracker UX | 3 | Manual bet entry form, bet slip with edit/void, integration test |
+| E35 | Bet Tracker UX | 7 | Manual bet entry form, bet slip with edit/void, integration test; v2: fixture browser, slip builder, quick-log from fixtures |
 | E36 | League Expansion | 4 | Championship + La Liga scrapers, multi-league features, backtest comparison |
 | E37 | Model Improvement | 4 | XGBoost on multi-league dataset, ensemble, walk-forward backtest |
 
-**Total: 38 epics, 150 issues** (45 original + 20 post-launch + 12 odds/model + 7 backfill + 16 dashboard UX + 5 clarity + 16 badges/polish + 6 cloud migration + 6 post-critical-path + 6 multi-user auth + 3 bet tracker + 4 league expansion + 4 model improvement)
+**Total: 38 epics, 154 issues** (45 original + 20 post-launch + 12 odds/model + 7 backfill + 16 dashboard UX + 5 clarity + 16 badges/polish + 6 cloud migration + 6 post-critical-path + 6 multi-user auth + 7 bet tracker + 4 league expansion + 4 model improvement)
 
 ---
 
@@ -4918,7 +4918,207 @@ Automated pytest suite covering all E35 backend logic.
 E35-01 (manual entry form + My Bets page)
 → E35-02 (bet slip table + edit/void)
 → E35-03 (integration test)
+→ E35-04 (fixture browser on My Bets)
+→ E35-05 (bet slip builder panel)
+→ E35-06 (quick-log from Fixtures page)
+→ E35-07 (integration test v2)
 ```
+
+---
+
+### E35-04 — Fixture Browser (My Bets Page) ✅ DONE
+
+**Type:** Frontend + Backend
+**Depends on:** E35-03
+**Master Plan:** MP §6 Schema (match, odds tables), MP §8 Design System, MP §9 Dashboard
+**Result:** load_fixtures_with_odds() query, date-window radio tabs (Today/Tomorrow/Next 3 Days/Next 7 Days), 7-market toggle buttons per fixture, pending_slip session state
+
+Replace the current selectbox match dropdown in "Log a Bet" with a
+full browsable fixture grid. Users scan upcoming fixtures, see live
+odds for each market inline, and click any odds button to add that
+selection to a running bet slip — no forms to fill in.
+
+**Changes:**
+
+- `src/delivery/views/my_bets.py`:
+  - New function `load_fixtures_with_odds(days: int = 7) -> list[dict]`
+    - Joins `Match` + `Odds` tables for scheduled fixtures from today
+      through `days` ahead
+    - For each fixture, returns the latest odds (by `retrieved_at`) for:
+      `1X2 Home`, `1X2 Draw`, `1X2 Away`, `Over 2.5`, `Under 2.5`,
+      `BTTS Yes`, `BTTS No`
+    - Returns `None` for any market where no odds exist in DB
+    - Sorted by `date ASC`, `kickoff_time ASC`
+  - New UI section: **Fixture Browser** (replaces the current selectbox)
+    - Date strip tabs: `Today` · `Tomorrow` · `Next 3 Days` · `Next 7 Days`
+      — filters the fixture list to that window
+    - Fixtures rendered as rows, grouped by date heading (e.g. "Sat 8 Mar")
+    - Each fixture row shows:
+      - League badge (if available) + home team vs away team + kickoff time
+      - Market buttons inline: `[Home 2.10]` `[Draw 3.40]` `[Away 3.20]`
+        `[O2.5 1.85]` `[U2.5 1.95]` `[BTTS Y 1.75]` `[BTTS N 2.05]`
+      - If odds not available for a market, show the label greyed out but
+        still clickable (user can set odds manually in the slip panel)
+    - Clicking a market button adds `{match_id, home_team, away_team, date,
+      league, market_type, selection, odds}` to
+      `st.session_state["pending_slip"]`
+    - Selected buttons render with a green border and `#3FB950` tint to
+      show they are in the slip
+    - Clicking again on an already-selected button removes it from the slip
+      (toggle behaviour)
+  - The old selectbox-based "Log a Bet" form is **removed** from this page
+    (its backend functions `log_manual_bet`, `check_duplicate_bet`, etc.
+    are retained — they are called by the new slip builder in E35-05)
+
+**Files:** `src/delivery/views/my_bets.py`
+
+**Acceptance Criteria:**
+- [ ] Fixture browser renders upcoming matches grouped by date
+- [ ] Date strip tabs correctly filter the fixture list
+- [ ] Each fixture row shows market buttons with odds where available
+- [ ] Clicking a market button adds to `st.session_state["pending_slip"]`
+- [ ] Clicking an already-selected button removes it (toggle)
+- [ ] Selected buttons visually differ from unselected (green border/tint)
+- [ ] Fixtures with no odds show greyed market labels (still clickable)
+- [ ] Empty state shown if no fixtures in the selected date window
+
+---
+
+### E35-05 — Bet Slip Builder Panel ✅ DONE
+
+**Type:** Frontend + Backend
+**Depends on:** E35-04
+**Master Plan:** MP §6 Schema (bet_log table), MP §8 Design System
+**Result:** log_multiple_bets() bulk insert, global stake + per-row override, Est. Return column, Log All Bets + Clear Slip buttons, success/skip banner
+
+The accumulating slip panel that appears below the fixture browser once
+at least one selection has been added. Users review their picks, adjust
+stakes and odds if needed, then confirm with a single button to log all
+bets to the database at once.
+
+**Changes:**
+
+- `src/delivery/views/my_bets.py`:
+  - New function `log_multiple_bets(user_id: int, selections: list[dict])
+    -> list[int]`
+    - Iterates over `selections`, calls `check_duplicate_bet()` for each
+    - Skips (and warns on) any duplicates found
+    - Calls `log_manual_bet()` for each valid selection
+    - Returns list of newly created `BetLog` IDs
+    - All-or-nothing per bet: one failure does not block the rest
+  - New UI section: **Pending Slip** (rendered below the fixture browser)
+    - Only visible when `st.session_state["pending_slip"]` is non-empty
+    - Section header: "Pending Slip (N bets)" where N = count of selections
+    - **Global stake row** at the top:
+      - Stake input pre-filled from `get_default_stake(user_id)`
+      - Labelled "Default Stake ($) — applies to all bets"
+      - Changing this updates all rows that haven't been individually
+        overridden
+    - **Slip table** — one row per selection:
+      - Match (home vs away), Market, Selection, Odds (editable number
+        input — user may have got a slightly different price), Stake
+        (editable — overrides global for this row), Est. Return, × remove
+      - Est. Return = `(odds − 1) × stake`, updated live as inputs change
+    - **Summary footer:**
+      - Total stake across all rows
+      - Total estimated return across all rows
+    - **"Log All Bets" button** (green, full width):
+      - Calls `log_multiple_bets()`
+      - On success: shows toast "X bet(s) logged ✓", clears
+        `st.session_state["pending_slip"]`, reruns to refresh history table
+      - On partial failure: shows which bets were skipped (duplicates) and
+        which were logged
+    - **"Clear Slip" link** below the button — empties the slip without
+      logging
+
+**Files:** `src/delivery/views/my_bets.py`
+
+**Acceptance Criteria:**
+- [ ] Slip panel invisible when `pending_slip` is empty
+- [ ] Slip panel appears immediately after first selection is added
+- [ ] Global stake pre-fills from user's bankroll staking settings
+- [ ] Changing global stake updates est. return for all unoverridden rows
+- [ ] Per-row odds and stake are individually editable
+- [ ] Est. Return updates live as odds/stake changes
+- [ ] "Log All Bets" writes one `BetLog` row per selection to the DB
+- [ ] Duplicate detection warns and skips; non-duplicates still log
+- [ ] Slip clears after successful log; history table shows new pending bets
+- [ ] "Clear Slip" empties `pending_slip` without writing to DB
+
+---
+
+### E35-06 — Quick-Log from Fixtures Page ✅ DONE
+
+**Type:** Frontend
+**Depends on:** E35-05
+**Master Plan:** MP §8 Design System, MP §9 Dashboard
+**Result:** Add-to-Slip button + inline expander on each fixture card in fixtures.py, sidebar slip counter badge in dashboard.py, shared pending_slip session state across pages
+
+Surface the bet slip builder on the Fixtures page so users can add bets
+directly while browsing upcoming fixtures — without navigating to My Bets
+first. A persistent "Slip (N)" counter in the sidebar shows how many
+selections are queued across pages.
+
+**Changes:**
+
+- `src/delivery/views/fixtures.py`:
+  - Add **"＋ Add to Slip"** button to each fixture card / row
+  - Clicking expands an inline `st.expander` for that fixture showing:
+    - The same 7 market buttons as the fixture browser (E35-04) with live
+      odds pulled from `load_fixtures_with_odds()` for that match_id
+    - Clicking a market button adds the selection to
+      `st.session_state["pending_slip"]` (same shared state as My Bets)
+    - Expander auto-closes after a selection is made (via `st.rerun()`)
+  - Already-selected markets shown with a green tick indicator so users
+    don't accidentally add the same market twice
+
+- `src/delivery/dashboard.py`:
+  - Add a **slip counter badge** to the My Bets sidebar entry when
+    `st.session_state.get("pending_slip")` is non-empty
+  - Format: "My Bets 🟢 N" where N = len of pending slip
+  - Badge disappears when slip is empty
+
+**Files:** `src/delivery/views/fixtures.py`, `src/delivery/dashboard.py`
+
+**Acceptance Criteria:**
+- [ ] "＋ Add to Slip" button visible on each fixture card in Fixtures page
+- [ ] Clicking the button opens an inline market selector for that fixture
+- [ ] Selecting a market adds it to the shared `pending_slip` session state
+- [ ] Already-selected markets for that fixture show a tick / selected state
+- [ ] Sidebar "My Bets" entry shows a count badge when slip is non-empty
+- [ ] Badge disappears when slip is cleared or all bets are logged
+- [ ] Navigating to My Bets shows the selections queued from Fixtures
+
+---
+
+### E35-07 — Integration Test (Bet Tracker UX v2) ✅ DONE
+
+**Type:** QA
+**Depends on:** E35-06
+**Master Plan:** MP §6 Schema (bet_log table)
+**Result:** tests/test_e35_v2_integration.py — 10 scenarios, 44/44 passing across full suite (E34+E35+E35v2); mock isolation fixed via conditional installation + radio side_effect + user_id=99999 sentinel
+
+Automated pytest suite covering all new backend logic introduced in
+E35-04 through E35-06.
+
+**Test script:** `tests/test_e35_v2_integration.py`
+
+**Test scenarios:**
+1. `load_fixtures_with_odds()` returns fixtures with correct odds structure
+2. `load_fixtures_with_odds()` returns `None` for markets with no odds in DB
+3. `log_multiple_bets()` creates one BetLog row per valid selection
+4. `log_multiple_bets()` skips duplicate selections and logs the rest
+5. `log_multiple_bets()` returns empty list when all selections are duplicates
+6. Per-row odds override is saved correctly (not overwritten by detection odds)
+7. Slip total stake and est. return calculations match expected values
+8. `pending_slip` state clears after `log_multiple_bets()` succeeds
+9. Cross-user guard: user A cannot see user B's logged bets in history table
+10. Empty fixture window returns empty list (no crash)
+
+**Acceptance Criteria:**
+- [ ] All 10 test scenarios pass
+- [ ] Tests use in-memory SQLite with patched engine/SessionFactory
+- [ ] No cross-user data leakage in any scenario
 
 ---
 

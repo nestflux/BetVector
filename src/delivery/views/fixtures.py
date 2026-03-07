@@ -175,6 +175,84 @@ PRED_PROB_MAP = {
 
 
 # ============================================================================
+# Slip markets for "Add to Slip" quick-log (E35-06)
+# Mirrors _BROWSER_MARKETS in my_bets.py — both lists must stay in sync.
+# Each tuple: (db_market_type, db_selection,
+#              betlog_market_type, betlog_selection, button_label)
+# ============================================================================
+
+_SLIP_MARKETS: List[Tuple[str, str, str, str, str]] = [
+    ("1X2",  "home",  "1X2",       "Home",  "Home"),
+    ("1X2",  "draw",  "1X2",       "Draw",  "Draw"),
+    ("1X2",  "away",  "1X2",       "Away",  "Away"),
+    ("OU25", "over",  "Over 2.5",  "Over",  "O2.5"),
+    ("OU25", "under", "Under 2.5", "Under", "U2.5"),
+    ("BTTS", "yes",   "BTTS Yes",  "Yes",   "BTTS Y"),
+    ("BTTS", "no",    "BTTS No",   "No",    "BTTS N"),
+]
+
+
+def _slip_key(match_id: int, db_market: str, db_selection: str) -> str:
+    """Unique identifier for a pending slip entry.
+
+    Must produce the same key as _slip_key() in my_bets.py so that
+    selections added on this page are visible in the slip builder there.
+    """
+    return f"{match_id}__{db_market}__{db_selection}"
+
+
+def _get_fixture_odds_for_slip(match_id: int) -> Dict[Tuple[str, str], Optional[float]]:
+    """Fetch the most recent odds for the 7 slip markets for one fixture.
+
+    Called lazily only when the "Add to Slip" expander is open, so
+    there is no performance impact on the main fixture list render.
+
+    Returns
+    -------
+    dict keyed by (db_market_type, db_selection) → odds_decimal or None.
+    """
+    try:
+        with get_session() as session:
+            # Subquery: latest captured_at per (market_type, selection)
+            latest_sq = (
+                session.query(
+                    Odds.market_type,
+                    Odds.selection,
+                    func.max(Odds.captured_at).label("latest"),
+                )
+                .filter(
+                    Odds.match_id == match_id,
+                    Odds.market_type.in_(["1X2", "OU25", "BTTS"]),
+                )
+                .group_by(Odds.market_type, Odds.selection)
+                .subquery()
+            )
+            odds_rows = (
+                session.query(Odds)
+                .join(
+                    latest_sq,
+                    (Odds.market_type  == latest_sq.c.market_type)
+                    & (Odds.selection  == latest_sq.c.selection)
+                    & (Odds.captured_at == latest_sq.c.latest),
+                )
+                .filter(Odds.match_id == match_id)
+                .all()
+            )
+            lut = {(o.market_type, o.selection): o.odds_decimal for o in odds_rows}
+            return {
+                ("1X2",  "home"):  lut.get(("1X2",  "home")),
+                ("1X2",  "draw"):  lut.get(("1X2",  "draw")),
+                ("1X2",  "away"):  lut.get(("1X2",  "away")),
+                ("OU25", "over"):  lut.get(("OU25", "over")),
+                ("OU25", "under"): lut.get(("OU25", "under")),
+                ("BTTS", "yes"):   lut.get(("BTTS", "yes")),
+                ("BTTS", "no"):    lut.get(("BTTS", "no")),
+            }
+    except Exception:
+        return {}
+
+
+# ============================================================================
 # Data Loading
 # ============================================================================
 
@@ -1151,6 +1229,19 @@ if view_mode == "Upcoming":
 
         st.divider()
 
+        # ── Pending slip banner (E35-06) ─────────────────────────────────
+        # If the user has queued bets from any page, show a quick reminder
+        # with the count.  Keeps users aware their slip is active without
+        # forcing them to leave the Fixtures page.
+        _pending = st.session_state.get("pending_slip", {})
+        if _pending:
+            _n = len(_pending)
+            st.info(
+                f"🎯 **{_n} bet{'s' if _n != 1 else ''} in your slip** — "
+                f"head to **My Bets** to review and confirm them.",
+                icon=None,
+            )
+
         # Group fixtures by date and render
         for match_date, group in groupby(fixtures, key=lambda x: x["date"]):
             st.markdown(
@@ -1278,14 +1369,92 @@ if view_mode == "Upcoming":
                     unsafe_allow_html=True,
                 )
 
-                # Deep Dive button
-                if st.button(
-                    "\U0001F50D Deep Dive",
-                    key=f"fixture_dive_{fix['match_id']}",
-                    type="secondary",
-                ):
-                    st.session_state["deep_dive_match_id"] = fix["match_id"]
-                    st.switch_page("views/match_detail.py")
+                # ── Action buttons: Deep Dive  |  Add to Slip (E35-06) ────
+                dive_col, slip_col = st.columns([2, 1])
+
+                with dive_col:
+                    if st.button(
+                        "\U0001F50D Deep Dive",
+                        key=f"fixture_dive_{fix['match_id']}",
+                        type="secondary",
+                    ):
+                        st.session_state["deep_dive_match_id"] = fix["match_id"]
+                        st.switch_page("views/match_detail.py")
+
+                with slip_col:
+                    # Show how many markets for this match are already in
+                    # the slip — e.g. "✓ 2 in Slip" vs "＋ Add to Slip".
+                    _slip = st.session_state.get("pending_slip", {})
+                    _match_count = sum(
+                        1 for k in _slip
+                        if k.startswith(f"{fix['match_id']}__")
+                    )
+                    _slip_btn_label = (
+                        f"✓ {_match_count} in Slip"
+                        if _match_count > 0
+                        else "＋ Add to Slip"
+                    )
+                    if st.button(
+                        _slip_btn_label,
+                        key=f"add_to_slip_{fix['match_id']}",
+                        type="secondary",
+                        use_container_width=True,
+                    ):
+                        _exp_key = f"slip_exp_{fix['match_id']}"
+                        st.session_state[_exp_key] = not st.session_state.get(
+                            _exp_key, False,
+                        )
+                        st.rerun()
+
+                # ── Inline market selector expander ────────────────────────
+                # Opens when user clicks "Add to Slip".  Lazy DB query so
+                # odds are only fetched for the expanded fixture, not all.
+                if st.session_state.get(f"slip_exp_{fix['match_id']}", False):
+                    with st.expander(
+                        f"Select markets — {fix['home_team']} vs {fix['away_team']}",
+                        expanded=True,
+                    ):
+                        _fx_odds  = _get_fixture_odds_for_slip(fix["match_id"])
+                        _slip_now = st.session_state.setdefault("pending_slip", {})
+                        _btn_cols = st.columns(7)
+
+                        for _col, (_db_mkt, _db_sel, _bl_mkt, _bl_sel, _lbl) in zip(
+                            _btn_cols, _SLIP_MARKETS,
+                        ):
+                            _skey    = _slip_key(fix["match_id"], _db_mkt, _db_sel)
+                            _is_sel  = _skey in _slip_now
+                            _raw_o   = _fx_odds.get((_db_mkt, _db_sel))
+                            _odds_s  = f"{_raw_o:.2f}" if _raw_o is not None else "—"
+                            _btn_lbl = f"{'✓ ' if _is_sel else ''}{_lbl}\n{_odds_s}"
+
+                            with _col:
+                                if st.button(
+                                    _btn_lbl,
+                                    key=f"fxslip_{_skey}",
+                                    use_container_width=True,
+                                    help=(
+                                        f"{'Remove from' if _is_sel else 'Add to'} slip: "
+                                        f"{_bl_mkt} · {_bl_sel}"
+                                    ),
+                                ):
+                                    if _is_sel:
+                                        del st.session_state["pending_slip"][_skey]
+                                        st.session_state.pop(f"slip_odds_{_skey}",  None)
+                                        st.session_state.pop(f"slip_stake_{_skey}", None)
+                                    else:
+                                        st.session_state["pending_slip"][_skey] = {
+                                            "match_id":    fix["match_id"],
+                                            "date":        fix["date"],
+                                            "home_team":   fix["home_team"],
+                                            "away_team":   fix["away_team"],
+                                            "league":      fix["league"],
+                                            "market_type": _bl_mkt,
+                                            "selection":   _bl_sel,
+                                            "odds":        _raw_o,
+                                            "label":       _lbl,
+                                            "slip_key":    _skey,
+                                        }
+                                    st.rerun()
 
 else:
     # ══════════════════════════════════════════════════════════════════════

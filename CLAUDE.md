@@ -98,6 +98,7 @@ E32-01 → E32-02 → E32-03 → E32-04 → E32-05 →
 E33-01 → E33-02 → E33-03 → E33-04 → E33-05 → E33-06 →
 E34-01 → E34-02 → E34-03 → E34-04 → E34-05 → E34-06 →
 E35-01 → E35-02 → E35-03 →
+E35-04 → E35-05 → E35-06 → E35-07 →
 E36-01 → E36-02 → E36-03 → E36-04 →
 E37-01 → E37-02 → E37-03 → E37-04
 ```
@@ -307,7 +308,7 @@ Wait for owner to respond with approval before making the change.
 
 ## Current Status
 
-Last completed: E36-03 (Multi-League Feature Adjustments — league_home_adv_5, is_newly_promoted, per-league edge threshold, backfill_historical bug fix) ✅
+Last completed: E35-07 (Integration Test v2 — 10 scenarios, 44/44 tests passing across E34+E35+E35v2 suites) ✅
 Currently working: E36-04 — Integration Test + Backtest
 Next up: E37-01 — XGBoost Model on Multi-League Dataset
 
@@ -350,10 +351,14 @@ E34 — Multi-User Authentication: ALL 6 issues done ✅
 - E34-05: Owner admin page ✅
 - E34-06: Integration test ✅ (19/19 pytest tests passing)
 
-E35 — Bet Tracker UX: 3 / 3 issues ✅
+E35 — Bet Tracker UX: ALL 7 issues done ✅
 - E35-01: Manual bet entry form (My Bets page) ✅
 - E35-02: Bet slip with edit/void ✅
-- E35-03: Integration test ✅
+- E35-03: Integration test ✅ (15 tests)
+- E35-04: Fixture browser on My Bets page ✅ (load_fixtures_with_odds, date tabs, 7-market buttons, toggle add/remove, pending_slip session state)
+- E35-05: Bet slip builder panel ✅ (global stake + per-row override, log_multiple_bets, Clear Slip, totals row)
+- E35-06: Quick-log from Fixtures page ✅ (Add-to-Slip button + inline expander, sidebar slip badge, shared session state)
+- E35-07: Integration test v2 ✅ (10 scenarios, 44/44 tests passing across full suite)
 
 E36 — League Expansion: 3 / 4 issues — 🔜 In progress
 - E36-01: Championship data pipeline ✅ (2,077 matches, 29,133 odds)

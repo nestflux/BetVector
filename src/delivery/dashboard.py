@@ -618,6 +618,26 @@ def render_sidebar() -> None:
         )
         st.divider()
 
+        # ── Pending slip counter (E35-06) ───────────────────────────────
+        # Shows a live count of queued bets so users know their slip is
+        # active no matter which page they're on.  Clicking "My Bets"
+        # from the nav above takes them straight to the slip builder.
+        _slip = st.session_state.get("pending_slip", {})
+        if _slip:
+            _n = len(_slip)
+            st.markdown(
+                f'<div style="background: rgba(63,185,80,0.12); '
+                f'border: 1px solid rgba(63,185,80,0.4); '
+                f'border-radius: 8px; padding: 8px 12px; '
+                f'font-family: Inter, sans-serif; font-size: 12px; '
+                f'color: #3FB950; text-align: center;">'
+                f'🎯 <strong>{_n} bet{"s" if _n != 1 else ""}</strong> in slip<br>'
+                f'<span style="font-size: 11px; color: #8B949E;">'
+                f'Go to My Bets to confirm</span>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
 
 # ============================================================================
 # Main
