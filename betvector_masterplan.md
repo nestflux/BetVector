@@ -736,7 +736,7 @@ CREATE TABLE bet_log (
     implied_prob    REAL NOT NULL,
     edge            REAL NOT NULL,
     stake           REAL NOT NULL,                          -- Stake amount in currency
-    stake_method    TEXT NOT NULL,                          -- 'flat', 'percentage', 'kelly'
+    stake_method    TEXT NOT NULL,                          -- 'flat', 'percentage', 'kelly', 'manual' (E35-01: sentinel for user-entered manual bets)
     bet_type        TEXT NOT NULL DEFAULT 'system_pick'     -- 'system_pick' (auto-logged) or 'user_placed'
         CHECK (bet_type IN ('system_pick', 'user_placed')),
     status          TEXT NOT NULL DEFAULT 'pending'         -- Bet resolution status

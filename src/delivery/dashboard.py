@@ -537,6 +537,14 @@ def get_pages() -> list:
             title="Today's Picks",
             icon="🎯",
         ),
+        # E35-01: My Bets — manual bet entry form for all logged-in users.
+        # Appears between Today's Picks and Performance Tracker so the
+        # bet-logging workflow is contiguous (see picks → log bet → track performance).
+        st.Page(
+            "views/my_bets.py",
+            title="My Bets",
+            icon="📋",
+        ),
         st.Page(
             "views/performance.py",
             title="Performance Tracker",

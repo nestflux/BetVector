@@ -4749,11 +4749,12 @@ primary daily interaction surface for any serious bettor using the system.
 
 ---
 
-### E35-01 — Manual Bet Entry Form
+### E35-01 — Manual Bet Entry Form ✅ DONE
 
 **Type:** Frontend + Backend
 **Depends on:** E34-06
 **Master Plan:** MP §6 Schema (bet_log table), MP §8 Betting Engine
+**Result:** `src/delivery/views/my_bets.py` created (316 lines). My Bets page added to sidebar for all users. load_upcoming_fixtures (7-day window, aliased joins), check_duplicate_bet, log_manual_bet (model_prob=0.0/edge=0.0 sentinels, stake_method="manual"). Form reset via clear_on_submit + bet_form_key increment. Gate 2 CLEAN (MP §6 updated to document "manual" stake_method). Gate 3 APPROVED.
 
 A bet entry form on a new **My Bets** page that lets users log any bet —
 not just model picks — directly from the dashboard.

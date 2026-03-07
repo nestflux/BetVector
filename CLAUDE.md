@@ -307,9 +307,9 @@ Wait for owner to respond with approval before making the change.
 
 ## Current Status
 
-Last completed: E34-06 (Integration test — 19/19 pytest tests passing) ✅
-Currently working: E35-01 — Manual Bet Entry Form (My Bets page)
-Next up: E35-02 — Bet Slip with Edit/Void
+Last completed: E35-01 (Manual Bet Entry Form — My Bets page) ✅
+Currently working: E35-02 — Bet Slip with Edit/Void
+Next up: E35-03 — E35 Integration Test
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
