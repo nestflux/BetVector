@@ -1490,7 +1490,7 @@ class Pipeline:
             derive_market_probabilities,
         )
         from src.models.poisson import PoissonModel
-        from src.models.storage import save_predictions
+        from src.models.storage import load_active_models, save_predictions
         from src.self_improvement.ensemble_weights import get_current_weights
 
         # Build results DataFrame for training from ALL historical seasons
@@ -1555,9 +1555,9 @@ class Pipeline:
             len(train_features), current_count, hist_count,
         )
 
-        # ---- Determine which models to train (E25-02) ----
-        # Read active models from config. If ensemble is disabled or only
-        # one model is listed, run single-model mode (backwards compatible).
+        # ---- Determine which models to run (E37-03) ----
+        # Read active models and ensemble flag from config.
+        # load_active_models() handles XGBoost pkl loading / fallback.
         try:
             active_models = list(config.settings.models.active_models)
         except (AttributeError, TypeError):
@@ -1568,15 +1568,36 @@ class Pipeline:
         except (AttributeError, TypeError):
             ensemble_enabled = False
 
-        # ---- Train and predict from each active model ----
+        # Load all active models.
+        # - Poisson: always instantiated fresh (trained below).
+        # - XGBoost: loaded from data/models/xgboost_v1.pkl (pre-trained).
+        #   If pkl missing → logged as WARNING and excluded from loaded_models,
+        #   so the pipeline falls back to Poisson-only gracefully (MP §11.3).
+        loaded_models = load_active_models()
+
+        # If ensemble was requested but XGBoost didn't load, disable ensemble
+        # for this run — no silent degradation, just Poisson-only behaviour.
+        loaded_keys = list(loaded_models.keys())
+        if ensemble_enabled and len(loaded_keys) < 2:
+            logger.warning(
+                "Ensemble requested but only %d model(s) loaded (%s). "
+                "Falling back to single-model mode for this run.",
+                len(loaded_keys), loaded_keys,
+            )
+            print(
+                f"  ⚠ Ensemble disabled this run: only {loaded_keys} available"
+            )
+            ensemble_enabled = False
+
+        # ---- Train and predict from each loaded model ----
         # model_predictions maps model_name → list of MatchPrediction
         model_predictions = {}
 
         for model_key in active_models:
-            # Instantiate the correct model class
-            model = self._create_model(model_key)
+            model = loaded_models.get(model_key)
             if model is None:
-                logger.warning("Unknown model key '%s', skipping", model_key)
+                # Model was not loaded (e.g., XGBoost pkl missing) — already warned
+                logger.info("Skipping '%s' — not loaded", model_key)
                 continue
 
             # Check which matches still need predictions from this model
@@ -1601,12 +1622,21 @@ class Pipeline:
                 model_predictions[model.name] = []
                 continue
 
-            # Train the model on the full historical dataset
-            try:
-                model.train(train_features, results_df)
-            except Exception as e:
-                logger.error("Failed to train %s: %s", model.name, e)
-                continue
+            # Train the model on the full historical dataset — unless it was
+            # pre-loaded from disk.  Poisson is always retrained (< 1 s).
+            # XGBoost loaded from pkl is already trained; skip retrain to
+            # preserve the pkl's weights (retrain only via `run train`).
+            already_trained = getattr(model, "_is_trained", False)
+            if not already_trained:
+                try:
+                    model.train(train_features, results_df)
+                except Exception as e:
+                    logger.error("Failed to train %s: %s", model.name, e)
+                    continue
+            else:
+                logger.info(
+                    "Using pre-loaded %s model (skipping retrain)", model.name,
+                )
 
             # Generate predictions
             try:
@@ -1615,7 +1645,7 @@ class Pipeline:
                 logger.error("Failed to predict with %s: %s", model.name, e)
                 continue
 
-            # Save individual model predictions to DB
+            # Save individual model predictions to DB (idempotent upsert)
             if preds:
                 save_predictions(preds)
                 logger.info(

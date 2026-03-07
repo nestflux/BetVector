@@ -28,7 +28,8 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Dict, List, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy import and_, desc
 
@@ -37,6 +38,96 @@ from src.database.models import Match, Prediction
 from src.models.base_model import MatchPrediction
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# Load Active Models
+# ============================================================================
+
+def load_active_models() -> Dict[str, Any]:
+    """Load all models listed in config.settings.models.active_models.
+
+    E37-03: Wires XGBoost into the production ensemble alongside Poisson.
+
+    Strategy per model type:
+
+    **Poisson** — instantiated fresh; trained at prediction time each morning.
+    Training Poisson is fast (< 1 s), so no pkl caching needed.
+
+    **XGBoost** — loaded from ``data/models/xgboost_v1.pkl`` to avoid
+    retraining cost in the morning pipeline.  If the pkl file is missing
+    (e.g., ``run train`` has never been run), the model is skipped with
+    a WARNING so the pipeline can fall back to Poisson-only gracefully.
+    Run ``python run_pipeline.py train`` to build / refresh the pkl.
+
+    Returns
+    -------
+    dict
+        Mapping of ``model_name`` (str, e.g. "poisson_v1") → instantiated
+        model object.  Missing or failed models are absent from the dict.
+
+    Raises
+    ------
+    Nothing — all errors are logged as warnings to preserve pipeline
+    resilience.  An empty dict is returned only if config is unreadable.
+    """
+    from src.config import config as _cfg
+    from src.models.poisson import PoissonModel
+    from src.models.xgboost_model import XGBoostModel
+
+    try:
+        active = list(_cfg.settings.models.active_models)
+    except (AttributeError, TypeError):
+        logger.warning("load_active_models: could not read active_models from config")
+        return {"poisson_v1": PoissonModel()}
+
+    loaded: Dict[str, Any] = {}
+
+    for model_key in active:
+        if model_key == "poisson_v1":
+            # Poisson is always available — it retrains from scratch at prediction time.
+            loaded[model_key] = PoissonModel()
+            logger.debug("load_active_models: Poisson ready (will retrain at predict time)")
+
+        elif model_key == "xgboost_v1":
+            # XGBoost is pre-trained and loaded from disk.  If the pkl is missing,
+            # skip it with a warning so the pipeline falls back to Poisson-only.
+            pkl_path = Path("data/models/xgboost_v1.pkl")
+            if not pkl_path.exists():
+                logger.warning(
+                    "WARNING: XGBoost model not found at %s, falling back to Poisson. "
+                    "Run 'python run_pipeline.py train' to build the XGBoost model.",
+                    pkl_path,
+                )
+                print(
+                    f"  ⚠ WARNING: XGBoost model not found ({pkl_path}), "
+                    "falling back to Poisson-only"
+                )
+            else:
+                try:
+                    xgb = XGBoostModel()
+                    xgb.load(pkl_path)
+                    loaded[model_key] = xgb
+                    logger.info("load_active_models: XGBoost loaded from %s", pkl_path)
+                except Exception as exc:
+                    logger.warning(
+                        "WARNING: Could not load XGBoost model from %s: %s. "
+                        "Falling back to Poisson-only.",
+                        pkl_path, exc,
+                    )
+                    print(
+                        f"  ⚠ WARNING: XGBoost model failed to load ({exc}), "
+                        "falling back to Poisson-only"
+                    )
+        else:
+            logger.warning("load_active_models: unknown model key '%s', skipping", model_key)
+
+    # Always ensure Poisson is present as the ultimate fallback
+    if not loaded:
+        logger.warning("load_active_models: no models loaded, using Poisson fallback")
+        loaded["poisson_v1"] = PoissonModel()
+
+    return loaded
 
 
 # ============================================================================

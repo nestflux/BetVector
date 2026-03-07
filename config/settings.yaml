@@ -76,15 +76,19 @@ safety:
 # Model Settings
 # ---------------------------------------------------------------------------
 # active_models lists the model keys that the pipeline runs today.
-# E25-04 Decision: Poisson remains production model after E25-03 backtest:
-#   Poisson:  Brier 0.5781, ROI +2.78%  ← WINNER (only profitable model)
-#   XGBoost:  Brier 0.5821, ROI -19.0%  (overfits with ~1,900 samples)
-#   Ensemble: Brier 0.5778, ROI -9.4%   (marginally better Brier but unprofitable)
-# Revisit when training data exceeds 5,000 matches — XGBoost may improve.
+# E37-02 Decision: Poisson outperforms XGBoost walk-forward across all 3 leagues.
+#   EPL:    Poisson Brier 0.5781 ROI +2.78%  vs XGB Brier 0.5872 ROI -26.05%
+#   Champ:  XGB Brier 0.6255 ROI -3.94%
+#   LaLiga: Poisson Brier 0.5741 ROI +4.71%  vs XGB Brier 0.5835 ROI -7.87%
+# E37-03: Ensemble activated at 50/50 initial weights.  Adaptive weights
+# (MP §11.3) will shift toward Poisson once 300+ resolved predictions exist.
+# XGBoost is loaded from data/models/xgboost_v1.pkl (run `python run_pipeline.py
+# train` to retrain).  If pkl is missing, pipeline falls back to Poisson-only.
 models:
   active_models:
     - "poisson_v1"
-  ensemble_enabled: false
+    - "xgboost_v1"
+  ensemble_enabled: true
 
   # XGBoost hyperparameters (E37-01 — updated for multi-league dataset)
   # With ~9,000+ training matches across EPL, Championship, and La Liga,

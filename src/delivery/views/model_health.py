@@ -964,10 +964,50 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# E37-03: Show current ensemble blend ratio when ensemble is active.
+# get_current_weights() returns equal weights (50/50) until 300+ resolved
+# predictions per model accumulate and the adaptive recalculation runs.
+try:
+    from src.config import config as _ens_cfg
+    from src.self_improvement.ensemble_weights import get_current_weights
+    _active_models = list(_ens_cfg.settings.models.active_models)
+    _ensemble_on = getattr(_ens_cfg.settings.models, "ensemble_enabled", False)
+except Exception:
+    _active_models = ["poisson_v1"]
+    _ensemble_on = False
+
+if _ensemble_on and len(_active_models) > 1:
+    # --- Blend ratio banner ---
+    _current_weights = get_current_weights(_active_models)
+    _weight_parts = [f"{m} {w:.0%}" for m, w in sorted(_current_weights.items())]
+    _blend_label = " / ".join(_weight_parts)
+    _adaptive_note = (
+        "Adaptive (inverse Brier)" if ensemble_weights
+        else "Initial 50/50 (adaptive activates after 300+ resolved predictions per model)"
+    )
+    st.markdown(
+        f"""<div style="
+            background:{COLOURS['surface']};
+            border:1px solid {COLOURS['border']};
+            border-left:3px solid {COLOURS['blue']};
+            border-radius:8px;
+            padding:12px 16px;
+            margin-bottom:12px;
+            font-family:'JetBrains Mono',monospace;
+        ">
+            <span style="color:{COLOURS['text_secondary']};font-size:11px;">ENSEMBLE MODE</span><br/>
+            <span style="color:{COLOURS['text']};font-size:16px;font-weight:600;">
+                {_blend_label}
+            </span><br/>
+            <span style="color:{COLOURS['text_secondary']};font-size:11px;">{_adaptive_note}</span>
+        </div>""",
+        unsafe_allow_html=True,
+    )
+
 if ensemble_weights:
     fig_weights = create_ensemble_weights_chart(ensemble_weights)
     st.plotly_chart(fig_weights, use_container_width=True, config={"displayModeBar": False})
-else:
+elif not _ensemble_on:
     st.markdown(
         '<div class="bv-empty-state">'
         "Ensemble weighting activates when 2+ models are active with 300+ resolved predictions each. "

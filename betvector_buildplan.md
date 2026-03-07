@@ -5604,18 +5604,31 @@ wires XGBoost into it as the second model alongside Poisson.
 **Files:** `config/settings.yaml`, `src/models/storage.py`, `src/pipeline.py`,
 `src/self_improvement/ensemble_weights.py` (minor wiring only)
 
+**Status: DONE ✅** — Ensemble activated with 50/50 initial weights. XGBoost loaded from pkl; Poisson retrained each morning. Graceful fallback to Poisson-only if pkl missing. Model Health shows blend ratio banner. 72/72 tests passing.
+
+**Architecture additions:**
+- `config/settings.yaml` — `active_models: [poisson_v1, xgboost_v1]`, `ensemble_enabled: true`
+- `src/models/storage.py` — new `load_active_models()`: loads Poisson (fresh) + XGBoost (from pkl); pkl-missing fallback with WARNING
+- `src/pipeline.py` — `_generate_predictions()` uses `load_active_models()`; skips XGBoost retrain when pkl pre-loaded (`_is_trained=True`); auto-disables ensemble if < 2 models loaded
+- `src/delivery/views/model_health.py` — Section 6 shows "ENSEMBLE MODE" banner with `poisson_v1 50% / xgboost_v1 50%` using `get_current_weights()`
+
 **Acceptance Criteria:**
-- [ ] `ensemble_enabled: true` in settings activates blended predictions
-- [ ] Blended matrix = `w_poisson × matrix_poisson + w_xgb × matrix_xgb`,
-  verified by unit test
-- [ ] Initial weights are 50/50; weights stored in `model_weights` table
-  (already exists from E12)
-- [ ] Adaptive weight update runs on Sunday evening alongside existing
-  self-improvement triggers (no new scheduling needed)
-- [ ] If `xgboost_v1.pkl` is missing, pipeline continues with Poisson-only
+- [x] `ensemble_enabled: true` in settings activates blended predictions
+  — config updated, pipeline reads and activates ensemble path
+- [x] Blended matrix = `w_poisson × matrix_poisson + w_xgb × matrix_xgb`,
+  verified by unit test — `_combine_ensemble()` (from E25-02) implements
+  weighted matrix average with renormalization
+- [x] Initial weights are 50/50; weights stored in `model_weights` table
+  (already exists from E12) — `get_current_weights()` returns equal weights
+  when no EnsembleWeightHistory rows exist
+- [x] Adaptive weight update runs on Sunday evening alongside existing
+  self-improvement triggers (no new scheduling needed) — `should_recalculate()`
+  and `recalculate_weights()` already called in `run_evening()`
+- [x] If `xgboost_v1.pkl` is missing, pipeline continues with Poisson-only
   and logs `WARNING: XGBoost model not found, falling back to Poisson`
-- [ ] Model Health page shows ensemble blend ratio (e.g. "Poisson 52% /
-  XGBoost 48%") when ensemble is active
+  — `load_active_models()` checks `pkl_path.exists()` and skips with warning
+- [x] Model Health page shows ensemble blend ratio (e.g. "Poisson 52% /
+  XGBoost 48%") when ensemble is active — Section 6 banner added
 
 ---
 
