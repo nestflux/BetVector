@@ -5654,10 +5654,18 @@ and graceful fallback behaviour.
 8. Temporal integrity: XGBoost training step receives no future data (verified
    by checking max `match_date` in training set < prediction date)
 
+**Status: DONE ✅** — 24 tests across 8 scenario classes + bonus config tests. 96/96 tests passing (72 existing + 24 new). All synthetic data, no real DB access.
+
 **Acceptance Criteria:**
-- [ ] All 8+ test scenarios pass
-- [ ] Tests use synthetic data only — no real DB access
-- [ ] `min_train_samples` guard tested explicitly
+- [x] All 8+ test scenarios pass — 24 tests across 8 classes:
+  TestXGBoostTrain (1), TestXGBoostPredict (1), TestXGBoostMinSamples (3),
+  TestEnsembleBlend (3), TestEnsembleWeightsSum (4), TestFallbackPoissonOnly (3),
+  TestDeriveFromBlendedMatrix (3), TestTemporalIntegrity (3), TestEnsembleConfig (3)
+- [x] Tests use synthetic data only — no real DB access —
+  `_make_synthetic_features(n, seed)` and `_make_synthetic_results(n, seed)`
+  generate deterministic data via `np.random.default_rng`; DB paths mocked
+- [x] `min_train_samples` guard tested explicitly — TestXGBoostMinSamples:
+  400 rows raises, 499 rows raises, 500 rows succeeds (boundary test)
 
 ---
 

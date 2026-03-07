@@ -308,9 +308,9 @@ Wait for owner to respond with approval before making the change.
 
 ## Current Status
 
-Last completed: E37-03 (Ensemble Poisson + XGBoost Adaptive Blend — 50/50 initial weights, pkl fallback, Model Health blend ratio, 72/72 tests) ✅
-Currently working: E37-04 — Integration Test
-Next up: Post-E37 (epic complete after E37-04)
+Last completed: E37-04 (Integration Test — 24 new tests, 96/96 total, synthetic data only, all 8 build plan scenarios covered) ✅
+Currently working: Post-E37 — Epic 37 complete, awaiting next direction
+Next up: TBD
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
@@ -366,11 +366,11 @@ E36 — League Expansion: ALL 4 issues done ✅
 - E36-03: Multi-league feature adjustments ✅ (league_home_adv_5, is_newly_promoted, per-league edge threshold, backfill bug fix)
 - E36-04: Integration test + backtest ✅ (28/28 tests, La Liga Brier 0.5741 ±0.04 of EPL, ROI +4.71%, 72/72 full suite)
 
-E37 — Model Improvement: 3 / 4 issues — 🔜 In progress
+E37 complete: All 4 issues done ✅ (XGBoost model, walk-forward backtest, ensemble blend, integration test — Poisson remains best, ensemble at 50/50 initial weights, 96/96 tests)
 - E37-01: XGBoost model on multi-league dataset ✅ (4,148 matches, 66 features, early stopping, saved to data/models/xgboost_v1.pkl)
-- E37-02: Walk-forward backtest XGBoost vs Poisson ✅ (EPL: XGB Brier 0.5872 ROI -26.05% vs Poisson Brier 0.5781 ROI +2.78%; Champ: XGB Brier 0.6255 ROI -3.94%; LaLiga: XGB Brier 0.5835 ROI -7.87% vs Poisson Brier 0.5741 ROI +4.71%; Poisson wins all 3 leagues)
-- E37-03: Ensemble Poisson + XGBoost adaptive blend ✅ (50/50 initial weights, pkl fallback, Model Health blend ratio, 72/72 tests)
-- E37-04: Integration test — 🔜 Starting now
+- E37-02: Walk-forward backtest XGBoost vs Poisson ✅ (EPL: XGB Brier 0.5872 ROI -26.05% vs Poisson Brier 0.5781 ROI +2.78%; Poisson wins all 3 leagues)
+- E37-03: Ensemble Poisson + XGBoost adaptive blend ✅ (50/50 initial weights, pkl fallback, Model Health blend ratio)
+- E37-04: Integration test ✅ (24 new tests, 96/96 total, all 8 build plan scenarios, synthetic data only)
 
 ---
 
