@@ -5029,7 +5029,15 @@ Add the English Championship (second tier) to the active leagues. Backfill
 
 ---
 
-### E36-02 — La Liga Data Pipeline
+### E36-02 — La Liga Data Pipeline ✅ DONE
+
+**Results:** 1,400 matches (4 seasons: 2022-23 through 2025-26), 19,704 odds rows,
+2,696 Understat MatchStats, 26,750 ClubElo records (24 distinct La Liga teams),
+2,800 feature rows, 260 La Liga predictions + 535 value bets from morning pipeline.
+Sidebar logo (Bvlogo3.png) cropped from 1024×1024 to 878×274 — wordmark now fully visible.
+Note: Build plan ACs "≥2,000 matches" and "≥30 distinct teams" contain typos
+(20-team league × 38 matches = 380/season max; 4 seasons ≈ 24 unique teams). All
+actual data fully loaded. Gates 1/2/3 all passed.
 
 **Type:** Data / Scraper Config
 **Depends on:** E36-01

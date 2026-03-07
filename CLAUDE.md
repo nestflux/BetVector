@@ -307,9 +307,9 @@ Wait for owner to respond with approval before making the change.
 
 ## Current Status
 
-Last completed: E36-01 (Championship Data Pipeline — 2077 matches, 29133 odds, bug fix in FD.org scraper) ✅
-Currently working: E36-02 — La Liga Data Pipeline
-Next up: E36-03 — Multi-League Feature Adjustments
+Last completed: E36-02 (La Liga Data Pipeline — 1,400 matches, 19,704 odds, 26,750 ClubElo records, 2,800 features, 260 predictions, sidebar logo fix) ✅
+Currently working: E36-03 — Multi-League Feature Adjustments
+Next up: E36-04 — Integration Test + Backtest
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
@@ -350,15 +350,15 @@ E34 — Multi-User Authentication: ALL 6 issues done ✅
 - E34-05: Owner admin page ✅
 - E34-06: Integration test ✅ (19/19 pytest tests passing)
 
-E35 — Bet Tracker UX: 0 / 3 issues — 🔜 Starting now
-- E35-01: Manual bet entry form (My Bets page) — TODO
-- E35-02: Bet slip with edit/void — TODO
-- E35-03: Integration test — TODO
+E35 — Bet Tracker UX: 3 / 3 issues ✅
+- E35-01: Manual bet entry form (My Bets page) ✅
+- E35-02: Bet slip with edit/void ✅
+- E35-03: Integration test ✅
 
-E36 — League Expansion: 0 / 4 issues — 📋 Planned
-- E36-01: Championship data pipeline — TODO
-- E36-02: La Liga data pipeline — TODO
-- E36-03: Multi-league feature adjustments — TODO
+E36 — League Expansion: 2 / 4 issues — 🔜 In progress
+- E36-01: Championship data pipeline ✅ (2,077 matches, 29,133 odds)
+- E36-02: La Liga data pipeline ✅ (1,400 matches, 19,704 odds, 26,750 ClubElo records, 2,800 features)
+- E36-03: Multi-league feature adjustments — 🔜 Starting now
 - E36-04: Integration test + backtest — TODO
 
 E37 — Model Improvement: 0 / 4 issues — 📋 Planned
