@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BetVector — New User Guide</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #0D1117;
+      color: #E6EDF3;
+      line-height: 1.7;
+      font-size: 16px;
+    }
+
+    /* --- Top Nav --- */
+    .top-nav {
+      position: sticky; top: 0; z-index: 100;
+      background: #0D1117; border-bottom: 1px solid #30363D;
+      padding: 0.75rem 1.5rem;
+      display: flex; align-items: center; gap: 1.5rem;
+      backdrop-filter: blur(12px);
+    }
+    .top-nav .logo {
+      font-size: 1.3rem; font-weight: 700;
+      background: linear-gradient(135deg, #3FB950, #58a6ff);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      text-decoration: none;
+    }
+    .top-nav .page-title { color: #8B949E; font-size: 1rem; font-weight: 500; }
+    .hamburger {
+      display: none; background: none; border: none;
+      color: #E6EDF3; font-size: 1.5rem; cursor: pointer; margin-left: auto;
+    }
+
+    /* --- Layout --- */
+    .layout { display: flex; max-width: 1400px; margin: 0 auto; }
+
+    /* --- Sidebar TOC --- */
+    .sidebar {
+      width: 280px; min-width: 280px;
+      position: sticky; top: 52px;
+      height: calc(100vh - 52px); overflow-y: auto;
+      border-right: 1px solid #30363D;
+      padding: 1.5rem 0;
+      scrollbar-width: thin; scrollbar-color: #30363D transparent;
+    }
+    .sidebar::-webkit-scrollbar { width: 4px; }
+    .sidebar::-webkit-scrollbar-track { background: transparent; }
+    .sidebar::-webkit-scrollbar-thumb { background: #30363D; border-radius: 2px; }
+    .sidebar .toc-title {
+      font-size: 0.75rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.05em;
+      color: #8B949E; padding: 0 1.25rem; margin-bottom: 0.75rem;
+    }
+    .toc-item {
+      display: block; padding: 0.35rem 1.25rem;
+      color: #8B949E; text-decoration: none; font-size: 0.85rem;
+      border-left: 2px solid transparent; transition: all 0.15s;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .toc-item:hover { color: #E6EDF3; background: #161B22; }
+    .toc-item.active { color: #3FB950; border-left-color: #3FB950; }
+    .toc-h3 { padding-left: 2.25rem; font-size: 0.8rem; }
+
+    /* --- Main Content --- */
+    .content { flex: 1; min-width: 0; padding: 2rem 3rem; max-width: 900px; }
+
+    /* --- Typography --- */
+    .md-h2.section-header {
+      font-size: 1.75rem; font-weight: 700;
+      margin: 2.5rem 0 1rem;
+      padding: 0.5rem 0 0.5rem 1rem;
+      border-left: 4px solid #3FB950;
+    }
+    .md-h3.subsection-header {
+      font-size: 1.3rem; font-weight: 600;
+      margin: 2rem 0 0.75rem; color: #58a6ff;
+    }
+    .md-h4 { font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
+    .md-p { margin-bottom: 1rem; }
+    .md-p strong, strong { color: #fff; }
+
+    /* --- Links --- */
+    .md-link { color: #58a6ff; text-decoration: none; }
+    .md-link:hover { text-decoration: underline; }
+
+    /* --- Lists --- */
+    .md-list { margin: 0.5rem 0 1rem 1.5rem; }
+    .md-list li { margin-bottom: 0.4rem; padding-left: 0.25rem; }
+
+    /* --- Callout / blockquote --- */
+    .md-blockquote {
+      border-left: 3px solid #58a6ff;
+      padding: 0.75rem 1.25rem; margin: 1rem 0;
+      background: #161B22; border-radius: 0 8px 8px 0;
+      color: #8B949E;
+    }
+    .md-blockquote strong { color: #58a6ff; }
+
+    /* --- Warning callout --- */
+    .callout-warn {
+      border-left: 3px solid #D29922;
+      padding: 0.75rem 1.25rem; margin: 1rem 0;
+      background: rgba(210, 153, 34, 0.08); border-radius: 0 8px 8px 0;
+    }
+    .callout-warn strong { color: #D29922; }
+
+    /* --- Tables --- */
+    .table-wrapper {
+      overflow-x: auto; margin: 1rem 0;
+      border-radius: 8px; border: 1px solid #30363D;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    thead th {
+      background: #161B22; padding: 0.75rem 1rem;
+      text-align: left; font-weight: 600; color: #E6EDF3;
+      border-bottom: 1px solid #30363D; white-space: nowrap;
+    }
+    tbody td { padding: 0.6rem 1rem; border-bottom: 1px solid #30363D; }
+    tbody tr:nth-child(even) { background: rgba(22, 27, 34, 0.5); }
+    tbody tr:hover { background: rgba(63, 185, 80, 0.05); }
+
+    /* --- Inline code --- */
+    .inline-code {
+      font-family: 'JetBrains Mono', monospace;
+      background: #161B22; border: 1px solid #30363D;
+      padding: 0.15rem 0.4rem; border-radius: 4px;
+      font-size: 0.88em; color: #58a6ff;
+    }
+
+    /* --- HR --- */
+    .md-hr { border: none; border-top: 1px solid #30363D; margin: 2rem 0; }
+
+    /* --- Step numbers --- */
+    .step-row { display: flex; gap: 1rem; margin-bottom: 0.75rem; align-items: flex-start; }
+    .step-num {
+      min-width: 2rem; height: 2rem; border-radius: 50%;
+      background: rgba(63,185,80,0.15); border: 1px solid rgba(63,185,80,0.4);
+      color: #3FB950; display: flex; align-items: center; justify-content: center;
+      font-size: 0.8rem; font-weight: 700; flex-shrink: 0; margin-top: 0.15rem;
+    }
+    .step-text { flex: 1; }
+
+    /* --- Routine card --- */
+    .routine-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0; }
+    .routine-card {
+      background: #161B22; border: 1px solid #30363D;
+      border-radius: 10px; padding: 1.25rem;
+    }
+    .routine-card .r-title { font-weight: 700; font-size: 0.95rem; margin-bottom: 0.6rem; color: #3FB950; }
+    .routine-card .r-time { font-size: 0.78rem; color: #8B949E; margin-bottom: 0.8rem; }
+    .routine-card ul { margin-left: 1.1rem; font-size: 0.88rem; }
+    .routine-card ul li { margin-bottom: 0.3rem; }
+
+    /* --- Back to top --- */
+    .back-to-top {
+      position: fixed; bottom: 2rem; right: 2rem;
+      width: 44px; height: 44px; border-radius: 50%;
+      background: #3FB950; color: #0D1117; border: none; cursor: pointer;
+      font-size: 1.25rem; display: none; align-items: center; justify-content: center;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4); transition: transform 0.2s; z-index: 50;
+    }
+    .back-to-top:hover { transform: scale(1.1); }
+    .back-to-top.visible { display: flex; }
+
+    /* --- Mobile --- */
+    @media (max-width: 768px) {
+      .hamburger { display: block; }
+      .sidebar {
+        position: fixed; top: 52px; left: -300px;
+        width: 280px; min-width: 280px; height: calc(100vh - 52px);
+        background: #0D1117; z-index: 90; transition: left 0.3s ease;
+        border-right: 1px solid #30363D;
+      }
+      .sidebar.open { left: 0; }
+      .sidebar-overlay {
+        display: none; position: fixed; top: 52px; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.5); z-index: 80;
+      }
+      .sidebar-overlay.open { display: block; }
+      .content { padding: 1.5rem 1rem; }
+      .md-h2.section-header { font-size: 1.4rem; }
+      .routine-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<nav class="top-nav">
+  <a href="index.html" class="logo">BetVector</a>
+  <span class="page-title">New User Guide</span>
+  <button class="hamburger" id="hamburger">&#9776;</button>
+</nav>
+
+<div class="sidebar-overlay" id="overlay"></div>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="toc-title">Contents</div>
+    <a href="#what-betvector-does" class="toc-item toc-h2">What BetVector Does</a>
+    <a href="#logging-in" class="toc-item toc-h2">Logging In</a>
+    <a href="#onboarding-wizard" class="toc-item toc-h2">Onboarding Wizard</a>
+    <a href="#the-dashboard-pages" class="toc-item toc-h2">The Dashboard Pages</a>
+    <a href="#fixtures" class="toc-item toc-h3">📅 Fixtures</a>
+    <a href="#todays-picks" class="toc-item toc-h3">🎯 Today's Picks</a>
+    <a href="#performance-tracker" class="toc-item toc-h3">📈 Performance Tracker</a>
+    <a href="#league-explorer" class="toc-item toc-h3">🏟️ League Explorer</a>
+    <a href="#model-health" class="toc-item toc-h3">🔬 Model Health</a>
+    <a href="#bankroll-manager" class="toc-item toc-h3">💰 Bankroll Manager</a>
+    <a href="#settings" class="toc-item toc-h3">⚙️ Settings</a>
+    <a href="#daily-routine" class="toc-item toc-h2">Your Daily Routine</a>
+    <a href="#understanding-odds" class="toc-item toc-h2">Understanding Odds &amp; Edge</a>
+    <a href="#paper-trading" class="toc-item toc-h2">Paper Trading Mode</a>
+    <a href="#model-limitations" class="toc-item toc-h2">Model Limitations</a>
+    <a href="#glossary" class="toc-item toc-h2">Glossary</a>
+    <a href="#getting-help" class="toc-item toc-h2">Getting Help</a>
+  </aside>
+
+  <main class="content">
+
+    <!-- Hero -->
+    <div style="margin-bottom:2.5rem; padding-top:0.5rem;">
+      <h1 style="font-size:2.25rem;font-weight:700;background:linear-gradient(135deg,#3FB950,#58a6ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:0.5rem;">New User Guide</h1>
+      <p style="color:#8B949E;font-size:1.05rem;">Everything you need to get started with BetVector as a viewer — no code, no terminals, just the dashboard.</p>
+      <p style="color:#8B949E;font-size:0.85rem;margin-top:0.4rem;">Version 1.0 &nbsp;·&nbsp; March 2026</p>
+    </div>
+
+    <hr class="md-hr">
+
+    <!-- What BetVector Does -->
+    <h2 class="md-h2 section-header" id="what-betvector-does">What BetVector Does</h2>
+    <p class="md-p">BetVector runs three times every day, automatically, without you needing to do anything:</p>
+
+    <div style="display:flex;flex-direction:column;gap:0.75rem;margin:1.25rem 0 1.5rem;">
+      <div style="background:#161B22;border:1px solid #30363D;border-radius:10px;padding:1rem 1.25rem;display:flex;gap:1rem;align-items:flex-start;">
+        <div style="font-size:1.5rem;min-width:2rem;">🌅</div>
+        <div><strong>Morning — 06:00 UTC</strong><br><span style="color:#8B949E;font-size:0.9rem;">Scrapes today's fixtures and bookmaker odds, runs the football model, and surfaces every match where the odds look mispriced. These are your <strong>value bets</strong>.</span></div>
+      </div>
+      <div style="background:#161B22;border:1px solid #30363D;border-radius:10px;padding:1rem 1.25rem;display:flex;gap:1rem;align-items:flex-start;">
+        <div style="font-size:1.5rem;min-width:2rem;">☀️</div>
+        <div><strong>Midday — 13:00 UTC</strong><br><span style="color:#8B949E;font-size:0.9rem;">Re-fetches odds (they shift throughout the day), recalculates edge on every pick, and updates the list.</span></div>
+      </div>
+      <div style="background:#161B22;border:1px solid #30363D;border-radius:10px;padding:1rem 1.25rem;display:flex;gap:1rem;align-items:flex-start;">
+        <div style="font-size:1.5rem;min-width:2rem;">🌙</div>
+        <div><strong>Evening — 22:00 UTC</strong><br><span style="color:#8B949E;font-size:0.9rem;">Scrapes final scores, settles all pending bets as won or lost, updates your P&amp;L, and records performance metrics.</span></div>
+      </div>
+    </div>
+
+    <p class="md-p">You don't trigger any of these. Your job each day is simple:</p>
+    <div style="margin:1rem 0 1.5rem;">
+      <div class="step-row"><div class="step-num">1</div><div class="step-text">Open the dashboard after the morning run</div></div>
+      <div class="step-row"><div class="step-num">2</div><div class="step-text">Review today's picks</div></div>
+      <div class="step-row"><div class="step-num">3</div><div class="step-text">Decide which picks to place with your bookmaker</div></div>
+      <div class="step-row"><div class="step-num">4</div><div class="step-text">Log the bets you placed on the dashboard</div></div>
+      <div class="step-row"><div class="step-num">5</div><div class="step-text">Check results in the evening</div></div>
+    </div>
+
+    <hr class="md-hr">
+
+    <!-- Logging In -->
+    <h2 class="md-h2 section-header" id="logging-in">Logging In</h2>
+    <p class="md-p">Go to the BetVector dashboard URL — the owner will share this with you. You will see a login screen asking for your <strong>email address</strong> and <strong>password</strong>. Both are set by the owner when they create your account.</p>
+
+    <div class="md-blockquote">
+      <strong>Forgot your password?</strong> Contact the owner. They can reset it from the Admin page. You cannot reset it yourself at this stage.
+    </div>
+
+    <p class="md-p">After logging in you land on the <strong>Fixtures</strong> page. Your session stays active until you close the browser or click <strong>Logout</strong> in the sidebar.</p>
+
+    <hr class="md-hr">
+
+    <!-- Onboarding Wizard -->
+    <h2 class="md-h2 section-header" id="onboarding-wizard">Your First Time: Onboarding Wizard</h2>
+    <p class="md-p">The very first time you log in, a short setup wizard appears before the main dashboard. It configures your personal betting preferences:</p>
+
+    <div class="table-wrapper">
+      <table>
+        <thead><tr><th>Setting</th><th>What It Means</th><th>Where to Start</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Starting Bankroll</strong></td><td>How much money you are committing to this strategy in total</td><td>The total you plan to bet with across the season</td></tr>
+          <tr><td><strong>Staking Method</strong></td><td>How to size each individual bet</td><td>Start with <strong>Flat</strong> — a fixed amount per bet, simple and safe</td></tr>
+          <tr><td><strong>Flat Stake</strong></td><td>The fixed amount to stake on each bet (for flat staking)</td><td>£20–£50 per bet depending on your bankroll</td></tr>
+          <tr><td><strong>Edge Threshold</strong></td><td>Minimum edge required before a bet is flagged as a value bet</td><td>Leave at the default 5% — you can tighten it later</td></tr>
+          <tr><td><strong>Paper Trading Mode</strong></td><td>Simulate bets without real money at risk</td><td>Turn <strong>on</strong> for your first few weeks</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="md-p">You only see this wizard once. You can change every setting later from the <strong>Settings</strong> page.</p>
+
+    <hr class="md-hr">
+
+    <!-- Dashboard Pages -->
+    <h2 class="md-h2 section-header" id="the-dashboard-pages">The Dashboard Pages</h2>
+
+    <h3 class="md-h3 subsection-header" id="fixtures">📅 Fixtures</h3>
+    <p class="md-p">The default landing page. Shows all upcoming fixtures for the current week across the tracked leagues.</p>
+    <ul class="md-list">
+      <li><strong>Green ring</strong> around a badge = home advantage flag for that team</li>
+      <li><strong>Blue ring</strong> = team is on strong recent form</li>
+      <li>Click any match to open the <strong>Match Deep Dive</strong> for that fixture</li>
+    </ul>
+
+    <h3 class="md-h3 subsection-header" id="todays-picks">🎯 Today's Picks</h3>
+    <p class="md-p">Your primary daily page. After the morning pipeline runs, every value bet the model found appears here as a card.</p>
+
+    <h4 class="md-h4">Reading a pick card</h4>
+    <div class="table-wrapper">
+      <table>
+        <thead><tr><th>Field</th><th>What It Means</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Match</strong></td><td>Home vs Away team, kickoff time</td></tr>
+          <tr><td><strong>Market</strong></td><td>1X2 (match result), Over/Under 2.5 goals, or BTTS</td></tr>
+          <tr><td><strong>Selection</strong></td><td>The specific outcome being recommended (e.g. Home win, Over 2.5)</td></tr>
+          <tr><td><strong>Model Probability</strong></td><td>The model's estimated chance of this outcome happening</td></tr>
+          <tr><td><strong>Implied Probability</strong></td><td>What the bookmaker's odds say the chance is (1 ÷ odds)</td></tr>
+          <tr><td><strong>Edge</strong></td><td>Model probability minus implied probability — your expected advantage</td></tr>
+          <tr><td><strong>Best Odds</strong></td><td>Highest odds found across tracked bookmakers</td></tr>
+          <tr><td><strong>Suggested Stake</strong></td><td>A stake calculated from your bankroll settings</td></tr>
+          <tr><td><strong>Confidence</strong></td><td>High (edge ≥ 10%), Medium (5–10%), Low (&lt; 5%)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h4 class="md-h4">Logging a bet</h4>
+    <p class="md-p">After you place a bet with your bookmaker, click <strong>"Log Bet"</strong> on the pick card to record it. The system creates a <em>user-placed</em> entry in your personal bet log, separate from the <em>system pick</em> already auto-logged. This dual tracking lets you compare the model's full recommendations against your actual betting decisions.</p>
+
+    <div class="callout-warn">
+      <strong>Important:</strong> Log the bet <em>after</em> you have actually placed it with a bookmaker. Do not log bets you are still thinking about — this creates inaccurate records.
+    </div>
+
+    <h3 class="md-h3 subsection-header" id="performance-tracker">📈 Performance Tracker</h3>
+    <p class="md-p">Shows how you are performing over time.</p>
+    <ul class="md-list">
+      <li><strong>ROI</strong> — net return as a percentage of total staked</li>
+      <li><strong>P&amp;L Chart</strong> — cumulative profit/loss plotted over time; hover for exact values</li>
+      <li><strong>Brier Score</strong> — model prediction accuracy (lower is better; 0.25 is random chance, below that is skill)</li>
+      <li><strong>Bet breakdown</strong> — filter by market type, league, and date range</li>
+      <li>Two views: <em>System Picks</em> (every model recommendation) and <em>Your Bets</em> (only what you placed)</li>
+    </ul>
+    <p class="md-p">Check this page every evening after results are in.</p>
+
+    <h3 class="md-h3 subsection-header" id="league-explorer">🏟️ League Explorer</h3>
+    <p class="md-p">Performance broken down by league. Useful for seeing which leagues the model performs best in and where value bets are most frequent. If a league is consistently underperforming, consider raising the edge threshold for it in Settings.</p>
+
+    <h3 class="md-h3 subsection-header" id="model-health">🔬 Model Health</h3>
+    <p class="md-p">Monitors whether the underlying model is well-calibrated. You don't need to act on this page — it is informational. Check it weekly.</p>
+    <ul class="md-list">
+      <li><strong>Calibration curve</strong> — a well-calibrated model hugs the diagonal line. Bowing above the diagonal = model is underestimating. Bowing below = overestimating.</li>
+      <li><strong>Rolling Brier Score</strong> — if this trends upward over several weeks, the model may need retraining. The system handles this automatically.</li>
+    </ul>
+
+    <h3 class="md-h3 subsection-header" id="bankroll-manager">💰 Bankroll Manager</h3>
+    <p class="md-p">Tracks your money.</p>
+    <ul class="md-list">
+      <li><strong>Current Bankroll</strong> — how much you have now vs how you started</li>
+      <li><strong>Drawdown Monitor</strong> — how far below your peak you currently are</li>
+      <li><strong>Safety Alerts</strong> — the system warns you if: daily losses exceed 10% of bankroll, drawdown from peak exceeds 25%, or bankroll drops below 50% of starting amount</li>
+    </ul>
+    <div class="callout-warn">
+      <strong>If any safety alert fires, stop placing new bets</strong> until you have reviewed the situation. These limits exist to protect you from chasing losses.
+    </div>
+
+    <h3 class="md-h3 subsection-header" id="settings">⚙️ Settings</h3>
+    <p class="md-p">Lets you change your personal preferences at any time — no owner involvement needed.</p>
+    <ul class="md-list">
+      <li>Switch staking method (flat / percentage / kelly)</li>
+      <li>Adjust your edge threshold (lower = more picks, higher = fewer but stronger picks)</li>
+      <li>Change your stake size or bankroll percentage</li>
+      <li>Toggle paper trading mode on/off</li>
+      <li><strong>Danger Zone</strong> — reset your bankroll, clear your bet history, or both. These actions are permanent — use with care.</li>
+    </ul>
+
+    <hr class="md-hr">
+
+    <!-- Daily Routine -->
+    <h2 class="md-h2 section-header" id="daily-routine">Your Daily Routine</h2>
+
+    <div class="routine-grid">
+      <div class="routine-card">
+        <div class="r-title">🌅 Morning</div>
+        <div class="r-time">Check after 06:30 UTC (07:30 BST)</div>
+        <ul>
+          <li>Open Today's Picks</li>
+          <li>Focus on high-confidence picks (edge ≥ 8%)</li>
+          <li>Do a quick sense-check: injuries? motivation? weather?</li>
+          <li>Place bets you agree with at your bookmaker</li>
+          <li>Log each bet on the dashboard immediately after</li>
+        </ul>
+      </div>
+      <div class="routine-card">
+        <div class="r-title">☀️ Midday</div>
+        <div class="r-time">Check after 13:30 UTC</div>
+        <ul>
+          <li>Re-open Today's Picks</li>
+          <li>Odds may have moved — check if edges changed</li>
+          <li>New bets may appear for later kickoffs</li>
+          <li>Place additional bets if new value appeared</li>
+        </ul>
+      </div>
+      <div class="routine-card">
+        <div class="r-title">🌙 Evening</div>
+        <div class="r-time">Check after 22:30 UTC</div>
+        <ul>
+          <li>Open Performance Tracker — review today's results</li>
+          <li>Open Bankroll Manager — check for safety alerts</li>
+          <li>Nothing else needed — the system settled all bets automatically</li>
+        </ul>
+      </div>
+      <div class="routine-card">
+        <div class="r-title">📅 Weekly (Sundays)</div>
+        <div class="r-time">Any time on Sunday</div>
+        <ul>
+          <li>Check Model Health — is the calibration curve healthy?</li>
+          <li>Review 4-week ROI trend in Performance Tracker</li>
+          <li>Check League Explorer for market-level insights</li>
+          <li>Adjust edge threshold or staking if needed</li>
+        </ul>
+      </div>
+    </div>
+
+    <hr class="md-hr">
+
+    <!-- Understanding Odds -->
+    <h2 class="md-h2 section-header" id="understanding-odds">Understanding Odds &amp; Edge</h2>
+
+    <h3 class="md-h3 subsection-header">Decimal Odds</h3>
+    <p class="md-p">BetVector uses decimal odds (standard in UK/European betting).</p>
+    <div class="table-wrapper">
+      <table>
+        <thead><tr><th>Odds</th><th>Implied chance</th><th>What you win on a £10 stake</th></tr></thead>
+        <tbody>
+          <tr><td><span class="inline-code">2.00</span></td><td>50%</td><td>£10 profit (get £20 back)</td></tr>
+          <tr><td><span class="inline-code">3.00</span></td><td>33%</td><td>£20 profit (get £30 back)</td></tr>
+          <tr><td><span class="inline-code">1.50</span></td><td>67%</td><td>£5 profit (get £15 back)</td></tr>
+          <tr><td><span class="inline-code">3.50</span></td><td>28.6%</td><td>£25 profit (get £35 back)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 class="md-h3 subsection-header">Implied Probability</h3>
+    <p class="md-p">A bookmaker's odds imply a probability: <strong>1 ÷ odds</strong>. Odds of 3.50 imply a 28.6% chance. Bookmakers add an overround (their margin), so their implied probabilities always sum to more than 100% across a market — that's their built-in edge over the punter.</p>
+
+    <h3 class="md-h3 subsection-header">Edge</h3>
+    <p class="md-p"><strong>Edge = Model Probability − Implied Probability</strong></p>
+    <p class="md-p">If the model says a home win has a 55% chance and the bookmaker's odds imply 45%, the edge is <strong>+10%</strong>. The bookmaker is systematically underpricing this outcome. Over a large number of bets with consistent positive edge, you should generate a positive return.</p>
+
+    <div class="md-blockquote">
+      <strong>Edge does not guarantee winning any individual bet.</strong> A 60% probability outcome loses 40% of the time — that is completely normal. What matters is placing bets with positive edge, sizing them appropriately, and tracking results over 100+ bets before drawing conclusions.
+    </div>
+
+    <h3 class="md-h3 subsection-header">Why You Will Lose Individual Bets</h3>
+    <p class="md-p">This is the most important mindset shift. BetVector is not a system that picks winners. It is a system that finds <em>mispriced</em> bets. Even a perfectly correct bet loses sometimes — that is the nature of probability. What you are trying to do is:</p>
+    <ul class="md-list">
+      <li>Only place bets when the model's edge is ≥ 5%</li>
+      <li>Never stake more than 5% of your bankroll on a single bet</li>
+      <li>Track results over at least 100 resolved bets before judging performance</li>
+      <li>Never chase losses — the model will find the next edge opportunity</li>
+    </ul>
+
+    <hr class="md-hr">
+
+    <!-- Paper Trading -->
+    <h2 class="md-h2 section-header" id="paper-trading">Paper Trading Mode</h2>
+    <p class="md-p">When paper trading is enabled (in Settings), every bet you log is marked as <strong>simulated</strong>. Your bankroll tracking, P&amp;L, and performance metrics all update as if real money was wagered — but nothing leaves your account.</p>
+    <p class="md-p"><strong>Run in paper trading mode for your first 4–6 weeks,</strong> or until you have at least 50 resolved bets. This lets you:</p>
+    <ul class="md-list">
+      <li>Build confidence in the model before real money is at risk</li>
+      <li>Understand what variance actually feels like (losing streaks happen even with edge)</li>
+      <li>Fine-tune your edge threshold and staking method without real consequences</li>
+    </ul>
+    <p class="md-p">Turn paper trading off in <strong>Settings</strong> when you are ready to go live.</p>
+
+    <hr class="md-hr">
+
+    <!-- Model Limitations -->
+    <h2 class="md-h2 section-header" id="model-limitations">What the Model Does Not Know</h2>
+    <p class="md-p">The Poisson model is built on historical match data, expected goals, and bookmaker odds. It does not have access to:</p>
+    <div class="table-wrapper">
+      <table>
+        <thead><tr><th>Blind Spot</th><th>What This Means in Practice</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Breaking team news</strong></td><td>A key player ruled out 2 hours before kickoff will not be reflected in morning picks</td></tr>
+          <tr><td><strong>Motivation</strong></td><td>A team with nothing to play for in the final weeks may not perform as the model expects</td></tr>
+          <tr><td><strong>Weather</strong></td><td>Heavy rain significantly affects Over/Under markets; the model only partially captures this</td></tr>
+          <tr><td><strong>Referee tendencies</strong></td><td>Certain referees are card-heavy or lenient; the model has referee features but they are approximate</td></tr>
+          <tr><td><strong>Fixture congestion</strong></td><td>A team playing their 4th game in 10 days may rotate heavily; the model flags congestion but does not know the starting XI</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="md-p">Your own knowledge of these factors should <strong>augment</strong> the model's picks, not replace them. The model gives you a statistically grounded starting point. The final decision is always yours.</p>
+
+    <hr class="md-hr">
+
+    <!-- Glossary -->
+    <h2 class="md-h2 section-header" id="glossary">Glossary</h2>
+    <div class="table-wrapper">
+      <table>
+        <thead><tr><th>Term</th><th>Plain English Meaning</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Value Bet</strong></td><td>A bet where the model thinks the bookmaker's odds are too generous — the model's probability is higher than what the odds imply</td></tr>
+          <tr><td><strong>Edge</strong></td><td>The expected advantage on a bet, in percentage points. Edge = model probability − implied probability.</td></tr>
+          <tr><td><strong>System Pick</strong></td><td>A value bet automatically logged by the model pipeline. Logged whether or not you actually place the bet.</td></tr>
+          <tr><td><strong>User-Placed Bet</strong></td><td>A bet you manually logged after placing it with your bookmaker. Tracked separately so you can compare your actual results against the model's full recommendations.</td></tr>
+          <tr><td><strong>Implied Probability</strong></td><td>What the bookmaker's odds say the chance of an outcome is. Calculated as 1 ÷ decimal odds.</td></tr>
+          <tr><td><strong>1X2</strong></td><td>Match result market: 1 = home win, X = draw, 2 = away win</td></tr>
+          <tr><td><strong>Over/Under 2.5</strong></td><td>Whether the total goals in the match is 3 or more (Over) or 2 or fewer (Under)</td></tr>
+          <tr><td><strong>BTTS</strong></td><td>Both Teams To Score — both teams score at least one goal in the match</td></tr>
+          <tr><td><strong>Brier Score</strong></td><td>Prediction accuracy measure. 0 = perfect. 0.25 = random chance. Lower is better.</td></tr>
+          <tr><td><strong>ROI</strong></td><td>Return on Investment — (total returns − total staked) ÷ total staked, expressed as a percentage</td></tr>
+          <tr><td><strong>Drawdown</strong></td><td>How far your bankroll has fallen from its highest point. A 20% drawdown means you are 20% below your peak balance.</td></tr>
+          <tr><td><strong>Paper Trading</strong></td><td>Simulated betting — all the tracking and metrics, none of the real-money risk</td></tr>
+          <tr><td><strong>Kelly Criterion</strong></td><td>A staking formula that sizes bets based on edge size. Volatile alone; safer at quarter-Kelly (25% of the full Kelly stake).</td></tr>
+          <tr><td><strong>xG</strong></td><td>Expected Goals — a measure of the quality of chances created, based on where shots came from and how they were taken</td></tr>
+          <tr><td><strong>Scoreline Matrix</strong></td><td>The 7×7 grid of probabilities (0-0 through 6-6) that the model produces internally. All market probabilities are derived from this grid.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <hr class="md-hr">
+
+    <!-- Getting Help -->
+    <h2 class="md-h2 section-header" id="getting-help">Getting Help</h2>
+    <p class="md-p">Contact the owner directly if:</p>
+    <ul class="md-list">
+      <li>Your password is not working</li>
+      <li>You think a result was settled incorrectly</li>
+      <li>A bet you logged is not appearing in your bet log</li>
+      <li>You want your edge threshold, bankroll, or staking method changed</li>
+      <li>You want to invite another user to the system</li>
+    </ul>
+    <p class="md-p">The owner has an <strong>Admin</strong> page where they can view all accounts, reset individual bankrolls, and manage access. Viewer accounts cannot see the Admin page.</p>
+
+    <div style="margin-top:3rem;padding:1.5rem;background:#161B22;border:1px solid #30363D;border-radius:12px;text-align:center;">
+      <p style="color:#8B949E;font-size:0.9rem;">BetVector · Quantitative edge in football betting</p>
+      <p style="color:#8B949E;font-size:0.8rem;margin-top:0.3rem;">New User Guide v1.0 · March 2026</p>
+    </div>
+
+  </main>
+</div>
+
+<button class="back-to-top" id="backToTop" title="Back to top">↑</button>
+
+<script>
+  // Hamburger menu
+  const hamburger = document.getElementById('hamburger');
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('overlay');
+  hamburger.addEventListener('click', () => {
+    sidebar.classList.toggle('open');
+    overlay.classList.toggle('open');
+  });
+  overlay.addEventListener('click', () => {
+    sidebar.classList.remove('open');
+    overlay.classList.remove('open');
+  });
+
+  // Back to top
+  const btn = document.getElementById('backToTop');
+  window.addEventListener('scroll', () => {
+    btn.classList.toggle('visible', window.scrollY > 400);
+  });
+  btn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+
+  // Active TOC item on scroll
+  const headings = document.querySelectorAll('h2[id], h3[id]');
+  const tocItems = document.querySelectorAll('.toc-item');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        tocItems.forEach(item => item.classList.remove('active'));
+        const active = document.querySelector(`.toc-item[href="#${entry.target.id}"]`);
+        if (active) active.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-10% 0px -85% 0px' });
+  headings.forEach(h => observer.observe(h));
+</script>
+
+</body>
+</html>
