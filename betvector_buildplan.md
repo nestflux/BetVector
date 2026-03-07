@@ -4879,11 +4879,13 @@ can see all their logged bets, edit mistakes, and void cancelled bets.
 
 ---
 
-### E35-03 — Integration Test
+### E35-03 — Integration Test ✅ DONE
 
 **Type:** QA
 **Depends on:** E35-02
 **Master Plan:** MP §6 Schema (bet_log table)
+
+**Results:** 15/15 tests pass. Covers log_manual_bet (creation + DB failure), check_duplicate_bet, load_user_bets (user scoping + status filter), update_bet (stake change + non-pending guard + wrong-user guard), void_bet (void+pnl=0 + wrong-user guard), voided bet ROI exclusion (pnl filter + summary metrics delta). In-memory SQLite, patched engine/SessionFactory, no cross-user leakage.
 
 Automated pytest suite covering all E35 backend logic.
 
