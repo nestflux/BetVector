@@ -95,7 +95,11 @@ E29-01 → E29-02 → E29-03 → E29-04 →
 E30-01 → E30-02 → E30-03 →
 E31-01 → E31-02 → E31-03 → E31-04 →
 E32-01 → E32-02 → E32-03 → E32-04 → E32-05 →
-E33-01 → E33-02 → E33-03 → E33-04 → E33-05 → E33-06
+E33-01 → E33-02 → E33-03 → E33-04 → E33-05 → E33-06 →
+E34-01 → E34-02 → E34-03 → E34-04 → E34-05 → E34-06 →
+E35-01 → E35-02 → E35-03 →
+E36-01 → E36-02 → E36-03 → E36-04 →
+E37-01 → E37-02 → E37-03 → E37-04
 ```
 
 The sequence is the law. Auto-advance after gates pass. Only stop for
@@ -304,8 +308,8 @@ Wait for owner to respond with approval before making the change.
 ## Current Status
 
 Last completed: E34-06 (Integration test — 19/19 pytest tests passing) ✅
-Currently working: E34 COMPLETE — all 6 issues done ✅
-Next up: Post-launch maintenance / new feature proposals
+Currently working: E35-01 — Manual Bet Entry Form (My Bets page)
+Next up: E35-02 — Bet Slip with Edit/Void
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
@@ -345,6 +349,23 @@ E34 — Multi-User Authentication: ALL 6 issues done ✅
 - E34-04: Per-user reset controls ✅
 - E34-05: Owner admin page ✅
 - E34-06: Integration test ✅ (19/19 pytest tests passing)
+
+E35 — Bet Tracker UX: 0 / 3 issues — 🔜 Starting now
+- E35-01: Manual bet entry form (My Bets page) — TODO
+- E35-02: Bet slip with edit/void — TODO
+- E35-03: Integration test — TODO
+
+E36 — League Expansion: 0 / 4 issues — 📋 Planned
+- E36-01: Championship data pipeline — TODO
+- E36-02: La Liga data pipeline — TODO
+- E36-03: Multi-league feature adjustments — TODO
+- E36-04: Integration test + backtest — TODO
+
+E37 — Model Improvement: 0 / 4 issues — 📋 Planned
+- E37-01: XGBoost model on multi-league dataset — TODO
+- E37-02: Walk-forward backtest XGBoost vs Poisson — TODO
+- E37-03: Ensemble Poisson + XGBoost adaptive blend — TODO
+- E37-04: Integration test — TODO
 
 ---
 

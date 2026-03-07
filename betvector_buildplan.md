@@ -49,8 +49,11 @@ This document breaks the BetVector masterplan into sequenced epics and issues th
 | E33 | Cloud Migration | 6 | SQLite → PostgreSQL + Neon, dual-DB engine, data migration, workflow simplification, Streamlit Cloud deploy |
 | PC | Post-Critical-Path Fixes | 6 | Logo transparency, logo centering, demo app, demo GIF, login ENTER button, fixture stub auto-creation |
 | E34 | Multi-User Authentication | 6 | Per-user login, hashed passwords, scoped bankroll/bet log, reset controls, owner admin page |
+| E35 | Bet Tracker UX | 3 | Manual bet entry form, bet slip with edit/void, integration test |
+| E36 | League Expansion | 4 | Championship + La Liga scrapers, multi-league features, backtest comparison |
+| E37 | Model Improvement | 4 | XGBoost on multi-league dataset, ensemble, walk-forward backtest |
 
-**Total: 35 epics, 139 issues** (45 original + 20 post-launch + 12 odds/model + 7 backfill + 16 dashboard UX + 5 clarity + 16 badges/polish + 6 cloud migration + 6 post-critical-path + 6 multi-user auth)
+**Total: 38 epics, 150 issues** (45 original + 20 post-launch + 12 odds/model + 7 backfill + 16 dashboard UX + 5 clarity + 16 badges/polish + 6 cloud migration + 6 post-critical-path + 6 multi-user auth + 3 bet tracker + 4 league expansion + 4 model improvement)
 
 ---
 
@@ -4710,4 +4713,720 @@ all 10 scenario steps via in-memory SQLite engine.
 E34-01 (password storage + session) → E34-02 (login page)
 → E34-03 (scope all queries) → E34-04 (user reset controls)
 → E34-05 (admin page) → E34-06 (integration test)
+```
+
+---
+
+---
+
+## Epic 35 — Bet Tracker UX
+
+**Status:** 🔜 Next up
+**Type:** Feature
+**Depends on:** E34 (multi-user auth — bets must be scoped to user_id)
+
+### Overview
+
+The current bet-logging flow only lets users log a bet against a model
+pick on Today's Picks. There is no way to log a bet the model did not
+recommend, no way to correct a wrongly entered stake, and no way to void
+a bet that got cancelled. The Performance Tracker is read-only analytics —
+it is not a bet management tool.
+
+This epic adds a dedicated **My Bets** page with a manual entry form,
+a live bet slip, and inline edit/void capability. The bet tracker is the
+primary daily interaction surface for any serious bettor using the system.
+
+**Bet types handled:**
+- `system_pick` — auto-logged by the model pipeline (unchanged, read-only)
+- `user_placed` — manually logged by the user via the dashboard (this epic)
+
+**What this does NOT change:**
+- The Performance Tracker's analytics views (ROI charts, Brier score, market
+  breakdowns) — those continue to use the same BetLog table, no schema changes
+- The "Log Bet" button on Today's Picks pick cards — kept as a fast-path for
+  model picks, but the new form handles all other cases
+
+---
+
+### E35-01 — Manual Bet Entry Form
+
+**Type:** Frontend + Backend
+**Depends on:** E34-06
+**Master Plan:** MP §6 Schema (bet_log table), MP §8 Betting Engine
+
+A bet entry form on a new **My Bets** page that lets users log any bet —
+not just model picks — directly from the dashboard.
+
+**Changes:**
+
+- New page `src/delivery/views/my_bets.py`
+  - `render_entry_form()` — Streamlit form with:
+    - Match selector (dropdown populated from today's `Match` rows in DB,
+      formatted as "Home vs Away — HH:MM", ordered by kickoff_time)
+    - Market selector (`1X2`, `Over 2.5`, `Under 2.5`, `BTTS Yes`, `BTTS No`,
+      `Asian Handicap`, `Other`)
+    - Selection field — conditional on market:
+      - 1X2 → selectbox (`Home`, `Draw`, `Away`)
+      - Over/Under → pre-filled from market choice
+      - BTTS → pre-filled (`Yes` / `No`)
+      - Asian Handicap / Other → free-text input
+    - Bookmaker field — free-text input with common suggestions
+      (`Pinnacle`, `Bet365`, `FanDuel`, `DraftKings`, `Other`)
+    - Odds — decimal float input, min 1.01
+    - Stake — float input, pre-filled from user's staking settings
+    - Submit button: **"Log Bet"**
+  - `log_manual_bet(user_id, match_id, market_type, selection, bookmaker,
+    odds, stake) → int | None`
+    - Writes a `BetLog` row with `bet_type="user_placed"`, `status="pending"`,
+      `model_prob=None`, `edge=None` (no model involvement for manual bets)
+    - Returns new `bet_id` or `None` on failure
+    - `implied_prob = round(1.0 / odds, 4)`
+    - `stake_method = "manual"`
+    - `date = today's date (YYYY-MM-DD)`
+  - Success toast on submit: "Bet logged ✓ — [Home] vs [Away] · [Market] ·
+    [Selection] · £[Stake] @ [Odds]"
+  - Error toast on duplicate or DB failure
+
+- `src/delivery/dashboard.py` — add My Bets to `get_pages()` for all roles
+
+**Files:** new `src/delivery/views/my_bets.py`, `src/delivery/dashboard.py`
+
+**Acceptance Criteria:**
+- [ ] My Bets page appears in the sidebar for all logged-in users
+- [ ] Match selector shows today's scheduled fixtures (home vs away + kickoff)
+  in kickoff-time order; falls back to a free-text field if no fixtures today
+- [ ] Market selector changes the Selection field options dynamically
+- [ ] Logging a manual bet creates a `BetLog` row with `bet_type="user_placed"`,
+  `status="pending"`, `model_prob=None`, `edge=None`, `stake_method="manual"`
+- [ ] `implied_prob` is correctly computed as `1.0 / odds`
+- [ ] Success toast appears with the bet summary after logging
+- [ ] Submitting the same match + market + selection twice on the same day
+  shows a warning, not a duplicate row (dedup check)
+- [ ] Form resets cleanly after successful submission
+
+---
+
+### E35-02 — Bet Slip with Edit and Void
+
+**Type:** Frontend + Backend
+**Depends on:** E35-01
+**Master Plan:** MP §6 Schema (bet_log table), MP §9 Dashboard
+
+The My Bets page gains a full bet slip table above the entry form. Users
+can see all their logged bets, edit mistakes, and void cancelled bets.
+
+**Changes:**
+
+- `src/delivery/views/my_bets.py` additions:
+  - `load_user_bets(user_id, status_filter, days_back) → list[dict]`
+    - Queries `BetLog` for `bet_type="user_placed" AND user_id=X`
+    - Ordered by `date DESC`, then `kickoff_time DESC`
+    - Returns `id`, `date`, `home_team`, `away_team`, `market_type`,
+      `selection`, `bookmaker`, `odds_at_detection`, `odds_at_placement`,
+      `stake`, `status`, `pnl`, `result`
+  - `update_bet(bet_id, user_id, **fields) → bool`
+    - Updates `stake`, `odds_at_placement`, `bookmaker`, `selection` on
+      a `user_placed` bet the requesting user owns
+    - Guards: can only edit `status="pending"` bets; cannot change `match_id`
+      or `market_type` (log a new bet instead)
+  - `void_bet(bet_id, user_id) → bool`
+    - Sets `status="void"`, `pnl=0.0`, `result=None`
+    - Guard: can only void bets owned by requesting user
+    - Voided bets are excluded from ROI calculations everywhere
+
+  - **Bet slip layout (top of My Bets page, above the entry form):**
+    - **Summary strip:** Today's open bets count · Today's P&L (settled) ·
+      This week's P&L · All-time P&L — 4 metric tiles in design-system colours
+    - **Filter row:** Status tabs — `All` · `Pending` · `Won` · `Lost` · `Void`
+    - **Table columns:** Date · Match · Market · Selection · Bookmaker · Odds ·
+      Stake · Est. Return (pending) / P&L (settled) · Status badge · Actions
+    - **Status badges:** Pending = amber pill, Won = green pill, Lost = red pill,
+      Void = grey pill
+    - **Actions per row (pending bets only):**
+      - ✏️ Edit — expands an inline mini-form (stake, odds, bookmaker, selection)
+        with a Save button
+      - 🚫 Void — confirmation checkbox appears next to the button; void only
+        fires if checkbox is ticked (prevents accidental voids)
+    - Won/Lost/Void rows show no action buttons (immutable)
+    - Pagination: show 20 rows per page; `st.dataframe` with `use_container_width`
+
+  - **Empty state:** If no bets logged yet, show a gentle prompt: "No bets
+    logged yet. Use the form below to record your first bet."
+
+- `src/delivery/views/performance.py` — add a note/link to My Bets on the
+  bet log section ("To edit or void a bet, visit My Bets ↗")
+
+**Files:** `src/delivery/views/my_bets.py` (extended), `src/delivery/views/performance.py`
+
+**Acceptance Criteria:**
+- [ ] Bet slip table renders with correct columns and design-system colours
+- [ ] Summary strip shows correct counts: pending bets today, today's P&L,
+  week P&L, all-time P&L
+- [ ] Status filter tabs correctly filter the table (All / Pending / Won /
+  Lost / Void)
+- [ ] Edit form opens inline; Save updates `stake` and/or `odds_at_placement`
+  in the DB; table refreshes
+- [ ] Cannot edit a non-pending bet (Edit button absent on Won/Lost/Void rows)
+- [ ] Void requires checkbox confirmation before the DB write
+- [ ] Voided bets have `pnl=0.0` in the database and are excluded from ROI
+  calculations in Performance Tracker
+- [ ] Pagination works: 20 rows per page, page count shown
+- [ ] Empty state message shown when no bets exist
+
+---
+
+### E35-03 — Integration Test
+
+**Type:** QA
+**Depends on:** E35-02
+**Master Plan:** MP §6 Schema (bet_log table)
+
+Automated pytest suite covering all E35 backend logic.
+
+**Test script:** `tests/test_e35_integration.py`
+
+**Test scenarios:**
+1. `log_manual_bet()` creates a correctly populated BetLog row
+2. `log_manual_bet()` returns None (not raises) when DB write fails
+3. Duplicate-check: same user + match + market + selection on same day returns
+   warning without writing a second row
+4. `load_user_bets()` returns only `user_placed` bets for the requesting user
+5. `load_user_bets()` with `status_filter="pending"` returns only pending rows
+6. `update_bet()` changes stake on a pending bet; DB reflects the update
+7. `update_bet()` returns False for a non-pending bet (won/lost/void)
+8. `update_bet()` returns False when `user_id` does not match the bet owner
+9. `void_bet()` sets status="void" and pnl=0.0
+10. `void_bet()` returns False for bets not owned by requesting user
+11. Voided bets excluded from ROI in Performance Tracker `load_bet_data()`
+
+**Acceptance Criteria:**
+- [ ] All 11+ test scenarios pass
+- [ ] Tests use in-memory SQLite with patched `_engine` / `_SessionFactory`
+- [ ] No cross-user data leakage in any test scenario
+
+---
+
+### Implementation Sequence
+
+```
+E35-01 (manual entry form + My Bets page)
+→ E35-02 (bet slip table + edit/void)
+→ E35-03 (integration test)
+```
+
+---
+
+---
+
+## Epic 36 — League Expansion
+
+**Status:** 📋 Planned
+**Type:** Data + Feature
+**Depends on:** E35 (Bet Tracker must be ready before bet volume increases)
+
+### Overview
+
+Extend BetVector beyond the English Premier League. Adding the English
+Championship and La Liga as the first two expansion leagues delivers:
+
+- **~1,000 additional matches per season** (Championship 552 + La Liga 380)
+- **~6,000+ historical training matches** via backfill (3+ seasons each)
+- **More betting surface** — 3x more value bets to evaluate per week
+- **Less efficient odds markets** — Championship in particular is underserved
+  by sharp bookmakers, meaning genuine edges are easier to find
+
+Both leagues are fully supported by Football-Data.co.uk (the primary scraper)
+and have reasonable Understat xG coverage, so no new scraper infrastructure
+is needed — only configuration and feature adjustments.
+
+**Why Championship before other top-5 leagues:**
+- Same Football-Data.co.uk format as EPL (`E1` code), easiest to onboard
+- 46 matches per team (vs EPL's 38) — more data per team per season
+- Less efficient market → higher expected ROI per bet
+- 3 promoted/relegated teams each season → interesting edge cases for the model
+- No Cloudflare issues with any of its data sources
+
+**Why La Liga second:**
+- The most globally-followed league after EPL → user interest
+- Football-Data.co.uk code `SP1`, Understat coverage good
+- Spanish football has distinctive tactical patterns (high xG, low PPDA)
+  that may improve multi-league model generalisation
+
+**Multi-league model considerations:**
+The Poisson model already handles multiple leagues correctly — it fits
+attack/defence ratings per team, not per league. What needs adjustment:
+
+1. **Home advantage** — currently a single global constant; should become
+   a per-league parameter (Championship home advantage ≠ EPL home advantage)
+2. **Promoted team handling** — teams newly promoted from League One/Two or
+   Segunda División have no prior-season data in the target league. They need
+   explicit regression toward league mean, not toward all-time mean.
+3. **Edge threshold per league** — Championship markets may warrant a lower
+   threshold (3%) than EPL (5%) given lower market efficiency.
+
+---
+
+### E36-01 — Championship Data Pipeline
+
+**Type:** Data / Scraper Config
+**Depends on:** E35-03
+**Master Plan:** MP §5 Data Sources, MP §6 Schema (leagues, seasons, matches tables)
+
+Add the English Championship (second tier) to the active leagues. Backfill
+3 seasons of historical data. Verify the pipeline runs end-to-end.
+
+**Changes:**
+
+- `config/leagues.yaml` — add Championship block:
+  ```yaml
+  - name: "Championship"
+    short_name: "Championship"
+    country: "England"
+    football_data_code: "E1"
+    understat_league: "Championship"
+    api_football_id: 40
+    is_active: true
+    seasons:
+      - "2022-23"
+      - "2023-24"
+      - "2024-25"
+      - "2025-26"
+    total_matchdays: 46
+    edge_threshold_override: 0.03   # Lower threshold for less-efficient market
+  ```
+- `src/scrapers/football_data.py` — confirm `E1` code works end-to-end
+  (it uses the same CSV format as `E0`; should require zero code changes)
+- `src/scrapers/understat_scraper.py` — confirm `Championship` league name
+  is handled; add to the league map if missing
+- `scripts/backfill_historical.py` — run backfill for Championship
+  2022-23 through 2024-25 (3 seasons of matches + odds + xG + ClubElo)
+- `src/database/seed.py` — seed Championship league and seasons
+
+**Files:** `config/leagues.yaml`, `src/database/seed.py`,
+`scripts/backfill_historical.py` (re-run for new league)
+
+**Acceptance Criteria:**
+- [ ] `config/leagues.yaml` contains Championship block with `is_active: true`
+- [ ] `python run_pipeline.py setup` seeds Championship league and 4 seasons
+  without errors
+- [ ] Backfill loads at minimum 2,000 Championship matches across 3 seasons
+- [ ] Backfill loads at minimum 15,000 Championship odds rows
+- [ ] Understat xG data loaded for available Championship matches (partial
+  coverage acceptable — model degrades gracefully to goals-only features)
+- [ ] Morning pipeline includes Championship fixtures and produces predictions
+  without errors
+- [ ] League Explorer page shows Championship as an active league
+
+---
+
+### E36-02 — La Liga Data Pipeline
+
+**Type:** Data / Scraper Config
+**Depends on:** E36-01
+**Master Plan:** MP §5 Data Sources, MP §6 Schema
+
+Add La Liga (Spanish top flight) to the active leagues. Same approach as
+Championship.
+
+**Changes:**
+
+- `config/leagues.yaml` — add La Liga block:
+  ```yaml
+  - name: "La Liga"
+    short_name: "LaLiga"
+    country: "Spain"
+    football_data_code: "SP1"
+    understat_league: "La liga"
+    api_football_id: 140
+    is_active: true
+    seasons:
+      - "2022-23"
+      - "2023-24"
+      - "2024-25"
+      - "2025-26"
+    total_matchdays: 38
+    edge_threshold_override: 0.05   # Same as EPL — well-served market
+  ```
+- `src/scrapers/understat_scraper.py` — La Liga uses `"La liga"` in Understat's
+  URL scheme; add to league name map if not already present
+- ClubElo already covers La Liga teams — verify team name mapping (`"Real Madrid"`,
+  `"Atletico Madrid"`, etc.) against Football-Data.co.uk spellings and add to
+  `TEAM_NAME_MAP` if gaps exist
+- `scripts/backfill_historical.py` — backfill La Liga 2022-23 through 2024-25
+- `src/database/seed.py` — seed La Liga league and seasons
+
+**Files:** `config/leagues.yaml`, `src/database/seed.py`,
+`src/scrapers/understat_scraper.py`, `src/scrapers/clubelo_scraper.py`
+
+**Acceptance Criteria:**
+- [ ] `config/leagues.yaml` contains La Liga block with `is_active: true`
+- [ ] `python run_pipeline.py setup` seeds La Liga league and 4 seasons
+- [ ] Backfill loads at minimum 2,000 La Liga matches across 3 seasons
+- [ ] Backfill loads at minimum 12,000 La Liga odds rows
+- [ ] ClubElo ratings loaded for La Liga teams (≥ 30 distinct teams across
+  the 3 backfill seasons)
+- [ ] Morning pipeline includes La Liga fixtures and produces predictions
+- [ ] League Explorer shows La Liga as an active league with match counts
+
+---
+
+### E36-03 — Multi-League Feature Adjustments
+
+**Type:** Feature Engineering
+**Depends on:** E36-02
+**Master Plan:** MP §4 Feature Engineering, MP §5 Data Sources
+
+Adjust the feature engineering layer to handle multi-league correctly.
+Three specific additions:
+
+**1. Per-league home advantage**
+
+The current model uses a single home-advantage constant fit across all
+training data. With 3 leagues of different tactical styles:
+- EPL: moderate home advantage (~0.3 goals per game difference)
+- Championship: stronger home advantage (~0.4 goals/game) — larger crowds,
+  more physical away trips
+- La Liga: lower home advantage (~0.25 goals/game) — more technical play,
+  fewer long journeys
+
+Changes:
+- `src/features/rolling.py` or `src/models/poisson.py` — compute home
+  advantage as a per-league intercept in the Poisson regression, not a
+  shared global constant
+- Feature: `league_home_adv_5` — rolling 5-match home advantage for the
+  league the match is played in (based on historical home vs away goal
+  differential in that league)
+
+**2. Newly promoted team flag**
+
+Teams in their first season in a new league have no within-league history.
+The current model falls back to league mean, but does not explicitly model
+the "promoted team penalty."
+
+Changes:
+- `src/features/context.py` — add `is_newly_promoted: bool` feature
+  - True if the team did not appear in the same league in the previous season
+  - Requires comparing current-season teams to prior-season teams in the same
+    league_id (query distinct `team_id` from `matches` WHERE `season_id` = prior)
+- Feature is nullable (False if no prior season in DB — treated as established)
+- This feature is meaningful for Championship especially (3 new teams per season)
+
+**3. Per-league edge threshold from config**
+
+The `edge_threshold_override` field added to `config/leagues.yaml` in E36-01/02
+must be read and applied in the value finder.
+
+Changes:
+- `src/betting/value_finder.py` — after loading `settings.value_betting.edge_threshold`
+  as the default, check if the current match's league has `edge_threshold_override`
+  set in the loaded leagues config; use that value if present
+
+**Files:** `src/features/rolling.py`, `src/features/context.py`,
+`src/models/poisson.py`, `src/betting/value_finder.py`, `config/leagues.yaml`
+
+**Acceptance Criteria:**
+- [ ] `league_home_adv_5` feature populated for EPL, Championship, La Liga
+  matches in the `features` table
+- [ ] `is_newly_promoted` feature is `True` for the correct promoted teams
+  in 2023-24 and 2024-25 (verifiable against known promotion/relegation tables)
+- [ ] `is_newly_promoted` is `False` for established teams and `False` (not
+  NULL) when prior season data is absent
+- [ ] `value_finder.py` uses `edge_threshold_override` from config when set;
+  Championship value bets use 3% threshold, EPL and La Liga use 5%
+- [ ] No temporal leakage: `is_newly_promoted` check uses only prior-season
+  data (season end date < current match date)
+
+---
+
+### E36-04 — Multi-League Integration Test and Backtest
+
+**Type:** QA + Evaluation
+**Depends on:** E36-03
+**Master Plan:** MP §7 Evaluation, MP §4 Feature Engineering
+
+Run the walk-forward backtester across all three active leagues and compare
+performance metrics against the EPL-only baseline.
+
+**Test script:** `tests/test_e36_integration.py`
+
+**Backtest command:**
+```bash
+python run_pipeline.py backtest --league Championship --season 2024-25
+python run_pipeline.py backtest --league LaLiga --season 2024-25
+```
+
+**Expected outcome (targets, not hard requirements):**
+- Championship Brier score within ±0.05 of EPL Brier score
+- La Liga Brier score within ±0.05 of EPL Brier score
+- Combined multi-league ROI ≥ EPL-only ROI (more bet volume, lower variance)
+- No pipeline errors across any of the three leagues in a morning run
+
+**Acceptance Criteria:**
+- [ ] Walk-forward backtest runs to completion for Championship 2024-25
+  without errors
+- [ ] Walk-forward backtest runs to completion for La Liga 2024-25 without
+  errors
+- [ ] Brier score and ROI logged to `data/predictions/backtest_report_*.json`
+  for each league
+- [ ] Morning pipeline (live run) processes fixtures from all 3 leagues in a
+  single run without errors
+- [ ] `is_newly_promoted` feature verified correct for 2024-25 promoted teams:
+  - Championship: Ipswich Town, Leicester City, Southampton (relegated from EPL)
+  - La Liga: Leganés, Espanyol, Valladolid (promoted from Segunda)
+- [ ] League Explorer shows all 3 leagues with live data and prediction counts
+- [ ] All automated pytest tests in `test_e36_integration.py` pass
+
+---
+
+### Implementation Sequence
+
+```
+E36-01 (Championship data pipeline)
+→ E36-02 (La Liga data pipeline)
+→ E36-03 (multi-league feature adjustments)
+→ E36-04 (integration test + backtest)
+```
+
+---
+
+---
+
+## Epic 37 — Model Improvement
+
+**Status:** 📋 Planned
+**Type:** Model / ML
+**Depends on:** E36 (multi-league dataset must exist before XGBoost has enough
+training data to outperform Poisson regression)
+
+### Overview
+
+With 3 active leagues and 6+ seasons of historical data (~9,000+ training
+matches across EPL, Championship, and La Liga), there is now sufficient
+data volume for a gradient boosting model to outperform the Poisson baseline.
+
+The goal is **not** to replace the Poisson model. It is to add XGBoost as a
+second model and blend them via the existing adaptive ensemble weight system
+(already implemented in `src/self_improvement/ensemble_weights.py`).
+
+**Why XGBoost over the Poisson for this expansion:**
+- XGBoost can learn non-linear interactions between features (e.g., "low xG
+  team playing at home against promoted team in bad form" is not a pattern
+  Poisson regression captures explicitly)
+- With 9,000+ samples, XGBoost has enough data to avoid overfitting
+- The scoreline matrix constraint (every model must output a 7×7 matrix) is
+  satisfied by fitting 49 separate XGBoost regressors — one per scoreline —
+  or by converting goal probability distributions to a matrix
+- The ensemble weights system already handles blending and fallback
+
+**What the Poisson model continues to do:**
+- Primary model for leagues with limited history (< 500 matches)
+- Provides a calibrated prior that prevents XGBoost from making extreme
+  predictions when features are sparse
+- Remains the fallback if XGBoost Brier score degrades past the rollback
+  threshold
+
+---
+
+### E37-01 — XGBoost Model on Multi-League Dataset
+
+**Type:** Model
+**Depends on:** E36-04
+**Master Plan:** MP §5 Models, MP §6 Schema (model_versions, predictions tables)
+
+Train an XGBoost model that outputs a 7×7 scoreline probability matrix,
+using the full multi-league feature set as input.
+
+**Architecture:**
+The cleanest approach for the scoreline matrix constraint is to train two
+XGBoost models — one for home goals expected, one for away goals expected —
+then use the Poisson PMF to convert expected goals into a 7×7 matrix.
+This keeps the output format identical to the Poisson model and reuses
+`derive_market_probabilities()` unchanged.
+
+- `src/models/xgboost_model.py` — new model class extending `BaseModel`
+  - `train(df: DataFrame, home_goals_col: str, away_goals_col: str)`
+    - Fits `XGBRegressor` for home expected goals and away expected goals
+    - Uses the same 70+ feature columns as the Poisson model
+    - `objective="reg:squarederror"`, `n_estimators=400`, `learning_rate=0.05`,
+      `max_depth=5`, `subsample=0.8`, `colsample_bytree=0.8`
+    - Early stopping on a 10% held-out validation set
+    - All hyperparameters in `config/settings.yaml` under `models.xgboost`
+  - `predict(df: DataFrame) → np.ndarray` — returns 7×7 matrix per match
+    - Predicts `mu_home` and `mu_away` from features
+    - Converts to matrix via `scipy.stats.poisson.pmf` (identical to Poisson
+      model's matrix generation step)
+  - `save(path: str)` / `load(path: str)` — uses `joblib.dump` / `joblib.load`
+    (already used by the Poisson model storage)
+
+- `config/settings.yaml` additions:
+  ```yaml
+  models:
+    xgboost:
+      n_estimators: 400
+      learning_rate: 0.05
+      max_depth: 5
+      subsample: 0.8
+      colsample_bytree: 0.8
+      early_stopping_rounds: 30
+      min_train_samples: 500     # Do not train XGBoost if fewer than 500 matches
+  ```
+
+- `src/models/storage.py` — register `xgboost_v1` as a known model type
+
+**Files:** new `src/models/xgboost_model.py`, `config/settings.yaml`,
+`src/models/storage.py`
+
+**Acceptance Criteria:**
+- [ ] `XGBoostModel` class implements the `BaseModel` interface (`train`,
+  `predict`, `save`, `load`)
+- [ ] `predict()` returns a valid 7×7 numpy array for every input row (all
+  probabilities ≥ 0, matrix sums within ±0.01 of 1.0)
+- [ ] Model trains successfully on the full multi-league feature DataFrame
+  without NaN errors (uses `fillna(mean).fillna(0.0)` same as Poisson)
+- [ ] Trained model saved to `data/models/xgboost_v1.pkl`
+- [ ] All XGBoost hyperparameters read from `config/settings.yaml` — nothing
+  hardcoded in `xgboost_model.py`
+- [ ] `min_train_samples` guard: `train()` raises `ValueError` with a clear
+  message if fewer than 500 training matches are provided
+- [ ] `derive_market_probabilities()` called on XGBoost matrix output produces
+  valid 1X2, Over/Under, BTTS probabilities (same function, no changes needed)
+
+---
+
+### E37-02 — Walk-Forward Backtest: XGBoost vs Poisson
+
+**Type:** Evaluation
+**Depends on:** E37-01
+**Master Plan:** MP §7 Evaluation, MP §5 Models
+
+Run the walk-forward backtester with XGBoost as the active model across
+all three leagues. Compare Brier score and ROI against the Poisson baseline.
+
+**Changes:**
+
+- `run_pipeline.py` — add `--model` flag to backtest command:
+  ```bash
+  python run_pipeline.py backtest --league EPL --season 2024-25 --model xgboost
+  python run_pipeline.py backtest --league Championship --season 2024-25 --model xgboost
+  python run_pipeline.py backtest --league LaLiga --season 2024-25 --model xgboost
+  ```
+- `src/evaluation/backtester.py` — accept `model_name` parameter; load the
+  specified model from storage instead of defaulting to Poisson
+- The walk-forward loop already handles temporal integrity — no changes needed
+  for the XGBoost case; it trains only on data before each matchday
+
+**Backtest targets (not hard requirements — record whatever results are achieved):**
+
+| Metric | Poisson baseline | XGBoost target |
+|--------|-----------------|----------------|
+| EPL Brier | 0.5781 | ≤ 0.5700 |
+| EPL ROI | +2.78% | ≥ +2.78% |
+| Championship Brier | TBD (E36) | ≤ Championship Poisson |
+| La Liga Brier | TBD (E36) | ≤ La Liga Poisson |
+
+**Files:** `run_pipeline.py`, `src/evaluation/backtester.py`
+
+**Acceptance Criteria:**
+- [ ] `--model xgboost` flag works in the backtest CLI without errors
+- [ ] XGBoost backtest runs to completion for EPL 2024-25 (full season,
+  walk-forward, no data leakage)
+- [ ] XGBoost backtest runs to completion for Championship 2024-25
+- [ ] XGBoost backtest runs to completion for La Liga 2024-25
+- [ ] Brier score and ROI recorded to `data/predictions/backtest_report_xgb_*.json`
+  for each league
+- [ ] Model Health page shows XGBoost calibration curve when XGBoost is active
+- [ ] Results documented in build plan with actual Brier/ROI numbers
+
+---
+
+### E37-03 — Ensemble: Poisson + XGBoost Adaptive Blend
+
+**Type:** Model / Self-Improvement
+**Depends on:** E37-02
+**Master Plan:** MP §11 Self-Improvement Engine (adaptive ensemble weights)
+
+Activate the ensemble for production. The adaptive weight system in
+`src/self_improvement/ensemble_weights.py` already exists — this issue
+wires XGBoost into it as the second model alongside Poisson.
+
+**Changes:**
+
+- `config/settings.yaml`:
+  ```yaml
+  models:
+    active_models:
+      - "poisson_v1"
+      - "xgboost_v1"
+    ensemble_enabled: true
+  ```
+- `src/models/storage.py` — `load_active_models()` must load both models
+  and return a dict `{model_name: BaseModel}`
+- `src/pipeline.py` — when `ensemble_enabled: true`, the prediction step
+  calls both models, gets two 7×7 matrices, and blends them using
+  `ensemble_weights.get_current_weights()`:
+  ```python
+  blended_matrix = w_poisson * matrix_poisson + w_xgb * matrix_xgb
+  ```
+  The blended matrix is then passed to `derive_market_probabilities()` —
+  everything downstream is unchanged.
+- **Initial weights:** 50/50 at launch (no resolved ensemble predictions yet)
+  until the adaptive weight system has 300+ resolved predictions to evaluate
+- **Fallback:** If XGBoost model file is not found on disk, log a warning and
+  fall back to Poisson-only (graceful degradation, not a crash)
+
+**Files:** `config/settings.yaml`, `src/models/storage.py`, `src/pipeline.py`,
+`src/self_improvement/ensemble_weights.py` (minor wiring only)
+
+**Acceptance Criteria:**
+- [ ] `ensemble_enabled: true` in settings activates blended predictions
+- [ ] Blended matrix = `w_poisson × matrix_poisson + w_xgb × matrix_xgb`,
+  verified by unit test
+- [ ] Initial weights are 50/50; weights stored in `model_weights` table
+  (already exists from E12)
+- [ ] Adaptive weight update runs on Sunday evening alongside existing
+  self-improvement triggers (no new scheduling needed)
+- [ ] If `xgboost_v1.pkl` is missing, pipeline continues with Poisson-only
+  and logs `WARNING: XGBoost model not found, falling back to Poisson`
+- [ ] Model Health page shows ensemble blend ratio (e.g. "Poisson 52% /
+  XGBoost 48%") when ensemble is active
+
+---
+
+### E37-04 — Integration Test
+
+**Type:** QA
+**Depends on:** E37-03
+**Master Plan:** MP §5 Models, MP §11 Self-Improvement
+
+Automated pytest suite verifying the XGBoost model, ensemble blending,
+and graceful fallback behaviour.
+
+**Test script:** `tests/test_e37_integration.py`
+
+**Test scenarios:**
+1. `XGBoostModel.train()` runs without error on a synthetic 600-row DataFrame
+2. `XGBoostModel.predict()` returns 7×7 array with values ≥ 0 that sum to ~1.0
+3. `XGBoostModel.train()` raises `ValueError` when fewer than 500 training rows
+4. Ensemble blend: `w_a * matrix_a + w_b * matrix_b` equals the blended output
+5. Ensemble weights sum to 1.0 at all times
+6. Fallback: pipeline continues with Poisson when XGBoost model file absent
+7. `derive_market_probabilities()` produces valid probabilities from blended matrix
+8. Temporal integrity: XGBoost training step receives no future data (verified
+   by checking max `match_date` in training set < prediction date)
+
+**Acceptance Criteria:**
+- [ ] All 8+ test scenarios pass
+- [ ] Tests use synthetic data only — no real DB access
+- [ ] `min_train_samples` guard tested explicitly
+
+---
+
+### Implementation Sequence
+
+```
+E37-01 (XGBoost model class + training)
+→ E37-02 (walk-forward backtest comparison)
+→ E37-03 (ensemble blend activation)
+→ E37-04 (integration test)
 ```
