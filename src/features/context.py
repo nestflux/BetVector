@@ -1048,3 +1048,238 @@ def calculate_injury_features(team_id: int) -> Dict[str, Any]:
         "injury_impact": round(total_impact, 2),
         "key_player_out": 1 if has_key_player_out else 0,
     }
+
+
+# ============================================================================
+# League Home Advantage Feature (E36-03)
+# ============================================================================
+# Home advantage varies significantly by league:
+#   EPL:         ~0.3 goals/match (moderate — large away fan sections,
+#                 continental travel not an issue within England)
+#   Championship:~0.4 goals/match (stronger — larger home crowds relative
+#                 to away allocations, more physical long-distance away trips)
+#   La Liga:     ~0.25 goals/match (lower — more technical play,
+#                 shorter travel distances across Spain)
+#
+# Rather than hard-coding these constants, we compute the rolling actual
+# home advantage from recent league matches.  This automatically captures
+# seasonal variation and adapts as the league's style evolves over time.
+#
+# league_home_adv_5 = mean(home_goals - away_goals) over the last 5
+# COMPLETED matches in this league before the match date.
+# Same value stored on both home and away Feature rows for a match.
+# ============================================================================
+
+# Minimum matches needed to compute a reliable league home advantage.
+# With fewer than this, the average is too noisy.
+MIN_LEAGUE_HOME_ADV_MATCHES = 3
+
+
+def calculate_league_home_advantage(
+    league_id: int,
+    match_date: str,
+    window: int = 5,
+) -> Dict[str, Any]:
+    """Calculate rolling league-level home advantage.
+
+    Looks at the last ``window`` completed matches in this league before
+    ``match_date`` and returns the average home goal advantage (home goals
+    minus away goals per match).
+
+    A positive value means home teams score more (the normal case).
+    Values close to 0 indicate weak or no home advantage in this league
+    for recent matches.
+
+    Parameters
+    ----------
+    league_id : int
+        Database ID of the league.
+    match_date : str
+        ISO date — only matches BEFORE this date are included.
+    window : int
+        Number of recent league matches to average over (default 5).
+
+    Returns
+    -------
+    dict
+        Keys: league_home_adv_5.
+        Returns None if fewer than MIN_LEAGUE_HOME_ADV_MATCHES exist.
+    """
+    with get_session() as session:
+        # Get the most recent ``window`` FINISHED league matches before this date.
+        # TEMPORAL INTEGRITY: strictly before match_date — we cannot know the
+        # result of the match being predicted, so we exclude it.
+        recent = (
+            session.query(Match)
+            .filter(
+                Match.league_id == league_id,
+                Match.date < match_date,
+                Match.status == "finished",
+                Match.home_goals.isnot(None),
+                Match.away_goals.isnot(None),
+            )
+            .order_by(Match.date.desc())
+            .limit(window)
+            .all()
+        )
+
+    if len(recent) < MIN_LEAGUE_HOME_ADV_MATCHES:
+        # Not enough data yet (early season or first season in this league)
+        return {"league_home_adv_5": None}
+
+    # Average home-minus-away goal differential across recent matches.
+    # Positive means home teams are scoring more than away teams.
+    diffs = [
+        (m.home_goals or 0) - (m.away_goals or 0)
+        for m in recent
+    ]
+    avg_adv = round(sum(diffs) / len(diffs), 4)
+
+    logger.debug(
+        "League home advantage (league_id=%d, before %s, window=%d): %.3f",
+        league_id, match_date, window, avg_adv,
+    )
+
+    return {"league_home_adv_5": avg_adv}
+
+
+# ============================================================================
+# Newly Promoted Team Feature (E36-03)
+# ============================================================================
+# Teams promoted from a lower division face a significant quality jump.
+# For example, a Championship team promoted to the EPL typically struggles
+# because opponents are substantially stronger.  The Elo system captures
+# this (promoted teams start with lower Elo), but an explicit binary flag
+# helps the model identify this pattern directly.
+#
+# A team is "newly promoted" if it did NOT appear in the same league
+# during the immediately preceding season.  We determine the prior season
+# by looking at which season_id in the same league has a start date just
+# before the current match date.
+#
+# TEMPORAL INTEGRITY:
+#   - We only check completed matches from the prior season.
+#   - We never use data from future seasons.
+#   - "is False when no prior season in DB" — this treats the earliest
+#     season in our DB as "established" (safe default: no false promotion flags).
+# ============================================================================
+
+
+def calculate_is_newly_promoted(
+    team_id: int,
+    league_id: int,
+    match_date: str,
+) -> Dict[str, Any]:
+    """Check whether this team is playing in this league for the first time.
+
+    Determines the current season from match records in the database, then
+    checks whether this team appeared in the prior season of the same league.
+    If not, the team is newly promoted.
+
+    Strategy: instead of relying on Season.start_date (which may be NULL for
+    some records), we determine the current season string by finding the most
+    recent season in the matches table for this league with match dates <=
+    the prediction date.  Then we find the lexicographically prior season
+    (e.g., "2023-24" is before "2024-25") and check team appearances.
+
+    Parameters
+    ----------
+    team_id : int
+        Database ID of the team.
+    league_id : int
+        Database ID of the league.
+    match_date : str
+        ISO date of the match being predicted.
+
+    Returns
+    -------
+    dict
+        Keys: is_newly_promoted.
+        - 1 if the team did not appear in this league last season
+        - 0 if the team played in this league last season
+        - 0 (not None) if no prior-season data exists in the DB
+    """
+    with get_session() as session:
+        from sqlalchemy import distinct
+
+        # Determine the current season: find the most recent season in the
+        # matches table for this league whose match dates are <= match_date.
+        # Season strings sort lexicographically (e.g., "2022-23" < "2023-24").
+        # We find all distinct seasons for this league, then take the most
+        # recent one whose matches include dates <= match_date.
+        season_rows = (
+            session.query(distinct(Match.season))
+            .filter(
+                Match.league_id == league_id,
+                Match.date <= match_date,
+            )
+            .all()
+        )
+
+        if not season_rows:
+            # No data for this league before this date — default to established
+            logger.debug(
+                "No matches found for league_id=%d on or before %s — "
+                "defaulting is_newly_promoted=0",
+                league_id, match_date,
+            )
+            return {"is_newly_promoted": 0}
+
+        # Sort seasons lexicographically and take the most recent one.
+        # "2024-25" > "2023-24" > "2022-23" in string comparison.
+        all_seasons = sorted([row[0] for row in season_rows])
+        current_season_str = all_seasons[-1]
+
+        # Find all known seasons for this league, sorted.
+        all_league_season_rows = (
+            session.query(distinct(Match.season))
+            .filter(Match.league_id == league_id)
+            .all()
+        )
+        all_league_seasons = sorted([row[0] for row in all_league_season_rows])
+
+        # Find the index of the current season to identify the prior one
+        try:
+            idx = all_league_seasons.index(current_season_str)
+        except ValueError:
+            return {"is_newly_promoted": 0}
+
+        if idx == 0:
+            # Current season is the earliest in our DB — no prior data
+            # Default to 0 (established): no evidence of promotion
+            logger.debug(
+                "Season %s is earliest in DB for league_id=%d — "
+                "defaulting is_newly_promoted=0",
+                current_season_str, league_id,
+            )
+            return {"is_newly_promoted": 0}
+
+        prior_season_str = all_league_seasons[idx - 1]
+
+        # Check if this team appeared in ANY match in the prior season.
+        # Both home and away appearances count.
+        appeared_in_prior = (
+            session.query(Match)
+            .filter(
+                Match.league_id == league_id,
+                Match.season == prior_season_str,
+                (
+                    (Match.home_team_id == team_id) |
+                    (Match.away_team_id == team_id)
+                ),
+            )
+            .first()
+        )
+
+    # If the team appeared in the prior season → established (0)
+    # If not → newly promoted (1)
+    is_promoted = 0 if appeared_in_prior is not None else 1
+
+    logger.debug(
+        "is_newly_promoted for team_id=%d in league_id=%d on %s: %d "
+        "(current season: %s, prior season: %s)",
+        team_id, league_id, match_date, is_promoted,
+        current_season_str, prior_season_str,
+    )
+
+    return {"is_newly_promoted": is_promoted}

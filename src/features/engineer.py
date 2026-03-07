@@ -37,6 +37,8 @@ from src.features.context import (
     calculate_context_features,
     calculate_elo_features,
     calculate_injury_features,
+    calculate_is_newly_promoted,
+    calculate_league_home_advantage,
     calculate_market_odds_features,
     calculate_market_value_features,
     calculate_referee_features,
@@ -200,6 +202,30 @@ def compute_features(match_id: int, league_id: int) -> Dict[str, Dict[str, Any]]
     away_injury = calculate_injury_features(away_team_id)
     home_features.update(home_injury)
     away_features.update(away_injury)
+
+    # --- Multi-league context features (E36-03) ---
+
+    # League home advantage (rolling 5-match window).
+    # Captures the actual observed home-field advantage in this specific league,
+    # which differs across EPL (~0.3 goals), Championship (~0.4), La Liga (~0.25).
+    # Same value for both home and away teams — it's a match/league-level stat.
+    league_ha = calculate_league_home_advantage(league_id, match_date, window=5)
+    home_features.update(league_ha)
+    away_features.update(league_ha)
+
+    # Newly promoted team flag.
+    # 1 if the team did not appear in this league last season (first season
+    # after promotion).  Promoted teams face a substantial quality step-up
+    # and systematically underperform pre-match form expectations.
+    # Computed per-team — different for home vs away.
+    home_promoted = calculate_is_newly_promoted(
+        home_team_id, league_id, match_date,
+    )
+    away_promoted = calculate_is_newly_promoted(
+        away_team_id, league_id, match_date,
+    )
+    home_features.update(home_promoted)
+    away_features.update(away_promoted)
 
     # --- Save to database ---
     save_features(match_id, home_team_id, is_home=1, features=home_features)
@@ -423,6 +449,8 @@ def _read_existing_features(
         "set_piece_xg_5", "open_play_xg_5",
         # Injury impact features (E22-02)
         "injury_impact", "key_player_out",
+        # Multi-league context features (E36-03)
+        "league_home_adv_5", "is_newly_promoted",
     ]
 
     for col in feature_cols:

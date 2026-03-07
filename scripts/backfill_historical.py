@@ -848,7 +848,10 @@ def backfill_features(
         existing = (
             session.query(Feature)
             .join(Match, Feature.match_id == Match.id)
-            .filter(Match.season == season)
+            .filter(
+                Match.season == season,
+                Match.league_id == league_id,
+            )
             .count()
         )
     logger.info("Season %s: %d existing Feature rows", season, existing)
@@ -862,13 +865,19 @@ def backfill_features(
     # We delete rather than using force_recompute=True because the latter
     # updates in-place, which can leave stale columns from old computations.
     # A fresh insert ensures all features are computed from the latest data.
+    # IMPORTANT: filter by league_id so we don't wipe other leagues' features
+    # for the same season (Championship, La Liga, and EPL all share seasons
+    # like "2024-25" but are independent leagues).
     if existing > 0:
         with get_session() as session:
             from src.database.models import Feature, Match
-            # Get all match IDs for this season
+            # Get match IDs for THIS season AND THIS league only
             match_ids = [
                 row[0] for row in
-                session.query(Match.id).filter(Match.season == season).all()
+                session.query(Match.id).filter(
+                    Match.season == season,
+                    Match.league_id == league_id,
+                ).all()
             ]
             if match_ids:
                 deleted = session.query(Feature).filter(
@@ -902,7 +911,10 @@ def backfill_features(
         final_count = (
             session.query(Feature)
             .join(Match, Feature.match_id == Match.id)
-            .filter(Match.season == season)
+            .filter(
+                Match.season == season,
+                Match.league_id == league_id,
+            )
             .count()
         )
         result["features_total"] = final_count
@@ -920,7 +932,10 @@ def backfill_features(
         features_all = (
             session.query(Feature)
             .join(Match, Feature.match_id == Match.id)
-            .filter(Match.season == season)
+            .filter(
+                Match.season == season,
+                Match.league_id == league_id,
+            )
             .all()
         )
         if features_all:

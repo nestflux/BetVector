@@ -687,6 +687,23 @@ class Feature(Base):
     # Captures the "star player absent" signal that most affects predictions.
     key_player_out = Column(Integer, nullable=True)
 
+    # --- Multi-league context features (E36-03) ---
+    # league_home_adv_5: rolling 5-match home goal advantage for this league.
+    # Home teams score more goals on average — this varies by league style:
+    #   EPL:         ~0.3 goals/match home advantage (moderate)
+    #   Championship:~0.4 goals/match (larger crowds, more physical away trips)
+    #   La Liga:     ~0.25 goals/match (more technical play, fewer long journeys)
+    # Computed as avg(home_goals - away_goals) over the last 5 league matches.
+    # Same value for both home and away team feature rows in a match.
+    league_home_adv_5 = Column(Float, nullable=True)
+    # is_newly_promoted: 1 if this team did not appear in this league in the
+    # previous season (i.e., they were promoted from a lower division).
+    # Promoted teams systematically underperform their pre-match Elo and form
+    # because they face much stronger competition than they're used to.
+    # 0 for established teams; False (not NULL) when no prior-season data exists.
+    # TEMPORAL INTEGRITY: only checks prior-season matches (season end < match date).
+    is_newly_promoted = Column(Integer, nullable=True)  # 1=promoted, 0=established
+
     computed_at = Column(
         String, nullable=False, server_default=func.now(),
     )

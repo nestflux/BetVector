@@ -482,7 +482,13 @@ class Pipeline:
             try:
                 from src.betting.value_finder import ValueFinder
                 finder = ValueFinder()
-                edge_threshold = config.settings.value_betting.edge_threshold
+                # Per-league edge threshold (E36-03): Championship uses 3% (less
+                # efficient market), La Liga and EPL use 5% (well-served markets).
+                # Falls back to the global default if no league override is set.
+                global_threshold = config.settings.value_betting.edge_threshold
+                edge_threshold = getattr(
+                    league_cfg, "edge_threshold_override", None,
+                ) or global_threshold
 
                 all_value_bets = []
                 for pred in predictions:
@@ -678,7 +684,12 @@ class Pipeline:
                 from src.models.storage import get_latest_predictions
 
                 finder = ValueFinder()
-                edge_threshold = config.settings.value_betting.edge_threshold
+                # Per-league edge threshold (E36-03): Championship uses 3% (less
+                # efficient market), La Liga and EPL use 5% (well-served markets).
+                global_threshold = config.settings.value_betting.edge_threshold
+                edge_threshold = getattr(
+                    league_cfg, "edge_threshold_override", None,
+                ) or global_threshold
 
                 # Get existing predictions for upcoming matches
                 predictions = get_latest_predictions(league_id=league_id)
@@ -1171,7 +1182,16 @@ class Pipeline:
 
             # Read staking config
             bankroll_cfg = config.settings.bankroll
-            edge_threshold = config.settings.value_betting.edge_threshold
+            # Per-league edge threshold (E36-03): Championship uses 3% (less
+            # efficient market), La Liga and EPL use 5% (well-served markets).
+            global_threshold = config.settings.value_betting.edge_threshold
+            bt_league_cfg = next(
+                (lg for lg in config.leagues if lg.short_name == league), None,
+            )
+            edge_threshold = (
+                getattr(bt_league_cfg, "edge_threshold_override", None) or global_threshold
+                if bt_league_cfg else global_threshold
+            )
 
             bt_result = bt_run(
                 league_id=league_id,
