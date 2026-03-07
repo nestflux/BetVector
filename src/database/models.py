@@ -82,6 +82,12 @@ class User(Base):
     kelly_fraction = Column(Float, nullable=False, server_default="0.25")
     # edge_threshold: minimum edge to flag a value bet (0.05 = 5%)
     edge_threshold = Column(Float, nullable=False, server_default="0.05")
+    # password_hash: PBKDF2-SHA256 hash of the user's password.
+    # Format: "pbkdf2_sha256$<iterations>$<salt_hex>$<hash_hex>"
+    # NULL for users who have not yet set a password (owner can set it via
+    # the admin page in E34-05).  When NULL the user cannot log in via email
+    # — they must be given a password by the owner before their first login.
+    password_hash = Column(String, nullable=True)
     # has_onboarded: set to 1 after the user completes the onboarding wizard
     has_onboarded = Column(Integer, nullable=False, server_default="0")
     # Notification preferences: 1 = enabled, 0 = disabled

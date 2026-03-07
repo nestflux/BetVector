@@ -63,6 +63,7 @@ from dotenv import load_dotenv
 import streamlit as st
 
 from src.config import PROJECT_ROOT
+from src.auth import is_authenticated, set_session_user, get_session_user_id
 
 # Load .env file so DASHBOARD_PASSWORD and other secrets are available
 # even when running via `streamlit run` directly (without the Desktop launcher).
@@ -336,13 +337,20 @@ def inject_custom_css() -> None:
 # ============================================================================
 
 def check_password() -> bool:
-    """Simple password gate using an environment variable.
+    """Emergency-fallback password gate using the DASHBOARD_PASSWORD env var.
 
-    Checks the entered password against DASHBOARD_PASSWORD from .env.
-    If the environment variable is not set, the dashboard is open
-    (useful for local development).
+    This is the *owner-only emergency path* — it grants owner-level access
+    using the single shared password from the environment.  Once multi-user
+    login (E34-02) is complete, regular users will authenticate via email +
+    password instead; this path stays as a guaranteed owner recovery route.
 
-    Returns True if authenticated, False otherwise.
+    Session state contract (E34-01):
+    - On success sets ``st.session_state["user_id"] = 1`` and
+      ``st.session_state["user_role"] = "owner"`` via ``set_session_user()``.
+    - ``is_authenticated()`` replaces the old boolean ``authenticated`` flag.
+
+    Returns True if authenticated (session already active or just verified),
+    False if the login form is being displayed.
     """
     # Check env var first, then Streamlit secrets (for Streamlit Cloud).
     # We only check st.secrets when a secrets file actually exists —
@@ -357,10 +365,13 @@ def check_password() -> bool:
         except Exception:
             dashboard_password = ""
     if not dashboard_password:
+        # No password configured — open access for local dev (no credentials set)
+        if not is_authenticated():
+            set_session_user(1, "owner")
         return True
 
-    # Check if already authenticated this session
-    if st.session_state.get("authenticated", False):
+    # Already authenticated in this browser session — skip the form
+    if is_authenticated():
         return True
 
     # Inject login-specific CSS — styles the ENTER button to feel like a
@@ -421,7 +432,9 @@ def check_password() -> bool:
             submitted = st.form_submit_button("ENTER")
             if submitted:
                 if password == dashboard_password:
-                    st.session_state["authenticated"] = True
+                    # Emergency fallback — grant owner access via env var password.
+                    # set_session_user stores user_id + user_role in session state.
+                    set_session_user(1, "owner")
                     st.rerun()
                 elif password:
                     st.error("Incorrect password. Try again.")
@@ -532,15 +545,19 @@ def check_onboarding() -> bool:
     Returns False if onboarding is needed (wizard should display instead).
     New users (has_onboarded=0) see the onboarding wizard.
     Returning users skip straight to the dashboard.
+
+    Uses the session user_id from ``get_session_user_id()`` so that each
+    user sees their own onboarding state (E34-01).  Defaults to user_id=1
+    during the migration period if session state is not yet populated.
     """
     from src.database.db import get_session
     from src.database.models import User
 
     with get_session() as session:
-        # Default to user_id=1 for MVP (single-user system)
-        user = session.get(User, 1)
+        user_id = get_session_user_id()
+        user = session.get(User, user_id)
         if not user:
-            return True  # No user yet — let setup handle it
+            return True  # No user record yet — let setup handle it
         return bool(user.has_onboarded)
 
 

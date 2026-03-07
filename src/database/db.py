@@ -265,20 +265,92 @@ def get_session() -> Generator[Session, None, None]:
 # Schema management
 # ============================================================================
 
+def _apply_schema_migrations(engine: Engine) -> None:
+    """Apply incremental column additions that ``create_all`` cannot handle.
+
+    SQLAlchemy's ``create_all`` only creates *new* tables — it never alters
+    existing ones.  When a column is added to an ORM model after the initial
+    schema was deployed, we must issue ALTER TABLE statements manually.
+
+    Each migration here is idempotent:
+    - PostgreSQL: ``ADD COLUMN IF NOT EXISTS`` is natively idempotent.
+    - SQLite: ``ADD COLUMN`` raises OperationalError if the column already
+      exists, so we swallow that specific error.
+
+    Add a new entry here whenever a column is added to an existing model.
+    """
+    is_postgres = str(engine.url).startswith("postgresql")
+
+    migrations = [
+        # E34-01 (March 2026): per-user password hash for multi-user auth.
+        # NULL = password not yet set; user cannot log in via email until set.
+        #
+        # NOTE — columns already present in the initial E33 Neon schema
+        # (has_onboarded, notify_morning, notify_evening, notify_weekly) do NOT
+        # need entries here; they were created by create_all() during the E33
+        # cloud migration and exist in every deployed database.  Only add
+        # columns that are genuinely new AFTER that initial deployment.
+        (
+            "users",
+            "password_hash",
+            "VARCHAR" if is_postgres else "TEXT",
+        ),
+    ]
+
+    with engine.begin() as conn:
+        for table, column, col_type in migrations:
+            try:
+                if is_postgres:
+                    conn.execute(text(
+                        f"ALTER TABLE {table} "
+                        f"ADD COLUMN IF NOT EXISTS {column} {col_type}"
+                    ))
+                else:
+                    # SQLite does not support IF NOT EXISTS on ALTER TABLE;
+                    # catch the error and continue if the column exists.
+                    conn.execute(text(
+                        f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"
+                    ))
+                logger.info(
+                    "Schema migration applied: %s.%s (%s)", table, column, col_type,
+                )
+            except Exception as exc:
+                exc_msg = str(exc).lower()
+                if "duplicate column" in exc_msg or "already exists" in exc_msg:
+                    # Expected on every run after the first — not an error.
+                    logger.debug(
+                        "Schema migration skipped (column exists): %s.%s",
+                        table, column,
+                    )
+                else:
+                    # Unexpected error (permissions, network, schema corruption).
+                    # Log at ERROR and re-raise so init_db() fails loudly rather
+                    # than silently leaving the column absent from the live schema
+                    # and deferring the crash to the first user login.
+                    logger.error(
+                        "Schema migration failed for %s.%s — re-raising: %s",
+                        table, column, exc,
+                    )
+                    raise
+
+
 def init_db() -> None:
-    """Create all tables that don't already exist.
+    """Create all tables that don't already exist, then apply column migrations.
 
     Safe to call multiple times — SQLAlchemy's ``create_all`` uses
-    ``CREATE TABLE IF NOT EXISTS`` under the hood.
+    ``CREATE TABLE IF NOT EXISTS`` under the hood, and ``_apply_schema_migrations``
+    is also fully idempotent.
 
     This function:
     1. Ensures the engine is initialised.
     2. Calls ``Base.metadata.create_all()`` to build every table registered
        on the Base (ORM models defined in E2-02, E2-03, E2-04).
-    3. Verifies WAL mode is active (SQLite only).
+    3. Applies incremental column migrations (``_apply_schema_migrations``).
+    4. Verifies WAL mode is active (SQLite only).
     """
     engine = get_engine()
     Base.metadata.create_all(engine)
+    _apply_schema_migrations(engine)
 
     # Verify WAL mode is actually enabled (belt and suspenders)
     if str(engine.url).startswith("sqlite"):
