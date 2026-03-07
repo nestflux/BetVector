@@ -19,6 +19,9 @@ leagues:
     api_football_id: 39
     # Understat league identifier (used by understatapi package)
     understat_league: "EPL"
+    # Football-Data.org API competition code (free tier: PL=Premier League only)
+    # Set to null for leagues not covered by Football-Data.org free tier.
+    football_data_org_code: "PL"
     is_active: true
     seasons:
       - "2020-21"
@@ -30,8 +33,33 @@ leagues:
     total_matchdays: 38
 
   # -------------------------------------------------------------------------
-  # Example: adding La Liga
-  # Uncomment the block below and set is_active: true when ready to expand.
+  # English Championship (E36-01 — League Expansion)
+  # Football-Data.co.uk code: E1 (same CSV format as EPL's E0 — zero code changes)
+  # 24 teams × 46 matches per team = 552 matches per season
+  # Less efficient market than EPL → edge_threshold_override: 0.03 (3%)
+  # NOTE: Championship is NOT covered by Understat — understat_league: null
+  # so the xG step is skipped gracefully, model falls back to goals-only features
+  # -------------------------------------------------------------------------
+  - name: "Championship"
+    short_name: "Championship"
+    country: "England"
+    football_data_code: "E1"
+    fbref_league_id: null
+    api_football_id: 40
+    understat_league: null   # Understat covers EPL, La Liga, Bundesliga, Serie A, Ligue 1 only
+    football_data_org_code: null  # Football-Data.org free tier covers PL only; Championship skipped
+    is_active: true
+    seasons:
+      - "2022-23"
+      - "2023-24"
+      - "2024-25"
+      - "2025-26"
+    total_matchdays: 46
+    edge_threshold_override: 0.03  # Lower threshold — Championship market less efficient than EPL
+
+  # -------------------------------------------------------------------------
+  # La Liga (E36-02 — planned, not yet active)
+  # Uncomment and set is_active: true when ready to expand.
   # -------------------------------------------------------------------------
   # - name: "La Liga"
   #   short_name: "LaLiga"
@@ -39,7 +67,12 @@ leagues:
   #   football_data_code: "SP1"
   #   fbref_league_id: "ESP-La Liga"
   #   api_football_id: 140
+  #   understat_league: "La liga"
   #   is_active: false
   #   seasons:
+  #     - "2022-23"
+  #     - "2023-24"
   #     - "2024-25"
+  #     - "2025-26"
   #   total_matchdays: 38
+  #   edge_threshold_override: 0.05   # EPL-level threshold — well-served market

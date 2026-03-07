@@ -206,6 +206,18 @@ class FootballDataOrgScraper(BaseScraper):
         """
         league_name = getattr(league_config, "short_name", "unknown")
 
+        # --- Guard: league must have a Football-Data.org competition code ---
+        # Free tier covers Premier League (PL) only.  Other leagues set
+        # football_data_org_code: null in leagues.yaml to skip gracefully.
+        fd_org_code = getattr(league_config, "football_data_org_code", None)
+        if not fd_org_code:
+            logger.info(
+                "[%s] No football_data_org_code configured for %s — skipping "
+                "(Football-Data.org free tier covers PL only).",
+                self.source_name, league_name,
+            )
+            return pd.DataFrame()
+
         # --- Guard: API key required ---
         if not self._api_key:
             logger.warning(
@@ -218,9 +230,9 @@ class FootballDataOrgScraper(BaseScraper):
         # Convert season string to API year (e.g. "2025-26" → 2025)
         api_season = self._convert_season(season)
 
-        # Build the API URL
+        # Build the API URL using the per-league competition code (e.g. "PL")
         url = (
-            f"{self._base_url}/competitions/{self._competition_code}"
+            f"{self._base_url}/competitions/{fd_org_code}"
             f"/matches?season={api_season}"
         )
 

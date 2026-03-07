@@ -1016,6 +1016,15 @@ def main() -> None:
         action="store_true",
         help="Download data and show parsed output without writing to DB.",
     )
+    parser.add_argument(
+        "--league",
+        default=None,
+        help=(
+            "Short name of the league to backfill (e.g. 'EPL', 'Championship'). "
+            "Default: first active league in config/leagues.yaml. "
+            "Added in E36-01 to support multi-league backfills."
+        ),
+    )
     args = parser.parse_args()
 
     print("=" * 70)
@@ -1032,7 +1041,24 @@ def main() -> None:
         print("ERROR: No active leagues in config/leagues.yaml")
         sys.exit(1)
 
-    league_cfg = active_leagues[0]
+    # E36-01: Support explicit --league selection for multi-league backfills.
+    # Without --league, defaults to the first active league (EPL) for
+    # backward compatibility with the original E23 backfill usage.
+    if args.league:
+        league_cfg = next(
+            (lc for lc in active_leagues if lc.short_name == args.league),
+            None,
+        )
+        if league_cfg is None:
+            active_names = [lc.short_name for lc in active_leagues]
+            print(
+                f"ERROR: League '{args.league}' not found or not active. "
+                f"Active leagues: {', '.join(active_names)}"
+            )
+            sys.exit(1)
+    else:
+        league_cfg = active_leagues[0]
+
     league_name = league_cfg.short_name
     league_id = _get_league_id(league_name)
     print(f"League: {league_cfg.name} (ID={league_id})")
