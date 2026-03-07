@@ -4634,7 +4634,7 @@ and start fresh. Each action requires explicit confirmation before executing.
 
 ---
 
-### E34-05 — Owner Admin Page — TODO
+### E34-05 — Owner Admin Page — DONE ✅
 
 **Type:** Frontend / Admin
 **Depends on:** E34-03
@@ -4645,29 +4645,28 @@ accounts, deactivate/reactivate existing users, view all users' status,
 and reset any user's bankroll or bet history from the admin side.
 
 **Changes:**
-- New: `src/delivery/pages/admin.py` — Admin page with:
-  1. **User table** — name, email, role, current bankroll, is_active, created_at
-  2. **Create user** — name + email + temporary password form → inserts `User`
-     row with hashed password. Owner must share credentials out-of-band.
-  3. **Deactivate / Reactivate** — toggle `is_active` for any user (except owner)
-  4. **Reset user bankroll** — sets `current_bankroll = starting_bankroll` for
-     selected user
-  5. **Clear user bet history** — deletes `user_placed` bet_log rows for
-     selected user. Requires confirmation.
-- `src/delivery/dashboard.py` — Add "Admin" to nav, visible only when
-  `st.session_state["user_role"] == "owner"`.
+- New: `src/delivery/views/admin.py` — Admin page with two-level role gate
+  (nav skip + st.stop()); user table with bankroll, role, status, password
+  status; per-user expander with reset/clear-history (checkbox confirm);
+  Create User form (name + email + password ≥8 chars + role → hashed User row)
+- `src/delivery/dashboard.py` — `get_pages()` now returns a list; appends
+  Admin page (🛡️) only when get_session_user_role()=="owner"; added
+  `get_session_user_role` to auth import.
 
-**Files:** `src/delivery/pages/admin.py` (new), `src/delivery/dashboard.py`
+**Results:**
+- 8/8 ACs pass; Gate 2 CLEAN, Gate 3 APPROVED
+- Defence in depth: nav-level + render-time role gates
+- Owner self-deactivation blocked at UI layer (is_self check) AND DB layer (deactivate_user guard)
 
 **Acceptance Criteria:**
-- [ ] Admin page not visible or accessible to `role='viewer'` users
-- [ ] Owner can create a new user with name, email, and temporary password
-- [ ] New user can log in with the temporary password immediately
-- [ ] Owner can deactivate a user — deactivated user cannot log in
-- [ ] Owner can reactivate a deactivated user
-- [ ] Owner can reset any user's bankroll
-- [ ] Owner can clear any user's bet history (user_placed only)
-- [ ] Owner's own account cannot be deactivated from the admin page
+- [x] Admin page not visible or accessible to `role='viewer'` users
+- [x] Owner can create a new user with name, email, and temporary password
+- [x] New user can log in with the temporary password immediately
+- [x] Owner can deactivate a user — deactivated user cannot log in
+- [x] Owner can reactivate a deactivated user
+- [x] Owner can reset any user's bankroll
+- [x] Owner can clear any user's bet history (user_placed only)
+- [x] Owner's own account cannot be deactivated from the admin page
 
 ---
 

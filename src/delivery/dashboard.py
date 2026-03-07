@@ -65,7 +65,7 @@ import streamlit as st
 from src.config import PROJECT_ROOT
 from src.auth import (
     is_authenticated, set_session_user, get_session_user_id,
-    get_user_by_email, verify_password,
+    get_session_user_role, get_user_by_email, verify_password,
 )
 
 # Load .env file so DASHBOARD_PASSWORD and other secrets are available
@@ -506,10 +506,15 @@ def _handle_login(email: str, password: str, emergency_pwd: str) -> None:
 # ============================================================================
 
 def get_pages() -> list:
-    """Define the six dashboard pages.
+    """Define the dashboard pages, adding Admin for owner users.
 
     Uses Streamlit's st.Page to define each page with its file path,
     title, and icon.  The pages are loaded from src/delivery/views/.
+
+    E34-05: The Admin page is appended only when the logged-in user has
+    role='owner'.  This keeps the sidebar uncluttered for viewers and
+    prevents the admin URL from being navigated to directly by non-owners
+    (the page itself also enforces the role gate as defence in depth).
 
     Returns
     -------
@@ -520,7 +525,7 @@ def get_pages() -> list:
     # E26-03: Fixtures is the landing page — the most interesting first
     # view, showing all matches with predicted scores and top picks.
     # Today's Picks is still prominent in the sidebar.
-    return [
+    pages = [
         st.Page(
             "views/fixtures.py",
             title="Fixtures",
@@ -563,6 +568,19 @@ def get_pages() -> list:
             icon="🔍",
         ),
     ]
+
+    # E34-05: Admin page — owners only.  Not rendered for viewer role so
+    # the page never appears in the sidebar navigation.
+    if get_session_user_role() == "owner":
+        pages.append(
+            st.Page(
+                "views/admin.py",
+                title="Admin",
+                icon="🛡️",
+            )
+        )
+
+    return pages
 
 
 # ============================================================================
