@@ -28,6 +28,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from src.auth import get_session_user_id
 from src.database.db import get_session
 from src.database.models import BetLog, Match, User
 from src.delivery.views._badge_helper import render_badge_only
@@ -565,7 +566,8 @@ st.markdown(
 st.divider()
 
 # --- Load Data ---
-user_data = load_user_data()
+# E34-03: Load data for the logged-in user, not the hardcoded owner.
+user_data = load_user_data(get_session_user_id())
 
 if not user_data:
     st.markdown(

@@ -23,6 +23,7 @@ from typing import Dict, List, Optional
 
 import streamlit as st
 
+from src.auth import get_session_user_id
 from src.database.db import get_session
 from src.database.models import InjuryFlag, League, Team, User
 
@@ -371,7 +372,8 @@ st.markdown(
 st.divider()
 
 # --- Load current user ---
-user_data = load_current_user()
+# E34-03: Load settings for the logged-in user, not the hardcoded owner.
+user_data = load_current_user(get_session_user_id())
 
 if not user_data:
     st.markdown(

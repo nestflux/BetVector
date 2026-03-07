@@ -31,8 +31,9 @@ from typing import Dict, List, Optional, Tuple
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-from sqlalchemy import func
+from sqlalchemy import and_, func, or_
 
+from src.auth import get_session_user_id
 from src.database.db import get_session
 from src.database.models import BetLog, Match
 from src.delivery.views._badge_helper import render_badge_only
@@ -60,6 +61,7 @@ COLOURS = {
 # ============================================================================
 
 def load_bet_data(
+    user_id: int = 1,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     league: Optional[str] = None,
@@ -72,8 +74,19 @@ def load_bet_data(
     the bets table.  Only resolved bets (won/lost) are included — pending
     bets don't contribute to P&L.
 
+    E34-03 — Multi-user scoping:
+    - system_pick bets are global: all users see them (they represent model
+      performance, not a personal bankroll action).
+    - user_placed bets are personal: only the placing user sees them.
+    - When bet_type filter is "user_placed", only that user's placed bets
+      are returned.  When "system_pick", all system picks are returned.
+    - When no bet_type filter is set, system picks (global) plus this
+      user's user_placed bets are combined.
+
     Parameters
     ----------
+    user_id : int
+        The logged-in user's database ID (from get_session_user_id()).
     date_from : str, optional
         ISO date string for start of range.
     date_to : str, optional
@@ -105,8 +118,30 @@ def load_bet_data(
             query = query.filter(BetLog.league == league)
         if market_type:
             query = query.filter(BetLog.market_type == market_type)
-        if bet_type:
-            query = query.filter(BetLog.bet_type == bet_type)
+
+        # E34-03: Multi-user scoping — system picks are shared across all
+        # users; user_placed bets belong to the individual who placed them.
+        if bet_type == "user_placed":
+            # Only this user's manually placed bets
+            query = query.filter(
+                BetLog.bet_type == "user_placed",
+                BetLog.user_id == user_id,
+            )
+        elif bet_type == "system_pick":
+            # System picks are global — no user_id filter needed
+            query = query.filter(BetLog.bet_type == "system_pick")
+        else:
+            # No bet_type filter: show system picks (global) + this user's
+            # user_placed bets.
+            query = query.filter(
+                or_(
+                    BetLog.bet_type == "system_pick",
+                    and_(
+                        BetLog.bet_type == "user_placed",
+                        BetLog.user_id == user_id,
+                    ),
+                )
+            )
 
         rows = query.order_by(BetLog.date.asc()).all()
 
@@ -157,14 +192,32 @@ def load_bet_data(
     return pd.DataFrame(data)
 
 
-def get_filter_options() -> Dict[str, List[str]]:
-    """Get unique values for filter dropdowns from the database."""
+def get_filter_options(user_id: int = 1) -> Dict[str, List[str]]:
+    """Get unique values for filter dropdowns from the database.
+
+    E34-03: Scoped to bets visible to user_id — system picks (global) plus
+    that user's user_placed bets.  This prevents filter dropdowns from
+    showing leagues/markets for bets the user cannot actually see.
+    """
     with get_session() as session:
+        visible_filter = or_(
+            BetLog.bet_type == "system_pick",
+            and_(
+                BetLog.bet_type == "user_placed",
+                BetLog.user_id == user_id,
+            ),
+        )
         leagues = [
-            r[0] for r in session.query(BetLog.league).distinct().all()
+            r[0] for r in session.query(BetLog.league)
+            .filter(visible_filter)
+            .distinct()
+            .all()
         ]
         markets = [
-            r[0] for r in session.query(BetLog.market_type).distinct().all()
+            r[0] for r in session.query(BetLog.market_type)
+            .filter(visible_filter)
+            .distinct()
+            .all()
         ]
 
     return {"leagues": sorted(leagues), "markets": sorted(markets)}
@@ -481,7 +534,8 @@ st.markdown(
 st.divider()
 
 # --- Filters ---
-filter_options = get_filter_options()
+# E34-03: Scope filter options to bets visible to the logged-in user.
+filter_options = get_filter_options(get_session_user_id())
 
 filter_cols = st.columns(4)
 with filter_cols[0]:
@@ -518,8 +572,10 @@ market_val = market_filter if market_filter != "All" else None
 bet_type_val = bet_type_filter if bet_type_filter != "All" else None
 
 # --- Load Data ---
+# E34-03: Pass logged-in user_id so data is scoped correctly.
 with st.spinner("Loading performance data..."):
     df = load_bet_data(
+        user_id=get_session_user_id(),
         date_from=date_from,
         date_to=date_to,
         league=league_val,

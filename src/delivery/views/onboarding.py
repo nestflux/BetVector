@@ -20,6 +20,7 @@ from datetime import datetime
 
 import streamlit as st
 
+from src.auth import get_session_user_id
 from src.database.db import get_session
 from src.database.models import League, User
 
@@ -423,8 +424,9 @@ def render_onboarding() -> None:
     )
     st.divider()
 
-    # Load user data for defaults on first visit
-    user_data = load_onboarding_user()
+    # Load user data for defaults on first visit.
+    # E34-03: Load for the logged-in user, not the hardcoded owner.
+    user_data = load_onboarding_user(get_session_user_id())
     if not user_data:
         st.error("No user account found. Please run the setup pipeline first.")
         return

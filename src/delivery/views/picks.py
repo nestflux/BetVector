@@ -35,6 +35,7 @@ from src.database.models import (
     ValueBet,
     Weather,
 )
+from src.auth import get_session_user_id
 from src.delivery.views._badge_helper import render_team_badge
 
 
@@ -250,14 +251,15 @@ def _date_sort_key(date_str: str) -> int:
 def get_suggested_stake(model_prob: float, odds: float) -> float:
     """Calculate a suggested stake for display purposes.
 
-    Uses the default user's bankroll settings. Falls back to a simple
+    Uses the logged-in user's bankroll settings. Falls back to a simple
     2% of $1000 if no user is configured.
     """
     try:
         from src.betting.bankroll import BankrollManager
         manager = BankrollManager()
+        user_id = get_session_user_id()
         with get_session() as session:
-            user = session.query(User).filter_by(role="owner").first()
+            user = session.get(User, user_id)
             if user:
                 result = manager.calculate_stake(user.id, model_prob, odds)
                 return result.stake
@@ -266,13 +268,6 @@ def get_suggested_stake(model_prob: float, odds: float) -> float:
 
     # Fallback: 2% of $1000
     return 20.00
-
-
-def get_default_user_id() -> Optional[int]:
-    """Get the owner user ID for bet logging."""
-    with get_session() as session:
-        user = session.query(User).filter_by(role="owner").first()
-        return user.id if user else None
 
 
 # ============================================================================
@@ -464,29 +459,27 @@ def render_value_bet_card(vb: Dict, idx) -> None:
                 )
 
             if st.button("Confirm Bet Placed", key=f"confirm_{idx}", type="primary"):
-                user_id = get_default_user_id()
-                if user_id is None:
-                    st.error("No user found. Run `python run_pipeline.py setup` first.")
-                else:
-                    try:
-                        from src.betting.tracker import log_user_bet
-                        bet_id = log_user_bet(
-                            value_bet_id=vb["id"],
-                            user_id=user_id,
-                            actual_odds=actual_odds,
-                            actual_stake=actual_stake,
+                # E34-03: Use the logged-in user's ID, not the DB owner lookup.
+                user_id = get_session_user_id()
+                try:
+                    from src.betting.tracker import log_user_bet
+                    bet_id = log_user_bet(
+                        value_bet_id=vb["id"],
+                        user_id=user_id,
+                        actual_odds=actual_odds,
+                        actual_stake=actual_stake,
+                    )
+                    if bet_id:
+                        st.success(
+                            f"Bet logged (ID: {bet_id}). "
+                            f"{vb['home_team']} vs {vb['away_team']} — "
+                            f"{selection_label} @ {actual_odds:.2f}, "
+                            f"${actual_stake:.2f} staked."
                         )
-                        if bet_id:
-                            st.success(
-                                f"Bet logged (ID: {bet_id}). "
-                                f"{vb['home_team']} vs {vb['away_team']} — "
-                                f"{selection_label} @ {actual_odds:.2f}, "
-                                f"${actual_stake:.2f} staked."
-                            )
-                        else:
-                            st.warning("Bet may already be logged (duplicate).")
-                    except Exception as e:
-                        st.error(f"Failed to log bet: {e}")
+                    else:
+                        st.warning("Bet may already be logged (duplicate).")
+                except Exception as e:
+                    st.error(f"Failed to log bet: {e}")
 
 
 def render_result_card(vb: Dict, idx: int) -> None:

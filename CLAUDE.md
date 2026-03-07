@@ -1,4 +1,4 @@
-# BetVector — Claude Code Session Rules
+3# BetVector — Claude Code Session Rules
 
 These rules apply to every session, every issue, without exception.
 Do not deviate from them unless explicitly told to in the chat.
@@ -303,9 +303,9 @@ Wait for owner to respond with approval before making the change.
 
 ## Current Status
 
-Last completed: PC-06 (Fixture stub auto-creation — Today's Picks fix) ✅
-Currently working: E34-01 — Multi-User Auth: Password storage + session overhaul
-Next up: E34-02 — Per-user login page
+Last completed: E34-03 (Scope all dashboard queries to logged-in user) ✅
+Currently working: E34-04 — Per-user reset controls
+Next up: E34-05 — Owner admin page
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
@@ -338,10 +338,10 @@ Post-critical-path (March 2026):
 - PC-05: Login ENTER button ✅ — styled green-bordered `st.form_submit_button`, JetBrains Mono, glow on hover
 - PC-06: Fixture stub auto-creation ✅ — `load_odds_the_odds_api` creates scheduled stubs; fixes Today's Picks
 
-E34 — Multi-User Authentication: 0 / 6 issues done 🔜
-- E34-01: Password storage + session overhaul — TODO
-- E34-02: Per-user login page — TODO
-- E34-03: Scope all dashboard queries to logged-in user — TODO
+E34 — Multi-User Authentication: 3 / 6 issues done 🔄
+- E34-01: Password storage + session overhaul ✅
+- E34-02: Per-user login page ✅
+- E34-03: Scope all dashboard queries to logged-in user ✅
 - E34-04: Per-user reset controls — TODO
 - E34-05: Owner admin page — TODO
 - E34-06: Integration test — TODO
