@@ -303,9 +303,9 @@ Wait for owner to respond with approval before making the change.
 
 ## Current Status
 
-Last completed: E33-06 (Integration Test — full cloud stack) ✅
-Currently working: CRITICAL PATH COMPLETE — all 122 issues done ✅
-Next up: Post-launch maintenance / new feature proposals
+Last completed: PC-06 (Fixture stub auto-creation — Today's Picks fix) ✅
+Currently working: E34-01 — Multi-User Auth: Password storage + session overhaul
+Next up: E34-02 — Per-user login page
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
@@ -328,14 +328,23 @@ E30 complete: All 3 issues done ✅ (Fixtures Enhancements + Logo — threshold/
 E31 complete: All 4 issues done ✅ (Badge Ring Redesign + League Explorer Badges — blue/green rings, card borders, team badges in all tables)
 E32 complete: All 5 issues done ✅ (Dashboard Clarity & Tooltips — MODEL badge, CSS tooltips, picks crash fix, glossary updates)
 E33 complete: All 6 issues done ✅ (Cloud Migration — Neon PostgreSQL + Streamlit Community Cloud, pipeline running)
-Total issues: 127 — ALL COMPLETE ✅
+Total original critical path: 127 issues — ALL COMPLETE ✅
 
 Post-critical-path (March 2026):
-- Logo transparency fix ✅ — all 4 logo PNGs de-haloed (flood-fill BFS from corners)
-- Logo centering ✅ — wordmark centred at top of every authenticated page + login gate redesigned
-- Demo app ✅ — `demo_app.py` (port 8502) self-contained with mock data, no DB/pipeline needed
-- Demo GIF ✅ — `demo_walkthrough.gif` (36 frames, 40s, 0.4 MB) via `scripts/capture_demo_gif.py`
-- Cloud migration ✅ — SQLite → Neon PostgreSQL, Streamlit Community Cloud deployment live
+- PC-01: Logo transparency fix ✅ — all 4 logo PNGs de-haloed (flood-fill BFS from corners)
+- PC-02: Logo centering ✅ — wordmark centred at top of every authenticated page + login gate redesigned
+- PC-03: Demo app ✅ — `demo_app.py` (port 8502) self-contained with mock data, no DB/pipeline needed
+- PC-04: Demo GIF ✅ — `demo_walkthrough.gif` (36 frames, 40s, 0.4 MB) via `scripts/capture_demo_gif.py`
+- PC-05: Login ENTER button ✅ — styled green-bordered `st.form_submit_button`, JetBrains Mono, glow on hover
+- PC-06: Fixture stub auto-creation ✅ — `load_odds_the_odds_api` creates scheduled stubs; fixes Today's Picks
+
+E34 — Multi-User Authentication: 0 / 6 issues done 🔜
+- E34-01: Password storage + session overhaul — TODO
+- E34-02: Per-user login page — TODO
+- E34-03: Scope all dashboard queries to logged-in user — TODO
+- E34-04: Per-user reset controls — TODO
+- E34-05: Owner admin page — TODO
+- E34-06: Integration test — TODO
 
 ---
 

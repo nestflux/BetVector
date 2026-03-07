@@ -47,8 +47,10 @@ This document breaks the BetVector masterplan into sequenced epics and issues th
 | E31 | Badge Ring Redesign & League Explorer | 4 | Blue/green rings, card borders, team badges in all tables |
 | E32 | Dashboard Clarity & Tooltips | 5 | MODEL badge, CSS tooltips, picks crash fix, glossary updates |
 | E33 | Cloud Migration | 6 | SQLite → PostgreSQL + Neon, dual-DB engine, data migration, workflow simplification, Streamlit Cloud deploy |
+| PC | Post-Critical-Path Fixes | 6 | Logo transparency, logo centering, demo app, demo GIF, login ENTER button, fixture stub auto-creation |
+| E34 | Multi-User Authentication | 6 | Per-user login, hashed passwords, scoped bankroll/bet log, reset controls, owner admin page |
 
-**Total: 33 epics, 127 issues** (45 original + 20 post-launch + 12 odds/model + 7 backfill + 16 dashboard UX + 5 clarity + 16 badges/polish + 6 cloud migration)
+**Total: 35 epics, 139 issues** (45 original + 20 post-launch + 12 odds/model + 7 backfill + 16 dashboard UX + 5 clarity + 16 badges/polish + 6 cloud migration + 6 post-critical-path + 6 multi-user auth)
 
 ---
 
@@ -4305,4 +4307,403 @@ Trigger morning pipeline via GitHub Actions → writes to Neon → verify dashbo
 E33-01 (ORM compat) → E33-02 (Dual-DB engine) → E33-03 (Data migration script)
 → E33-04 (Workflow simplification) → E33-05 (Streamlit Cloud deploy)
 → E33-06 (Integration test)
+```
+
+---
+
+---
+
+## Post-Critical-Path Work (March 2026)
+
+Fixes and features completed after the 127-issue critical path was finished.
+These were not in the original build plan but are recorded here for completeness.
+
+---
+
+### PC-01 — Logo Transparency Fix — DONE ✅
+
+**Type:** UX / Assets
+**Date:** March 2026
+
+All four `docs/logo/` PNG files had background colours (`#181d24`, `#252d2f`,
+`#1e2227`) that didn't match the app background (`#0D1117`), producing a visible
+halo around the logo on every page.
+
+**Fix:** BFS flood-fill from image corners using PIL + NumPy. `Bvlogo2.png`
+required additional inner seeds due to a 1-px edge artefact.
+
+**Files modified:** `docs/logo/Bvlogo1.png`, `Bvlogo1.5.png`, `Bvlogo2.png`, `Bvlogo3.png`
+
+**Acceptance Criteria:**
+- [x] All 4 PNGs have transparent backgrounds (no visible halo on `#0D1117`)
+- [x] Logo shape and colours unchanged
+- [x] Renders correctly in sidebar, login page, and page header
+
+---
+
+### PC-02 — Logo Centering + Login Gate Redesign — DONE ✅
+
+**Type:** UX / Dashboard
+**Date:** March 2026
+
+The logo was left-aligned on all pages and the login gate lacked visual polish.
+
+**Changes:**
+- `src/delivery/dashboard.py` — Added `import base64`, `_LOGO_B64` pre-encoded
+  constant, and `render_page_logo()` helper. Helper injects a centred base64
+  `<img>` via `st.markdown(unsafe_allow_html=True)` — works without a static
+  file server.
+- `render_page_logo()` called in `main()` before `nav.run()` → appears on every
+  authenticated page.
+- `st.logo()` updated with `size="large"` for a more prominent sidebar logo.
+- Login gate: replaced `st.image()` with `st.columns([1,2,1])` layout →
+  logo, subtitle, and password field all centred.
+
+**Files modified:** `src/delivery/dashboard.py`
+
+**Acceptance Criteria:**
+- [x] Wordmark centred at top of every authenticated page
+- [x] Login gate logo and form centred
+- [x] Sidebar logo uses `size="large"`
+- [x] No static file server dependency (base64 inline)
+
+---
+
+### PC-03 — Demo App — DONE ✅
+
+**Type:** Marketing / Demo
+**Date:** March 2026
+
+Self-contained Streamlit demo app (port 8502) with mock EPL GW29 2025-26 data.
+No `src/` imports, no database, no pipeline dependency. Safe to share publicly
+without exposing live data or credentials.
+
+**Files created:** `demo_app.py`
+
+**Acceptance Criteria:**
+- [x] Runs on port 8502 independently of the main app
+- [x] 7 pages matching production layout (Picks, Fixtures, Performance, League Explorer, Deep Dive, Bankroll, Model Health)
+- [x] Real team badge PNGs from `data/badges/{team_id}.png` with text fallback
+- [x] No database connection required
+- [x] Launch config added to `.claude/launch.json` under key `"demo"`
+
+---
+
+### PC-04 — Demo GIF — DONE ✅
+
+**Type:** Marketing / Demo
+**Date:** March 2026
+
+Animated walkthrough GIF for use in pitches, README, and social media.
+
+**Files created:** `scripts/capture_demo_gif.py`, `demo_walkthrough.gif`, `demo_walkthrough_frames/` (36 PNGs)
+
+**Specs:** 36 frames · 960×600 px · ~40 seconds · ~0.4 MB
+
+**Acceptance Criteria:**
+- [x] GIF plays all 7 pages
+- [x] Per-frame green progress bar prevents Pillow frame-collapse optimisation
+- [x] File size under 1 MB
+- [x] Individual frames available in `demo_walkthrough_frames/`
+
+---
+
+### PC-05 — Login ENTER Button — DONE ✅
+
+**Type:** UX / Dashboard
+**Date:** March 2026
+
+The login page previously auto-submitted on keystroke. Replaced with an explicit
+styled ENTER button that communicates the feeling of entering a secure,
+knowledge-unlocking environment.
+
+**Changes:**
+- `src/delivery/dashboard.py` — Wrapped password field in `st.form("login_form",
+  border=False)`. Added `st.form_submit_button("ENTER")` with custom CSS:
+  transparent background, `#3FB950` green border, JetBrains Mono 12px,
+  4px letter-spacing, uppercase. Hover: subtle green glow
+  (`rgba(63,185,80,0.18)`). CSS scoped to login form only via
+  `[data-testid="stForm"] .stFormSubmitButton > button`.
+
+**Files modified:** `src/delivery/dashboard.py`
+
+**Acceptance Criteria:**
+- [x] Password field inside `st.form` — Enter key and button both submit
+- [x] Button styled with green border, JetBrains Mono, uppercase "ENTER"
+- [x] Hover glow effect on button
+- [x] CSS does not bleed to other pages
+- [x] Incorrect password shows error without reloading the page
+
+---
+
+### PC-06 — Fixture Stub Auto-Creation — DONE ✅
+
+**Type:** Pipeline / Bug Fix
+**Date:** March 2026
+
+**Root cause:** `load_odds_the_odds_api` was discarding all odds for upcoming
+matches not yet in the `matches` table (`no_match: 2767` in production logs),
+leaving Today's Picks permanently empty. Football-Data.co.uk only provides
+finished results, API-Football's free plan blocks 2025-26, so no other scraper
+was creating scheduled fixture records.
+
+**Fix:** When a match is not found, the loader now:
+1. Looks up both teams by canonical name in the `teams` table
+2. If either team is unknown → warns about `TEAM_NAME_MAP` and skips
+3. If both teams exist → derives the EPL season from the match date
+   (Aug–May calendar, e.g. March 2026 → "2025-26"), creates a `Match`
+   stub with `status="scheduled"`, flushes for the ID, then loads all
+   odds against it
+4. Idempotent: second run finds the existing stub via `filter_by`
+
+**Files modified:** `src/scrapers/loader.py` (`load_odds_the_odds_api`)
+
+**Acceptance Criteria:**
+- [x] Odds API odds for upcoming fixtures are no longer discarded
+- [x] Scheduled fixture stubs created automatically (18 GW29-30 fixtures)
+- [x] Season derived correctly from match date
+- [x] Idempotent — second run reuses existing stub, does not duplicate
+- [x] Unknown team names still emit WARNING pointing to `TEAM_NAME_MAP`
+- [x] Pipeline logs show `no_match: 0` for known EPL teams
+
+---
+
+---
+
+## Epic 34 — Multi-User Authentication
+
+**Status:** 🔜 Next up
+**Type:** Feature
+**Depends on:** E33 (cloud stack must be live before multi-user auth is meaningful)
+
+### Overview
+
+Evolve BetVector from a single-password shared dashboard into an invite-only
+multi-user system. Each user has their own login, their own bankroll, and their
+own bet log. The model's picks are global (same for everyone — one model),
+but tracking, staking decisions, and performance are personal.
+
+The database schema already supports this fully (`user_id` on `bet_log`,
+per-user bankroll columns on `users`, `role` field). The work is wiring the
+dashboard to use it.
+
+**Auth approach:** Invite-only. No public sign-up. Owner creates accounts.
+Each user logs in with email + password (PBKDF2-SHA256 hashed, Python stdlib
+`hashlib` — no new dependencies). Streamlit session state stores `user_id`
+and `user_role`. No JWT, no OAuth, no external auth service.
+
+**Password reset:** Out of scope for v1. Users contact the owner.
+**Email verification:** Out of scope for v1.
+**Google OAuth:** Out of scope for v1.
+(Email sending infrastructure already exists in `email_alerts.py` and can
+support these features in a future epic when needed.)
+
+---
+
+### E34-01 — Password Storage + Session Overhaul — TODO
+
+**Type:** Backend / Database
+**Depends on:** E33-06
+**Master Plan:** MP §6 Schema (users table)
+
+Add `password_hash` column to the `users` table. Replace the current
+`authenticated: True/False` session state with `user_id: int` + `user_role: str`.
+Update all dashboard guards to check `user_id` in session state instead of
+the boolean flag.
+
+**Changes:**
+- `src/database/models.py` — Add `password_hash = Column(String, nullable=True)`
+  to `User`. Nullable so existing rows aren't broken before passwords are set.
+- `src/database/db.py` or a new `src/auth.py` — Add `hash_password(plain: str) → str`
+  and `verify_password(plain: str, hashed: str) → bool` using
+  `hashlib.pbkdf2_hmac("sha256", ...)` with a per-user salt stored in the hash.
+- `src/delivery/dashboard.py` — Replace `st.session_state["authenticated"]`
+  with `st.session_state["user_id"]` (int) and `st.session_state["user_role"]`
+  (str). Update `check_password()` and `main()` guards accordingly.
+- Alembic migration (or `init_db()` auto-migration via `checkfirst=True`) to
+  add the column to Neon PostgreSQL without data loss.
+
+**Files:** `src/database/models.py`, `src/delivery/dashboard.py`, new `src/auth.py`
+
+**Acceptance Criteria:**
+- [ ] `password_hash` column exists on `users` table in Neon
+- [ ] `hash_password()` and `verify_password()` implemented with PBKDF2-SHA256
+- [ ] Session state uses `user_id` (int) and `user_role` (str), not boolean
+- [ ] Dashboard still loads correctly after session state change
+- [ ] Existing `DASHBOARD_PASSWORD` env var path retained as emergency fallback
+  (owner can always get in even if DB is empty)
+
+---
+
+### E34-02 — Per-User Login Page — TODO
+
+**Type:** Frontend / Auth
+**Depends on:** E34-01
+**Master Plan:** MP §6 Schema (users table), MP §9 Dashboard
+
+Replace the single-password gate with an email + password login form.
+Keeps the current visual design (centred logo, green ENTER button, dark theme).
+
+**Changes:**
+- `src/delivery/dashboard.py` — Update `check_password()` to render an email
+  field above the password field. On submit: look up `User` by `email` →
+  verify `password_hash` → on success store `user_id` + `user_role` in session
+  state. On failure: generic "Incorrect email or password" (no user enumeration).
+- Wrong email or wrong password → same error message (security best practice).
+- `is_active = 0` users → "Account inactive. Contact the owner." message.
+
+**Files:** `src/delivery/dashboard.py`
+
+**Acceptance Criteria:**
+- [ ] Login form shows email field + password field + ENTER button
+- [ ] Correct email + correct password → authenticated, `user_id` set in session
+- [ ] Wrong email → generic error (does not reveal whether email exists)
+- [ ] Wrong password → same generic error
+- [ ] Inactive user (`is_active=0`) → specific "inactive account" message
+- [ ] Retains current visual design (logo, green border, JetBrains Mono)
+- [ ] Works on mobile (Streamlit responsive layout)
+
+---
+
+### E34-03 — Scope All Dashboard Queries to Logged-In User — TODO
+
+**Type:** Frontend / Backend
+**Depends on:** E34-02
+**Master Plan:** MP §6 Schema (user_id on bet_log, bankroll on users)
+
+Replace every hardcoded `user_id=1` in `dashboard.py` and all page files
+with `st.session_state["user_id"]`. Bankroll, bet log, staking settings,
+and notification preferences must all read from and write to the correct user.
+
+**Changes:**
+- `src/delivery/dashboard.py` — Replace `user_id=1` with session user_id
+  in `_check_onboarding()` and any other top-level user queries.
+- `src/delivery/pages/picks.py` — Scope bet log reads/writes to session user_id.
+- `src/delivery/pages/performance.py` — Scope P&L and bet history to session user_id.
+- `src/delivery/pages/bankroll.py` — Scope bankroll reads/writes to session user_id.
+- `src/delivery/pages/settings.py` — Scope settings reads/writes to session user_id.
+- `src/delivery/pages/onboarding.py` (if exists) — Scope to session user_id.
+- System picks in `bet_log` (`bet_type='system_pick'`) remain global —
+  they are model performance records, not per-user. Only `bet_type='user_placed'`
+  picks are scoped to the user.
+
+**Files:** `src/delivery/dashboard.py`, all files in `src/delivery/pages/`
+
+**Acceptance Criteria:**
+- [ ] Two separate user accounts show independent bankrolls
+- [ ] Bet log entries for User A are not visible to User B
+- [ ] Settings changes for User A do not affect User B
+- [ ] System picks (model performance) are visible to all users
+- [ ] No hardcoded `user_id=1` remaining in any dashboard file
+- [ ] Onboarding wizard scoped to logged-in user
+
+---
+
+### E34-04 — Per-User Reset Controls — TODO
+
+**Type:** Frontend / UX
+**Depends on:** E34-03
+**Master Plan:** MP §9 Dashboard (Settings page)
+
+Add reset controls to the Settings page so users can wipe their own data
+and start fresh. Each action requires explicit confirmation before executing.
+
+**Changes:**
+- `src/delivery/pages/settings.py` — Add "Danger Zone" section with three actions:
+  1. **Reset Bankroll** — sets `current_bankroll = starting_bankroll` for the
+     logged-in user. Shows current vs starting bankroll. Requires confirmation checkbox.
+  2. **Clear Bet History** — deletes all `bet_log` rows where
+     `user_id = session_user_id AND bet_type = 'user_placed'`. Does NOT delete
+     system picks. Requires confirmation checkbox.
+  3. **Reset Everything** — both of the above in one action. Requires typing
+     "RESET" in a text field to confirm (stronger guard).
+
+**Files:** `src/delivery/pages/settings.py`
+
+**Acceptance Criteria:**
+- [ ] "Reset Bankroll" button resets `current_bankroll` to `starting_bankroll`
+- [ ] "Clear Bet History" deletes only `user_placed` bet_log rows for that user
+- [ ] "Reset Everything" performs both resets atomically
+- [ ] All three actions require explicit confirmation before executing
+- [ ] "Reset Everything" requires typing "RESET" to confirm
+- [ ] System picks (`bet_type='system_pick'`) are never deleted by user resets
+- [ ] Success message shown after each reset
+
+---
+
+### E34-05 — Owner Admin Page — TODO
+
+**Type:** Frontend / Admin
+**Depends on:** E34-03
+**Master Plan:** MP §9 Dashboard
+
+New page visible only to `role='owner'` users. Owner can create new user
+accounts, deactivate/reactivate existing users, view all users' status,
+and reset any user's bankroll or bet history from the admin side.
+
+**Changes:**
+- New: `src/delivery/pages/admin.py` — Admin page with:
+  1. **User table** — name, email, role, current bankroll, is_active, created_at
+  2. **Create user** — name + email + temporary password form → inserts `User`
+     row with hashed password. Owner must share credentials out-of-band.
+  3. **Deactivate / Reactivate** — toggle `is_active` for any user (except owner)
+  4. **Reset user bankroll** — sets `current_bankroll = starting_bankroll` for
+     selected user
+  5. **Clear user bet history** — deletes `user_placed` bet_log rows for
+     selected user. Requires confirmation.
+- `src/delivery/dashboard.py` — Add "Admin" to nav, visible only when
+  `st.session_state["user_role"] == "owner"`.
+
+**Files:** `src/delivery/pages/admin.py` (new), `src/delivery/dashboard.py`
+
+**Acceptance Criteria:**
+- [ ] Admin page not visible or accessible to `role='viewer'` users
+- [ ] Owner can create a new user with name, email, and temporary password
+- [ ] New user can log in with the temporary password immediately
+- [ ] Owner can deactivate a user — deactivated user cannot log in
+- [ ] Owner can reactivate a deactivated user
+- [ ] Owner can reset any user's bankroll
+- [ ] Owner can clear any user's bet history (user_placed only)
+- [ ] Owner's own account cannot be deactivated from the admin page
+
+---
+
+### E34-06 — Integration Test — TODO
+
+**Type:** QA
+**Depends on:** E34-05
+**Master Plan:** MP §9 Dashboard
+
+End-to-end verification that multi-user auth works correctly across two accounts.
+
+**Test script:** Manual walkthrough checklist (no automated test framework for
+Streamlit UI).
+
+**Test scenario:**
+1. Owner logs in → verifies admin page is visible
+2. Owner creates "Tester" viewer account with temporary password
+3. Tester logs in with temporary password → verifies admin page is NOT visible
+4. Tester records a bet → verifies it appears in Tester's bet log
+5. Owner logs in → verifies Tester's bet does NOT appear in Owner's bet log
+6. Owner resets Tester's bankroll from admin page → verifies change
+7. Tester resets their own bankroll from Settings → verifies change
+8. Tester clears their own bet history → verifies cleared
+9. Owner deactivates Tester → verifies Tester cannot log in
+10. Owner reactivates Tester → verifies Tester can log in again
+
+**Acceptance Criteria:**
+- [ ] All 10 test scenario steps pass
+- [ ] No cross-user data leakage at any step
+- [ ] All pages load without errors for both owner and viewer roles
+- [ ] Session state correctly isolated between browser tabs / incognito windows
+- [ ] Neon PostgreSQL (cloud) confirms correct row counts for each user
+
+---
+
+### Implementation Sequence
+
+```
+E34-01 (password storage + session) → E34-02 (login page)
+→ E34-03 (scope all queries) → E34-04 (user reset controls)
+→ E34-05 (admin page) → E34-06 (integration test)
 ```
