@@ -30,9 +30,11 @@ from src.auth import get_session_user_id, get_session_user_role, hash_password
 from src.database.db import get_session
 from src.database.models import BetLog, User
 
-# Import shared persistence helpers from settings to avoid code duplication.
-# These are pure DB operations with no UI coupling.
-from src.delivery.views.settings import (
+# Import shared persistence helpers from _user_ops (not settings.py).
+# settings.py has module-level Streamlit rendering code — importing from it
+# would execute that code in the admin page's context, corrupting the layout.
+# _user_ops.py contains only pure DB operations with no Streamlit imports.
+from src.delivery.views._user_ops import (
     clear_bet_history,
     deactivate_user,
     reactivate_user,

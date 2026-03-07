@@ -27,6 +27,17 @@ from src.auth import get_session_user_id
 from src.database.db import get_session
 from src.database.models import BetLog, InjuryFlag, League, Team, User
 
+# Shared user management DB helpers — imported from _user_ops so that
+# admin.py can also import them without triggering settings.py's module-level
+# Streamlit rendering code.
+from src.delivery.views._user_ops import (
+    clear_bet_history,
+    deactivate_user,
+    reactivate_user,
+    reset_bankroll,
+    reset_everything,
+)
+
 
 # ============================================================================
 # Design tokens (MP §8)
@@ -146,107 +157,6 @@ def save_user_setting(user_id: int, field: str, value) -> bool:
         return False
 
 
-def reset_bankroll(user_id: int) -> bool:
-    """Reset the user's current bankroll to their starting bankroll.
-
-    E29-04: This is a "fresh start" — the bankroll counter resets but all
-    historical bet data (BetLog) is preserved.  This lets the user restart
-    their bankroll tracking without losing performance history.
-
-    Parameters
-    ----------
-    user_id : int
-        The user's database ID.
-
-    Returns
-    -------
-    bool
-        True if the reset succeeded, False otherwise.
-    """
-    try:
-        with get_session() as session:
-            user = session.get(User, user_id)
-            if not user:
-                return False
-            user.current_bankroll = user.starting_bankroll
-            user.updated_at = datetime.utcnow().isoformat()
-            session.commit()
-        return True
-    except Exception:
-        return False
-
-
-def clear_bet_history(user_id: int) -> int:
-    """Delete all user_placed BetLog rows for the given user.
-
-    E34-04: Clears the user's personal bet history while preserving system
-    picks.  System picks (bet_type='system_pick') record model performance
-    and are global — never scoped to or deleted by a single user.
-
-    Parameters
-    ----------
-    user_id : int
-        The user whose personal bet log entries should be deleted.
-
-    Returns
-    -------
-    int
-        Number of rows deleted, or -1 on failure.
-    """
-    try:
-        with get_session() as session:
-            deleted = (
-                session.query(BetLog)
-                .filter(
-                    BetLog.user_id == user_id,
-                    BetLog.bet_type == "user_placed",
-                )
-                .delete(synchronize_session=False)
-            )
-            session.commit()
-            return deleted
-    except Exception:
-        return -1
-
-
-def reset_everything(user_id: int) -> bool:
-    """Atomically reset the bankroll AND clear bet history for the user.
-
-    E34-04: Both operations (bankroll reset + bet history clear) execute
-    in a single database transaction.  If either fails, both roll back so
-    the data is never left in a partially-reset state.  System picks are
-    always preserved.
-
-    Parameters
-    ----------
-    user_id : int
-        The user to fully reset.
-
-    Returns
-    -------
-    bool
-        True if both operations committed successfully, False otherwise.
-    """
-    try:
-        with get_session() as session:
-            user = session.get(User, user_id)
-            if not user:
-                return False
-            # 1. Reset bankroll counter
-            user.current_bankroll = user.starting_bankroll
-            user.updated_at = datetime.utcnow().isoformat()
-            # 2. Clear personal bet history (system picks untouched)
-            session.query(BetLog).filter(
-                BetLog.user_id == user_id,
-                BetLog.bet_type == "user_placed",
-            ).delete(synchronize_session=False)
-            # Both changes committed in one atomic transaction
-            session.commit()
-        return True
-    except Exception:
-        return False
-
-
 def toggle_league_active(league_id: int, is_active: bool) -> bool:
     """Enable or disable a league in the database.
 
@@ -292,36 +202,6 @@ def create_viewer_user(name: str, email: str) -> Optional[int]:
             return new_user.id
     except Exception:
         return None
-
-
-def deactivate_user(user_id: int) -> bool:
-    """Deactivate a user (set is_active=0). Cannot deactivate the owner."""
-    try:
-        with get_session() as session:
-            user = session.get(User, user_id)
-            if not user or user.role == "owner":
-                return False
-            user.is_active = 0
-            user.updated_at = datetime.utcnow().isoformat()
-            session.commit()
-        return True
-    except Exception:
-        return False
-
-
-def reactivate_user(user_id: int) -> bool:
-    """Reactivate a previously deactivated user."""
-    try:
-        with get_session() as session:
-            user = session.get(User, user_id)
-            if not user:
-                return False
-            user.is_active = 1
-            user.updated_at = datetime.utcnow().isoformat()
-            session.commit()
-        return True
-    except Exception:
-        return False
 
 
 # ============================================================================
