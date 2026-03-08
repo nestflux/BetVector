@@ -18,8 +18,11 @@ Key changes:
 Master Plan refs: MP §3 Flow 1 (Morning Picks Review), MP §8 Design System
 """
 
+import logging
 from datetime import date, datetime, timedelta
 from typing import Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 import streamlit as st
 
@@ -93,64 +96,73 @@ def _enrich_value_bets(session, rows) -> List[Dict]:
     """
     results = []
     for vb, match, league in rows:
-        home_team = session.query(Team).filter_by(id=match.home_team_id).first()
-        away_team = session.query(Team).filter_by(id=match.away_team_id).first()
+        try:
+            home_team = session.query(Team).filter_by(id=match.home_team_id).first()
+            away_team = session.query(Team).filter_by(id=match.away_team_id).first()
 
-        # Weather conditions for this match (E17-02)
-        weather = session.query(Weather).filter_by(match_id=match.id).first()
-        weather_category = weather.weather_category if weather else None
-        is_heavy_weather = False
-        if weather:
-            cat = (weather.weather_category or "").lower()
-            is_heavy_weather = (
-                cat in ("rain", "heavy_rain", "snow", "storm")
-                or (weather.wind_speed_kmh or 0) > 30
+            # Weather conditions for this match (E17-02)
+            weather = session.query(Weather).filter_by(match_id=match.id).first()
+            weather_category = weather.weather_category if weather else None
+            is_heavy_weather = False
+            if weather:
+                cat = (weather.weather_category or "").lower()
+                is_heavy_weather = (
+                    cat in ("rain", "heavy_rain", "snow", "storm")
+                    or (weather.wind_speed_kmh or 0) > 30
+                )
+
+            # Market value ratio from the home team's features (E17-02)
+            home_feature = (
+                session.query(Feature)
+                .filter_by(match_id=match.id, team_id=match.home_team_id)
+                .first()
             )
+            mv_ratio = getattr(home_feature, "market_value_ratio", None) if home_feature else None
 
-        # Market value ratio from the home team's features (E17-02)
-        home_feature = (
-            session.query(Feature)
-            .filter_by(match_id=match.id, team_id=match.home_team_id)
-            .first()
-        )
-        mv_ratio = getattr(home_feature, "market_value_ratio", None) if home_feature else None
+            # Match result for finished matches — used in Recent Results section.
+            # Guard against NULL goals: a match can be status="finished" but have
+            # NULL home_goals/away_goals if the pipeline partially updated.
+            match_result = None
+            if (match.status == "finished"
+                    and match.home_goals is not None
+                    and match.away_goals is not None):
+                match_result = f"{match.home_goals}-{match.away_goals}"
 
-        # Match result for finished matches — used in Recent Results section.
-        # Guard against NULL goals: a match can be status="finished" but have
-        # NULL home_goals/away_goals if the pipeline partially updated.
-        match_result = None
-        if (match.status == "finished"
-                and match.home_goals is not None
-                and match.away_goals is not None):
-            match_result = f"{match.home_goals}-{match.away_goals}"
-
-        results.append({
-            "id": vb.id,
-            "match_id": vb.match_id,
-            "home_team": home_team.name if home_team else "Unknown",
-            "away_team": away_team.name if away_team else "Unknown",
-            "home_team_id": home_team.id if home_team else None,
-            "away_team_id": away_team.id if away_team else None,
-            "league": league.short_name,
-            "date": match.date,
-            "kickoff": match.kickoff_time or "TBD",
-            "status": match.status,
-            "match_result": match_result,
-            "market_type": vb.market_type,
-            "selection": vb.selection,
-            "model_prob": vb.model_prob,
-            "bookmaker": vb.bookmaker,
-            "bookmaker_odds": vb.bookmaker_odds,
-            "implied_prob": vb.implied_prob,
-            "edge": vb.edge,
-            "expected_value": vb.expected_value,
-            "confidence": vb.confidence,
-            "explanation": vb.explanation,
-            "detected_at": vb.detected_at,
-            "is_heavy_weather": is_heavy_weather,
-            "weather_summary": weather_category,
-            "market_value_ratio": mv_ratio,
-        })
+            results.append({
+                "id": vb.id,
+                "match_id": vb.match_id,
+                "home_team": home_team.name if home_team else "Unknown",
+                "away_team": away_team.name if away_team else "Unknown",
+                "home_team_id": home_team.id if home_team else None,
+                "away_team_id": away_team.id if away_team else None,
+                "league": league.short_name if league else "??",
+                "date": match.date,
+                "kickoff": match.kickoff_time or "TBD",
+                "status": match.status,
+                "match_result": match_result,
+                "market_type": vb.market_type,
+                "selection": vb.selection,
+                "model_prob": vb.model_prob,
+                "bookmaker": vb.bookmaker,
+                "bookmaker_odds": vb.bookmaker_odds,
+                "implied_prob": vb.implied_prob,
+                "edge": vb.edge,
+                "expected_value": vb.expected_value,
+                "confidence": vb.confidence,
+                "explanation": vb.explanation,
+                "detected_at": vb.detected_at,
+                "is_heavy_weather": is_heavy_weather,
+                "weather_summary": weather_category,
+                "market_value_ratio": mv_ratio,
+            })
+        except Exception as exc:
+            # PC-07-04: Skip corrupted/incomplete rows instead of crashing
+            # the entire page.  Log the error for debugging.
+            logger.warning(
+                "_enrich_value_bets: Skipping value_bet %s (match %s) — %s",
+                getattr(vb, "id", "?"), getattr(match, "id", "?"), exc,
+            )
+            continue
     return results
 
 
@@ -189,31 +201,38 @@ def get_value_bets_in_range(
         Unique value bets grouped by pick, enriched with team names,
         league, kickoff, and alt_bookmaker_count.
     """
-    with get_session() as session:
-        from_str = date_from.isoformat()
-        to_str = date_to.isoformat()
+    try:
+        with get_session() as session:
+            from_str = date_from.isoformat()
+            to_str = date_to.isoformat()
 
-        query = (
-            session.query(ValueBet, Match, League)
-            .join(Match, ValueBet.match_id == Match.id)
-            .join(League, Match.league_id == League.id)
-            .filter(Match.date >= from_str)
-            .filter(Match.date <= to_str)
-        )
+            query = (
+                session.query(ValueBet, Match, League)
+                .join(Match, ValueBet.match_id == Match.id)
+                .join(League, Match.league_id == League.id)
+                .filter(Match.date >= from_str)
+                .filter(Match.date <= to_str)
+            )
 
-        if edge_threshold > 0:
-            query = query.filter(ValueBet.edge >= edge_threshold)
+            if edge_threshold > 0:
+                query = query.filter(ValueBet.edge >= edge_threshold)
 
-        # Fetch all rows — we'll group in Python for flexibility
-        # (SQLite GROUP BY with MAX is awkward for returning full row data)
-        rows = (
-            query
-            .order_by(Match.date.asc(), ValueBet.edge.desc())
-            .all()
-        )
+            # Fetch all rows — we'll group in Python for flexibility
+            # (SQLite GROUP BY with MAX is awkward for returning full row data)
+            rows = (
+                query
+                .order_by(Match.date.asc(), ValueBet.edge.desc())
+                .all()
+            )
 
-        # Enrich all rows (team names, weather, etc.)
-        all_enriched = _enrich_value_bets(session, rows)
+            # Enrich all rows (team names, weather, etc.)
+            all_enriched = _enrich_value_bets(session, rows)
+
+    except Exception as exc:
+        # PC-07-04: Graceful degradation on DB errors — return empty list
+        # instead of crashing the entire Today's Picks page.
+        logger.error("get_value_bets_in_range: DB query failed — %s", exc)
+        return []
 
     # --- Group by unique pick (match_id + market_type + selection) ---
     # Keep only the best bookmaker (highest edge) per group.

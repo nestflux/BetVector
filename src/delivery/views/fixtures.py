@@ -63,7 +63,7 @@ E30-02: Historical fixtures view (Recent Results):
 Master Plan refs: MP §3 Flow 4 (Dashboard Exploration), MP §8 Design System
 """
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from html import escape as html_escape
 from itertools import groupby
 from typing import Dict, List, Optional, Tuple
@@ -323,30 +323,9 @@ def get_all_upcoming_fixtures(days_ahead: int = 14) -> List[Dict]:
                 .count()
             )
 
-            # Compute per-market edges by comparing model probs to best odds.
-            # For each of the 9 market selections, we need:
-            #   1. model_prob from Prediction attributes
-            #   2. best available odds from the Odds table
-            #   3. edge = model_prob - (1.0 / odds)
-            market_edges = {}
-            for market_type, selection, _label in MARKET_BADGES:
-                edge = _compute_edge(
-                    session, match.id, prediction, market_type, selection,
-                )
-                market_edges[(market_type, selection)] = edge
-
-            # E26-03: Extract predicted goals for inline display.
-            # These come from the Poisson model's expected goals output.
-            pred_home_goals = None
-            pred_away_goals = None
-            if prediction is not None:
-                pred_home_goals = getattr(prediction, "predicted_home_goals", None)
-                pred_away_goals = getattr(prediction, "predicted_away_goals", None)
-
-            # E29-02: Build per-market model_prob and confidence lookup from
-            # the already-loaded ValueBet rows.  This enriches the market
-            # badges with tooltip data (model probability, confidence level)
-            # and identifies the model's preferred bet (ring highlight).
+            # PC-07-01: Build ValueBet info FIRST, then use it for edge alignment.
+            # This ensures Fixtures page edges match what ValueFinder stored,
+            # so a green ring here means the pick also appears in Today's Picks.
             market_vb_info: Dict[Tuple[str, str], Dict] = {}
             for vb in vb_rows:
                 key = (vb.market_type, vb.selection)
@@ -356,6 +335,35 @@ def get_all_upcoming_fixtures(days_ahead: int = 14) -> List[Dict]:
                         "confidence": vb.confidence,
                         "edge": vb.edge,
                     }
+
+            # Compute per-market edges for badge display.
+            # PRIORITY: use ValueBet-stored edges when available (these are the
+            # canonical edges from ValueFinder).  Only fall back to on-the-fly
+            # _compute_edge() for markets WITHOUT a ValueBet row (negative-edge
+            # markets still need an edge value for tooltip display).
+            # This alignment guarantees: green ring on Fixtures ↔ pick exists
+            # in Today's Picks (both sourced from the same ValueBet data).
+            market_edges = {}
+            for market_type, selection, _label in MARKET_BADGES:
+                key = (market_type, selection)
+                vb_data = market_vb_info.get(key)
+                if vb_data is not None:
+                    # Use the stored edge from ValueFinder — single source of truth
+                    market_edges[key] = vb_data["edge"]
+                else:
+                    # No ValueBet row → compute on the fly (likely negative edge)
+                    edge = _compute_edge(
+                        session, match.id, prediction, market_type, selection,
+                    )
+                    market_edges[key] = edge
+
+            # E26-03: Extract predicted goals for inline display.
+            # These come from the Poisson model's expected goals output.
+            pred_home_goals = None
+            pred_away_goals = None
+            if prediction is not None:
+                pred_home_goals = getattr(prediction, "predicted_home_goals", None)
+                pred_away_goals = getattr(prediction, "predicted_away_goals", None)
 
             # E29-02: Extract model probabilities from the Prediction record
             # for badges that don't have ValueBet entries (e.g., negative edge
@@ -864,11 +872,21 @@ def _render_market_badges(
                 )
 
             # Edge — colour-coded green (positive) or red (negative)
-            edge_colour = COLOURS["green"] if edge_pct > 0 else COLOURS["red"]
+            # PC-07-05: Cap displayed edge to ±30%. Extreme values (from
+            # historical predictions with degenerate features) are misleading.
+            EDGE_DISPLAY_CAP = 30.0
+            if abs(edge_pct) > EDGE_DISPLAY_CAP:
+                edge_sign = "+" if edge_pct > 0 else "-"
+                edge_display = f"{edge_sign}>{EDGE_DISPLAY_CAP:.0f}%"
+                # Muted colour for capped edges — signals "use caution"
+                edge_colour = COLOURS["yellow"]
+            else:
+                edge_display = f"{edge_pct:+.1f}%"
+                edge_colour = COLOURS["green"] if edge_pct > 0 else COLOURS["red"]
             tooltip_lines.append(
                 f'<span style="color: #8B949E;">Edge:</span> '
                 f'<span style="color: {edge_colour}; font-weight: 700;">'
-                f'{edge_pct:+.1f}%</span>'
+                f'{edge_display}</span>'
             )
 
             # Confidence level (only for value bets with confidence data)
@@ -1028,13 +1046,17 @@ if view_mode == "Upcoming":
                 f'{pick["market_type"]}/{pick["selection"]}',
             )
             edge_pct = pick["edge"] * 100
-            # Green if edge is at least 2× the configured threshold (strong pick),
-            # yellow otherwise (still a value bet, but less emphatic).
-            # _config_edge_threshold is loaded from config at module level (e.g. 0.05 = 5%).
-            # Top Picks uses the *config* threshold, not the user's slider — system
-            # picks are stable and shouldn't shift when the slider moves.
-            _strong_edge_pct = _config_edge_threshold * 200  # 2× threshold as %
-            edge_colour = COLOURS["green"] if edge_pct >= _strong_edge_pct else COLOURS["yellow"]
+            # PC-07-05: Cap displayed edge to ±30% in Top Picks too
+            EDGE_DISPLAY_CAP_TP = 30.0
+            if edge_pct > EDGE_DISPLAY_CAP_TP:
+                edge_pct_display = f"+>{EDGE_DISPLAY_CAP_TP:.0f}%"
+                edge_colour = COLOURS["yellow"]  # Muted — extreme, use caution
+            else:
+                edge_pct_display = f"+{edge_pct:.1f}%"
+                # Green if edge is at least 2× the configured threshold (strong pick),
+                # yellow otherwise (still a value bet, but less emphatic).
+                _strong_edge_pct = _config_edge_threshold * 200  # 2× threshold as %
+                edge_colour = COLOURS["green"] if edge_pct >= _strong_edge_pct else COLOURS["yellow"]
             conf_colour = (
                 COLOURS["green"] if pick["confidence"] == "high"
                 else COLOURS["yellow"] if pick["confidence"] == "medium"
@@ -1045,20 +1067,32 @@ if view_mode == "Upcoming":
             tp_home = render_team_badge(pick["home_team_id"], pick["home_team"], size=20)
             tp_away = render_team_badge(pick["away_team_id"], pick["away_team"], size=20)
 
+            # PC-07-03: Format fixture date as "Mon 10 Mar" for display
+            try:
+                _pick_dt = datetime.strptime(str(pick["date"]), "%Y-%m-%d")
+                _pick_date_str = _pick_dt.strftime("%a %d %b")
+            except (ValueError, TypeError):
+                _pick_date_str = str(pick.get("date", ""))
+
             picks_html_parts.append(
                 f'<div style="background-color: {COLOURS["surface"]}; '
                 f'border: 1px solid {COLOURS["border"]}; border-radius: 8px; '
                 f'padding: 10px 14px; flex: 1 1 220px; min-width: 220px;">'
-                f'<div style="font-family: Inter, sans-serif; font-size: 13px; '
-                f'font-weight: 600; color: {COLOURS["text"]}; margin-bottom: 4px;">'
-                f'{tp_home} vs {tp_away}</div>'
+                f'<div style="display: flex; justify-content: space-between; '
+                f'align-items: center; margin-bottom: 4px;">'
+                f'<span style="font-family: Inter, sans-serif; font-size: 13px; '
+                f'font-weight: 600; color: {COLOURS["text"]};">'
+                f'{tp_home} vs {tp_away}</span>'
+                f'<span style="font-family: JetBrains Mono, monospace; font-size: 10px; '
+                f'color: {COLOURS["text_secondary"]};">{_pick_date_str}</span>'
+                f'</div>'
                 f'<div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">'
                 f'<span style="font-family: Inter, sans-serif; font-size: 12px; '
                 f'color: {COLOURS["text_secondary"]};">{sel_label}</span>'
                 f'<span style="font-family: JetBrains Mono, monospace; font-size: 12px; '
                 f'color: {COLOURS["text"]};">{pick["bookmaker_odds"]:.2f}</span>'
                 f'<span style="font-family: JetBrains Mono, monospace; font-size: 12px; '
-                f'font-weight: 700; color: {edge_colour};">+{edge_pct:.1f}%</span>'
+                f'font-weight: 700; color: {edge_colour};">{edge_pct_display}</span>'
                 f'<span style="font-family: Inter, sans-serif; font-size: 10px; '
                 f'color: {COLOURS["text_secondary"]};">{pick["bookmaker"]}</span>'
                 f'<span style="display: inline-block; width: 8px; height: 8px; '

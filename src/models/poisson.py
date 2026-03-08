@@ -272,10 +272,22 @@ class PoissonModel(BaseModel):
             lambda_home = float(self._home_model.predict(X_home).iloc[0])
             lambda_away = float(self._away_model.predict(X_away).iloc[0])
 
-            # Clamp lambda to reasonable range (0.1 to 5.0)
-            # Very extreme lambdas produce degenerate scoreline matrices
-            lambda_home = max(0.1, min(5.0, lambda_home))
-            lambda_away = max(0.1, min(5.0, lambda_away))
+            # Clamp lambda to reasonable range [0.2, 3.5]
+            # - 3.5 goals is already extreme (e.g., Man City vs newly promoted)
+            #   5.0 was too generous and produced 98.6% home-win probabilities
+            # - 0.2 minimum prevents near-zero probabilities in the scoreline matrix
+            # Log a warning when the clamp activates — it usually indicates
+            # degenerate feature data (missing features → fillna(0.0) → extreme λ)
+            LAMBDA_MIN, LAMBDA_MAX = 0.2, 3.5
+            raw_home, raw_away = lambda_home, lambda_away
+            lambda_home = max(LAMBDA_MIN, min(LAMBDA_MAX, lambda_home))
+            lambda_away = max(LAMBDA_MIN, min(LAMBDA_MAX, lambda_away))
+            if raw_home != lambda_home or raw_away != lambda_away:
+                logger.warning(
+                    "Lambda clamped for match %d: raw (%.3f, %.3f) → clamped (%.3f, %.3f). "
+                    "Check feature data for missing/degenerate values.",
+                    match_id, raw_home, raw_away, lambda_home, lambda_away,
+                )
 
             # Build the 7×7 scoreline probability matrix
             matrix = self._build_scoreline_matrix(lambda_home, lambda_away)

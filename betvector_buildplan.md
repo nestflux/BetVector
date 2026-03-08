@@ -5926,3 +5926,121 @@ E38-01 (Backfill Championship & La Liga to 2020-21)
 → E38-05 (Multi-league validation & backtest)
 → E38-06 (Integration test)
 ```
+
+---
+
+## PC-07 — Dashboard & Value Bet Logic Fixes
+
+**Status:** ✅ DONE
+**Type:** Bug Fix / UX
+**Date:** March 2026
+
+### Overview
+
+After E38 league expansion, user testing revealed several dashboard issues:
+1. Edge mismatch between Fixtures page and Today's Picks (different computation methods)
+2. 99% model probabilities from excessive lambda clamping (236 matches affected)
+3. Top Picks missing fixture dates
+4. Today's Picks page crashes on DB errors (no error handling)
+5. Extreme edge values displayed without capping
+
+Root causes: Lambda clamp range [0.1, 5.0] too wide → degenerate 98.6% probabilities → absurd edges.
+Fixtures page recomputed edges on-the-fly using best-of-all-bookmakers odds instead of using stored ValueBet edges.
+
+---
+
+### PC-07-01 — Fix Edge Computation Alignment — DONE ✅
+
+**Type:** Bug Fix
+**File:** `src/delivery/views/fixtures.py`
+
+Fixtures page now prefers ValueBet-stored edges (single source of truth from ValueFinder)
+over on-the-fly `_compute_edge()` recomputation. Falls back to `_compute_edge()` only for
+markets without a ValueBet row (negative-edge markets).
+
+**Acceptance Criteria:**
+- [x] Fixtures page edges match ValueBet-stored edges when available
+- [x] Green ring on fixture → pick appears in Today's Picks (assuming pipeline ran)
+- [x] Negative-edge markets still show computed edge in tooltip
+- [x] No visual regression in badge display
+
+---
+
+### PC-07-02 — Tighten Lambda Clamping & Probability Cap — DONE ✅
+
+**Type:** Bug Fix
+**Files:** `src/models/poisson.py`, `src/models/base_model.py`
+
+Lambda clamp [0.1, 5.0] → [0.2, 3.5]. Probability cap [0.02, 0.98] added in
+`derive_market_probabilities()`. Warning logged when lambda hits clamp bounds.
+
+**Acceptance Criteria:**
+- [x] No match has prob_home_win > 0.98 or < 0.02
+- [x] Lambda clamp range is [0.2, 3.5]
+- [x] Warning logged when lambda hits clamp bounds
+- [x] 182/182 tests pass (no regression)
+
+---
+
+### PC-07-03 — Add Dates to Top Picks Section — DONE ✅
+
+**Type:** UX Enhancement
+**File:** `src/delivery/views/fixtures.py`
+
+Top Picks cards now show fixture date formatted as "Mon 10 Mar" right-aligned
+next to team names. Graceful fallback on date parse errors.
+
+**Acceptance Criteria:**
+- [x] Each Top Pick card shows fixture date (e.g., "Mon 10 Mar")
+- [x] Layout doesn't break on narrow screens (flex row with space-between)
+
+---
+
+### PC-07-04 — Add Error Handling to Today's Picks Page — DONE ✅
+
+**Type:** Bug Fix
+**File:** `src/delivery/views/picks.py`
+
+Added try-except to `_enrich_value_bets()` (per-row, logs warning, skips corrupted rows)
+and `get_value_bets_in_range()` (whole query, logs error, returns empty list).
+
+**Acceptance Criteria:**
+- [x] Today's Picks page doesn't crash on DB errors
+- [x] Corrupted rows skipped with log warning
+- [x] User sees existing empty state handler instead of stack trace
+- [x] Page works when value_bets table is empty
+
+---
+
+### PC-07-05 — Add Edge Display Cap — DONE ✅
+
+**Type:** UX Enhancement
+**File:** `src/delivery/views/fixtures.py`
+
+Displayed edge capped at ±30% in both badge tooltips and Top Picks cards.
+Capped edges show as "+>30%" in yellow (caution) colour. Underlying data unchanged.
+
+**Acceptance Criteria:**
+- [x] No tooltip or Top Pick shows edges above ±30%
+- [x] Capped edges show yellow colour indicator
+- [x] Underlying data unchanged — display cap only
+
+---
+
+### Results
+
+- 5/5 issues complete
+- 182/182 non-XGBoost tests passing (1 skipped — xgboost package)
+- Gate 1: 17/17 AC verified
+- Gate 2: [CLEAN] — no Masterplan drift
+- Gate 3: [APPROVED] — production quality
+
+### Implementation Sequence
+
+```
+PC-07-02 (Lambda clamping — root cause)
+→ PC-07-01 (Edge alignment)
+→ PC-07-03 (Top Picks dates)
+→ PC-07-04 (Picks error handling)
+→ PC-07-05 (Edge display cap)
+```

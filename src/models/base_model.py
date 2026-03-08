@@ -189,18 +189,30 @@ def derive_market_probabilities(
             if h >= 1 and a >= 1:
                 prob_btts_yes += p
 
+    # --- Probability capping ---
+    # No single market outcome should be above 98% or below 2%.
+    # Even the strongest favourite vs the weakest underdog has upset potential.
+    # Capping prevents degenerate edges (e.g., +60%) that mislead the bettor.
+    # Complementary pairs (over/under, btts yes/no, 1X2) are capped individually
+    # so they may not sum to exactly 1.0 — this is acceptable for display and
+    # edge computation (the raw matrix probabilities remain uncapped internally).
+    PROB_MIN, PROB_MAX = 0.02, 0.98
+
+    def _cap(p: float) -> float:
+        return round(max(PROB_MIN, min(PROB_MAX, p)), 6)
+
     return {
-        "prob_home_win": round(prob_home_win, 6),
-        "prob_draw": round(prob_draw, 6),
-        "prob_away_win": round(prob_away_win, 6),
-        "prob_over_25": round(prob_over_25, 6),
-        "prob_under_25": round(1.0 - prob_over_25, 6),
-        "prob_over_15": round(prob_over_15, 6),
-        "prob_under_15": round(1.0 - prob_over_15, 6),
-        "prob_over_35": round(prob_over_35, 6),
-        "prob_under_35": round(1.0 - prob_over_35, 6),
-        "prob_btts_yes": round(prob_btts_yes, 6),
-        "prob_btts_no": round(1.0 - prob_btts_yes, 6),
+        "prob_home_win": _cap(prob_home_win),
+        "prob_draw": _cap(prob_draw),
+        "prob_away_win": _cap(prob_away_win),
+        "prob_over_25": _cap(prob_over_25),
+        "prob_under_25": _cap(1.0 - prob_over_25),
+        "prob_over_15": _cap(prob_over_15),
+        "prob_under_15": _cap(1.0 - prob_over_15),
+        "prob_over_35": _cap(prob_over_35),
+        "prob_under_35": _cap(1.0 - prob_over_35),
+        "prob_btts_yes": _cap(prob_btts_yes),
+        "prob_btts_no": _cap(1.0 - prob_btts_yes),
     }
 
 

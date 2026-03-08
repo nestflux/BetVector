@@ -309,9 +309,9 @@ Wait for owner to respond with approval before making the change.
 
 ## Current Status
 
-Last completed: E38-06 (Integration Test — 110 tests, 8 scenarios, all 6 leagues validated) ✅
-Currently working: Epic 38 COMPLETE — all 6 issues done ✅
-Next up: Owner to decide next epic
+Last completed: PC-07 (Dashboard & Value Bet Logic Fixes — 5 issues, all gates passed) ✅
+Currently working: Owner to decide next work
+Next up: Owner to decide
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
@@ -343,6 +343,7 @@ Post-critical-path (March 2026):
 - PC-04: Demo GIF ✅ — `demo_walkthrough.gif` (36 frames, 40s, 0.4 MB) via `scripts/capture_demo_gif.py`
 - PC-05: Login ENTER button ✅ — styled green-bordered `st.form_submit_button`, JetBrains Mono, glow on hover
 - PC-06: Fixture stub auto-creation ✅ — `load_odds_the_odds_api` creates scheduled stubs; fixes Today's Picks
+- PC-07: Dashboard & Value Bet Logic Fixes ✅ — lambda clamp [0.2, 3.5], prob cap [0.02, 0.98], edge alignment, Top Picks dates, error handling, display cap ±30%
 
 E34 — Multi-User Authentication: ALL 6 issues done ✅
 - E34-01: Password storage + session overhaul ✅
