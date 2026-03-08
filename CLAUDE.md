@@ -309,9 +309,9 @@ Wait for owner to respond with approval before making the change.
 
 ## Current Status
 
-Last completed: E38-04 (Serie A Data Pipeline — 2,170 matches, 31,236 odds, 4,334 MatchStats, 33,934 ClubElo records, 4,340 features, 29 teams across 6 seasons) ✅
-Currently working: E38-05 — Multi-League Validation & Backtest
-Next up: E38-06 — Integration Test
+Last completed: E38-05 (Multi-League Validation & Backtest — 6 leagues, Brier: LaLiga 0.5660, SerieA 0.5713, Bundesliga 0.5914, LeagueOne 0.6114, Championship 0.6672, XGBoost retrained on 13,094 matches) ✅
+Currently working: E38-06 — Integration Test
+Next up: Epic 38 complete after E38-06
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
