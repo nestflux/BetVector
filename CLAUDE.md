@@ -309,9 +309,9 @@ Wait for owner to respond with approval before making the change.
 
 ## Current Status
 
-Last completed: E38-05 (Multi-League Validation & Backtest — 6 leagues, Brier: LaLiga 0.5660, SerieA 0.5713, Bundesliga 0.5914, LeagueOne 0.6114, Championship 0.6672, XGBoost retrained on 13,094 matches) ✅
-Currently working: E38-06 — Integration Test
-Next up: Epic 38 complete after E38-06
+Last completed: E38-06 (Integration Test — 110 tests, 8 scenarios, all 6 leagues validated) ✅
+Currently working: Epic 38 COMPLETE — all 6 issues done ✅
+Next up: Owner to decide next epic
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
@@ -373,13 +373,13 @@ E37 complete: All 4 issues done ✅ (XGBoost model, walk-forward backtest, ensem
 - E37-03: Ensemble Poisson + XGBoost adaptive blend ✅ (50/50 initial weights, pkl fallback, Model Health blend ratio)
 - E37-04: Integration test ✅ (24 new tests, 96/96 total, all 8 build plan scenarios, synthetic data only)
 
-E38 — League Backfill & Expansion Phase 2: 6 issues planned
-- E38-01: Backfill Championship & La Liga to 2020-21 (add 2020-21, 2021-22 seasons)
-- E38-02: League One data pipeline (E2, 6 seasons, no Understat)
-- E38-03: Bundesliga data pipeline (D1, 6 seasons, Understat "Bundesliga")
-- E38-04: Serie A data pipeline (I1, 6 seasons, Understat "Serie_A")
-- E38-05: Multi-league validation & backtest
-- E38-06: Integration test
+E38 complete: All 6 issues done ✅ (League Backfill & Expansion Phase 2 — 6 leagues, 13,183 matches, 26,366 features, Brier: LaLiga 0.5660, SerieA 0.5713, Bundesliga 0.5914, LeagueOne 0.6114, Championship 0.6672)
+- E38-01: Backfill Championship & La Liga to 2020-21 ✅ (2,077 + 720 matches backfilled)
+- E38-02: League One data pipeline ✅ (3,166 matches, 44,396 odds, 6,332 features, 37 teams across 6 seasons)
+- E38-03: Bundesliga data pipeline ✅ (1,746 matches, 24,434 odds, 3,492 features, 28 teams across 6 seasons)
+- E38-04: Serie A data pipeline ✅ (2,170 matches, 31,236 odds, 4,340 features, 29 teams across 6 seasons)
+- E38-05: Multi-league validation & backtest ✅ (5 league backtests, XGBoost retrained on 13,094 matches, zero temporal violations)
+- E38-06: Integration test ✅ (110 tests, 8 scenarios, 182/182 non-XGBoost tests passing)
 
 ---
 
