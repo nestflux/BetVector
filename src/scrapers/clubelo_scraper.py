@@ -170,6 +170,41 @@ TEAM_NAME_MAP: Dict[str, str] = {
     "Wycombe": "Wycombe",
 
     # -------------------------------------------------------------------------
+    # Ligue 1 teams (PC-08-02)
+    # ClubElo French team names — map to Football-Data.co.uk canonical DB names.
+    # 27 unique teams across 2020-21 to 2025-26 seasons.
+    # ClubElo covers French Level 1 (Ligue 1) and Level 2 (Ligue 2) for
+    # relegated teams, so all teams have Elo coverage.
+    # -------------------------------------------------------------------------
+    "Ajaccio": "Ajaccio",                    # 2022-23
+    "Angers": "Angers",
+    "Auxerre": "Auxerre",
+    "Bordeaux": "Bordeaux",                  # 2020-21, 2021-22
+    "Brest": "Brest",
+    "Clermont": "Clermont",                  # 2021-22, 2022-23, 2023-24
+    "Dijon": "Dijon",                        # 2020-21
+    "Le Havre": "Le Havre",                  # 2023-24+
+    "Lens": "Lens",
+    "Lille": "Lille",
+    "Lorient": "Lorient",
+    "Lyon": "Lyon",
+    "Marseille": "Marseille",
+    "Metz": "Metz",
+    "Monaco": "Monaco",
+    "Montpellier": "Montpellier",
+    "Nantes": "Nantes",
+    "Nice": "Nice",
+    "Nimes": "Nimes",                        # 2020-21
+    "Paris FC": "Paris FC",                  # 2025-26 (promoted)
+    "PSG": "Paris SG",                       # ClubElo: "PSG" → FD: "Paris SG"
+    "Reims": "Reims",
+    "Rennes": "Rennes",
+    "Saint-Etienne": "St Etienne",           # ClubElo: "Saint-Etienne" → FD: "St Etienne"
+    "Strasbourg": "Strasbourg",
+    "Toulouse": "Toulouse",
+    "Troyes": "Troyes",                      # 2021-22, 2022-23
+
+    # -------------------------------------------------------------------------
     # Bundesliga teams (E38-03)
     # ClubElo uses short German names — map to Football-Data.co.uk canonical
     # DB names.  25 unique teams across 2020-21 to 2025-26 seasons.

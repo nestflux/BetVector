@@ -285,6 +285,22 @@ scheduling:
       - "send_weekly_email"
 
 # ---------------------------------------------------------------------------
+# Internal Elo Computation (PC-08-04)
+# ---------------------------------------------------------------------------
+# Standard Elo algorithm parameters for computing ratings from match results.
+# Used for Championship (where ClubElo has 61% null coverage) — computes
+# Elo internally from historical match data and stores in club_elo table.
+#
+# K-factor: higher = more reactive to recent results (32 is chess standard)
+# Initial rating: starting Elo for a team with no history (1500 is standard)
+# Home advantage: added to home team's Elo for expected result calculation
+#   (65 points ≈ 4% higher win probability, well-researched football estimate)
+internal_elo:
+  k_factor: 32
+  initial_rating: 1500
+  home_advantage: 65
+
+# ---------------------------------------------------------------------------
 # Enum Definitions  (MP §6 — used for validation throughout the codebase)
 # ---------------------------------------------------------------------------
 enums:

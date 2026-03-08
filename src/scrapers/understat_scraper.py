@@ -156,6 +156,41 @@ UNDERSTAT_EPL_TEAM_MAP: Dict[str, str] = {
     "Werder Bremen": "Werder Bremen",
     "Wolfsburg": "Wolfsburg",
 
+    # --- Ligue 1 teams (PC-08-02) ---
+    # Understat uses full/formal French team names; Football-Data.co.uk uses
+    # abbreviated forms.  DB canonical names follow Football-Data.co.uk.
+    # 27 unique teams across 2020-21 to 2025-26 seasons.
+    # Understat league key: "Ligue_1"
+    "AC Ajaccio": "Ajaccio",                  # FD: "Ajaccio" (2022-23)
+    "Ajaccio": "Ajaccio",                     # alt Understat name
+    "Angers": "Angers",
+    "Auxerre": "Auxerre",
+    "Bordeaux": "Bordeaux",                   # 2020-21, 2021-22
+    "Brest": "Brest",
+    "Clermont Foot": "Clermont",              # FD: "Clermont" (Understat uses "Clermont Foot")
+    "Clermont": "Clermont",                   # alt Understat name
+    "Dijon": "Dijon",                         # 2020-21
+    "Le Havre": "Le Havre",                   # 2023-24+
+    "Lens": "Lens",
+    "Lille": "Lille",
+    "Lorient": "Lorient",
+    "Lyon": "Lyon",
+    "Marseille": "Marseille",
+    "Metz": "Metz",
+    "Monaco": "Monaco",
+    "Montpellier": "Montpellier",
+    "Nantes": "Nantes",
+    "Nice": "Nice",
+    "Nimes": "Nimes",                         # 2020-21
+    "Paris FC": "Paris FC",                   # 2025-26 (promoted)
+    "Paris Saint Germain": "Paris SG",        # FD: "Paris SG" (Understat uses full name)
+    "Reims": "Reims",
+    "Rennes": "Rennes",
+    "Saint-Etienne": "St Etienne",            # FD: "St Etienne" (Understat uses "Saint-Etienne")
+    "Strasbourg": "Strasbourg",
+    "Toulouse": "Toulouse",
+    "Troyes": "Troyes",                       # 2021-22, 2022-23
+
     # --- Serie A teams (E38-04) ---
     # Understat uses formal Italian names; Football-Data.co.uk uses shorter forms.
     # DB canonical names follow Football-Data.co.uk (the primary scraper).

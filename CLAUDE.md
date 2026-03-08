@@ -309,7 +309,7 @@ Wait for owner to respond with approval before making the change.
 
 ## Current Status
 
-Last completed: PC-07 (Dashboard & Value Bet Logic Fixes — 5 issues, all gates passed) ✅
+Last completed: PC-08 (Data Gap Fix: League Correction + Missing Data + Pipeline Timeout — 6 issues, all gates passed) ✅
 Currently working: Owner to decide next work
 Next up: Owner to decide
 

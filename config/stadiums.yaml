@@ -1,14 +1,15 @@
 # ============================================================================
-# BetVector — Stadium Coordinates for Weather Data
+# BetVector — Stadium Coordinates for Weather Data (PC-08-05)
 # ============================================================================
-# Latitude/longitude for each EPL team's home stadium.  Used by the Weather
-# scraper to fetch match-day conditions from Open-Meteo.  Coordinates are
-# approximate centre-of-pitch — accuracy within 100m is sufficient since
-# Open-Meteo interpolates from a ~1km grid.
+# Latitude/longitude for all tracked league teams' home stadiums.  Used by
+# the Weather scraper to fetch match-day conditions from Open-Meteo.
+# Coordinates are approximate centre-of-pitch — accuracy within 100m is
+# sufficient since Open-Meteo interpolates from a ~1km grid.
 #
+# Team keys must match canonical DB names (from Football-Data.co.uk).
 # Update this file each summer when teams are promoted/relegated.
-# 2025-26 promoted: Sunderland, Leeds United, Burnley
-# 2025-26 relegated: Leicester City, Ipswich Town, Southampton
+#
+# Leagues: EPL, Championship, LaLiga, Ligue1, Bundesliga, SerieA
 # ============================================================================
 
 stadiums:
@@ -114,3 +115,538 @@ stadiums:
       stadium: "Molineux"
       lat: 52.5901
       lon: -2.1306
+
+  # =========================================================================
+  # Championship (E36-01) — 24 teams per season, high turnover
+  # Covers 2025-26 squads + recently relegated/promoted teams
+  # =========================================================================
+  Championship:
+    "Blackburn":
+      stadium: "Ewood Park"
+      lat: 53.7286
+      lon: -2.4893
+    "Bristol City":
+      stadium: "Ashton Gate"
+      lat: 51.4400
+      lon: -2.6203
+    "Burnley":
+      stadium: "Turf Moor"
+      lat: 53.7890
+      lon: -2.2302
+    "Cardiff":
+      stadium: "Cardiff City Stadium"
+      lat: 51.4728
+      lon: -3.2031
+    "Coventry":
+      stadium: "Coventry Building Society Arena"
+      lat: 52.4487
+      lon: -1.4956
+    "Derby":
+      stadium: "Pride Park"
+      lat: 52.9149
+      lon: -1.4474
+    "Hull":
+      stadium: "MKM Stadium"
+      lat: 53.7464
+      lon: -0.3680
+    "Leeds":
+      stadium: "Elland Road"
+      lat: 53.7778
+      lon: -1.5722
+    "Luton":
+      stadium: "Kenilworth Road"
+      lat: 51.8842
+      lon: -0.4316
+    "Middlesbrough":
+      stadium: "Riverside Stadium"
+      lat: 54.5781
+      lon: -1.2176
+    "Millwall":
+      stadium: "The Den"
+      lat: 51.4860
+      lon: -0.0510
+    "Norwich":
+      stadium: "Carrow Road"
+      lat: 52.6221
+      lon: 1.3092
+    "Oxford":
+      stadium: "Kassam Stadium"
+      lat: 51.7165
+      lon: -1.2081
+    "Plymouth":
+      stadium: "Home Park"
+      lat: 50.3882
+      lon: -4.1508
+    "Portsmouth":
+      stadium: "Fratton Park"
+      lat: 50.7963
+      lon: -1.0638
+    "Preston":
+      stadium: "Deepdale"
+      lat: 53.7722
+      lon: -2.6886
+    "QPR":
+      stadium: "Loftus Road"
+      lat: 51.5093
+      lon: -0.2323
+    "Sheffield Utd":
+      stadium: "Bramall Lane"
+      lat: 53.3703
+      lon: -1.4709
+    "Sheffield Weds":
+      stadium: "Hillsborough"
+      lat: 53.4114
+      lon: -1.5006
+    "Stoke":
+      stadium: "bet365 Stadium"
+      lat: 52.9884
+      lon: -2.1755
+    "Sunderland":
+      stadium: "Stadium of Light"
+      lat: 54.9146
+      lon: -1.3882
+    "Swansea":
+      stadium: "Swansea.com Stadium"
+      lat: 51.6428
+      lon: -3.9347
+    "Watford":
+      stadium: "Vicarage Road"
+      lat: 51.6500
+      lon: -0.4015
+    "West Brom":
+      stadium: "The Hawthorns"
+      lat: 52.5090
+      lon: -1.9641
+
+  # =========================================================================
+  # La Liga (E36-02) — 20 teams, Spanish top flight
+  # Team keys match Football-Data.co.uk canonical names
+  # =========================================================================
+  LaLiga:
+    "Alaves":
+      stadium: "Mendizorrotza"
+      lat: 42.8371
+      lon: -2.6876
+    "Ath Bilbao":
+      stadium: "San Mamés"
+      lat: 43.2641
+      lon: -2.9494
+    "Ath Madrid":
+      stadium: "Cívitas Metropolitano"
+      lat: 40.4362
+      lon: -3.5995
+    "Barcelona":
+      stadium: "Estadi Olímpic Lluís Companys"
+      lat: 41.3649
+      lon: 2.1557
+    "Betis":
+      stadium: "Benito Villamarín"
+      lat: 37.3564
+      lon: -5.9818
+    "Cadiz":
+      stadium: "Nuevo Mirandilla"
+      lat: 36.5013
+      lon: -6.2727
+    "Celta":
+      stadium: "Abanca-Balaídos"
+      lat: 42.2118
+      lon: -8.7395
+    "Espanol":
+      stadium: "RCDE Stadium"
+      lat: 41.3479
+      lon: 2.0757
+    "Getafe":
+      stadium: "Coliseum"
+      lat: 40.3256
+      lon: -3.7148
+    "Girona":
+      stadium: "Montilivi"
+      lat: 41.9607
+      lon: 2.8287
+    "Las Palmas":
+      stadium: "Gran Canaria"
+      lat: 28.1003
+      lon: -15.4565
+    "Leganes":
+      stadium: "Butarque"
+      lat: 40.3366
+      lon: -3.7601
+    "Mallorca":
+      stadium: "Son Moix"
+      lat: 39.5899
+      lon: 2.6300
+    "Osasuna":
+      stadium: "El Sadar"
+      lat: 42.7966
+      lon: -1.6378
+    "Real Madrid":
+      stadium: "Santiago Bernabéu"
+      lat: 40.4531
+      lon: -3.6883
+    "Sevilla":
+      stadium: "Ramón Sánchez-Pizjuán"
+      lat: 37.3840
+      lon: -5.9705
+    "Sociedad":
+      stadium: "Reale Arena"
+      lat: 43.3013
+      lon: -1.9736
+    "Valencia":
+      stadium: "Mestalla"
+      lat: 39.4746
+      lon: -0.3582
+    "Valladolid":
+      stadium: "José Zorrilla"
+      lat: 41.6445
+      lon: -4.7612
+    "Vallecano":
+      stadium: "Vallecas"
+      lat: 40.3919
+      lon: -3.6589
+    "Villarreal":
+      stadium: "Estadio de la Cerámica"
+      lat: 39.9443
+      lon: -0.1036
+
+  # =========================================================================
+  # Ligue 1 (PC-08-02) — French top flight
+  # 18 teams from 2023-24 onwards (was 20 through 2022-23)
+  # Team keys match Football-Data.co.uk canonical names
+  # =========================================================================
+  Ligue1:
+    "Ajaccio":
+      stadium: "Stade François Coty"
+      lat: 41.9199
+      lon: 8.7682
+    "Angers":
+      stadium: "Stade Raymond Kopa"
+      lat: 47.4604
+      lon: -0.5306
+    "Auxerre":
+      stadium: "Stade de l'Abbé-Deschamps"
+      lat: 47.7870
+      lon: 3.5880
+    "Bordeaux":
+      stadium: "Matmut Atlantique"
+      lat: 44.8976
+      lon: -0.5614
+    "Brest":
+      stadium: "Stade Francis-Le Blé"
+      lat: 48.4028
+      lon: -4.4617
+    "Clermont":
+      stadium: "Stade Gabriel Montpied"
+      lat: 45.7866
+      lon: 3.0988
+    "Dijon":
+      stadium: "Stade Gaston Gérard"
+      lat: 47.3238
+      lon: 5.0682
+    "Le Havre":
+      stadium: "Stade Océane"
+      lat: 49.4985
+      lon: 0.1690
+    "Lens":
+      stadium: "Stade Bollaert-Delelis"
+      lat: 50.4327
+      lon: 2.8152
+    "Lille":
+      stadium: "Stade Pierre-Mauroy"
+      lat: 50.6120
+      lon: 3.1304
+    "Lorient":
+      stadium: "Stade du Moustoir"
+      lat: 47.7480
+      lon: -3.3688
+    "Lyon":
+      stadium: "Groupama Stadium"
+      lat: 45.7653
+      lon: 4.9822
+    "Marseille":
+      stadium: "Stade Vélodrome"
+      lat: 43.2698
+      lon: 5.3959
+    "Metz":
+      stadium: "Stade Saint-Symphorien"
+      lat: 49.1098
+      lon: 6.1603
+    "Monaco":
+      stadium: "Stade Louis II"
+      lat: 43.7276
+      lon: 7.4155
+    "Montpellier":
+      stadium: "Stade de la Mosson"
+      lat: 43.6222
+      lon: 3.8120
+    "Nantes":
+      stadium: "Stade de la Beaujoire"
+      lat: 47.2563
+      lon: -1.5245
+    "Nice":
+      stadium: "Allianz Riviera"
+      lat: 43.7051
+      lon: 7.1927
+    "Nimes":
+      stadium: "Stade des Costières"
+      lat: 43.8136
+      lon: 4.3600
+    "Paris FC":
+      stadium: "Stade Charléty"
+      lat: 48.8187
+      lon: 2.3489
+    "Paris SG":
+      stadium: "Parc des Princes"
+      lat: 48.8414
+      lon: 2.2530
+    "Reims":
+      stadium: "Stade Auguste-Delaune"
+      lat: 49.2468
+      lon: 3.9316
+    "Rennes":
+      stadium: "Roazhon Park"
+      lat: 48.1074
+      lon: -1.7128
+    "St Etienne":
+      stadium: "Stade Geoffroy-Guichard"
+      lat: 45.4607
+      lon: 4.3900
+    "Strasbourg":
+      stadium: "Stade de la Meinau"
+      lat: 48.5601
+      lon: 7.7550
+    "Toulouse":
+      stadium: "Stadium de Toulouse"
+      lat: 43.5833
+      lon: 1.4340
+    "Troyes":
+      stadium: "Stade de l'Aube"
+      lat: 48.2785
+      lon: 4.0716
+
+  # =========================================================================
+  # Bundesliga (E38-03) — German top flight, 18 teams
+  # Team keys match Football-Data.co.uk canonical names
+  # =========================================================================
+  Bundesliga:
+    "Augsburg":
+      stadium: "WWK Arena"
+      lat: 48.3234
+      lon: 10.8862
+    "Bayern Munich":
+      stadium: "Allianz Arena"
+      lat: 48.2188
+      lon: 11.6247
+    "Bielefeld":
+      stadium: "SchücoArena"
+      lat: 52.0317
+      lon: 8.5164
+    "Bochum":
+      stadium: "Vonovia Ruhrstadion"
+      lat: 51.4899
+      lon: 7.2364
+    "Darmstadt":
+      stadium: "Merck-Stadion am Böllenfalltor"
+      lat: 49.8612
+      lon: 8.6727
+    "Dortmund":
+      stadium: "Signal Iduna Park"
+      lat: 51.4926
+      lon: 7.4518
+    "Ein Frankfurt":
+      stadium: "Deutsche Bank Park"
+      lat: 50.0685
+      lon: 8.6455
+    "FC Koln":
+      stadium: "RheinEnergieStadion"
+      lat: 50.9335
+      lon: 6.8750
+    "Freiburg":
+      stadium: "Europa-Park Stadion"
+      lat: 48.0215
+      lon: 7.8300
+    "Greuther Furth":
+      stadium: "Sportpark Ronhof"
+      lat: 49.4717
+      lon: 10.9900
+    "Hamburg":
+      stadium: "Volksparkstadion"
+      lat: 53.5872
+      lon: 9.8985
+    "Heidenheim":
+      stadium: "Voith-Arena"
+      lat: 48.6731
+      lon: 10.1418
+    "Hertha":
+      stadium: "Olympiastadion"
+      lat: 52.5148
+      lon: 13.2395
+    "Hoffenheim":
+      stadium: "PreZero Arena"
+      lat: 49.2383
+      lon: 8.8882
+    "Holstein Kiel":
+      stadium: "Holstein-Stadion"
+      lat: 54.3490
+      lon: 10.1241
+    "Leverkusen":
+      stadium: "BayArena"
+      lat: 51.0384
+      lon: 7.0020
+    "M'gladbach":
+      stadium: "Borussia-Park"
+      lat: 51.1746
+      lon: 6.3854
+    "Mainz":
+      stadium: "Mewa Arena"
+      lat: 49.9840
+      lon: 8.2244
+    "RB Leipzig":
+      stadium: "Red Bull Arena"
+      lat: 51.3459
+      lon: 12.3486
+    "Schalke 04":
+      stadium: "Veltins-Arena"
+      lat: 51.5547
+      lon: 7.0681
+    "St Pauli":
+      stadium: "Millerntor-Stadion"
+      lat: 53.5545
+      lon: 9.9674
+    "Stuttgart":
+      stadium: "MHPArena"
+      lat: 48.7924
+      lon: 9.2320
+    "Union Berlin":
+      stadium: "Stadion An der Alten Försterei"
+      lat: 52.4573
+      lon: 13.5681
+    "Werder Bremen":
+      stadium: "Weserstadion"
+      lat: 53.0663
+      lon: 8.8376
+    "Wolfsburg":
+      stadium: "Volkswagen Arena"
+      lat: 52.4320
+      lon: 10.8035
+
+  # =========================================================================
+  # Serie A (E38-04) — Italian top flight, 20 teams
+  # Team keys match Football-Data.co.uk canonical names
+  # =========================================================================
+  SerieA:
+    "Atalanta":
+      stadium: "Gewiss Stadium"
+      lat: 45.7092
+      lon: 9.6810
+    "Benevento":
+      stadium: "Stadio Ciro Vigorito"
+      lat: 41.1158
+      lon: 14.7813
+    "Bologna":
+      stadium: "Stadio Renato Dall'Ara"
+      lat: 44.4923
+      lon: 11.3097
+    "Cagliari":
+      stadium: "Unipol Domus"
+      lat: 39.1999
+      lon: 9.1378
+    "Como":
+      stadium: "Stadio Giuseppe Sinigaglia"
+      lat: 45.8151
+      lon: 9.0699
+    "Cremonese":
+      stadium: "Stadio Giovanni Zini"
+      lat: 45.1388
+      lon: 10.0440
+    "Crotone":
+      stadium: "Stadio Ezio Scida"
+      lat: 39.0926
+      lon: 17.1199
+    "Empoli":
+      stadium: "Stadio Carlo Castellani"
+      lat: 43.7264
+      lon: 10.9558
+    "Fiorentina":
+      stadium: "Stadio Artemio Franchi"
+      lat: 43.7808
+      lon: 11.2821
+    "Frosinone":
+      stadium: "Stadio Benito Stirpe"
+      lat: 41.6390
+      lon: 13.3236
+    "Genoa":
+      stadium: "Stadio Luigi Ferraris"
+      lat: 44.4165
+      lon: 8.9527
+    "Inter":
+      stadium: "San Siro"
+      lat: 45.4781
+      lon: 9.1240
+    "Juventus":
+      stadium: "Allianz Stadium"
+      lat: 45.1096
+      lon: 7.6413
+    "Lazio":
+      stadium: "Stadio Olimpico"
+      lat: 41.9340
+      lon: 12.4547
+    "Lecce":
+      stadium: "Stadio Via del Mare"
+      lat: 40.3610
+      lon: 18.1944
+    "Milan":
+      stadium: "San Siro"
+      lat: 45.4781
+      lon: 9.1240
+    "Monza":
+      stadium: "U-Power Stadium"
+      lat: 45.5825
+      lon: 9.3027
+    "Napoli":
+      stadium: "Stadio Diego Armando Maradona"
+      lat: 40.8279
+      lon: 14.1931
+    "Parma":
+      stadium: "Stadio Ennio Tardini"
+      lat: 44.7945
+      lon: 10.3381
+    "Pisa":
+      stadium: "Arena Garibaldi"
+      lat: 43.7167
+      lon: 10.3964
+    "Roma":
+      stadium: "Stadio Olimpico"
+      lat: 41.9340
+      lon: 12.4547
+    "Salernitana":
+      stadium: "Stadio Arechi"
+      lat: 40.6620
+      lon: 14.7967
+    "Sampdoria":
+      stadium: "Stadio Luigi Ferraris"
+      lat: 44.4165
+      lon: 8.9527
+    "Sassuolo":
+      stadium: "Mapei Stadium"
+      lat: 44.7145
+      lon: 10.6505
+    "Spezia":
+      stadium: "Stadio Alberto Picco"
+      lat: 44.1030
+      lon: 9.8276
+    "Torino":
+      stadium: "Stadio Olimpico Grande Torino"
+      lat: 45.0419
+      lon: 7.6499
+    "Udinese":
+      stadium: "Bluenergy Stadium"
+      lat: 46.0807
+      lon: 13.1997
+    "Venezia":
+      stadium: "Stadio Pier Luigi Penzo"
+      lat: 45.4249
+      lon: 12.3622
+    "Verona":
+      stadium: "Stadio Marcantonio Bentegodi"
+      lat: 45.4354
+      lon: 10.9685

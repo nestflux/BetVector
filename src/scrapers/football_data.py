@@ -88,79 +88,57 @@ EPL_TEAM_NAME_MAP: Dict[str, str] = {
 }
 
 # ============================================================================
-# League One Team Name Map (E38-02 — League Expansion Phase 2)
+# Ligue 1 Team Name Map (PC-08-02 — replaces English League One)
 # ============================================================================
-# League One (E2) uses short/abbreviated team names on Football-Data.co.uk.
-# Unlike EPL, we use these FD names as-is for the canonical DB name (same
-# pattern as Championship E1).  The map is identity so no transformation
-# occurs, but having it explicit:
+# French Ligue 1 (F1) uses short team names on Football-Data.co.uk.
+# We use these FD names as-is for the canonical DB name (identity mapping).
+# The map is identity so no transformation occurs, but having it explicit:
 #   (a) suppresses the "No team name map" warning,
-#   (b) documents all 49 teams across 6 seasons (2020-21 to 2025-26),
+#   (b) documents all 27 teams across 6 seasons (2020-21 to 2025-26),
 #   (c) enables future normalisation if needed.
 #
-# League One has high turnover — 24 teams per season but 49 unique teams
-# across 6 seasons due to promotion/relegation.
+# Ligue 1 had 20 teams through 2022-23, then reduced to 18 from 2023-24.
+# 27 unique teams across 6 seasons due to promotion/relegation.
 # ============================================================================
 
-LEAGUE_ONE_TEAM_NAME_MAP: Dict[str, str] = {
-    # All teams that appeared in League One 2020-21 through 2025-26.
+LIGUE_1_TEAM_NAME_MAP: Dict[str, str] = {
+    # All teams that appeared in Ligue 1 2020-21 through 2025-26.
     # Football-Data.co.uk names → canonical DB names (identity mapping).
-    "AFC Wimbledon": "AFC Wimbledon",       # 2020-21, 2021-22, 2025-26
-    "Accrington": "Accrington",             # 2020-21, 2021-22, 2022-23
-    "Barnsley": "Barnsley",                 # 2022-23, 2023-24, 2024-25, 2025-26
-    "Birmingham": "Birmingham",             # 2024-25
-    "Blackpool": "Blackpool",               # 2020-21, 2023-24, 2024-25, 2025-26
-    "Bolton": "Bolton",                     # 2021-22, 2022-23, 2023-24, 2024-25, 2025-26
-    "Bradford": "Bradford",                 # 2025-26
-    "Bristol Rvs": "Bristol Rvs",           # 2020-21, 2022-23, 2023-24, 2024-25
-    "Burton": "Burton",                     # 2020-21, 2021-22, 2022-23, 2023-24, 2024-25, 2025-26
-    "Cambridge": "Cambridge",               # 2021-22, 2022-23, 2023-24, 2024-25
-    "Cardiff": "Cardiff",                   # 2025-26
-    "Carlisle": "Carlisle",                 # 2023-24
-    "Charlton": "Charlton",                 # 2020-21, 2021-22, 2022-23, 2023-24, 2024-25
-    "Cheltenham": "Cheltenham",             # 2021-22, 2022-23, 2023-24
-    "Crawley Town": "Crawley Town",         # 2024-25
-    "Crewe": "Crewe",                       # 2020-21, 2021-22
-    "Derby": "Derby",                       # 2022-23, 2023-24
-    "Doncaster": "Doncaster",               # 2020-21, 2021-22, 2025-26
-    "Exeter": "Exeter",                     # 2022-23, 2023-24, 2024-25, 2025-26
-    "Fleetwood Town": "Fleetwood Town",     # 2020-21, 2021-22, 2022-23, 2023-24, 2024-25
-    "Forest Green": "Forest Green",         # 2022-23
-    "Gillingham": "Gillingham",             # 2020-21, 2021-22
-    "Huddersfield": "Huddersfield",         # 2024-25, 2025-26
-    "Hull": "Hull",                         # 2020-21
-    "Ipswich": "Ipswich",                   # 2020-21, 2021-22, 2022-23
-    "Leyton Orient": "Leyton Orient",       # 2023-24, 2024-25, 2025-26
-    "Lincoln": "Lincoln",                   # 2020-21, 2021-22, 2022-23, 2023-24, 2024-25, 2025-26
-    "Luton": "Luton",                       # 2025-26
-    "Mansfield": "Mansfield",               # 2024-25, 2025-26
-    "Milton Keynes Dons": "Milton Keynes Dons",  # 2020-21, 2021-22, 2022-23
-    "Morecambe": "Morecambe",               # 2021-22, 2022-23
-    "Northampton": "Northampton",           # 2020-21, 2023-24, 2024-25, 2025-26
-    "Oxford": "Oxford",                     # 2020-21, 2021-22, 2022-23, 2023-24
-    "Peterboro": "Peterboro",               # 2020-21, 2022-23, 2023-24, 2024-25, 2025-26
-    "Plymouth": "Plymouth",                 # 2020-21, 2021-22, 2022-23, 2025-26
-    "Port Vale": "Port Vale",               # 2022-23, 2023-24, 2025-26
-    "Portsmouth": "Portsmouth",             # 2020-21, 2021-22, 2022-23, 2023-24
-    "Reading": "Reading",                   # 2023-24, 2024-25, 2025-26
-    "Rochdale": "Rochdale",                 # 2020-21
-    "Rotherham": "Rotherham",               # 2021-22, 2024-25, 2025-26
-    "Sheffield Weds": "Sheffield Weds",     # 2021-22, 2022-23
-    "Shrewsbury": "Shrewsbury",             # 2020-21, 2021-22, 2022-23, 2023-24, 2024-25
-    "Stevenage": "Stevenage",               # 2023-24, 2024-25, 2025-26
-    "Stockport": "Stockport",               # 2024-25, 2025-26
-    "Sunderland": "Sunderland",             # 2020-21, 2021-22
-    "Swindon": "Swindon",                   # 2020-21
-    "Wigan": "Wigan",                       # 2020-21, 2021-22, 2023-24, 2024-25, 2025-26
-    "Wrexham": "Wrexham",                   # 2024-25
-    "Wycombe": "Wycombe",                   # 2021-22, 2022-23, 2023-24, 2024-25, 2025-26
+    # Verified against actual F1.csv files for each season.
+    "Ajaccio": "Ajaccio",                   # 2022-23
+    "Angers": "Angers",                     # 2020-21, 2021-22, 2022-23, 2024-25, 2025-26
+    "Auxerre": "Auxerre",                   # 2022-23, 2024-25, 2025-26
+    "Bordeaux": "Bordeaux",                 # 2020-21, 2021-22
+    "Brest": "Brest",                       # all 6 seasons
+    "Clermont": "Clermont",                 # 2021-22, 2022-23, 2023-24
+    "Dijon": "Dijon",                       # 2020-21
+    "Le Havre": "Le Havre",                 # 2023-24, 2024-25, 2025-26
+    "Lens": "Lens",                         # all 6 seasons
+    "Lille": "Lille",                       # all 6 seasons
+    "Lorient": "Lorient",                   # 2020-21, 2021-22, 2022-23, 2023-24, 2025-26
+    "Lyon": "Lyon",                         # all 6 seasons
+    "Marseille": "Marseille",               # all 6 seasons
+    "Metz": "Metz",                         # 2020-21, 2021-22, 2023-24, 2025-26
+    "Monaco": "Monaco",                     # all 6 seasons
+    "Montpellier": "Montpellier",           # 2020-21, 2021-22, 2022-23, 2023-24, 2024-25
+    "Nantes": "Nantes",                     # all 6 seasons
+    "Nice": "Nice",                         # all 6 seasons
+    "Nimes": "Nimes",                       # 2020-21
+    "Paris FC": "Paris FC",                 # 2025-26 (promoted)
+    "Paris SG": "Paris SG",                 # all 6 seasons
+    "Reims": "Reims",                       # all 6 seasons
+    "Rennes": "Rennes",                     # all 6 seasons
+    "St Etienne": "St Etienne",             # 2020-21, 2021-22, 2024-25
+    "Strasbourg": "Strasbourg",             # all 6 seasons
+    "Toulouse": "Toulouse",                 # 2022-23, 2023-24, 2024-25, 2025-26
+    "Troyes": "Troyes",                     # 2021-22, 2022-23
 }
 
 # ============================================================================
 # Bundesliga Team Name Map (E38-03 — League Expansion Phase 2)
 # ============================================================================
 # Bundesliga (D1) uses abbreviated team names on Football-Data.co.uk.
-# Like Championship and League One, we use these FD names as-is for the
+# Like Championship and Ligue 1, we use these FD names as-is for the
 # canonical DB name.  The map is identity so no transformation occurs,
 # but having it explicit documents all 25 teams across 6 seasons and
 # suppresses the "No team name map" warning.
@@ -203,7 +181,7 @@ BUNDESLIGA_TEAM_NAME_MAP: Dict[str, str] = {
 # Serie A Team Name Map (E38-04 — League Expansion Phase 2)
 # ============================================================================
 # Serie A (I1) uses short team names on Football-Data.co.uk.
-# Like Championship, League One, and Bundesliga, we use these FD names as-is
+# Like Championship, Ligue 1, and Bundesliga, we use these FD names as-is
 # for the canonical DB name.  The map is identity so no transformation
 # occurs, but having it explicit documents all 29 teams across 6 seasons
 # and suppresses the "No team name map" warning.
@@ -534,7 +512,7 @@ class FootballDataScraper(BaseScraper):
         """
         maps: Dict[str, Dict[str, str]] = {
             "EPL": EPL_TEAM_NAME_MAP,
-            "LeagueOne": LEAGUE_ONE_TEAM_NAME_MAP,  # E38-02: identity map (FD names are canonical)
+            "Ligue1": LIGUE_1_TEAM_NAME_MAP,         # PC-08-02: identity map (FD names are canonical)
             "Bundesliga": BUNDESLIGA_TEAM_NAME_MAP,  # E38-03: identity map (FD names are canonical)
             "SerieA": SERIE_A_TEAM_NAME_MAP,        # E38-04: identity map (FD names are canonical)
         }

@@ -2,7 +2,7 @@
 E38-06 — Multi-League Expansion Phase 2 Integration Test
 =========================================================
 Automated pytest suite validating that the E38 league expansion
-(Championship backfill, League One, Bundesliga, Serie A) is correctly
+(Championship backfill, Ligue 1, Bundesliga, Serie A) is correctly
 wired end-to-end.
 
 Scenarios (from the E38-06 build plan):
@@ -69,12 +69,12 @@ EXPECTED_LEAGUES = {
         "season_count": 6,
         "total_matchdays": 38,
     },
-    "LeagueOne": {
-        "football_data_code": "E2",
-        "country": "England",
-        "understat_league": None,
+    "Ligue1": {
+        "football_data_code": "F1",
+        "country": "France",
+        "understat_league": "Ligue_1",
         "season_count": 6,
-        "total_matchdays": 46,
+        "total_matchdays": 38,
     },
     "Bundesliga": {
         "football_data_code": "D1",
@@ -97,7 +97,7 @@ EXPECTED_EDGE_THRESHOLDS = {
     "EPL": 0.05,         # Standard — well-served market
     "Championship": 0.03,  # Lower — thinner market, less efficient
     "LaLiga": 0.05,      # Standard — well-served market
-    "LeagueOne": 0.02,   # Lowest — least efficient market
+    "Ligue1": 0.05,      # Standard — well-served market
     "Bundesliga": 0.05,  # Standard — well-served market
     "SerieA": 0.05,      # Standard — well-served market
 }
@@ -108,7 +108,7 @@ MIN_MATCH_COUNTS = {
     "EPL": 700,          # 760 in local DB (2024-25 + 2025-26; historical on Neon)
     "Championship": 3_000,  # 3,181 (6 full seasons)
     "LaLiga": 2_000,     # 2,160 (6 seasons × ~360 matches)
-    "LeagueOne": 3_000,  # 3,166 (6 full seasons)
+    "Ligue1": 2_000,     # ~2,280 (6 seasons × ~380/306 matches)
     "Bundesliga": 1_600, # 1,746 (6 seasons × ~291 matches)
     "SerieA": 2_000,     # 2,170 (6 seasons × ~362 matches)
 }
@@ -278,14 +278,14 @@ class TestTeamNameMaps:
         """
         from src.scrapers.football_data import (
             EPL_TEAM_NAME_MAP,
-            LEAGUE_ONE_TEAM_NAME_MAP,
+            LIGUE_1_TEAM_NAME_MAP,
             BUNDESLIGA_TEAM_NAME_MAP,
             SERIE_A_TEAM_NAME_MAP,
         )
 
         maps = {
             "EPL": EPL_TEAM_NAME_MAP,
-            "LeagueOne": LEAGUE_ONE_TEAM_NAME_MAP,
+            "Ligue1": LIGUE_1_TEAM_NAME_MAP,
             "Bundesliga": BUNDESLIGA_TEAM_NAME_MAP,
             "SerieA": SERIE_A_TEAM_NAME_MAP,
         }
@@ -309,10 +309,10 @@ class TestTeamNameMaps:
         from src.scrapers.understat_scraper import UNDERSTAT_EPL_TEAM_MAP
 
         # Dict keys are inherently unique in Python, so verify the map
-        # has a reasonable number of entries (100+ across 4 Understat leagues)
-        assert len(UNDERSTAT_EPL_TEAM_MAP) >= 100, (
+        # has a reasonable number of entries (120+ across 5 Understat leagues)
+        assert len(UNDERSTAT_EPL_TEAM_MAP) >= 120, (
             f"UNDERSTAT_EPL_TEAM_MAP has only {len(UNDERSTAT_EPL_TEAM_MAP)} entries, "
-            "expected 100+ across EPL, La Liga, Bundesliga, Serie A"
+            "expected 120+ across EPL, La Liga, Ligue 1, Bundesliga, Serie A"
         )
 
         # Verify all values are non-empty strings
@@ -346,12 +346,12 @@ class TestTeamNameMaps:
     def test_football_data_get_team_name_map_registry(self):
         """_get_team_name_map must return a map for every league that has one.
 
-        EPL, LeagueOne, Bundesliga, SerieA have explicit maps.
+        EPL, Ligue1, Bundesliga, SerieA have explicit maps.
         Championship and LaLiga use the identity map pattern (FD names = canonical).
         """
         from src.scrapers.football_data import FootballDataScraper
 
-        for short_name in ["EPL", "LeagueOne", "Bundesliga", "SerieA"]:
+        for short_name in ["EPL", "Ligue1", "Bundesliga", "SerieA"]:
             name_map = FootballDataScraper._get_team_name_map(short_name)
             assert isinstance(name_map, dict), (
                 f"_get_team_name_map({short_name!r}) did not return a dict"
@@ -372,6 +372,7 @@ class TestTeamNameMaps:
         expected_entries = {
             "Arsenal": "Arsenal",              # EPL
             "Barcelona": "Barcelona",          # La Liga
+            "Paris Saint Germain": "Paris SG", # Ligue 1
             "Bayern Munich": "Bayern Munich",  # Bundesliga
             "Inter": "Inter",                  # Serie A
         }
@@ -392,15 +393,15 @@ class TestTeamNameMaps:
 class TestFeatureEngineerNullUnderstat:
     """Verify that the feature engineer and models handle missing xG gracefully.
 
-    Championship and League One don't have Understat coverage, so xG-based
-    feature columns (npxg_5, deep_5, etc.) will be NaN or absent.  The
-    Poisson and XGBoost models must handle this without crashing.
+    Championship doesn't have Understat coverage, so xG-based feature
+    columns (npxg_5, deep_5, etc.) will be NaN or absent.  The Poisson
+    and XGBoost models must handle this without crashing.
     """
 
     def _make_features_without_xg(self, n_rows: int = 50) -> pd.DataFrame:
         """Create a feature DataFrame with NO xG columns.
 
-        Simulates what Championship/League One features look like:
+        Simulates what Championship features look like:
         only form, market, and basic stats — no npxg, deep, xga, etc.
         """
         rng = np.random.default_rng(42)
@@ -424,7 +425,7 @@ class TestFeatureEngineerNullUnderstat:
             data[f"{prefix}pinnacle_draw_prob"] = rng.uniform(0.2, 0.35, n_rows)
             data[f"{prefix}pinnacle_away_prob"] = rng.uniform(0.15, 0.5, n_rows)
 
-            # xG columns intentionally ABSENT — simulating Championship/League One
+            # xG columns intentionally ABSENT — simulating Championship (no Understat)
             # npxg_5, deep_5, npxga_5, ppda_allowed_5, set_piece_xg_5, etc. are NOT here
 
         return pd.DataFrame(data)
@@ -432,7 +433,7 @@ class TestFeatureEngineerNullUnderstat:
     def test_poisson_select_feature_cols_filters_missing(self):
         """Poisson _select_feature_cols() drops candidates not in the DataFrame.
 
-        When xG columns are absent (Championship/League One), the model
+        When xG columns are absent (Championship — no Understat), the model
         must gracefully use only available features.  The method takes
         (df, target) where target is "home" or "away".
         """
@@ -519,7 +520,7 @@ class TestBackfillLeagueRouting:
             )
 
     @pytest.mark.parametrize("league_name", [
-        "EPL", "Championship", "LaLiga", "LeagueOne", "Bundesliga", "SerieA",
+        "EPL", "Championship", "LaLiga", "Ligue1", "Bundesliga", "SerieA",
     ])
     def test_backfill_league_routing_logic(self, league_name: str):
         """The backfill script's league selection logic must find each league.
@@ -729,7 +730,7 @@ class TestBacktestResults:
 
     Brier score thresholds:
     - Understat leagues (La Liga, Bundesliga, Serie A): < 0.65
-    - Non-Understat leagues (Championship, League One): < 0.70
+    - Non-Understat leagues (Championship): < 0.70
       (structural limitation — no xG features available)
     """
 
@@ -739,7 +740,7 @@ class TestBacktestResults:
         "Bundesliga": {"brier_max": 0.65, "has_understat": True},
         "SerieA": {"brier_max": 0.65, "has_understat": True},
         "Championship": {"brier_max": 0.70, "has_understat": False},
-        "LeagueOne": {"brier_max": 0.70, "has_understat": False},
+        "Ligue1": {"brier_max": 0.65, "has_understat": True},
     }
 
     @pytest.mark.parametrize("league_name", list(BACKTEST_LEAGUES.keys()))
@@ -815,15 +816,15 @@ class TestEdgeThresholds:
         ("EPL", 0.05),
         ("Championship", 0.03),
         ("LaLiga", 0.05),
-        ("LeagueOne", 0.02),
+        ("Ligue1", 0.05),
         ("Bundesliga", 0.05),
         ("SerieA", 0.05),
     ])
     def test_edge_threshold_correct(self, short_name: str, expected_threshold: float):
         """Each league's edge threshold must match the expected value.
 
-        Lower thresholds (Championship 3%, League One 2%) capture more value
-        in less efficient markets.  Standard threshold (5%) for EPL, La Liga,
+        Lower threshold (Championship 3%) captures more value in a less
+        efficient market.  Standard threshold (5%) for EPL, La Liga, Ligue 1,
         Bundesliga, Serie A reflects well-served betting markets.
         """
         lg = _get_league_config(short_name)

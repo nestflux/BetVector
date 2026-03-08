@@ -88,21 +88,23 @@ leagues:
     edge_threshold_override: 0.05  # Same as EPL — well-served market
 
   # -------------------------------------------------------------------------
-  # League One (E38-02 — League Expansion Phase 2)
-  # Football-Data.co.uk code: E2 (same CSV format as EPL E0 and Championship E1)
-  # 24 teams × 46 matches per team = 552 matches per season
-  # Least efficient of our tracked markets → edge_threshold_override: 0.02 (2%)
-  # NOTE: League One is NOT covered by Understat — understat_league: null
-  # NOTE: ClubElo does NOT cover Level 3 (League One) — Elo features will be null
-  # The model handles null xG and Elo gracefully via fillna fallbacks.
+  # French Ligue 1 (PC-08-02 — replaces English League One)
+  # Football-Data.co.uk code: F1 (same CSV format as other leagues)
+  # 20 teams × 38 matchdays = 380 matches per season (2020-21, 2021-22, 2022-23)
+  # 18 teams × 34 matchdays = 306 matches per season (2023-24 onwards — Ligue 1
+  #   reduced to 18 teams starting 2023-24)
+  # Well-served market (Pinnacle covers it well) → edge_threshold_override: 0.05
+  # Understat key: "Ligue_1" — full xG/NPxG/PPDA/deep coverage
+  # ClubElo covers all Ligue 1 teams fully (Level 1 French football)
+  # Football-Data.org free tier covers PL only → football_data_org_code: null
   # -------------------------------------------------------------------------
-  - name: "League One"
-    short_name: "LeagueOne"
-    country: "England"
-    football_data_code: "E2"
-    fbref_league_id: null
-    api_football_id: 41
-    understat_league: null       # Understat covers EPL, La Liga, Bundesliga, Serie A, Ligue 1 only
+  - name: "Ligue 1"
+    short_name: "Ligue1"
+    country: "France"
+    football_data_code: "F1"
+    fbref_league_id: "FRA-Ligue-1"
+    api_football_id: 61
+    understat_league: "Ligue_1"  # Full Understat coverage (xG, NPxG, PPDA, deep)
     football_data_org_code: null # Football-Data.org free tier covers PL only
     is_active: true
     seasons:
@@ -112,8 +114,8 @@ leagues:
       - "2023-24"
       - "2024-25"
       - "2025-26"
-    total_matchdays: 46
-    edge_threshold_override: 0.02  # Lower threshold — League One market least efficient
+    total_matchdays: 38
+    edge_threshold_override: 0.05  # Same as EPL — well-served market
 
   # -------------------------------------------------------------------------
   # Bundesliga (E38-03 — League Expansion Phase 2)
