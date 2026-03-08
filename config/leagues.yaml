@@ -142,3 +142,31 @@ leagues:
       - "2025-26"
     total_matchdays: 34
     edge_threshold_override: 0.05  # Same as EPL — well-served market
+
+  # -------------------------------------------------------------------------
+  # Serie A (E38-04 — League Expansion Phase 2)
+  # Football-Data.co.uk code: I1 (same CSV format as other leagues)
+  # 20 teams × 38 matchdays = 380 matches per season
+  # Well-served market (Pinnacle covers it well) → edge_threshold_override: 0.05 (5%)
+  # Understat key: "Serie_A" — full coverage of all seasons (xG, NPxG, PPDA, deep)
+  # ClubElo covers all Serie A teams fully (Level 1 + relegated Level 2)
+  # Football-Data.org free tier covers PL only → football_data_org_code: null
+  # -------------------------------------------------------------------------
+  - name: "Serie A"
+    short_name: "SerieA"
+    country: "Italy"
+    football_data_code: "I1"
+    fbref_league_id: "ITA-Serie A"
+    api_football_id: 135
+    understat_league: "Serie_A"    # Full Understat coverage (xG, NPxG, PPDA, deep)
+    football_data_org_code: null   # Football-Data.org free tier covers PL only
+    is_active: true
+    seasons:
+      - "2020-21"
+      - "2021-22"
+      - "2022-23"
+      - "2023-24"
+      - "2024-25"
+      - "2025-26"
+    total_matchdays: 38
+    edge_threshold_override: 0.05  # Same as EPL — well-served market

@@ -155,6 +155,40 @@ UNDERSTAT_EPL_TEAM_MAP: Dict[str, str] = {
     "VfB Stuttgart": "Stuttgart",               # FD: "Stuttgart"
     "Werder Bremen": "Werder Bremen",
     "Wolfsburg": "Wolfsburg",
+
+    # --- Serie A teams (E38-04) ---
+    # Understat uses formal Italian names; Football-Data.co.uk uses shorter forms.
+    # DB canonical names follow Football-Data.co.uk (the primary scraper).
+    # 29 unique teams across 2020-21 to 2025-26 seasons.
+    "AC Milan": "Milan",                       # FD: "Milan" (Understat adds "AC" prefix)
+    "Atalanta": "Atalanta",
+    "Benevento": "Benevento",                  # 2020-21 only
+    "Bologna": "Bologna",
+    "Cagliari": "Cagliari",
+    "Como": "Como",                            # 2024-25+
+    "Cremonese": "Cremonese",                  # 2022-23, 2025-26
+    "Crotone": "Crotone",                      # 2020-21 only
+    "Empoli": "Empoli",                        # 2021-22 through 2024-25
+    "Fiorentina": "Fiorentina",
+    "Frosinone": "Frosinone",                  # 2023-24 only
+    "Genoa": "Genoa",
+    "Inter": "Inter",
+    "Juventus": "Juventus",
+    "Lazio": "Lazio",
+    "Lecce": "Lecce",                          # 2022-23+
+    "Monza": "Monza",                          # 2022-23, 2023-24, 2024-25
+    "Napoli": "Napoli",
+    "Parma Calcio 1913": "Parma",              # FD: "Parma" (Understat uses full name)
+    "Pisa": "Pisa",                            # 2025-26
+    "Roma": "Roma",
+    "Salernitana": "Salernitana",              # 2021-22, 2022-23, 2023-24
+    "Sampdoria": "Sampdoria",                  # 2020-21, 2021-22, 2022-23
+    "Sassuolo": "Sassuolo",
+    "Spezia": "Spezia",                        # 2020-21, 2021-22, 2022-23
+    "Torino": "Torino",
+    "Udinese": "Udinese",
+    "Venezia": "Venezia",                      # 2021-22, 2024-25
+    "Verona": "Verona",
 }
 
 

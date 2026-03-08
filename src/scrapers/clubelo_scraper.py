@@ -201,6 +201,42 @@ TEAM_NAME_MAP: Dict[str, str] = {
     "Stuttgart": "Stuttgart",
     "Union Berlin": "Union Berlin",
     "Wolfsburg": "Wolfsburg",
+
+    # -------------------------------------------------------------------------
+    # Serie A teams (E38-04)
+    # ClubElo Italian team names match Football-Data.co.uk exactly (identity).
+    # 29 unique teams across 2020-21 to 2025-26 seasons.
+    # Covers Level 1 (Serie A) and Level 2 (Serie B) for relegated teams.
+    # -------------------------------------------------------------------------
+    "Atalanta": "Atalanta",
+    "Benevento": "Benevento",             # 2020-21
+    "Bologna": "Bologna",
+    "Cagliari": "Cagliari",
+    "Como": "Como",                       # 2024-25+
+    "Cremonese": "Cremonese",             # 2022-23, 2025-26
+    "Crotone": "Crotone",                 # 2020-21
+    "Empoli": "Empoli",
+    "Fiorentina": "Fiorentina",
+    "Frosinone": "Frosinone",             # 2023-24
+    "Genoa": "Genoa",
+    "Inter": "Inter",
+    "Juventus": "Juventus",
+    "Lazio": "Lazio",
+    "Lecce": "Lecce",                     # 2022-23+
+    "Milan": "Milan",
+    "Monza": "Monza",                     # 2022-23, 2023-24, 2024-25
+    "Napoli": "Napoli",
+    "Parma": "Parma",                     # 2020-21, 2024-25+
+    "Pisa": "Pisa",                       # 2025-26
+    "Roma": "Roma",
+    "Salernitana": "Salernitana",         # 2021-22, 2022-23, 2023-24
+    "Sampdoria": "Sampdoria",
+    "Sassuolo": "Sassuolo",
+    "Spezia": "Spezia",                   # 2020-21, 2021-22, 2022-23
+    "Torino": "Torino",
+    "Udinese": "Udinese",
+    "Venezia": "Venezia",                 # 2021-22, 2024-25
+    "Verona": "Verona",
 }
 
 

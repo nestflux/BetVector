@@ -200,6 +200,53 @@ BUNDESLIGA_TEAM_NAME_MAP: Dict[str, str] = {
 }
 
 # ============================================================================
+# Serie A Team Name Map (E38-04 — League Expansion Phase 2)
+# ============================================================================
+# Serie A (I1) uses short team names on Football-Data.co.uk.
+# Like Championship, League One, and Bundesliga, we use these FD names as-is
+# for the canonical DB name.  The map is identity so no transformation
+# occurs, but having it explicit documents all 29 teams across 6 seasons
+# and suppresses the "No team name map" warning.
+#
+# Serie A has 20 teams/season, moderate turnover with promotion/relegation.
+# 29 unique teams across 2020-21 to 2025-26.
+# ============================================================================
+
+SERIE_A_TEAM_NAME_MAP: Dict[str, str] = {
+    # All teams that appeared in Serie A 2020-21 through 2025-26.
+    # Football-Data.co.uk names → canonical DB names (identity mapping).
+    "Atalanta": "Atalanta",               # all 6 seasons
+    "Benevento": "Benevento",             # 2020-21
+    "Bologna": "Bologna",                 # all 6 seasons
+    "Cagliari": "Cagliari",               # 2020-21, 2021-22, 2023-24, 2024-25, 2025-26
+    "Como": "Como",                       # 2024-25, 2025-26
+    "Cremonese": "Cremonese",             # 2022-23, 2025-26
+    "Crotone": "Crotone",                 # 2020-21
+    "Empoli": "Empoli",                   # 2021-22 through 2024-25
+    "Fiorentina": "Fiorentina",           # all 6 seasons
+    "Frosinone": "Frosinone",             # 2023-24
+    "Genoa": "Genoa",                     # 2020-21, 2021-22, 2023-24, 2024-25, 2025-26
+    "Inter": "Inter",                     # all 6 seasons
+    "Juventus": "Juventus",               # all 6 seasons
+    "Lazio": "Lazio",                     # all 6 seasons
+    "Lecce": "Lecce",                     # 2022-23, 2023-24, 2024-25, 2025-26
+    "Milan": "Milan",                     # all 6 seasons
+    "Monza": "Monza",                     # 2022-23, 2023-24, 2024-25
+    "Napoli": "Napoli",                   # all 6 seasons
+    "Parma": "Parma",                     # 2020-21, 2024-25, 2025-26
+    "Pisa": "Pisa",                       # 2025-26
+    "Roma": "Roma",                       # all 6 seasons
+    "Salernitana": "Salernitana",         # 2021-22, 2022-23, 2023-24
+    "Sampdoria": "Sampdoria",             # 2020-21, 2021-22, 2022-23
+    "Sassuolo": "Sassuolo",               # 2020-21 through 2023-24, 2025-26
+    "Spezia": "Spezia",                   # 2020-21, 2021-22, 2022-23
+    "Torino": "Torino",                   # all 6 seasons
+    "Udinese": "Udinese",                 # all 6 seasons
+    "Venezia": "Venezia",                 # 2021-22, 2024-25
+    "Verona": "Verona",                   # all 6 seasons
+}
+
+# ============================================================================
 # Column definitions
 # ============================================================================
 # Columns we always expect in the CSV (results)
@@ -489,6 +536,7 @@ class FootballDataScraper(BaseScraper):
             "EPL": EPL_TEAM_NAME_MAP,
             "LeagueOne": LEAGUE_ONE_TEAM_NAME_MAP,  # E38-02: identity map (FD names are canonical)
             "Bundesliga": BUNDESLIGA_TEAM_NAME_MAP,  # E38-03: identity map (FD names are canonical)
+            "SerieA": SERIE_A_TEAM_NAME_MAP,        # E38-04: identity map (FD names are canonical)
         }
         if league_short_name not in maps:
             logger.warning(

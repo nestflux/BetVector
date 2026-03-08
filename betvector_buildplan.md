@@ -5841,12 +5841,14 @@ ClubElo: full coverage.  Well-served market → `edge_threshold_override: 0.05`.
 team mappings), `src/scrapers/clubelo_scraper.py`
 
 **Acceptance Criteria:**
-- [ ] Serie A entry in leagues.yaml with 6 seasons
-- [ ] Team name maps in football_data.py, understat_scraper.py, clubelo_scraper.py
-- [ ] Matches + odds loaded for all 6 seasons (~2,280 matches)
-- [ ] Understat xG + advanced stats for all 6 seasons (~4,560 MatchStats)
-- [ ] ClubElo ratings loaded for all seasons
-- [ ] Features computed (including xG-based features)
+- [x] Serie A entry in leagues.yaml with 6 seasons ✅
+- [x] Team name maps in football_data.py (29 teams), understat_scraper.py (29 teams), clubelo_scraper.py (29 teams) ✅
+- [x] Matches + odds loaded for all 6 seasons — 2,170 matches, 31,236 odds ✅
+- [x] Understat xG + advanced stats for all 6 seasons — 4,334 MatchStats ✅
+- [x] ClubElo ratings loaded for all seasons — 33,934 records ✅
+- [x] Features computed (including xG-based features) — 4,340 features (xG/NPxG/PPDA/Elo 99-100%) ✅
+
+**Status: DONE** ✅ — Completed 2026-03-07
 
 ---
 
