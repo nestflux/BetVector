@@ -5677,3 +5677,234 @@ E37-01 (XGBoost model class + training)
 → E37-03 (ensemble blend activation)
 → E37-04 (integration test)
 ```
+
+---
+
+## Epic 38 — League Backfill & Expansion (Phase 2)
+
+**Status:** 📋 Planned
+**Type:** Data + Feature + Config
+**Depends on:** E37 (ensemble model must be ready before expanding training data)
+
+### Overview
+
+BetVector currently covers 3 leagues: **EPL** (6 seasons), **Championship**
+(4 seasons: 2022–26), and **La Liga** (4 seasons: 2022–26).  This epic:
+
+1. **Backfills** Championship and La Liga to match EPL's 6-season depth
+   (adding 2020-21 and 2021-22)
+2. **Expands** to 3 new leagues: **League One**, **Bundesliga**, and
+   **Serie A** — all for 6 seasons (2020-21 through 2025-26)
+
+This increases the training dataset from ~4,100 matches to ~15,300+ matches
+across 6 leagues, improving model calibration and multi-league value betting
+coverage.
+
+**Data source coverage matrix:**
+
+| League | FD.co.uk | Understat xG | ClubElo | FD.org | Odds API |
+|--------|:--------:|:------------:|:-------:|:------:|:--------:|
+| EPL (E0) | ✅ | ✅ "EPL" | ✅ | ✅ "PL" | ✅ |
+| Championship (E1) | ✅ | ❌ null | ✅ | ❌ | ❌ |
+| La Liga (SP1) | ✅ | ✅ "La_Liga" | ✅ | ❌ | ❌ |
+| League One (E2) | ✅ | ❌ null | ⚠️ partial | ❌ | ❌ |
+| Bundesliga (D1) | ✅ | ✅ "Bundesliga" | ✅ | ❌ | ❌ |
+| Serie A (I1) | ✅ | ✅ "Serie_A" | ✅ | ❌ | ❌ |
+
+**Estimated final data volumes:**
+
+| League | Seasons | Matches | Odds | MatchStats | ClubElo | Features |
+|--------|---------|---------|------|------------|---------|----------|
+| EPL | 6 | ~2,280 | ~34,000 | ~4,560 | ~18,000 | ~2,280 |
+| Championship | 6 | ~3,312 | ~49,680 | 0 | ~26,000 | ~3,312 |
+| La Liga | 6 | ~2,280 | ~34,000 | ~4,560 | ~18,000 | ~2,280 |
+| League One | 6 | ~3,312 | ~49,680 | 0 | ~15,000 | ~3,312 |
+| Bundesliga | 6 | ~1,836 | ~27,540 | ~3,672 | ~14,000 | ~1,836 |
+| Serie A | 6 | ~2,280 | ~34,000 | ~4,560 | ~18,000 | ~2,280 |
+| **Total** | | **~15,300** | **~228,900** | **~17,352** | **~109,000** | **~15,300** |
+
+---
+
+### E38-01 — Backfill Championship & La Liga to 2020-21
+
+**Type:** Data
+**Depends on:** E37-04
+**Master Plan:** MP §5 Data Sources, MP §6 Schema
+
+Add 2 seasons (2020-21, 2021-22) to existing Championship and La Liga
+pipelines.  This brings both leagues to the same 6-season depth as EPL.
+
+Championship 2020-21 and 2021-22 require adding team name mappings for
+teams that played in those seasons but have since been relegated (e.g.,
+Derby County, Wigan Athletic, Huddersfield Town).  La Liga similarly
+needs mappings for Eibar, Huesca, and other relegated teams.
+
+No new scraper code — the existing `backfill_historical.py` script with
+`--league` flag handles everything.  Championship has no Understat coverage
+(understat_league: null) so that step is skipped automatically.
+
+**Files:** `config/leagues.yaml`, `src/scrapers/football_data.py`,
+`src/scrapers/understat_scraper.py`, `src/scrapers/clubelo_scraper.py`
+
+**Expected data:**
+- Championship: ~1,104 new matches, ~16,560 odds, ~8,700 ClubElo records
+- La Liga: ~760 new matches, ~11,400 odds, ~1,520 MatchStats, ~6,000 ClubElo
+
+**Acceptance Criteria:**
+- [x] Championship has 6 seasons (2020-21 through 2025-26) in DB ✅ 3,181 matches
+- [x] La Liga has 6 seasons (2020-21 through 2025-26) in DB ✅ 2,160 matches
+- [x] All matches loaded with odds from Football-Data.co.uk ✅ 1,104 Champ + 760 LaLiga new matches, 27,960 new odds
+- [x] La Liga has Understat xG for 2020-21 and 2021-22 ✅ 1,518 MatchStats
+- [x] ClubElo ratings loaded for both leagues' new seasons ✅ 24,683 new records (global fetch covers both)
+- [x] Features computed for all new season matches ✅ 2,208 Champ + 1,520 LaLiga = 3,728 features
+- [x] No unmapped team name warnings in logs ✅ SD Huesca mapped explicitly
+
+**Status:** DONE ✅ (completed 2026-03-07)
+
+---
+
+### E38-02 — League One Data Pipeline
+
+**Type:** Data + Config
+**Depends on:** E38-01
+**Master Plan:** MP §5 Data Sources, MP §6 Schema
+
+Add League One (English third tier) for all 6 seasons (2020-21 through
+2025-26).  League One has 24 teams, 46 matchdays, ~552 matches/season.
+
+Football-Data.co.uk code: **E2**.  Understat does NOT cover League One
+(understat_league: null).  ClubElo has partial coverage — top clubs are
+covered but smaller clubs may be missing.  The pipeline handles missing
+ClubElo gracefully (features default to null, model uses fillna).
+
+Less efficient market than EPL → `edge_threshold_override: 0.02` (2%).
+
+**Files:** `config/leagues.yaml`, `src/scrapers/football_data.py` (new
+`LEAGUE_ONE_TEAM_NAME_MAP`), `src/scrapers/clubelo_scraper.py`
+
+**Acceptance Criteria:**
+- [ ] League One entry in leagues.yaml with 6 seasons
+- [ ] League + Season rows created in DB
+- [ ] `LEAGUE_ONE_TEAM_NAME_MAP` covers all teams across 6 seasons
+- [ ] Matches + odds loaded for all 6 seasons (~3,312 matches)
+- [ ] ClubElo loaded where available (graceful skip for unmapped teams)
+- [ ] Features computed (xG features null — model handles gracefully)
+- [ ] No crash when Understat step is skipped (null league key)
+
+---
+
+### E38-03 — Bundesliga Data Pipeline
+
+**Type:** Data + Config
+**Depends on:** E38-02
+**Master Plan:** MP §5 Data Sources, MP §6 Schema
+
+Add Bundesliga for all 6 seasons (2020-21 through 2025-26).  Bundesliga
+has 18 teams, 34 matchdays, ~306 matches/season.
+
+Football-Data.co.uk code: **D1**.  Understat: **"Bundesliga"** (full
+coverage of all seasons).  ClubElo: full coverage.  Well-served betting
+market → `edge_threshold_override: 0.05` (5%, same as EPL).
+
+**Files:** `config/leagues.yaml`, `src/scrapers/football_data.py` (new
+`BUNDESLIGA_TEAM_NAME_MAP`), `src/scrapers/understat_scraper.py` (Bundesliga
+team mappings), `src/scrapers/clubelo_scraper.py`
+
+**Acceptance Criteria:**
+- [ ] Bundesliga entry in leagues.yaml with 6 seasons
+- [ ] Team name maps in football_data.py, understat_scraper.py, clubelo_scraper.py
+- [ ] Matches + odds loaded for all 6 seasons (~1,836 matches)
+- [ ] Understat xG + advanced stats for all 6 seasons (~3,672 MatchStats)
+- [ ] ClubElo ratings loaded for all seasons
+- [ ] Features computed (including xG-based features)
+
+---
+
+### E38-04 — Serie A Data Pipeline
+
+**Type:** Data + Config
+**Depends on:** E38-03
+**Master Plan:** MP §5 Data Sources, MP §6 Schema
+
+Add Serie A for all 6 seasons (2020-21 through 2025-26).  Serie A has
+20 teams, 38 matchdays, ~380 matches/season.
+
+Football-Data.co.uk code: **I1**.  Understat: **"Serie_A"** (full coverage).
+ClubElo: full coverage.  Well-served market → `edge_threshold_override: 0.05`.
+
+**Files:** `config/leagues.yaml`, `src/scrapers/football_data.py` (new
+`SERIE_A_TEAM_NAME_MAP`), `src/scrapers/understat_scraper.py` (Serie A
+team mappings), `src/scrapers/clubelo_scraper.py`
+
+**Acceptance Criteria:**
+- [ ] Serie A entry in leagues.yaml with 6 seasons
+- [ ] Team name maps in football_data.py, understat_scraper.py, clubelo_scraper.py
+- [ ] Matches + odds loaded for all 6 seasons (~2,280 matches)
+- [ ] Understat xG + advanced stats for all 6 seasons (~4,560 MatchStats)
+- [ ] ClubElo ratings loaded for all seasons
+- [ ] Features computed (including xG-based features)
+
+---
+
+### E38-05 — Multi-League Validation & Backtest
+
+**Type:** QA + Model
+**Depends on:** E38-04
+**Master Plan:** MP §5 Models, MP §11 Self-Improvement
+
+Validate data integrity across all 6 leagues and run Poisson backtest on
+each new league.  Retrain XGBoost on the expanded ~15,300-match dataset.
+
+**Steps:**
+1. Data integrity checks per league per season (match counts, null checks)
+2. Feature completeness validation (>95% with Understat, >80% without)
+3. Poisson backtest per league (target: Brier < 0.65)
+4. XGBoost retrain on expanded dataset (new pkl saved)
+
+**Acceptance Criteria:**
+- [ ] All 6 leagues have complete data for their configured seasons
+- [ ] Feature completeness > 95% for Understat leagues, > 80% for non-Understat
+- [ ] Poisson Brier score < 0.65 for all leagues
+- [ ] XGBoost retrained on expanded dataset (new pkl saved)
+- [ ] No temporal integrity violations
+
+---
+
+### E38-06 — Integration Test
+
+**Type:** QA
+**Depends on:** E38-05
+**Master Plan:** MP §5 Data Sources, MP §6 Schema
+
+Automated pytest suite validating multi-league expansion — config, team
+name maps, feature engineering, and data integrity.
+
+**Test file:** `tests/test_e38_integration.py`
+
+**Test scenarios:**
+1. Config: all 6 leagues present and active in leagues.yaml
+2. Config: season counts correct per league
+3. Team name maps: no duplicate canonical names across leagues
+4. Feature engineer: handles null Understat gracefully
+5. Backfill script: `--league` flag routes to correct league
+6. Seed: creates League + Season rows for all 6 leagues
+7. Data integrity: match counts within expected ranges
+8. Backtest: each league produces valid Brier score
+
+**Acceptance Criteria:**
+- [ ] All integration tests pass
+- [ ] Tests use synthetic data (no DB dependency)
+- [ ] Full test suite passes (96+ existing + new tests)
+
+---
+
+### Implementation Sequence
+
+```
+E38-01 (Backfill Championship & La Liga to 2020-21)
+→ E38-02 (League One pipeline)
+→ E38-03 (Bundesliga pipeline)
+→ E38-04 (Serie A pipeline)
+→ E38-05 (Multi-league validation & backtest)
+→ E38-06 (Integration test)
+```

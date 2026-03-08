@@ -50,6 +50,8 @@ leagues:
     football_data_org_code: null  # Football-Data.org free tier covers PL only; Championship skipped
     is_active: true
     seasons:
+      - "2020-21"
+      - "2021-22"
       - "2022-23"
       - "2023-24"
       - "2024-25"
@@ -76,6 +78,8 @@ leagues:
     football_data_org_code: null  # Football-Data.org free tier covers PL only
     is_active: true
     seasons:
+      - "2020-21"
+      - "2021-22"
       - "2022-23"
       - "2023-24"
       - "2024-25"

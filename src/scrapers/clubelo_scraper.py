@@ -125,11 +125,49 @@ TEAM_NAME_MAP: Dict[str, str] = {
     "Valladolid": "Valladolid",
     "Las Palmas": "Las Palmas",
     "Leganes": "Leganes",
-    # Historical La Liga teams (2022-24 seasons, now relegated)
+    # Historical La Liga teams (relegated during 2020-2024 seasons)
     "Almeria": "Almeria",
     "Cadiz": "Cadiz",
+    "Eibar": "Eibar",                  # E38-01: relegated after 2020-21
     "Elche": "Elche",
     "Granada": "Granada",
+    "Huesca": "Huesca",                # E38-01: in La Liga 2020-21 only
+    "Levante": "Levante",              # E38-01: relegated after 2021-22
+
+    # -------------------------------------------------------------------------
+    # Championship teams (E38-01)
+    # ClubElo uses short names — same as Football-Data.co.uk pass-through names
+    # for Championship teams.  Teams that also appear in EPL with a DIFFERENT
+    # canonical name (e.g., ClubElo "Leeds" → EPL "Leeds United") are NOT
+    # duplicated here — they get Elo via their EPL team record.
+    #
+    # Championship-only teams (never in EPL during 2020-2026 with different
+    # name) get their own entries here so the feature engineer can use Elo.
+    # -------------------------------------------------------------------------
+    "Barnsley": "Barnsley",
+    "Birmingham": "Birmingham",
+    "Blackburn": "Blackburn",
+    "Blackpool": "Blackpool",
+    "Bristol City": "Bristol City",
+    "Cardiff": "Cardiff",
+    "Coventry": "Coventry",
+    "Derby": "Derby",
+    "Huddersfield": "Huddersfield",
+    "Hull": "Hull",
+    "Middlesbrough": "Middlesbrough",
+    "Millwall": "Millwall",
+    "Oxford": "Oxford",                 # 2024-25+
+    "Peterboro": "Peterboro",
+    "Plymouth": "Plymouth",             # 2023-24+
+    "Portsmouth": "Portsmouth",         # 2024-25+
+    "Preston": "Preston",
+    "QPR": "QPR",
+    "Reading": "Reading",
+    "Rotherham": "Rotherham",
+    "Sheffield Weds": "Sheffield Weds",
+    "Stoke": "Stoke",
+    "Swansea": "Swansea",
+    "Wycombe": "Wycombe",
 }
 
 

@@ -94,7 +94,7 @@ UNDERSTAT_EPL_TEAM_MAP: Dict[str, str] = {
     "Huddersfield": "Huddersfield Town",
     "Cardiff": "Cardiff City",
 
-    # --- La Liga teams (E36-02) ---
+    # --- La Liga teams (E36-02 + E38-01 backfill) ---
     # Understat uses full official names; Football-Data.co.uk uses short forms.
     # DB canonical names follow Football-Data.co.uk (the primary scraper).
     "Alaves": "Alaves",
@@ -104,13 +104,17 @@ UNDERSTAT_EPL_TEAM_MAP: Dict[str, str] = {
     "Barcelona": "Barcelona",
     "Cadiz": "Cadiz",
     "Celta Vigo": "Celta",              # FD.co.uk: "Celta"
+    "Eibar": "Eibar",                   # E38-01: relegated after 2020-21
     "Elche": "Elche",
     "Espanyol": "Espanol",              # FD.co.uk: "Espanol" (no accent)
     "Getafe": "Getafe",
     "Girona": "Girona",
     "Granada": "Granada",
+    "Huesca": "Huesca",                 # E38-01: in La Liga 2020-21 only
+    "SD Huesca": "Huesca",              # E38-01: Understat uses "SD Huesca" prefix
     "Las Palmas": "Las Palmas",
     "Leganes": "Leganes",
+    "Levante": "Levante",               # E38-01: relegated after 2021-22
     "Mallorca": "Mallorca",
     "Osasuna": "Osasuna",
     "Rayo Vallecano": "Vallecano",      # FD.co.uk: "Vallecano"

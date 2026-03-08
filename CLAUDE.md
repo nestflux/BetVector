@@ -100,7 +100,8 @@ E34-01 → E34-02 → E34-03 → E34-04 → E34-05 → E34-06 →
 E35-01 → E35-02 → E35-03 →
 E35-04 → E35-05 → E35-06 → E35-07 →
 E36-01 → E36-02 → E36-03 → E36-04 →
-E37-01 → E37-02 → E37-03 → E37-04
+E37-01 → E37-02 → E37-03 → E37-04 →
+E38-01 → E38-02 → E38-03 → E38-04 → E38-05 → E38-06
 ```
 
 The sequence is the law. Auto-advance after gates pass. Only stop for
@@ -308,9 +309,9 @@ Wait for owner to respond with approval before making the change.
 
 ## Current Status
 
-Last completed: E37-04 (Integration Test — 24 new tests, 96/96 total, synthetic data only, all 8 build plan scenarios covered) ✅
-Currently working: Post-E37 — Epic 37 complete, awaiting next direction
-Next up: TBD
+Last completed: E38-01 (Backfill Championship & La Liga to 2020-21 — 1,864 new matches, 27,960 odds, 1,518 MatchStats, 24,683 ClubElo, 3,728 features) ✅
+Currently working: E38-02 — League One Data Pipeline
+Next up: E38-03 — Bundesliga Data Pipeline
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
@@ -371,6 +372,14 @@ E37 complete: All 4 issues done ✅ (XGBoost model, walk-forward backtest, ensem
 - E37-02: Walk-forward backtest XGBoost vs Poisson ✅ (EPL: XGB Brier 0.5872 ROI -26.05% vs Poisson Brier 0.5781 ROI +2.78%; Poisson wins all 3 leagues)
 - E37-03: Ensemble Poisson + XGBoost adaptive blend ✅ (50/50 initial weights, pkl fallback, Model Health blend ratio)
 - E37-04: Integration test ✅ (24 new tests, 96/96 total, all 8 build plan scenarios, synthetic data only)
+
+E38 — League Backfill & Expansion Phase 2: 6 issues planned
+- E38-01: Backfill Championship & La Liga to 2020-21 (add 2020-21, 2021-22 seasons)
+- E38-02: League One data pipeline (E2, 6 seasons, no Understat)
+- E38-03: Bundesliga data pipeline (D1, 6 seasons, Understat "Bundesliga")
+- E38-04: Serie A data pipeline (I1, 6 seasons, Understat "Serie_A")
+- E38-05: Multi-league validation & backtest
+- E38-06: Integration test
 
 ---
 
