@@ -168,6 +168,39 @@ TEAM_NAME_MAP: Dict[str, str] = {
     "Stoke": "Stoke",
     "Swansea": "Swansea",
     "Wycombe": "Wycombe",
+
+    # -------------------------------------------------------------------------
+    # Bundesliga teams (E38-03)
+    # ClubElo uses short German names — map to Football-Data.co.uk canonical
+    # DB names.  25 unique teams across 2020-21 to 2025-26 seasons.
+    # -------------------------------------------------------------------------
+    # Teams with different ClubElo vs FD names:
+    "Bayern": "Bayern Munich",              # ClubElo: "Bayern" → FD: "Bayern Munich"
+    "Frankfurt": "Ein Frankfurt",          # ClubElo: "Frankfurt" → FD: "Ein Frankfurt"
+    "Fuerth": "Greuther Furth",            # ClubElo: "Fuerth" → FD: "Greuther Furth" (2021-22)
+    "Gladbach": "M'gladbach",              # ClubElo: "Gladbach" → FD: "M'gladbach"
+    "Holstein": "Holstein Kiel",           # ClubElo: "Holstein" → FD: "Holstein Kiel" (2024-25)
+    "Koeln": "FC Koln",                    # ClubElo: "Koeln" → FD: "FC Koln"
+    "Schalke": "Schalke 04",              # ClubElo: "Schalke" → FD: "Schalke 04"
+    "Werder": "Werder Bremen",             # ClubElo: "Werder" → FD: "Werder Bremen"
+    # Teams with matching ClubElo & FD names (identity):
+    "Augsburg": "Augsburg",
+    "Bielefeld": "Bielefeld",              # 2020-21, 2021-22
+    "Bochum": "Bochum",                    # 2021-22 through 2024-25
+    "Darmstadt": "Darmstadt",              # 2023-24
+    "Dortmund": "Dortmund",
+    "Freiburg": "Freiburg",
+    "Hamburg": "Hamburg",                   # 2025-26
+    "Heidenheim": "Heidenheim",            # 2023-24+
+    "Hertha": "Hertha",                    # 2020-21 through 2022-23
+    "Hoffenheim": "Hoffenheim",
+    "Leverkusen": "Leverkusen",
+    "Mainz": "Mainz",
+    "RB Leipzig": "RB Leipzig",
+    "St Pauli": "St Pauli",               # 2024-25, 2025-26
+    "Stuttgart": "Stuttgart",
+    "Union Berlin": "Union Berlin",
+    "Wolfsburg": "Wolfsburg",
 }
 
 

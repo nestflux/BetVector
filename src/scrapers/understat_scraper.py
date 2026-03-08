@@ -125,6 +125,36 @@ UNDERSTAT_EPL_TEAM_MAP: Dict[str, str] = {
     "Sevilla": "Sevilla",
     "Valencia": "Valencia",
     "Villarreal": "Villarreal",
+
+    # --- Bundesliga teams (E38-03) ---
+    # Understat uses full/formal names; Football-Data.co.uk uses abbreviated forms.
+    # DB canonical names follow Football-Data.co.uk (the primary scraper).
+    # 25 unique teams across 2020-21 to 2025-26 seasons.
+    "Arminia Bielefeld": "Bielefeld",           # FD: "Bielefeld" (2020-21, 2021-22)
+    "Augsburg": "Augsburg",
+    "Bayer Leverkusen": "Leverkusen",           # FD: "Leverkusen"
+    "Bayern Munich": "Bayern Munich",
+    "Bochum": "Bochum",                         # 2021-22 through 2024-25
+    "Borussia Dortmund": "Dortmund",            # FD: "Dortmund"
+    "Borussia M.Gladbach": "M'gladbach",        # FD: "M'gladbach" (note apostrophe)
+    "Darmstadt": "Darmstadt",                   # 2023-24
+    "Eintracht Frankfurt": "Ein Frankfurt",     # FD: "Ein Frankfurt"
+    "FC Cologne": "FC Koln",                    # FD: "FC Koln" (no umlaut)
+    "FC Heidenheim": "Heidenheim",              # FD: "Heidenheim" (2023-24+)
+    "Freiburg": "Freiburg",
+    "Greuther Fuerth": "Greuther Furth",        # FD: "Greuther Furth" (2021-22)
+    "Hamburger SV": "Hamburg",                  # FD: "Hamburg" (2025-26)
+    "Hertha Berlin": "Hertha",                  # FD: "Hertha" (2020-21 through 2022-23)
+    "Hoffenheim": "Hoffenheim",
+    "Holstein Kiel": "Holstein Kiel",           # 2024-25
+    "Mainz 05": "Mainz",                       # FD: "Mainz"
+    "RasenBallsport Leipzig": "RB Leipzig",     # FD: "RB Leipzig"
+    "Schalke 04": "Schalke 04",                 # 2020-21, 2022-23
+    "St. Pauli": "St Pauli",                    # FD: "St Pauli" (no period)
+    "Union Berlin": "Union Berlin",
+    "VfB Stuttgart": "Stuttgart",               # FD: "Stuttgart"
+    "Werder Bremen": "Werder Bremen",
+    "Wolfsburg": "Wolfsburg",
 }
 
 

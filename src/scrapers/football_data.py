@@ -157,6 +157,49 @@ LEAGUE_ONE_TEAM_NAME_MAP: Dict[str, str] = {
 }
 
 # ============================================================================
+# Bundesliga Team Name Map (E38-03 — League Expansion Phase 2)
+# ============================================================================
+# Bundesliga (D1) uses abbreviated team names on Football-Data.co.uk.
+# Like Championship and League One, we use these FD names as-is for the
+# canonical DB name.  The map is identity so no transformation occurs,
+# but having it explicit documents all 25 teams across 6 seasons and
+# suppresses the "No team name map" warning.
+#
+# Bundesliga has 18 teams/season, lower turnover than English leagues.
+# 25 unique teams across 2020-21 to 2025-26 (7 promoted/relegated).
+# ============================================================================
+
+BUNDESLIGA_TEAM_NAME_MAP: Dict[str, str] = {
+    # All teams that appeared in Bundesliga 2020-21 through 2025-26.
+    # Football-Data.co.uk names → canonical DB names (identity mapping).
+    "Augsburg": "Augsburg",                 # all 6 seasons
+    "Bayern Munich": "Bayern Munich",       # all 6 seasons
+    "Bielefeld": "Bielefeld",              # 2020-21, 2021-22
+    "Bochum": "Bochum",                    # 2021-22 through 2024-25
+    "Darmstadt": "Darmstadt",              # 2023-24
+    "Dortmund": "Dortmund",                # all 6 seasons
+    "Ein Frankfurt": "Ein Frankfurt",       # all 6 seasons
+    "FC Koln": "FC Koln",                  # 2020-21 through 2023-24, 2025-26
+    "Freiburg": "Freiburg",                # all 6 seasons
+    "Greuther Furth": "Greuther Furth",     # 2021-22
+    "Hamburg": "Hamburg",                   # 2025-26
+    "Heidenheim": "Heidenheim",            # 2023-24, 2024-25, 2025-26
+    "Hertha": "Hertha",                    # 2020-21 through 2022-23
+    "Hoffenheim": "Hoffenheim",            # all 6 seasons
+    "Holstein Kiel": "Holstein Kiel",       # 2024-25
+    "Leverkusen": "Leverkusen",            # all 6 seasons
+    "M'gladbach": "M'gladbach",            # all 6 seasons
+    "Mainz": "Mainz",                      # all 6 seasons
+    "RB Leipzig": "RB Leipzig",            # all 6 seasons
+    "Schalke 04": "Schalke 04",            # 2020-21, 2022-23
+    "St Pauli": "St Pauli",                # 2024-25, 2025-26
+    "Stuttgart": "Stuttgart",              # all 6 seasons
+    "Union Berlin": "Union Berlin",         # all 6 seasons
+    "Werder Bremen": "Werder Bremen",       # 2020-21, 2022-23 through 2025-26
+    "Wolfsburg": "Wolfsburg",              # all 6 seasons
+}
+
+# ============================================================================
 # Column definitions
 # ============================================================================
 # Columns we always expect in the CSV (results)
@@ -445,6 +488,7 @@ class FootballDataScraper(BaseScraper):
         maps: Dict[str, Dict[str, str]] = {
             "EPL": EPL_TEAM_NAME_MAP,
             "LeagueOne": LEAGUE_ONE_TEAM_NAME_MAP,  # E38-02: identity map (FD names are canonical)
+            "Bundesliga": BUNDESLIGA_TEAM_NAME_MAP,  # E38-03: identity map (FD names are canonical)
         }
         if league_short_name not in maps:
             logger.warning(

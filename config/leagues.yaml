@@ -114,3 +114,31 @@ leagues:
       - "2025-26"
     total_matchdays: 46
     edge_threshold_override: 0.02  # Lower threshold — League One market least efficient
+
+  # -------------------------------------------------------------------------
+  # Bundesliga (E38-03 — League Expansion Phase 2)
+  # Football-Data.co.uk code: D1 (same CSV format as other leagues)
+  # 18 teams × 34 matchdays = 306 matches per season
+  # Well-served market (Pinnacle covers it well) → edge_threshold_override: 0.05 (5%)
+  # Understat key: "Bundesliga" — full coverage of all seasons
+  # ClubElo covers all Bundesliga teams fully
+  # Football-Data.org free tier covers PL only → football_data_org_code: null
+  # -------------------------------------------------------------------------
+  - name: "Bundesliga"
+    short_name: "Bundesliga"
+    country: "Germany"
+    football_data_code: "D1"
+    fbref_league_id: "GER-Bundesliga"
+    api_football_id: 78
+    understat_league: "Bundesliga"  # Full Understat coverage (xG, NPxG, PPDA, deep)
+    football_data_org_code: null    # Football-Data.org free tier covers PL only
+    is_active: true
+    seasons:
+      - "2020-21"
+      - "2021-22"
+      - "2022-23"
+      - "2023-24"
+      - "2024-25"
+      - "2025-26"
+    total_matchdays: 34
+    edge_threshold_override: 0.05  # Same as EPL — well-served market

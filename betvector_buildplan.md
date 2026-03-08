@@ -5813,12 +5813,14 @@ market → `edge_threshold_override: 0.05` (5%, same as EPL).
 team mappings), `src/scrapers/clubelo_scraper.py`
 
 **Acceptance Criteria:**
-- [ ] Bundesliga entry in leagues.yaml with 6 seasons
-- [ ] Team name maps in football_data.py, understat_scraper.py, clubelo_scraper.py
-- [ ] Matches + odds loaded for all 6 seasons (~1,836 matches)
-- [ ] Understat xG + advanced stats for all 6 seasons (~3,672 MatchStats)
-- [ ] ClubElo ratings loaded for all seasons
-- [ ] Features computed (including xG-based features)
+- [x] Bundesliga entry in leagues.yaml with 6 seasons ✅
+- [x] Team name maps in football_data.py (25 teams), understat_scraper.py (25 teams), clubelo_scraper.py (25 teams) ✅
+- [x] Matches + odds loaded for all 6 seasons — 1,746 matches, 25,128 odds ✅
+- [x] Understat xG + advanced stats for all 6 seasons — 3,490 MatchStats ✅
+- [x] ClubElo ratings loaded for all seasons — 55,430 records (1,192 dates) ✅
+- [x] Features computed (including xG-based features) — 3,492 features (xG/NPxG/PPDA/Elo 97-100%) ✅
+
+**Status: DONE** ✅ — Completed 2026-03-07
 
 ---
 
