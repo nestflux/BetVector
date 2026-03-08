@@ -5783,13 +5783,15 @@ Less efficient market than EPL → `edge_threshold_override: 0.02` (2%).
 `LEAGUE_ONE_TEAM_NAME_MAP`), `src/scrapers/clubelo_scraper.py`
 
 **Acceptance Criteria:**
-- [ ] League One entry in leagues.yaml with 6 seasons
-- [ ] League + Season rows created in DB
-- [ ] `LEAGUE_ONE_TEAM_NAME_MAP` covers all teams across 6 seasons
-- [ ] Matches + odds loaded for all 6 seasons (~3,312 matches)
-- [ ] ClubElo loaded where available (graceful skip for unmapped teams)
-- [ ] Features computed (xG features null — model handles gracefully)
-- [ ] No crash when Understat step is skipped (null league key)
+- [x] League One entry in leagues.yaml with 6 seasons ✅ E2, 46 matchdays, edge_threshold 0.02
+- [x] League + Season rows created in DB ✅ League ID=4, 6 Season rows
+- [x] `LEAGUE_ONE_TEAM_NAME_MAP` covers all teams across 6 seasons ✅ 49 teams (identity map)
+- [x] Matches + odds loaded for all 6 seasons (~3,312 matches) ✅ 3,166 matches, 45,236 odds
+- [x] ClubElo loaded where available (graceful skip for unmapped teams) ✅ 0 records (ClubElo covers L1/L2 only)
+- [x] Features computed (xG features null — model handles gracefully) ✅ 6,332 features, form/market 97-100%
+- [x] No crash when Understat step is skipped (null league key) ✅ graceful empty DataFrame return
+
+**Status:** DONE ✅ (completed 2026-03-07)
 
 ---
 

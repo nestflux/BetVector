@@ -86,3 +86,31 @@ leagues:
       - "2025-26"
     total_matchdays: 38
     edge_threshold_override: 0.05  # Same as EPL — well-served market
+
+  # -------------------------------------------------------------------------
+  # League One (E38-02 — League Expansion Phase 2)
+  # Football-Data.co.uk code: E2 (same CSV format as EPL E0 and Championship E1)
+  # 24 teams × 46 matches per team = 552 matches per season
+  # Least efficient of our tracked markets → edge_threshold_override: 0.02 (2%)
+  # NOTE: League One is NOT covered by Understat — understat_league: null
+  # NOTE: ClubElo does NOT cover Level 3 (League One) — Elo features will be null
+  # The model handles null xG and Elo gracefully via fillna fallbacks.
+  # -------------------------------------------------------------------------
+  - name: "League One"
+    short_name: "LeagueOne"
+    country: "England"
+    football_data_code: "E2"
+    fbref_league_id: null
+    api_football_id: 41
+    understat_league: null       # Understat covers EPL, La Liga, Bundesliga, Serie A, Ligue 1 only
+    football_data_org_code: null # Football-Data.org free tier covers PL only
+    is_active: true
+    seasons:
+      - "2020-21"
+      - "2021-22"
+      - "2022-23"
+      - "2023-24"
+      - "2024-25"
+      - "2025-26"
+    total_matchdays: 46
+    edge_threshold_override: 0.02  # Lower threshold — League One market least efficient

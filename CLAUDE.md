@@ -309,9 +309,9 @@ Wait for owner to respond with approval before making the change.
 
 ## Current Status
 
-Last completed: E38-01 (Backfill Championship & La Liga to 2020-21 — 1,864 new matches, 27,960 odds, 1,518 MatchStats, 24,683 ClubElo, 3,728 features) ✅
-Currently working: E38-02 — League One Data Pipeline
-Next up: E38-03 — Bundesliga Data Pipeline
+Last completed: E38-02 (League One Data Pipeline — 3,166 matches, 45,236 odds, 6,332 features, 49 teams, no Understat/ClubElo) ✅
+Currently working: E38-03 — Bundesliga Data Pipeline
+Next up: E38-04 — Serie A Data Pipeline
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)

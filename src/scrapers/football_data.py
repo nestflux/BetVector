@@ -88,6 +88,75 @@ EPL_TEAM_NAME_MAP: Dict[str, str] = {
 }
 
 # ============================================================================
+# League One Team Name Map (E38-02 — League Expansion Phase 2)
+# ============================================================================
+# League One (E2) uses short/abbreviated team names on Football-Data.co.uk.
+# Unlike EPL, we use these FD names as-is for the canonical DB name (same
+# pattern as Championship E1).  The map is identity so no transformation
+# occurs, but having it explicit:
+#   (a) suppresses the "No team name map" warning,
+#   (b) documents all 49 teams across 6 seasons (2020-21 to 2025-26),
+#   (c) enables future normalisation if needed.
+#
+# League One has high turnover — 24 teams per season but 49 unique teams
+# across 6 seasons due to promotion/relegation.
+# ============================================================================
+
+LEAGUE_ONE_TEAM_NAME_MAP: Dict[str, str] = {
+    # All teams that appeared in League One 2020-21 through 2025-26.
+    # Football-Data.co.uk names → canonical DB names (identity mapping).
+    "AFC Wimbledon": "AFC Wimbledon",       # 2020-21, 2021-22, 2025-26
+    "Accrington": "Accrington",             # 2020-21, 2021-22, 2022-23
+    "Barnsley": "Barnsley",                 # 2022-23, 2023-24, 2024-25, 2025-26
+    "Birmingham": "Birmingham",             # 2024-25
+    "Blackpool": "Blackpool",               # 2020-21, 2023-24, 2024-25, 2025-26
+    "Bolton": "Bolton",                     # 2021-22, 2022-23, 2023-24, 2024-25, 2025-26
+    "Bradford": "Bradford",                 # 2025-26
+    "Bristol Rvs": "Bristol Rvs",           # 2020-21, 2022-23, 2023-24, 2024-25
+    "Burton": "Burton",                     # 2020-21, 2021-22, 2022-23, 2023-24, 2024-25, 2025-26
+    "Cambridge": "Cambridge",               # 2021-22, 2022-23, 2023-24, 2024-25
+    "Cardiff": "Cardiff",                   # 2025-26
+    "Carlisle": "Carlisle",                 # 2023-24
+    "Charlton": "Charlton",                 # 2020-21, 2021-22, 2022-23, 2023-24, 2024-25
+    "Cheltenham": "Cheltenham",             # 2021-22, 2022-23, 2023-24
+    "Crawley Town": "Crawley Town",         # 2024-25
+    "Crewe": "Crewe",                       # 2020-21, 2021-22
+    "Derby": "Derby",                       # 2022-23, 2023-24
+    "Doncaster": "Doncaster",               # 2020-21, 2021-22, 2025-26
+    "Exeter": "Exeter",                     # 2022-23, 2023-24, 2024-25, 2025-26
+    "Fleetwood Town": "Fleetwood Town",     # 2020-21, 2021-22, 2022-23, 2023-24, 2024-25
+    "Forest Green": "Forest Green",         # 2022-23
+    "Gillingham": "Gillingham",             # 2020-21, 2021-22
+    "Huddersfield": "Huddersfield",         # 2024-25, 2025-26
+    "Hull": "Hull",                         # 2020-21
+    "Ipswich": "Ipswich",                   # 2020-21, 2021-22, 2022-23
+    "Leyton Orient": "Leyton Orient",       # 2023-24, 2024-25, 2025-26
+    "Lincoln": "Lincoln",                   # 2020-21, 2021-22, 2022-23, 2023-24, 2024-25, 2025-26
+    "Luton": "Luton",                       # 2025-26
+    "Mansfield": "Mansfield",               # 2024-25, 2025-26
+    "Milton Keynes Dons": "Milton Keynes Dons",  # 2020-21, 2021-22, 2022-23
+    "Morecambe": "Morecambe",               # 2021-22, 2022-23
+    "Northampton": "Northampton",           # 2020-21, 2023-24, 2024-25, 2025-26
+    "Oxford": "Oxford",                     # 2020-21, 2021-22, 2022-23, 2023-24
+    "Peterboro": "Peterboro",               # 2020-21, 2022-23, 2023-24, 2024-25, 2025-26
+    "Plymouth": "Plymouth",                 # 2020-21, 2021-22, 2022-23, 2025-26
+    "Port Vale": "Port Vale",               # 2022-23, 2023-24, 2025-26
+    "Portsmouth": "Portsmouth",             # 2020-21, 2021-22, 2022-23, 2023-24
+    "Reading": "Reading",                   # 2023-24, 2024-25, 2025-26
+    "Rochdale": "Rochdale",                 # 2020-21
+    "Rotherham": "Rotherham",               # 2021-22, 2024-25, 2025-26
+    "Sheffield Weds": "Sheffield Weds",     # 2021-22, 2022-23
+    "Shrewsbury": "Shrewsbury",             # 2020-21, 2021-22, 2022-23, 2023-24, 2024-25
+    "Stevenage": "Stevenage",               # 2023-24, 2024-25, 2025-26
+    "Stockport": "Stockport",               # 2024-25, 2025-26
+    "Sunderland": "Sunderland",             # 2020-21, 2021-22
+    "Swindon": "Swindon",                   # 2020-21
+    "Wigan": "Wigan",                       # 2020-21, 2021-22, 2023-24, 2024-25, 2025-26
+    "Wrexham": "Wrexham",                   # 2024-25
+    "Wycombe": "Wycombe",                   # 2021-22, 2022-23, 2023-24, 2024-25, 2025-26
+}
+
+# ============================================================================
 # Column definitions
 # ============================================================================
 # Columns we always expect in the CSV (results)
@@ -375,6 +444,7 @@ class FootballDataScraper(BaseScraper):
         """
         maps: Dict[str, Dict[str, str]] = {
             "EPL": EPL_TEAM_NAME_MAP,
+            "LeagueOne": LEAGUE_ONE_TEAM_NAME_MAP,  # E38-02: identity map (FD names are canonical)
         }
         if league_short_name not in maps:
             logger.warning(
