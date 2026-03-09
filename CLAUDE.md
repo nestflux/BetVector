@@ -307,6 +307,35 @@ Wait for owner to respond with approval before making the change.
 
 ---
 
+## Rule 9 — No Inline Multi-Line Python
+
+Never use `python -c "..."` with multi-line code. The permission
+allow-list wildcard `Bash(python *)` does not match across newlines,
+so multi-line `-c` commands always trigger a manual permission prompt.
+
+Instead, write a temporary script and run it:
+
+```bash
+# ✅ Do this — always matches the allow list
+cat > /tmp/bv_check.py << 'PYEOF'
+import os
+print("hello")
+PYEOF
+python /tmp/bv_check.py
+
+# ❌ Never this — triggers permission prompt every time
+python -c "
+import os
+print('hello')
+"
+```
+
+This applies to all ad-hoc Python: DB checks, data queries, one-off
+scripts, migration commands — anything that would be more than a
+single-line expression.
+
+---
+
 ## Current Status
 
 Last completed: PC-08 (Data Gap Fix: League Correction + Missing Data + Pipeline Timeout — 6 issues, all gates passed) ✅

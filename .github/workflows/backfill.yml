@@ -9,9 +9,10 @@
 #
 # Usage:
 #   1. Go to Actions → "Historical Backfill" → "Run workflow"
-#   2. Pick a league or "all" to run every league sequentially
+#   2. Pick a league or "all" to run every league in parallel
 #   3. Monitor progress in the workflow logs
 #
+# Each league runs as its own parallel job when "all" is selected.
 # Each league step is idempotent — safe to re-run if interrupted.
 # ============================================================================
 
@@ -21,7 +22,7 @@ on:
   workflow_dispatch:
     inputs:
       league:
-        description: "League to backfill (or 'all' for every league)"
+        description: "League to backfill (or 'all' for every league in parallel)"
         required: true
         default: "all"
         type: choice
@@ -47,49 +48,38 @@ on:
           - "features"
           - "elo-internal"
 
+# Allow multiple backfill runs at once (parallel leagues)
 concurrency:
-  group: betvector-backfill
+  group: betvector-backfill-${{ github.run_id }}
   cancel-in-progress: false
 
+# ------------------------------------------------------------------
+# Reusable setup steps defined once, used by all jobs
+# ------------------------------------------------------------------
 jobs:
-  backfill:
+
+  # ----------------------------------------------------------------
+  # EPL
+  # ----------------------------------------------------------------
+  backfill-epl:
+    if: inputs.league == 'all' || inputs.league == 'EPL'
     runs-on: ubuntu-latest
     timeout-minutes: 180
-
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
       API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
       FOOTBALL_DATA_ORG_KEY: ${{ secrets.FOOTBALL_DATA_ORG_KEY }}
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt && pip install -e .
-
-      - name: Initialise database schema + seed leagues
-        run: |
-          python -c "
-          from src.database.db import init_db
-          from src.database.seed import seed_all
-          init_db()
-          seed_all()
-          print('DB schema + seed complete')
-          "
-
-      # ----------------------------------------------------------------
-      # EPL
-      # ----------------------------------------------------------------
+      - run: pip install -r requirements.txt && pip install -e .
+      - name: Initialise DB
+        run: python -c "from src.database.db import init_db; from src.database.seed import seed_all; init_db(); seed_all()"
       - name: "Backfill: EPL"
-        if: inputs.league == 'all' || inputs.league == 'EPL'
         run: |
           STEP="${{ inputs.step }}"
           if [ "$STEP" = "all" ] || [ "$STEP" = "matches" ] || [ "$STEP" = "understat" ] || [ "$STEP" = "shot-xg" ] || [ "$STEP" = "clubelo" ] || [ "$STEP" = "features" ]; then
@@ -99,11 +89,28 @@ jobs:
             echo "Skipping EPL (step=$STEP not applicable)"
           fi
 
-      # ----------------------------------------------------------------
-      # Championship
-      # ----------------------------------------------------------------
+  # ----------------------------------------------------------------
+  # Championship
+  # ----------------------------------------------------------------
+  backfill-championship:
+    if: inputs.league == 'all' || inputs.league == 'Championship'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
+      API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+      FOOTBALL_DATA_ORG_KEY: ${{ secrets.FOOTBALL_DATA_ORG_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - run: pip install -r requirements.txt && pip install -e .
+      - name: Initialise DB
+        run: python -c "from src.database.db import init_db; from src.database.seed import seed_all; init_db(); seed_all()"
       - name: "Backfill: Championship"
-        if: inputs.league == 'all' || inputs.league == 'Championship'
         run: |
           STEP="${{ inputs.step }}"
           if [ "$STEP" = "all" ] || [ "$STEP" = "matches" ] || [ "$STEP" = "clubelo" ] || [ "$STEP" = "features" ]; then
@@ -112,18 +119,34 @@ jobs:
           else
             echo "Skipping Championship (step=$STEP not applicable — no Understat/shot-xG)"
           fi
-
       - name: "Internal Elo: Championship"
-        if: (inputs.league == 'all' || inputs.league == 'Championship') && (inputs.step == 'all' || inputs.step == 'elo-internal')
+        if: inputs.step == 'all' || inputs.step == 'elo-internal'
         run: |
           echo "=== Championship: Computing internal Elo ratings ==="
           python -m src.features.elo_calculator Championship
 
-      # ----------------------------------------------------------------
-      # La Liga
-      # ----------------------------------------------------------------
+  # ----------------------------------------------------------------
+  # La Liga
+  # ----------------------------------------------------------------
+  backfill-laliga:
+    if: inputs.league == 'all' || inputs.league == 'LaLiga'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
+      API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+      FOOTBALL_DATA_ORG_KEY: ${{ secrets.FOOTBALL_DATA_ORG_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - run: pip install -r requirements.txt && pip install -e .
+      - name: Initialise DB
+        run: python -c "from src.database.db import init_db; from src.database.seed import seed_all; init_db(); seed_all()"
       - name: "Backfill: La Liga"
-        if: inputs.league == 'all' || inputs.league == 'LaLiga'
         run: |
           STEP="${{ inputs.step }}"
           if [ "$STEP" = "all" ] || [ "$STEP" = "matches" ] || [ "$STEP" = "understat" ] || [ "$STEP" = "shot-xg" ] || [ "$STEP" = "clubelo" ] || [ "$STEP" = "features" ]; then
@@ -133,11 +156,28 @@ jobs:
             echo "Skipping La Liga (step=$STEP not applicable)"
           fi
 
-      # ----------------------------------------------------------------
-      # Ligue 1
-      # ----------------------------------------------------------------
+  # ----------------------------------------------------------------
+  # Ligue 1
+  # ----------------------------------------------------------------
+  backfill-ligue1:
+    if: inputs.league == 'all' || inputs.league == 'Ligue1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
+      API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+      FOOTBALL_DATA_ORG_KEY: ${{ secrets.FOOTBALL_DATA_ORG_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - run: pip install -r requirements.txt && pip install -e .
+      - name: Initialise DB
+        run: python -c "from src.database.db import init_db; from src.database.seed import seed_all; init_db(); seed_all()"
       - name: "Backfill: Ligue 1"
-        if: inputs.league == 'all' || inputs.league == 'Ligue1'
         run: |
           STEP="${{ inputs.step }}"
           if [ "$STEP" = "all" ] || [ "$STEP" = "matches" ] || [ "$STEP" = "understat" ] || [ "$STEP" = "shot-xg" ] || [ "$STEP" = "clubelo" ] || [ "$STEP" = "features" ]; then
@@ -147,11 +187,28 @@ jobs:
             echo "Skipping Ligue 1 (step=$STEP not applicable)"
           fi
 
-      # ----------------------------------------------------------------
-      # Bundesliga
-      # ----------------------------------------------------------------
+  # ----------------------------------------------------------------
+  # Bundesliga
+  # ----------------------------------------------------------------
+  backfill-bundesliga:
+    if: inputs.league == 'all' || inputs.league == 'Bundesliga'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
+      API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+      FOOTBALL_DATA_ORG_KEY: ${{ secrets.FOOTBALL_DATA_ORG_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - run: pip install -r requirements.txt && pip install -e .
+      - name: Initialise DB
+        run: python -c "from src.database.db import init_db; from src.database.seed import seed_all; init_db(); seed_all()"
       - name: "Backfill: Bundesliga"
-        if: inputs.league == 'all' || inputs.league == 'Bundesliga'
         run: |
           STEP="${{ inputs.step }}"
           if [ "$STEP" = "all" ] || [ "$STEP" = "matches" ] || [ "$STEP" = "understat" ] || [ "$STEP" = "shot-xg" ] || [ "$STEP" = "clubelo" ] || [ "$STEP" = "features" ]; then
@@ -161,11 +218,28 @@ jobs:
             echo "Skipping Bundesliga (step=$STEP not applicable)"
           fi
 
-      # ----------------------------------------------------------------
-      # Serie A
-      # ----------------------------------------------------------------
+  # ----------------------------------------------------------------
+  # Serie A
+  # ----------------------------------------------------------------
+  backfill-seriea:
+    if: inputs.league == 'all' || inputs.league == 'SerieA'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
+      API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+      FOOTBALL_DATA_ORG_KEY: ${{ secrets.FOOTBALL_DATA_ORG_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - run: pip install -r requirements.txt && pip install -e .
+      - name: Initialise DB
+        run: python -c "from src.database.db import init_db; from src.database.seed import seed_all; init_db(); seed_all()"
       - name: "Backfill: Serie A"
-        if: inputs.league == 'all' || inputs.league == 'SerieA'
         run: |
           STEP="${{ inputs.step }}"
           if [ "$STEP" = "all" ] || [ "$STEP" = "matches" ] || [ "$STEP" = "understat" ] || [ "$STEP" = "shot-xg" ] || [ "$STEP" = "clubelo" ] || [ "$STEP" = "features" ]; then
@@ -175,11 +249,24 @@ jobs:
             echo "Skipping Serie A (step=$STEP not applicable)"
           fi
 
-      # ----------------------------------------------------------------
-      # Summary
-      # ----------------------------------------------------------------
+  # ----------------------------------------------------------------
+  # Summary — runs after all league jobs finish (or fail/skip)
+  # ----------------------------------------------------------------
+  summary:
+    if: always()
+    needs: [backfill-epl, backfill-championship, backfill-laliga, backfill-ligue1, backfill-bundesliga, backfill-seriea]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - run: pip install -r requirements.txt && pip install -e .
       - name: Print DB summary
-        if: always()
         run: |
           python -c "
           from src.database.db import get_session
