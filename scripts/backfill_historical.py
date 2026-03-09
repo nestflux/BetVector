@@ -842,9 +842,21 @@ def backfill_features(
         "errors": [],
     }
 
-    # --- 1. Count existing features before deletion -----------------------
+    # --- 1. Count existing features and check completeness ----------------
     with get_session() as session:
         from src.database.models import Feature, Match
+        # Count matches in this season (each match should have 2 feature rows)
+        match_count = (
+            session.query(Match)
+            .filter(
+                Match.season == season,
+                Match.league_id == league_id,
+                Match.status.in_(("finished", "scheduled")),
+            )
+            .count()
+        )
+        expected_features = match_count * 2  # home + away per match
+
         existing = (
             session.query(Feature)
             .join(Match, Feature.match_id == Match.id)
@@ -854,7 +866,24 @@ def backfill_features(
             )
             .count()
         )
-    logger.info("Season %s: %d existing Feature rows", season, existing)
+    logger.info(
+        "Season %s: %d existing Feature rows, %d expected (%d matches × 2)",
+        season, existing, expected_features, match_count,
+    )
+
+    # --- 1b. Skip if season is already complete ---------------------------
+    # If we already have all feature rows, skip this season entirely.
+    # This prevents the delete-and-recompute cycle that wastes hours on
+    # leagues that were already fully backfilled.
+    if existing >= expected_features and expected_features > 0:
+        logger.info(
+            "Season %s: COMPLETE (%d/%d features) — skipping",
+            season, existing, expected_features,
+        )
+        result["features_computed"] = 0
+        result["features_total"] = existing
+        result["skipped"] = True
+        return result
 
     if dry_run:
         logger.info("DRY RUN — would recompute features for %s", season)
@@ -971,6 +1000,11 @@ def run_features_backfill(args, league_cfg, league_id) -> list:
         )
         results.append(season_result)
         elapsed = time.time() - season_start
+
+        if season_result.get("skipped"):
+            print(f"  → SKIPPED (already complete: {season_result['features_total']} features)")
+            print(f"  → Elapsed: {elapsed:.0f}s")
+            continue
 
         print(f"  → Feature rows: {season_result['features_total']}")
         print(f"  → Elapsed: {elapsed:.0f}s")
