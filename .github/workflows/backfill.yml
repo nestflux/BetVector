@@ -1,0 +1,207 @@
+# ============================================================================
+# BetVector — Historical Data Backfill (PC-08)
+# ============================================================================
+# One-time workflow to backfill historical match data, odds, ClubElo,
+# Understat xG, features, and internal Elo for all leagues.
+#
+# Trigger: Manual only (workflow_dispatch) — NOT scheduled.
+# Runs from GitHub Actions (AWS) for low-latency access to Neon PostgreSQL.
+#
+# Usage:
+#   1. Go to Actions → "Historical Backfill" → "Run workflow"
+#   2. Pick a league or "all" to run every league sequentially
+#   3. Monitor progress in the workflow logs
+#
+# Each league step is idempotent — safe to re-run if interrupted.
+# ============================================================================
+
+name: Historical Backfill
+
+on:
+  workflow_dispatch:
+    inputs:
+      league:
+        description: "League to backfill (or 'all' for every league)"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - "all"
+          - "EPL"
+          - "Championship"
+          - "LaLiga"
+          - "Ligue1"
+          - "Bundesliga"
+          - "SerieA"
+      step:
+        description: "Which backfill step to run"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - "all"
+          - "matches"
+          - "understat"
+          - "shot-xg"
+          - "clubelo"
+          - "features"
+          - "elo-internal"
+
+concurrency:
+  group: betvector-backfill
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
+      API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+      FOOTBALL_DATA_ORG_KEY: ${{ secrets.FOOTBALL_DATA_ORG_KEY }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt && pip install -e .
+
+      - name: Initialise database schema + seed leagues
+        run: |
+          python -c "
+          from src.database.db import init_db
+          from src.database.seed import seed_all
+          init_db()
+          seed_all()
+          print('DB schema + seed complete')
+          "
+
+      # ----------------------------------------------------------------
+      # EPL
+      # ----------------------------------------------------------------
+      - name: "Backfill: EPL"
+        if: inputs.league == 'all' || inputs.league == 'EPL'
+        run: |
+          STEP="${{ inputs.step }}"
+          if [ "$STEP" = "all" ] || [ "$STEP" = "matches" ] || [ "$STEP" = "understat" ] || [ "$STEP" = "shot-xg" ] || [ "$STEP" = "clubelo" ] || [ "$STEP" = "features" ]; then
+            echo "=== EPL: Running backfill step '$STEP' ==="
+            python scripts/backfill_historical.py "$STEP" --league EPL
+          else
+            echo "Skipping EPL (step=$STEP not applicable)"
+          fi
+
+      # ----------------------------------------------------------------
+      # Championship
+      # ----------------------------------------------------------------
+      - name: "Backfill: Championship"
+        if: inputs.league == 'all' || inputs.league == 'Championship'
+        run: |
+          STEP="${{ inputs.step }}"
+          if [ "$STEP" = "all" ] || [ "$STEP" = "matches" ] || [ "$STEP" = "clubelo" ] || [ "$STEP" = "features" ]; then
+            echo "=== Championship: Running backfill step '$STEP' ==="
+            python scripts/backfill_historical.py "$STEP" --league Championship
+          else
+            echo "Skipping Championship (step=$STEP not applicable — no Understat/shot-xG)"
+          fi
+
+      - name: "Internal Elo: Championship"
+        if: (inputs.league == 'all' || inputs.league == 'Championship') && (inputs.step == 'all' || inputs.step == 'elo-internal')
+        run: |
+          echo "=== Championship: Computing internal Elo ratings ==="
+          python -m src.features.elo_calculator Championship
+
+      # ----------------------------------------------------------------
+      # La Liga
+      # ----------------------------------------------------------------
+      - name: "Backfill: La Liga"
+        if: inputs.league == 'all' || inputs.league == 'LaLiga'
+        run: |
+          STEP="${{ inputs.step }}"
+          if [ "$STEP" = "all" ] || [ "$STEP" = "matches" ] || [ "$STEP" = "understat" ] || [ "$STEP" = "shot-xg" ] || [ "$STEP" = "clubelo" ] || [ "$STEP" = "features" ]; then
+            echo "=== La Liga: Running backfill step '$STEP' ==="
+            python scripts/backfill_historical.py "$STEP" --league LaLiga
+          else
+            echo "Skipping La Liga (step=$STEP not applicable)"
+          fi
+
+      # ----------------------------------------------------------------
+      # Ligue 1
+      # ----------------------------------------------------------------
+      - name: "Backfill: Ligue 1"
+        if: inputs.league == 'all' || inputs.league == 'Ligue1'
+        run: |
+          STEP="${{ inputs.step }}"
+          if [ "$STEP" = "all" ] || [ "$STEP" = "matches" ] || [ "$STEP" = "understat" ] || [ "$STEP" = "shot-xg" ] || [ "$STEP" = "clubelo" ] || [ "$STEP" = "features" ]; then
+            echo "=== Ligue 1: Running backfill step '$STEP' ==="
+            python scripts/backfill_historical.py "$STEP" --league Ligue1
+          else
+            echo "Skipping Ligue 1 (step=$STEP not applicable)"
+          fi
+
+      # ----------------------------------------------------------------
+      # Bundesliga
+      # ----------------------------------------------------------------
+      - name: "Backfill: Bundesliga"
+        if: inputs.league == 'all' || inputs.league == 'Bundesliga'
+        run: |
+          STEP="${{ inputs.step }}"
+          if [ "$STEP" = "all" ] || [ "$STEP" = "matches" ] || [ "$STEP" = "understat" ] || [ "$STEP" = "shot-xg" ] || [ "$STEP" = "clubelo" ] || [ "$STEP" = "features" ]; then
+            echo "=== Bundesliga: Running backfill step '$STEP' ==="
+            python scripts/backfill_historical.py "$STEP" --league Bundesliga
+          else
+            echo "Skipping Bundesliga (step=$STEP not applicable)"
+          fi
+
+      # ----------------------------------------------------------------
+      # Serie A
+      # ----------------------------------------------------------------
+      - name: "Backfill: Serie A"
+        if: inputs.league == 'all' || inputs.league == 'SerieA'
+        run: |
+          STEP="${{ inputs.step }}"
+          if [ "$STEP" = "all" ] || [ "$STEP" = "matches" ] || [ "$STEP" = "understat" ] || [ "$STEP" = "shot-xg" ] || [ "$STEP" = "clubelo" ] || [ "$STEP" = "features" ]; then
+            echo "=== Serie A: Running backfill step '$STEP' ==="
+            python scripts/backfill_historical.py "$STEP" --league SerieA
+          else
+            echo "Skipping Serie A (step=$STEP not applicable)"
+          fi
+
+      # ----------------------------------------------------------------
+      # Summary
+      # ----------------------------------------------------------------
+      - name: Print DB summary
+        if: always()
+        run: |
+          python -c "
+          from src.database.db import get_session
+          from src.database.models import Match, League, Feature, Odds, ClubElo
+          from sqlalchemy import func
+
+          with get_session() as s:
+              leagues = s.query(League).filter_by(is_active=1).order_by(League.id).all()
+              print()
+              print('=' * 70)
+              print('BACKFILL SUMMARY')
+              print('=' * 70)
+              print(f'{\"League\":<15s} {\"Matches\":>8s} {\"Odds\":>8s} {\"Features\":>8s}')
+              print('-' * 45)
+              total_m, total_o, total_f = 0, 0, 0
+              for lg in leagues:
+                  m = s.query(func.count(Match.id)).filter_by(league_id=lg.id).scalar()
+                  o = s.query(func.count(Odds.id)).join(Match).filter(Match.league_id==lg.id).scalar()
+                  f = s.query(func.count(Feature.id)).join(Match).filter(Match.league_id==lg.id).scalar()
+                  print(f'{lg.short_name:<15s} {m:>8,d} {o:>8,d} {f:>8,d}')
+                  total_m += m; total_o += o; total_f += f
+              print('-' * 45)
+              print(f'{\"TOTAL\":<15s} {total_m:>8,d} {total_o:>8,d} {total_f:>8,d}')
+              print('=' * 70)
+          "
