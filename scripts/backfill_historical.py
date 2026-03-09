@@ -890,32 +890,19 @@ def backfill_features(
         result["features_total"] = existing
         return result
 
-    # --- 2. Delete existing features for fresh recomputation --------------
-    # We delete rather than using force_recompute=True because the latter
-    # updates in-place, which can leave stale columns from old computations.
-    # A fresh insert ensures all features are computed from the latest data.
-    # IMPORTANT: filter by league_id so we don't wipe other leagues' features
-    # for the same season (Championship, La Liga, and EPL all share seasons
-    # like "2024-25" but are independent leagues).
-    if existing > 0:
-        with get_session() as session:
-            from src.database.models import Feature, Match
-            # Get match IDs for THIS season AND THIS league only
-            match_ids = [
-                row[0] for row in
-                session.query(Match.id).filter(
-                    Match.season == season,
-                    Match.league_id == league_id,
-                ).all()
-            ]
-            if match_ids:
-                deleted = session.query(Feature).filter(
-                    Feature.match_id.in_(match_ids)
-                ).delete(synchronize_session="fetch")
-                logger.info(
-                    "Season %s: deleted %d old Feature rows for fresh recompute",
-                    season, deleted,
-                )
+    # --- 2. Compute only missing features (incremental) -------------------
+    # compute_all_features() already skips matches that have 2 feature rows
+    # (home + away).  No need to delete existing features — just let the
+    # engineer's built-in skip logic handle it.  This is dramatically faster
+    # for partially-complete seasons (e.g. 400/500 done → only 100 computed
+    # instead of deleting 400 and recomputing 500).
+    #
+    # NOTE: if feature columns change in the future, use force_recompute=True
+    # to rebuild all features with the new schema.
+    logger.info(
+        "Season %s: %d/%d features exist — computing %d missing",
+        season, existing, expected_features, expected_features - existing,
+    )
 
     # --- 3. Recompute features for all matches in this season -------------
     try:
