@@ -64,7 +64,7 @@ jobs:
   backfill-epl:
     if: inputs.league == 'all' || inputs.league == 'EPL'
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 360
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
@@ -95,7 +95,7 @@ jobs:
   backfill-championship:
     if: inputs.league == 'all' || inputs.league == 'Championship'
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 360
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
@@ -131,7 +131,7 @@ jobs:
   backfill-laliga:
     if: inputs.league == 'all' || inputs.league == 'LaLiga'
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 360
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
@@ -162,7 +162,7 @@ jobs:
   backfill-ligue1:
     if: inputs.league == 'all' || inputs.league == 'Ligue1'
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 360
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
@@ -193,7 +193,7 @@ jobs:
   backfill-bundesliga:
     if: inputs.league == 'all' || inputs.league == 'Bundesliga'
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 360
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
@@ -224,7 +224,7 @@ jobs:
   backfill-seriea:
     if: inputs.league == 'all' || inputs.league == 'SerieA'
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 360
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
