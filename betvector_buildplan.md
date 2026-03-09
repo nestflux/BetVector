@@ -6247,9 +6247,13 @@ elo:
 - `scripts/migrate_league_one_to_ligue1.py`: DB migration script (idempotent, dependency-order deletion)
 - `tests/test_e38_integration.py`: All LeagueOne references updated to Ligue1
 
-**PC-08-03 — EPL Historical Backfill to Cloud DB:** DEFERRED (operational)
-- Code is ready (`scripts/backfill_historical.py`), requires running against Neon cloud DB
-- Not a code change — owner can run when ready
+**PC-08-03 — Historical Backfill to Cloud DB:** IN PROGRESS (operational)
+- GitHub Actions workflow `.github/workflows/backfill.yml` created and triggered
+- Runs all 6 leagues sequentially from AWS (low-latency to Neon PostgreSQL)
+- Includes: matches, odds, Understat xG, ClubElo, features, Championship internal Elo
+- Migration script `scripts/migrate_league_one_to_ligue1.py` already run successfully
+- Cloud DB schema updated: `league_home_adv_5` and `is_newly_promoted` columns added
+- `DATABASE_URL` added to local `.env` for future local runs
 
 **PC-08-04 — Compute Internal Elo for Championship:** DONE ✅
 - `src/features/elo_calculator.py`: Standard Elo (K=32, init=1500, home_adv=65)
