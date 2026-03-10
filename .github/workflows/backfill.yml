@@ -121,7 +121,7 @@ jobs:
             echo "Skipping Championship (step=$STEP not applicable — no Understat/shot-xG)"
           fi
       - name: "Internal Elo: Championship"
-        if: inputs.step == 'all' || inputs.step == 'elo-internal'
+        if: always() && (inputs.step == 'all' || inputs.step == 'smart' || inputs.step == 'elo-internal')
         run: |
           echo "=== Championship: Computing internal Elo ratings ==="
           python -m src.features.elo_calculator Championship
