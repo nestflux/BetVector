@@ -37,9 +37,10 @@ on:
       step:
         description: "Which backfill step to run"
         required: true
-        default: "all"
+        default: "smart"
         type: choice
         options:
+          - "smart"
           - "all"
           - "matches"
           - "understat"
@@ -82,7 +83,7 @@ jobs:
       - name: "Backfill: EPL"
         run: |
           STEP="${{ inputs.step }}"
-          if [ "$STEP" = "all" ] || [ "$STEP" = "matches" ] || [ "$STEP" = "understat" ] || [ "$STEP" = "shot-xg" ] || [ "$STEP" = "clubelo" ] || [ "$STEP" = "features" ]; then
+          if [ "$STEP" = "all" ] || [ "$STEP" = "smart" ] || [ "$STEP" = "matches" ] || [ "$STEP" = "understat" ] || [ "$STEP" = "shot-xg" ] || [ "$STEP" = "clubelo" ] || [ "$STEP" = "features" ]; then
             echo "=== EPL: Running backfill step '$STEP' ==="
             python scripts/backfill_historical.py "$STEP" --league EPL
           else
@@ -113,7 +114,7 @@ jobs:
       - name: "Backfill: Championship"
         run: |
           STEP="${{ inputs.step }}"
-          if [ "$STEP" = "all" ] || [ "$STEP" = "matches" ] || [ "$STEP" = "clubelo" ] || [ "$STEP" = "features" ]; then
+          if [ "$STEP" = "all" ] || [ "$STEP" = "smart" ] || [ "$STEP" = "matches" ] || [ "$STEP" = "clubelo" ] || [ "$STEP" = "features" ]; then
             echo "=== Championship: Running backfill step '$STEP' ==="
             python scripts/backfill_historical.py "$STEP" --league Championship
           else
@@ -149,7 +150,7 @@ jobs:
       - name: "Backfill: La Liga"
         run: |
           STEP="${{ inputs.step }}"
-          if [ "$STEP" = "all" ] || [ "$STEP" = "matches" ] || [ "$STEP" = "understat" ] || [ "$STEP" = "shot-xg" ] || [ "$STEP" = "clubelo" ] || [ "$STEP" = "features" ]; then
+          if [ "$STEP" = "all" ] || [ "$STEP" = "smart" ] || [ "$STEP" = "matches" ] || [ "$STEP" = "understat" ] || [ "$STEP" = "shot-xg" ] || [ "$STEP" = "clubelo" ] || [ "$STEP" = "features" ]; then
             echo "=== La Liga: Running backfill step '$STEP' ==="
             python scripts/backfill_historical.py "$STEP" --league LaLiga
           else
@@ -180,7 +181,7 @@ jobs:
       - name: "Backfill: Ligue 1"
         run: |
           STEP="${{ inputs.step }}"
-          if [ "$STEP" = "all" ] || [ "$STEP" = "matches" ] || [ "$STEP" = "understat" ] || [ "$STEP" = "shot-xg" ] || [ "$STEP" = "clubelo" ] || [ "$STEP" = "features" ]; then
+          if [ "$STEP" = "all" ] || [ "$STEP" = "smart" ] || [ "$STEP" = "matches" ] || [ "$STEP" = "understat" ] || [ "$STEP" = "shot-xg" ] || [ "$STEP" = "clubelo" ] || [ "$STEP" = "features" ]; then
             echo "=== Ligue 1: Running backfill step '$STEP' ==="
             python scripts/backfill_historical.py "$STEP" --league Ligue1
           else
@@ -211,7 +212,7 @@ jobs:
       - name: "Backfill: Bundesliga"
         run: |
           STEP="${{ inputs.step }}"
-          if [ "$STEP" = "all" ] || [ "$STEP" = "matches" ] || [ "$STEP" = "understat" ] || [ "$STEP" = "shot-xg" ] || [ "$STEP" = "clubelo" ] || [ "$STEP" = "features" ]; then
+          if [ "$STEP" = "all" ] || [ "$STEP" = "smart" ] || [ "$STEP" = "matches" ] || [ "$STEP" = "understat" ] || [ "$STEP" = "shot-xg" ] || [ "$STEP" = "clubelo" ] || [ "$STEP" = "features" ]; then
             echo "=== Bundesliga: Running backfill step '$STEP' ==="
             python scripts/backfill_historical.py "$STEP" --league Bundesliga
           else
@@ -242,7 +243,7 @@ jobs:
       - name: "Backfill: Serie A"
         run: |
           STEP="${{ inputs.step }}"
-          if [ "$STEP" = "all" ] || [ "$STEP" = "matches" ] || [ "$STEP" = "understat" ] || [ "$STEP" = "shot-xg" ] || [ "$STEP" = "clubelo" ] || [ "$STEP" = "features" ]; then
+          if [ "$STEP" = "all" ] || [ "$STEP" = "smart" ] || [ "$STEP" = "matches" ] || [ "$STEP" = "understat" ] || [ "$STEP" = "shot-xg" ] || [ "$STEP" = "clubelo" ] || [ "$STEP" = "features" ]; then
             echo "=== Serie A: Running backfill step '$STEP' ==="
             python scripts/backfill_historical.py "$STEP" --league SerieA
           else

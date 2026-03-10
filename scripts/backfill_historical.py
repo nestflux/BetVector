@@ -1024,7 +1024,7 @@ def main() -> None:
     )
     parser.add_argument(
         "command",
-        choices=["matches", "understat", "shot-xg", "clubelo", "features", "all"],
+        choices=["matches", "understat", "shot-xg", "clubelo", "features", "all", "smart"],
         help=(
             "What to backfill: "
             "'matches' = E23-01 (match results + odds from Football-Data.co.uk), "
@@ -1032,7 +1032,8 @@ def main() -> None:
             "'shot-xg' = E23-03 (set-piece vs open-play xG breakdown), "
             "'clubelo' = E23-04 (ClubElo ratings for match dates), "
             "'features' = E23-05 (recompute all features for all seasons), "
-            "'all' = all five in sequence"
+            "'all' = all five in sequence, "
+            "'smart' = check DB first, skip steps with complete data"
         ),
     )
     parser.add_argument(
@@ -1100,39 +1101,138 @@ def main() -> None:
     print(f"League: {league_cfg.name} (ID={league_id})")
     print()
 
+    # --- Smart mode: check DB and decide which steps to run ----------------
+    if args.command == "smart":
+        from src.database.models import Match, Feature, MatchStat, Odds, ClubElo
+        from sqlalchemy import func
+
+        steps_to_run = []
+        with get_session() as session:
+            match_count = session.query(func.count(Match.id)).filter_by(
+                league_id=league_id,
+            ).scalar()
+            odds_count = session.query(func.count(Odds.id)).join(Match).filter(
+                Match.league_id == league_id,
+            ).scalar()
+            stat_count = session.query(func.count(MatchStat.id)).join(
+                Match, MatchStat.match_id == Match.id,
+            ).filter(Match.league_id == league_id).scalar()
+            feat_count = session.query(func.count(Feature.id)).join(Match).filter(
+                Match.league_id == league_id,
+            ).scalar()
+
+        expected_features = match_count * 2  # home + away per match
+
+        print(f"Smart mode — checking DB for {league_name}:")
+        print(f"  Matches:  {match_count:,}")
+        print(f"  Odds:     {odds_count:,}")
+        print(f"  Stats:    {stat_count:,} (Understat xG/NPxG)")
+        print(f"  Features: {feat_count:,} / {expected_features:,} expected")
+        print()
+
+        # Matches: check if we have a reasonable count (>100 per season)
+        num_seasons = len(league_cfg.seasons) if hasattr(league_cfg, 'seasons') else 6
+        if match_count < 100 * num_seasons:
+            steps_to_run.append("matches")
+            print("  → Will run: matches (insufficient match data)")
+        else:
+            print("  → SKIP: matches (data complete)")
+
+        # Understat: only for leagues with Understat coverage
+        has_understat = getattr(league_cfg, 'understat_league', None)
+        if has_understat and stat_count < match_count:
+            steps_to_run.append("understat")
+            steps_to_run.append("shot-xg")
+            print(f"  → Will run: understat + shot-xg ({stat_count} stats < {match_count} matches)")
+        elif has_understat:
+            print("  → SKIP: understat + shot-xg (data complete)")
+        else:
+            print("  → SKIP: understat + shot-xg (no Understat coverage)")
+
+        # ClubElo: skip if we have ratings (rough check)
+        clubelo_count = 0
+        with get_session() as session:
+            from src.database.models import Team
+            team_ids = [t.id for t in session.query(Team.id).filter_by(league_id=league_id).all()]
+            if team_ids:
+                clubelo_count = session.query(func.count(ClubElo.id)).filter(
+                    ClubElo.team_id.in_(team_ids),
+                ).scalar()
+        if clubelo_count < match_count:
+            steps_to_run.append("clubelo")
+            print(f"  → Will run: clubelo ({clubelo_count} ratings < {match_count} matches)")
+        else:
+            print("  → SKIP: clubelo (data complete)")
+
+        # Features: check completeness
+        if feat_count < expected_features:
+            steps_to_run.append("features")
+            print(f"  → Will run: features ({feat_count}/{expected_features} = {feat_count*100//expected_features}%)")
+        else:
+            print("  → SKIP: features (100% complete)")
+
+        print()
+
+        if not steps_to_run:
+            print("✅ All data complete — nothing to do!")
+            sys.exit(0)
+
+        print(f"Running {len(steps_to_run)} step(s): {', '.join(steps_to_run)}")
+        print()
+
+        # Override command for the dispatch below
+        args.command = "__smart__"
+        args._smart_steps = steps_to_run
+
     # --- Run requested backfill(s) ----------------------------------------
     start_time = time.time()
     all_results = []
     has_errors = False
 
-    if args.command in ("matches", "all"):
+    run_matches = args.command in ("matches", "all") or (
+        args.command == "__smart__" and "matches" in args._smart_steps
+    )
+    run_understat = args.command in ("understat", "all") or (
+        args.command == "__smart__" and "understat" in args._smart_steps
+    )
+    run_shot_xg = args.command in ("shot-xg", "all") or (
+        args.command == "__smart__" and "shot-xg" in args._smart_steps
+    )
+    run_clubelo = args.command in ("clubelo", "all") or (
+        args.command == "__smart__" and "clubelo" in args._smart_steps
+    )
+    run_features = args.command in ("features", "all") or (
+        args.command == "__smart__" and "features" in args._smart_steps
+    )
+
+    if run_matches:
         match_results = run_matches_backfill(args, league_cfg, league_id)
         all_results.extend(match_results)
         if any(r["errors"] for r in match_results):
             has_errors = True
         print()
 
-    if args.command in ("understat", "all"):
+    if run_understat:
         understat_results = run_understat_backfill(args, league_cfg, league_id)
         all_results.extend(understat_results)
         if any(r["errors"] for r in understat_results):
             has_errors = True
         print()
 
-    if args.command in ("shot-xg", "all"):
+    if run_shot_xg:
         shot_xg_results = run_shot_xg_backfill(args, league_cfg, league_id)
         all_results.extend(shot_xg_results)
         if any(r["errors"] for r in shot_xg_results):
             has_errors = True
         print()
 
-    if args.command in ("clubelo", "all"):
+    if run_clubelo:
         clubelo_result = run_clubelo_backfill(args, league_cfg, league_id)
         if clubelo_result["errors"]:
             has_errors = True
         print()
 
-    if args.command in ("features", "all"):
+    if run_features:
         feature_results = run_features_backfill(args, league_cfg, league_id)
         all_results.extend(feature_results)
         if any(r["errors"] for r in feature_results):
