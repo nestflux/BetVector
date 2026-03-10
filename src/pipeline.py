@@ -49,7 +49,10 @@ from typing import Any, Dict, List, Optional, Type
 
 from src.config import config
 from src.database.db import get_session, init_db
-from src.database.models import League, Match, PipelineRun, Weather
+from src.database.models import (
+    Feature, League, Match, MatchStat, PipelineRun, Prediction, Weather,
+)
+from sqlalchemy import func as sa_func
 from src.database.seed import seed_all
 
 logger = logging.getLogger(__name__)
@@ -87,12 +90,189 @@ class Pipeline:
     Chains scrapers, loaders, feature engineers, models, value finders,
     and bet trackers together in the correct order for each run type.
 
+    Smart Resume (PC-09)
+    --------------------
+    When the morning pipeline is restarted (e.g. after a GitHub Actions
+    timeout), it checks which leagues were already fully processed today
+    and skips them.  A league is "fully processed" if it has predictions
+    created today for upcoming matches — this means scraping, loading,
+    features, AND predictions all completed successfully.
+
+    Additionally, the Understat scraper is skipped when all finished
+    matches in the current season already have xG stats in the database.
+
     Usage::
 
         pipeline = Pipeline()
         result = pipeline.run_morning()
         print(f"Found {result.value_bets_found} value bets")
     """
+
+    # -------------------------------------------------------------------
+    # Smart Resume: League Checkpoint Methods
+    # -------------------------------------------------------------------
+
+    @staticmethod
+    def _league_processed_today(league_id: int) -> bool:
+        """Check if this league was already fully processed today.
+
+        A league is considered "processed today" if EITHER:
+        1. There are predictions created today for that league's matches
+           (the primary signal — means scrape + load + features + predict
+           all completed successfully), OR
+        2. There are features created today AND no upcoming scheduled
+           matches (off-season or mid-week gap — no predictions needed
+           but scrape + features still ran).
+
+        This enables smart resume: if the pipeline timed out after
+        processing 3 of 6 leagues, the next run skips the 3 done leagues
+        and picks up from league 4.
+        """
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        try:
+            with get_session() as session:
+                # Primary check: predictions created today
+                pred_count = (
+                    session.query(sa_func.count(Prediction.id))
+                    .join(Match, Prediction.match_id == Match.id)
+                    .filter(
+                        Match.league_id == league_id,
+                        Prediction.created_at.like(f"{today}%"),
+                    )
+                    .scalar()
+                ) or 0
+
+                if pred_count > 0:
+                    return True
+
+                # Fallback: if no upcoming matches exist for this league
+                # but features were updated today, the league was processed.
+                # This handles off-season / mid-week gaps where there are
+                # no scheduled matches to predict.
+                scheduled_count = (
+                    session.query(sa_func.count(Match.id))
+                    .filter(
+                        Match.league_id == league_id,
+                        Match.status == "scheduled",
+                    )
+                    .scalar()
+                ) or 0
+
+                if scheduled_count == 0:
+                    # No upcoming matches — check if features were computed today.
+                    # Feature model uses computed_at (not created_at).
+                    feature_today = (
+                        session.query(sa_func.count(Feature.id))
+                        .join(Match, Feature.match_id == Match.id)
+                        .filter(
+                            Match.league_id == league_id,
+                            Feature.computed_at.like(f"{today}%"),
+                        )
+                        .scalar()
+                    ) or 0
+                    return feature_today > 0
+
+                return False
+        except Exception as e:
+            logger.warning(
+                "Could not check league checkpoint (league_id=%d): %s",
+                league_id, e,
+            )
+            return False  # If check fails, process the league to be safe
+
+    @staticmethod
+    def _understat_already_current(league_id: int, season: str) -> bool:
+        """Check if Understat stats are up-to-date for this league-season.
+
+        Compares the number of finished matches to the number of matches
+        with MatchStat rows.  If every finished match already has stats,
+        we can skip the Understat API calls entirely.
+
+        This is the biggest single optimization: Understat's ``scrape()``
+        makes 2 API calls per league-season, and the loader iterates
+        through every match to check for duplicates.  Skipping this
+        when data is already current saves both HTTP time and DB I/O.
+        """
+        try:
+            with get_session() as session:
+                finished_count = (
+                    session.query(sa_func.count(Match.id))
+                    .filter(
+                        Match.league_id == league_id,
+                        Match.season == season,
+                        Match.status == "finished",
+                    )
+                    .scalar()
+                ) or 0
+
+                if finished_count == 0:
+                    return False  # No finished matches → nothing to skip
+
+                # Count distinct matches that have at least one MatchStat row
+                matches_with_stats = (
+                    session.query(
+                        sa_func.count(sa_func.distinct(MatchStat.match_id))
+                    )
+                    .join(Match, MatchStat.match_id == Match.id)
+                    .filter(
+                        Match.league_id == league_id,
+                        Match.season == season,
+                    )
+                    .scalar()
+                ) or 0
+
+                return matches_with_stats >= finished_count
+        except Exception as e:
+            logger.warning(
+                "Could not check Understat freshness (league_id=%d): %s",
+                league_id, e,
+            )
+            return False  # If check fails, fetch to be safe
+
+    @staticmethod
+    def _features_already_current(league_id: int, season: str) -> bool:
+        """Check if features are up-to-date for this league-season.
+
+        Compares the number of finished matches to the number of matches
+        with Feature rows (each match should have 2 feature rows: home
+        and away).  If all finished matches have features, we can skip
+        the feature computation step entirely.
+        """
+        try:
+            with get_session() as session:
+                finished_count = (
+                    session.query(sa_func.count(Match.id))
+                    .filter(
+                        Match.league_id == league_id,
+                        Match.season == season,
+                        Match.status == "finished",
+                    )
+                    .scalar()
+                ) or 0
+
+                if finished_count == 0:
+                    return False
+
+                # Feature rows: 2 per match (home + away)
+                feature_count = (
+                    session.query(sa_func.count(Feature.id))
+                    .join(Match, Feature.match_id == Match.id)
+                    .filter(
+                        Match.league_id == league_id,
+                        Match.season == season,
+                    )
+                    .scalar()
+                ) or 0
+
+                # Each match should have 2 feature rows
+                expected = finished_count * 2
+                return feature_count >= expected
+        except Exception as e:
+            logger.warning(
+                "Could not check feature freshness (league_id=%d): %s",
+                league_id, e,
+            )
+            return False
 
     def run_morning(self) -> PipelineResult:
         """Full morning pipeline: scrape → load → features → predict → value → log → email.
@@ -142,6 +322,18 @@ class Pipeline:
             current_season = league_cfg.seasons[-1] if league_cfg.seasons else None
             if current_season is None:
                 errors.append(f"No seasons configured for {league_name}")
+                continue
+
+            # --- Smart Resume (PC-09): Skip leagues already processed today ---
+            # If this league was fully processed today (predictions exist),
+            # skip it entirely.  This enables the pipeline to resume from
+            # where it left off after a timeout/restart.
+            if self._league_processed_today(league_id):
+                print(
+                    f"\n{'='*60}\n"
+                    f"⏭  {league_name}: Already processed today — SKIPPING\n"
+                    f"{'='*60}"
+                )
                 continue
 
             # --- Step 1: Scrape data ---
@@ -250,23 +442,29 @@ class Pipeline:
                 print(f"  → API-Football: FAILED ({e})")
 
             # 1d. Understat (xG data — replaces blocked FBref)
+            # Smart skip (PC-09): if all finished matches already have
+            # MatchStat rows, skip the Understat API calls entirely.
+            # This saves ~6 seconds per league (2 API calls × 3s rate limit).
             understat_df = None
-            try:
-                from src.scrapers.understat_scraper import UnderstatScraper
-                us_scraper = UnderstatScraper()
-                understat_df = us_scraper.scrape(
-                    league_config=league_cfg, season=current_season,
-                )
-                if understat_df is not None and not understat_df.empty:
-                    finished = understat_df[understat_df["home_xg"].notna()]
-                    print(f"  → Understat: {len(finished)} matches with xG data")
-                else:
-                    print("  → Understat: No data returned")
-            except Exception as e:
-                err = f"Understat scrape failed for {league_name}: {e}"
-                logger.error(err)
-                errors.append(err)
-                print(f"  → Understat: FAILED ({e})")
+            if self._understat_already_current(league_id, current_season):
+                print("  → Understat: All matches have stats — SKIPPED")
+            else:
+                try:
+                    from src.scrapers.understat_scraper import UnderstatScraper
+                    us_scraper = UnderstatScraper()
+                    understat_df = us_scraper.scrape(
+                        league_config=league_cfg, season=current_season,
+                    )
+                    if understat_df is not None and not understat_df.empty:
+                        finished = understat_df[understat_df["home_xg"].notna()]
+                        print(f"  → Understat: {len(finished)} matches with xG data")
+                    else:
+                        print("  → Understat: No data returned")
+                except Exception as e:
+                    err = f"Understat scrape failed for {league_name}: {e}"
+                    logger.error(err)
+                    errors.append(err)
+                    print(f"  → Understat: FAILED ({e})")
 
             # 1e-pre. The Odds API (live pre-match odds from 50+ bookmakers)
             # Fetched here so odds are available for value bet detection.
