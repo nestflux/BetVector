@@ -31,7 +31,7 @@ concurrency:
 jobs:
   evening:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 120
 
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
