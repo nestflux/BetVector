@@ -49,6 +49,7 @@ from typing import Dict, List, Optional, Tuple
 
 from src.database.db import get_session
 from src.database.models import (
+    BetLog,
     Match,
     Odds,
     Prediction,
@@ -450,6 +451,27 @@ def clear_value_bets_for_scheduled() -> int:
             .subquery()
         )
 
+        # PC-11-01: Nullify BetLog.value_bet_id references BEFORE
+        # deleting VBs to avoid ForeignKeyViolation on PostgreSQL.
+        # Same FK chain protection as _generate_predictions().
+        vb_ids_scheduled = [
+            vb_id for (vb_id,) in
+            session.query(ValueBetORM.id)
+            .filter(ValueBetORM.match_id.in_(scheduled_ids))
+            .all()
+        ]
+
+        bl_nullified = 0
+        if vb_ids_scheduled:
+            bl_nullified = (
+                session.query(BetLog)
+                .filter(BetLog.value_bet_id.in_(vb_ids_scheduled))
+                .update(
+                    {BetLog.value_bet_id: None},
+                    synchronize_session="fetch",
+                )
+            )
+
         # Delete all VBs for those matches
         deleted_count = (
             session.query(ValueBetORM)
@@ -462,8 +484,8 @@ def clear_value_bets_for_scheduled() -> int:
     if deleted_count > 0:
         logger.info(
             "clear_value_bets_for_scheduled: Cleared %d stale value bets "
-            "for scheduled matches",
-            deleted_count,
+            "(%d bet_log refs nullified) for scheduled matches",
+            deleted_count, bl_nullified,
         )
     else:
         logger.debug(
