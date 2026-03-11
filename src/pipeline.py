@@ -1702,7 +1702,7 @@ class Pipeline:
         import pandas as pd
 
         from src.database.db import get_session
-        from src.database.models import Match, Prediction
+        from src.database.models import BetLog, Match, Prediction, ValueBet
         from src.models.base_model import (
             MatchPrediction,
             derive_market_probabilities,
@@ -1852,6 +1852,48 @@ class Pipeline:
                 )
                 if stale_scheduled:
                     stale_count = len(stale_scheduled)
+                    stale_pred_ids = [sp.id for sp in stale_scheduled]
+
+                    # PC-11-01: Delete child rows BEFORE parent predictions
+                    # to avoid ForeignKeyViolation on PostgreSQL (Neon).
+                    #
+                    # FK chain: BetLog.value_bet_id → ValueBet.prediction_id
+                    #           → Prediction.id
+                    # Must delete in reverse order: BetLog refs → VBs → Preds.
+
+                    # Step 1: Find VB IDs that will be deleted
+                    vb_ids_to_delete = [
+                        vb_id for (vb_id,) in
+                        session.query(ValueBet.id)
+                        .filter(ValueBet.prediction_id.in_(stale_pred_ids))
+                        .all()
+                    ]
+
+                    if vb_ids_to_delete:
+                        # Step 2: Nullify BetLog.value_bet_id references
+                        # (nullable FK — set to NULL, don't delete the log)
+                        bl_nullified = (
+                            session.query(BetLog)
+                            .filter(BetLog.value_bet_id.in_(vb_ids_to_delete))
+                            .update(
+                                {BetLog.value_bet_id: None},
+                                synchronize_session="fetch",
+                            )
+                        )
+
+                        # Step 3: Delete the value bets
+                        vb_deleted = (
+                            session.query(ValueBet)
+                            .filter(ValueBet.prediction_id.in_(stale_pred_ids))
+                            .delete(synchronize_session="fetch")
+                        )
+                        logger.info(
+                            "Cleared %d value bets (%d bet_log refs nullified) "
+                            "for %d stale scheduled predictions",
+                            vb_deleted, bl_nullified, stale_count,
+                        )
+
+                    # Step 4: Now safe to delete the predictions
                     for sp in stale_scheduled:
                         session.delete(sp)
                     session.commit()

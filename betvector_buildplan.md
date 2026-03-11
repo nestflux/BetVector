@@ -57,8 +57,9 @@ This document breaks the BetVector masterplan into sequenced epics and issues th
 | PC-08 | Data Gap Fix — League Correction & Missing Data | 6 | Replace English League One with French Ligue 1, pipeline timeout, EPL backfill, Championship Elo, stadiums, referee data |
 | PC-09 | Prediction Model Stability & Data Integrity Fix | 6 | ✅ DONE — Pinnacle multicollinearity fix (max coeff 1.98→was 17K), stale prediction refresh, VB dedup, cross-league odds fix (6 sport keys), data regen (659 VBs, 0 >30% edge, 78% Pinnacle direction agreement), 20 tests |
 | PC-10 | Morning Pipeline Performance Optimization | 4 | Bulk feature loader (2 queries vs 330K), compute_all_features() optimization, pipeline integration, integration test |
+| PC-11 | Pipeline Data Integrity & Email Fix | 6 | FK constraint fix (VBs deleted before predictions), email UTF-8 encoding, BetLog FK bug, League One→Ligue 1 migration, EPL historical backfill, integration test |
 
-**Total: 43 epics, 181 issues** (45 original + 20 post-launch + 12 odds/model + 7 backfill + 16 dashboard UX + 5 clarity + 16 badges/polish + 6 cloud migration + 6 post-critical-path + 6 multi-user auth + 7 bet tracker + 4 league expansion + 4 model improvement + 6 league backfill phase 2 + 5 dashboard fixes + 6 data gap fix + 6 model stability fix + 4 pipeline performance)
+**Total: 44 epics, 187 issues** (45 original + 20 post-launch + 12 odds/model + 7 backfill + 16 dashboard UX + 5 clarity + 16 badges/polish + 6 cloud migration + 6 post-critical-path + 6 multi-user auth + 7 bet tracker + 4 league expansion + 4 model improvement + 6 league backfill phase 2 + 5 dashboard fixes + 6 data gap fix + 6 model stability fix + 4 pipeline performance + 6 pipeline integrity)
 
 ---
 
@@ -6533,3 +6534,100 @@ PC-10-01 (load_features_bulk — new bulk loader)
 | Total queries (6 leagues, morning run) | ~330,000 | ~30 |
 | Historical feature load time (est.) | ~20 min | ~5 sec |
 | Current season feature time (no new matches) | ~3 min | ~10 sec |
+
+---
+
+## PC-11 — Pipeline Data Integrity & Email Fix
+
+**Context:** Morning pipeline run #22942486235 produced 0 predictions, 0 value bets, 0 emails across all 6 leagues. Three bugs: FK constraint violation blocks prediction refresh, email encoding crashes on non-ASCII, BetLog stores wrong FK value.
+
+**Database Audit (March 2026):**
+
+| League | Seasons | Matches | Features | Predictions | Value Bets | Odds | Scheduled |
+|--------|---------|---------|----------|-------------|------------|------|-----------|
+| EPL | 2 ⚠️ | 760 | 1,520 | 760 | 2,668 | 11,009 | 89 |
+| Championship | 6 | 3,181 | 6,362 | 421 | 1,366 | 45,693 | 0 |
+| La Liga | 6 | 2,160 | 4,320 | 260 | 535 | 31,104 | 0 |
+| League One → Ligue 1 | 6 | 3,166 | 6,332 | 0 | 0 | 45,236 | 0 |
+| Bundesliga | 6 | 1,746 | 3,492 | 0 | 0 | 25,128 | 0 |
+| Serie A | 6 | 2,170 | 4,340 | 0 | 0 | 31,236 | 0 |
+| **Total** | | **13,183** | **26,366** | **1,441** | **4,569** | **189,406** | **89** |
+
+### PC-11-01 — Fix FK Constraint in Stale Prediction Refresh ✅ DONE
+
+**Type:** Critical bug fix
+**File:** `src/pipeline.py`
+**Problem:** `_generate_predictions()` deletes stale predictions for scheduled matches, but `ValueBet.prediction_id` FK blocks the delete. `clear_value_bets_for_scheduled()` runs in Step 5, but prediction delete is in Step 4.
+**Fix:** Delete VBs → nullify BetLog.value_bet_id → delete predictions (correct FK order).
+
+**Acceptance Criteria:**
+- [ ] Value bets deleted BEFORE their parent predictions
+- [ ] BetLog.value_bet_id nullified for affected rows
+- [ ] No `ForeignKeyViolation` on PostgreSQL
+- [ ] Finished-match predictions preserved
+- [ ] Logging shows VB/prediction cleanup counts
+
+### PC-11-02 — Fix Email Encoding (UTF-8) ✅ DONE
+
+**Type:** Bug fix
+**File:** `src/delivery/email_alerts.py`
+**Problem:** `MIMEText(html_body, "html")` — no charset. `msg.as_string()` uses ASCII-only policy. Subject has em dash `—` (U+2014). Scraped data has `\xa0`.
+**Fix:** UTF-8 charset on MIMEText, `msg.as_bytes()`, `Header(subject, "utf-8")`, sanitize `\xa0`.
+
+**Acceptance Criteria:**
+- [ ] `MIMEText` uses `charset="utf-8"`
+- [ ] `sendmail` uses `msg.as_bytes()`
+- [ ] Subject with em dash sends without error
+- [ ] Non-breaking spaces sanitized
+- [ ] RFC 2047 compliant subject encoding
+
+### PC-11-03 — Fix BetLog.value_bet_id FK Bug ✅ DONE
+
+**Type:** Bug fix
+**File:** `src/betting/tracker.py`
+**Problem:** Line 138 stores `vb.prediction_id` (predictions.id) into `BetLog.value_bet_id` (FK to value_bets.id). Wrong table ID.
+**Fix:** Query actual VB ID from DB using (match_id, prediction_id, market_type, selection, bookmaker).
+
+**Acceptance Criteria:**
+- [ ] `BetLog.value_bet_id` stores actual `ValueBet.id`
+- [ ] Lookup uses composite key
+- [ ] Falls back to `None` if VB not found
+
+### PC-11-04 — Fix League One → Ligue 1 Cloud DB Migration ✅ DONE
+
+**Type:** Data fix
+**Problem:** League ID=4 still shows "League One (England)" in cloud DB.
+**Fix:** Check state, update name/country if data is correct, or re-run migration script.
+
+**Acceptance Criteria:**
+- [ ] League ID=4: name="Ligue 1", country="France"
+- [ ] Teams are French (PSG, Lyon, Marseille, etc.)
+
+### PC-11-05 — EPL Historical Backfill ✅ DONE
+
+**Type:** Data fix (GitHub Actions trigger)
+**Problem:** EPL cloud DB has only 2 seasons (760 matches). Missing 2020-21 through 2023-24.
+**Fix:** Trigger backfill workflow for EPL.
+
+**Acceptance Criteria:**
+- [ ] EPL has 6 seasons (2020-21 through 2025-26)
+- [ ] 2,280+ matches, 4,560+ features
+- [ ] Backfill completes without errors
+
+### PC-11-06 — Integration Test + Pipeline Verification ✅ DONE
+
+**Type:** Test
+**File:** `tests/test_pc11_pipeline_integrity.py`
+
+**Acceptance Criteria:**
+- [ ] 9+ new tests (FK fix, email encoding, BetLog FK, source code checks)
+- [ ] All existing tests pass (182+)
+- [ ] Morning pipeline re-run produces predictions for all leagues
+- [ ] Emails send successfully
+
+### Implementation Sequence
+
+```
+PC-11-01 (FK constraint fix) → PC-11-02 (email encoding) → PC-11-03 (BetLog FK)
+→ PC-11-04 (league migration) → PC-11-05 (EPL backfill) → PC-11-06 (tests + verify)
+```

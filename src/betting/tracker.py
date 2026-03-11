@@ -133,9 +133,21 @@ def log_system_picks(
                 skipped_count += 1
                 continue
 
+            # PC-11-03: Look up the actual ValueBet DB ID instead of
+            # using vb.prediction_id (which is a predictions.id, wrong table).
+            # BetLog.value_bet_id is an FK to value_bets.id.
+            actual_vb = session.query(ValueBet).filter_by(
+                match_id=vb.match_id,
+                prediction_id=vb.prediction_id,
+                market_type=vb.market_type,
+                selection=vb.selection,
+                bookmaker=vb.bookmaker,
+            ).first()
+            actual_vb_id = actual_vb.id if actual_vb else None
+
             entry = BetLog(
                 user_id=user_id,
-                value_bet_id=vb.prediction_id,
+                value_bet_id=actual_vb_id,
                 match_id=vb.match_id,
                 date=match_info["date"],
                 league=match_info["league"],

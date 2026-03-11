@@ -23,6 +23,7 @@ import os
 import smtplib
 import time
 from datetime import datetime, timedelta
+from email.header import Header
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
@@ -68,6 +69,19 @@ _jinja_env = Environment(
 # Retry configuration for transient SMTP errors
 MAX_RETRIES = 3
 RETRY_DELAY_SECONDS = 5
+
+
+def _sanitize_email_text(text: str) -> str:
+    """Replace non-breaking spaces and other problematic Unicode chars.
+
+    Web-scraped team names and value bet explanations sometimes contain
+    U+00A0 (non-breaking space) instead of regular spaces.  This can
+    cause encoding issues in email headers and MIME serialisation.
+    """
+    if not text:
+        return text
+    # Replace non-breaking space (common in scraped HTML) with regular space
+    return text.replace("\xa0", " ")
 
 
 def _get_smtp_config() -> dict:
@@ -132,12 +146,19 @@ def _send_email(
     if smtp_cfg is None:
         smtp_cfg = _get_smtp_config()
 
-    # Build the MIME message
+    # PC-11-02: Sanitize non-breaking spaces from scraped content
+    # before building the MIME message.
+    subject = _sanitize_email_text(subject)
+    html_body = _sanitize_email_text(html_body)
+
+    # Build the MIME message with explicit UTF-8 encoding.
+    # The subject template uses an em dash (U+2014) and team names may
+    # include accented characters (Nürnberg, São Paulo, etc.).
     msg = MIMEMultipart("alternative")
     msg["From"] = f'{smtp_cfg["display_name"]} <{smtp_cfg["from_address"]}>'
     msg["To"] = to_address
-    msg["Subject"] = subject
-    msg.attach(MIMEText(html_body, "html"))
+    msg["Subject"] = Header(subject, "utf-8")
+    msg.attach(MIMEText(html_body, "html", "utf-8"))
 
     last_error = None
 
@@ -154,10 +175,12 @@ def _send_email(
                 server.starttls()
                 server.ehlo()
             server.login(smtp_cfg["from_address"], smtp_cfg["password"])
+            # Use as_bytes() instead of as_string() to properly handle
+            # non-ASCII content in headers and body (RFC 2047 encoding).
             server.sendmail(
                 smtp_cfg["from_address"],
                 [to_address],
-                msg.as_string(),
+                msg.as_bytes(),
             )
             server.quit()
             logger.info(
