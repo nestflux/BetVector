@@ -719,7 +719,7 @@ def main() -> None:
     # We use st.navigation with a single page to prevent Streamlit from
     # showing the default page discovery sidebar.
     if not check_onboarding():
-        from src.delivery.pages.onboarding import render_onboarding
+        from src.delivery.views.onboarding import render_onboarding
         onboarding_page = st.Page(render_onboarding, title="Welcome", icon="👋")
         nav = st.navigation([onboarding_page], position="hidden")
         nav.run()
