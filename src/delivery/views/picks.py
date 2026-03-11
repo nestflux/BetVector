@@ -93,15 +93,59 @@ def _enrich_value_bets(session, rows) -> List[Dict]:
 
     Shared helper used by both the upcoming-picks and recent-results
     queries so enrichment logic isn't duplicated.
+
+    PC-12-03: Rewrote to use bulk-loading instead of per-row queries.
+    Previously ran 4 queries per VB row (Team×2, Weather, Feature) =
+    ~12,000 queries for 3,000 VBs. Now runs 3 bulk queries total
+    regardless of VB count, then does O(1) dict lookups in the loop.
     """
+    if not rows:
+        return []
+
+    # ── Step 1: Collect all unique IDs needed for enrichment ──────────
+    team_ids: set = set()
+    match_ids: set = set()
+    home_team_per_match: dict = {}  # match_id → home_team_id
+
+    for vb, match, league in rows:
+        team_ids.add(match.home_team_id)
+        team_ids.add(match.away_team_id)
+        match_ids.add(match.id)
+        home_team_per_match[match.id] = match.home_team_id
+
+    # ── Step 2: Bulk-load Teams (1 query) ─────────────────────────────
+    teams_by_id: dict = {}
+    if team_ids:
+        for team in session.query(Team).filter(Team.id.in_(team_ids)).all():
+            teams_by_id[team.id] = team
+
+    # ── Step 3: Bulk-load Weather (1 query) ───────────────────────────
+    weather_by_match: dict = {}
+    if match_ids:
+        for w in session.query(Weather).filter(
+            Weather.match_id.in_(match_ids)
+        ).all():
+            weather_by_match[w.match_id] = w
+
+    # ── Step 4: Bulk-load Features for home teams (1 query) ───────────
+    # We only need the home team's feature row for market_value_ratio.
+    features_by_match: dict = {}
+    if match_ids:
+        for f in session.query(Feature).filter(
+            Feature.match_id.in_(match_ids)
+        ).all():
+            # Key by (match_id, team_id) so we can look up home team's row
+            features_by_match[(f.match_id, f.team_id)] = f
+
+    # ── Step 5: Enrich each row using O(1) dict lookups ───────────────
     results = []
     for vb, match, league in rows:
         try:
-            home_team = session.query(Team).filter_by(id=match.home_team_id).first()
-            away_team = session.query(Team).filter_by(id=match.away_team_id).first()
+            home_team = teams_by_id.get(match.home_team_id)
+            away_team = teams_by_id.get(match.away_team_id)
 
             # Weather conditions for this match (E17-02)
-            weather = session.query(Weather).filter_by(match_id=match.id).first()
+            weather = weather_by_match.get(match.id)
             weather_category = weather.weather_category if weather else None
             is_heavy_weather = False
             if weather:
@@ -112,10 +156,8 @@ def _enrich_value_bets(session, rows) -> List[Dict]:
                 )
 
             # Market value ratio from the home team's features (E17-02)
-            home_feature = (
-                session.query(Feature)
-                .filter_by(match_id=match.id, team_id=match.home_team_id)
-                .first()
+            home_feature = features_by_match.get(
+                (match.id, match.home_team_id)
             )
             mv_ratio = getattr(home_feature, "market_value_ratio", None) if home_feature else None
 
@@ -272,6 +314,10 @@ def get_suggested_stake(model_prob: float, odds: float) -> float:
 
     Uses the logged-in user's bankroll settings. Falls back to a simple
     2% of $1000 if no user is configured.
+
+    NOTE: For bulk usage (rendering many cards), prefer
+    ``_precompute_all_stakes()`` which fetches user info once instead
+    of hitting the DB per call.
     """
     try:
         from src.betting.bankroll import BankrollManager
@@ -289,6 +335,91 @@ def get_suggested_stake(model_prob: float, odds: float) -> float:
     return 20.00
 
 
+def _precompute_all_stakes(picks: List[Dict]) -> Dict[int, float]:
+    """Precompute suggested stakes for all picks in minimal DB round-trips.
+
+    PC-12-03: Replaces the per-card ``get_suggested_stake()`` calls which
+    hit the DB 4+ times per card (user × 2, daily_losses, peak_bankroll).
+    For 35 deduplicated cards, that was ~140 queries at ~200ms each = 28s.
+
+    Now fetches user info once (1 query), checks safety limits once
+    (3 queries), then computes all stakes mathematically (0 queries).
+    Total: ~4 queries regardless of card count.
+
+    Parameters
+    ----------
+    picks : list[dict]
+        Enriched value bet dicts from ``get_value_bets_in_range()``.
+
+    Returns
+    -------
+    dict[int, float]
+        Mapping of value_bet ID → suggested stake amount.
+    """
+    if not picks:
+        return {}
+
+    fallback_stake = 20.00  # 2% of $1000
+
+    try:
+        from src.betting.bankroll import BankrollManager
+        user_id = get_session_user_id()
+        manager = BankrollManager()
+
+        # ── 1 query: fetch user staking settings ─────────────────────
+        with get_session() as session:
+            user = session.query(User).filter_by(id=user_id).first()
+        if not user:
+            return {vb["id"]: fallback_stake for vb in picks}
+
+        # ── 3 queries: check safety limits (user, daily_losses, peak) ─
+        safety = manager.check_safety_limits(user_id)
+
+        # If safety limits are breached, all stakes are $0
+        if safety.get("daily_limit_hit") or safety.get("min_bankroll_hit"):
+            return {vb["id"]: 0.0 for vb in picks}
+
+        # ── Extract user settings for mathematical computation ────────
+        method = user.staking_method or "flat"
+        bankroll = user.current_bankroll or 1000.0
+        stake_pct = user.stake_percentage or 0.02
+        kelly_frac = user.kelly_fraction or 0.25
+
+        # Max bet cap from config (hard safety limit)
+        try:
+            max_bet_pct = float(config.settings.safety.max_bet_percentage)
+        except (AttributeError, TypeError, ValueError):
+            max_bet_pct = 0.10
+        max_stake = bankroll * max_bet_pct
+
+        # ── Compute all stakes in-memory (0 queries) ─────────────────
+        stakes: Dict[int, float] = {}
+        for vb in picks:
+            model_prob = vb.get("model_prob", 0.0)
+            odds = vb.get("bookmaker_odds", 1.0)
+
+            if method == "kelly":
+                # Kelly Criterion: f* = (p × b - 1) / (b - 1)
+                if model_prob * odds < 1.0 or odds <= 1.0:
+                    raw_stake = 0.0
+                else:
+                    full_kelly = (model_prob * odds - 1.0) / (odds - 1.0)
+                    raw_stake = full_kelly * kelly_frac * bankroll
+            else:
+                # Flat or percentage: bankroll × stake_percentage
+                raw_stake = bankroll * stake_pct
+
+            # Apply max bet cap and round
+            final_stake = round(max(0.0, min(raw_stake, max_stake)), 2)
+            stakes[vb["id"]] = final_stake
+
+        return stakes
+
+    except Exception as exc:
+        logger.warning("_precompute_all_stakes: fallback — %s", exc)
+        return {vb["id"]: fallback_stake for vb in picks}
+
+
 # ============================================================================
 # Card Rendering
 # ============================================================================
@@ -303,7 +434,7 @@ def render_confidence_badge(confidence: str) -> str:
     )
 
 
-def render_value_bet_card(vb: Dict, idx) -> None:
+def render_value_bet_card(vb: Dict, idx, precomputed_stake: Optional[float] = None) -> None:
     """Render a single value bet as a styled card.
 
     Shows match info, market details, edge, confidence badge,
@@ -312,12 +443,20 @@ def render_value_bet_card(vb: Dict, idx) -> None:
     E26-01: Updated to show best bookmaker prominently, alternative
     bookmaker count, and inline match result for finished matches.
 
+    PC-12-03: Added ``precomputed_stake`` parameter — when provided,
+    skips the per-card ``get_suggested_stake()`` DB call.  The page
+    layout pre-computes all stakes via ``_precompute_all_stakes()``
+    before entering the render loop (4 queries total vs 4 × N).
+
     Parameters
     ----------
     vb : dict
         Enriched value bet dict from get_value_bets_in_range().
     idx : int or str
         Unique key suffix for Streamlit widgets (avoids key collisions).
+    precomputed_stake : float, optional
+        Pre-calculated stake from ``_precompute_all_stakes()``.
+        Falls back to ``get_suggested_stake()`` if not provided.
     """
     market_label = MARKET_DISPLAY.get(vb["market_type"], vb["market_type"])
     selection_label = SELECTION_DISPLAY.get(
@@ -325,7 +464,13 @@ def render_value_bet_card(vb: Dict, idx) -> None:
         f"{vb['market_type']}/{vb['selection']}",
     )
     confidence_badge = render_confidence_badge(vb["confidence"])
-    suggested_stake = get_suggested_stake(vb["model_prob"], vb["bookmaker_odds"])
+    # PC-12-03: Use precomputed stake when available (0 DB queries),
+    # else fall back to get_suggested_stake (4+ queries per call).
+    suggested_stake = (
+        precomputed_stake
+        if precomputed_stake is not None
+        else get_suggested_stake(vb["model_prob"], vb["bookmaker_odds"])
+    )
 
     # Clean bookmaker name for display — raw values like "market_avg"
     # become "Market Avg", known bookmakers keep their proper names
@@ -555,11 +700,16 @@ def render_result_card(vb: Dict, idx: int) -> None:
 # ============================================================================
 
 st.markdown(
-    '<div class="bv-page-title">Today\'s Picks</div>',
+    '<div class="bv-page-title">Today\'s Picks '
+    '<span style="font-size: 14px; font-weight: 700; color: #3FB950; '
+    'background: rgba(63,185,80,0.12); padding: 2px 8px; border-radius: 4px; '
+    'vertical-align: middle; letter-spacing: 0.5px; text-transform: uppercase;">'
+    'Value</span></div>',
     unsafe_allow_html=True,
 )
 st.markdown(
-    '<p class="text-muted">Value bets grouped by unique pick — slide the date range to browse matchdays</p>',
+    '<p class="text-muted">Value bets where the model finds positive edge over bookmaker odds '
+    '— slide the date range to browse matchdays</p>',
     unsafe_allow_html=True,
 )
 st.divider()
@@ -614,6 +764,10 @@ with st.spinner("Loading picks..."):
     )
 
 if all_picks:
+    # PC-12-03: Precompute all suggested stakes once (4 DB queries total)
+    # instead of calling get_suggested_stake() per card (4 queries × N cards).
+    _stake_map = _precompute_all_stakes(all_picks)
+
     # Split into upcoming (scheduled) and recent (finished) for summary
     today_str = _today.isoformat()
     upcoming = [vb for vb in all_picks if vb["status"] == "scheduled"]
@@ -667,7 +821,11 @@ if all_picks:
         for idx, vb in enumerate(group_list):
             # Use a globally unique key by combining date and idx
             global_idx = f"{match_date}_{idx}"
-            render_value_bet_card(vb, global_idx)
+            # PC-12-03: Pass precomputed stake (0 DB queries per card)
+            render_value_bet_card(
+                vb, global_idx,
+                precomputed_stake=_stake_map.get(vb["id"]),
+            )
 
 else:
     # Empty state — no value bets in the date range (MP §8)

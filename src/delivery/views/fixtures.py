@@ -23,7 +23,7 @@ E24-04: Added pipeline health summary and diagnostic badges.
 - Info tip when odds coverage is below 70% (explains bookmaker pricing window)
 
 E26-03: Landing page enhancements:
-- Top Picks banner: 3-5 highest-edge value bets (grouped by unique pick)
+- Top Value Picks banner: 3-5 highest-edge value bets (grouped by unique pick)
   shown prominently at the top of the page.
 - Predicted score per fixture: "Model: X.X - X.X" inline below market badges.
 - Fixtures page is now default=True in dashboard.py.
@@ -109,6 +109,24 @@ try:
     _config_edge_threshold = float(config.settings.value_betting.edge_threshold)
 except (AttributeError, TypeError, ValueError):
     _config_edge_threshold = 0.05  # 5% default
+
+
+@st.cache_data(ttl=600)
+def _get_league_names() -> List[str]:
+    """Fetch all league names from the DB, cached for 10 minutes.
+
+    PC-12-02: Used for the league filter multi-select on the Fixtures page.
+    Returns short_name where available, else name.
+    """
+    try:
+        with get_session() as session:
+            leagues = session.query(League).order_by(League.name.asc()).all()
+            return [
+                lg.short_name if lg.short_name else lg.name
+                for lg in leagues
+            ]
+    except Exception:
+        return []
 
 
 def _edge_colour(edge: Optional[float], threshold: float = 0.05) -> str:
@@ -263,6 +281,13 @@ def get_all_upcoming_fixtures(days_ahead: int = 14) -> List[Dict]:
     per market selection to compute edge.  Returns a list ready for rendering
     with color-coded market indicators.
 
+    PC-12-04: Rewrote to use bulk-loading instead of per-match queries.
+    Previously ran 3+ queries per match inside a loop (ValueBet, Prediction,
+    Odds count, plus up to 9 _compute_edge queries per non-VB badge).
+    For 48 fixtures that was 500+ round-trips to Neon at ~200ms each.
+    Now runs ≤ 6 bulk queries regardless of fixture count, then uses
+    O(1) dict lookups in the enrichment loop.
+
     Parameters
     ----------
     days_ahead : int
@@ -281,6 +306,7 @@ def get_all_upcoming_fixtures(days_ahead: int = 14) -> List[Dict]:
     cutoff_str = (date.today() + timedelta(days=days_ahead)).isoformat()
 
     with get_session() as session:
+        # ── Query 1: All scheduled matches with teams + league (1 query) ──
         matches = (
             session.query(Match, HomeTeam, AwayTeam, League)
             .join(HomeTeam, Match.home_team_id == HomeTeam.id)
@@ -295,33 +321,79 @@ def get_all_upcoming_fixtures(days_ahead: int = 14) -> List[Dict]:
             .all()
         )
 
+        if not matches:
+            return []
+
+        # Collect all match IDs for bulk queries
+        match_ids = [m.id for m, _, _, _ in matches]
+
+        # ── Query 2: Bulk-load all ValueBets for scheduled matches ────────
+        all_vbs: Dict[int, List] = {}
+        for vb in session.query(ValueBet).filter(
+            ValueBet.match_id.in_(match_ids)
+        ).all():
+            all_vbs.setdefault(vb.match_id, []).append(vb)
+
+        # ── Query 3: Bulk-load most recent Prediction per match ───────────
+        # Subquery: max created_at per match_id → gets the "latest" prediction.
+        from sqlalchemy import and_
+        latest_pred_sq = (
+            session.query(
+                Prediction.match_id,
+                func.max(Prediction.created_at).label("max_created"),
+            )
+            .filter(Prediction.match_id.in_(match_ids))
+            .group_by(Prediction.match_id)
+            .subquery()
+        )
+        preds_by_match: Dict[int, Prediction] = {}
+        for pred in (
+            session.query(Prediction)
+            .join(
+                latest_pred_sq,
+                and_(
+                    Prediction.match_id == latest_pred_sq.c.match_id,
+                    Prediction.created_at == latest_pred_sq.c.max_created,
+                ),
+            )
+            .all()
+        ):
+            preds_by_match[pred.match_id] = pred
+
+        # ── Query 4: Bulk-load Odds counts per match ─────────────────────
+        odds_counts: Dict[int, int] = {}
+        for mid, cnt in (
+            session.query(Odds.match_id, func.count(Odds.id))
+            .filter(Odds.match_id.in_(match_ids))
+            .group_by(Odds.match_id)
+            .all()
+        ):
+            odds_counts[mid] = cnt
+
+        # ── Query 5: Bulk-load best odds per (match, market, selection) ───
+        # Used for _compute_edge replacement — no per-badge DB queries needed.
+        best_odds: Dict[Tuple[int, str, str], float] = {}
+        for mid, mt, sel, max_odds in (
+            session.query(
+                Odds.match_id,
+                Odds.market_type,
+                Odds.selection,
+                func.max(Odds.odds_decimal),
+            )
+            .filter(Odds.match_id.in_(match_ids))
+            .group_by(Odds.match_id, Odds.market_type, Odds.selection)
+            .all()
+        ):
+            if max_odds and max_odds > 1.0:
+                best_odds[(mid, mt, sel)] = max_odds
+
+        # ── Enrich each match using O(1) dict lookups ─────────────────────
         results = []
         for match, home_team, away_team, league in matches:
-            # E29-02: Load all ValueBet rows up front — we need them for
-            # both the count (diagnostic badges) and the per-market info
-            # (tooltip enrichment + model's pick ring).  One query instead
-            # of a separate COUNT + SELECT.
-            vb_rows = (
-                session.query(ValueBet)
-                .filter_by(match_id=match.id)
-                .all()
-            )
+            vb_rows = all_vbs.get(match.id, [])
             vb_count = len(vb_rows)
-
-            # Load prediction for this match (most recent model)
-            prediction = (
-                session.query(Prediction)
-                .filter_by(match_id=match.id)
-                .order_by(Prediction.created_at.desc())
-                .first()
-            )
-
-            # Check if this match has ANY odds loaded (any source)
-            odds_count = (
-                session.query(Odds)
-                .filter_by(match_id=match.id)
-                .count()
-            )
+            prediction = preds_by_match.get(match.id)
+            odds_count = odds_counts.get(match.id, 0)
 
             # PC-07-01: Build ValueBet info FIRST, then use it for edge alignment.
             # This ensures Fixtures page edges match what ValueFinder stored,
@@ -339,10 +411,10 @@ def get_all_upcoming_fixtures(days_ahead: int = 14) -> List[Dict]:
             # Compute per-market edges for badge display.
             # PRIORITY: use ValueBet-stored edges when available (these are the
             # canonical edges from ValueFinder).  Only fall back to on-the-fly
-            # _compute_edge() for markets WITHOUT a ValueBet row (negative-edge
+            # edge computation for markets WITHOUT a ValueBet row (negative-edge
             # markets still need an edge value for tooltip display).
-            # This alignment guarantees: green ring on Fixtures ↔ pick exists
-            # in Today's Picks (both sourced from the same ValueBet data).
+            # PC-12-04: Edge computation now uses bulk-loaded best_odds dict
+            # instead of per-badge _compute_edge() DB queries.
             market_edges = {}
             for market_type, selection, _label in MARKET_BADGES:
                 key = (market_type, selection)
@@ -351,9 +423,10 @@ def get_all_upcoming_fixtures(days_ahead: int = 14) -> List[Dict]:
                     # Use the stored edge from ValueFinder — single source of truth
                     market_edges[key] = vb_data["edge"]
                 else:
-                    # No ValueBet row → compute on the fly (likely negative edge)
-                    edge = _compute_edge(
-                        session, match.id, prediction, market_type, selection,
+                    # No ValueBet row → compute from bulk-loaded data (0 queries)
+                    edge = _compute_edge_from_cache(
+                        prediction, market_type, selection,
+                        best_odds.get((match.id, market_type, selection)),
                     )
                     market_edges[key] = edge
 
@@ -452,6 +525,10 @@ def get_recent_results(days_back: int = 30) -> List[Dict]:
     - Model's best pick correctness (did the top pick match reality?)
     - Value bet profitability (did any VB selection match reality?)
 
+    PC-12-04: Rewrote to use bulk-loading instead of per-match queries.
+    Same pattern as ``get_all_upcoming_fixtures()`` — ≤ 6 bulk queries
+    regardless of match count, then O(1) dict lookups in the loop.
+
     Parameters
     ----------
     days_back : int
@@ -470,6 +547,7 @@ def get_recent_results(days_back: int = 30) -> List[Dict]:
     cutoff_str = (date.today() - timedelta(days=days_back)).isoformat()
 
     with get_session() as session:
+        # ── Query 1: All finished matches with teams + league (1 query) ───
         matches = (
             session.query(Match, HomeTeam, AwayTeam, League)
             .join(HomeTeam, Match.home_team_id == HomeTeam.id)
@@ -485,40 +563,81 @@ def get_recent_results(days_back: int = 30) -> List[Dict]:
             .all()
         )
 
+        if not matches:
+            return []
+
+        # Collect all match IDs for bulk queries
+        match_ids = [m.id for m, _, _, _ in matches]
+
+        # ── Query 2: Bulk-load all ValueBets ──────────────────────────────
+        all_vbs: Dict[int, List] = {}
+        for vb in session.query(ValueBet).filter(
+            ValueBet.match_id.in_(match_ids)
+        ).all():
+            all_vbs.setdefault(vb.match_id, []).append(vb)
+
+        # ── Query 3: Bulk-load most recent Prediction per match ───────────
+        from sqlalchemy import and_
+        latest_pred_sq = (
+            session.query(
+                Prediction.match_id,
+                func.max(Prediction.created_at).label("max_created"),
+            )
+            .filter(Prediction.match_id.in_(match_ids))
+            .group_by(Prediction.match_id)
+            .subquery()
+        )
+        preds_by_match: Dict[int, Prediction] = {}
+        for pred in (
+            session.query(Prediction)
+            .join(
+                latest_pred_sq,
+                and_(
+                    Prediction.match_id == latest_pred_sq.c.match_id,
+                    Prediction.created_at == latest_pred_sq.c.max_created,
+                ),
+            )
+            .all()
+        ):
+            preds_by_match[pred.match_id] = pred
+
+        # ── Query 4: Bulk-load Odds counts per match ─────────────────────
+        odds_counts: Dict[int, int] = {}
+        for mid, cnt in (
+            session.query(Odds.match_id, func.count(Odds.id))
+            .filter(Odds.match_id.in_(match_ids))
+            .group_by(Odds.match_id)
+            .all()
+        ):
+            odds_counts[mid] = cnt
+
+        # ── Query 5: Bulk-load best odds per (match, market, selection) ───
+        best_odds: Dict[Tuple[int, str, str], float] = {}
+        for mid, mt, sel, max_odds in (
+            session.query(
+                Odds.match_id,
+                Odds.market_type,
+                Odds.selection,
+                func.max(Odds.odds_decimal),
+            )
+            .filter(Odds.match_id.in_(match_ids))
+            .group_by(Odds.match_id, Odds.market_type, Odds.selection)
+            .all()
+        ):
+            if max_odds and max_odds > 1.0:
+                best_odds[(mid, mt, sel)] = max_odds
+
+        # ── Enrich each match using O(1) dict lookups ─────────────────────
         results = []
         for match, home_team, away_team, league in matches:
-            # Load ValueBet rows (same pattern as upcoming fixtures)
-            vb_rows = (
-                session.query(ValueBet)
-                .filter_by(match_id=match.id)
-                .all()
-            )
+            vb_rows = all_vbs.get(match.id, [])
             vb_count = len(vb_rows)
+            prediction = preds_by_match.get(match.id)
+            odds_count = odds_counts.get(match.id, 0)
 
-            # Load prediction (most recent model)
-            prediction = (
-                session.query(Prediction)
-                .filter_by(match_id=match.id)
-                .order_by(Prediction.created_at.desc())
-                .first()
-            )
-
-            # Check odds availability
-            odds_count = (
-                session.query(Odds)
-                .filter_by(match_id=match.id)
-                .count()
-            )
-
-            # Compute per-market edges (same as upcoming)
-            market_edges: Dict[Tuple[str, str], Optional[float]] = {}
-            for market_type, selection, _label in MARKET_BADGES:
-                edge = _compute_edge(
-                    session, match.id, prediction, market_type, selection,
-                )
-                market_edges[(market_type, selection)] = edge
-
-            # ValueBet info for tooltips (same as upcoming)
+            # PC-12-04: Compute per-market edges using bulk-loaded data
+            # For recent results, use VB-stored edges where available,
+            # then fall back to cached best-odds computation.
             market_vb_info: Dict[Tuple[str, str], Dict] = {}
             for vb in vb_rows:
                 key = (vb.market_type, vb.selection)
@@ -528,6 +647,19 @@ def get_recent_results(days_back: int = 30) -> List[Dict]:
                         "confidence": vb.confidence,
                         "edge": vb.edge,
                     }
+
+            market_edges: Dict[Tuple[str, str], Optional[float]] = {}
+            for market_type, selection, _label in MARKET_BADGES:
+                key = (market_type, selection)
+                vb_data = market_vb_info.get(key)
+                if vb_data is not None:
+                    market_edges[key] = vb_data["edge"]
+                else:
+                    edge = _compute_edge_from_cache(
+                        prediction, market_type, selection,
+                        best_odds.get((match.id, market_type, selection)),
+                    )
+                    market_edges[key] = edge
 
             # Model probabilities from Prediction (for non-VB badges)
             market_probs: Dict[Tuple[str, str], float] = {}
@@ -609,6 +741,57 @@ def get_recent_results(days_back: int = 30) -> List[Dict]:
     return results
 
 
+def _compute_edge_from_cache(
+    prediction: Optional[Prediction],
+    market_type: str,
+    selection: str,
+    best_odds_decimal: Optional[float] = None,
+) -> Optional[float]:
+    """Compute edge using pre-loaded data (zero DB queries).
+
+    PC-12-04: Replaces ``_compute_edge()`` which ran a DB query per call
+    to find the best odds. The best odds are now bulk-loaded upfront and
+    passed in via ``best_odds_decimal``.
+
+    Edge = model_prob - implied_prob, where implied_prob = 1/odds.
+    Returns None if either the prediction or odds are unavailable.
+
+    Parameters
+    ----------
+    prediction : Prediction or None
+        The Prediction record.
+    market_type : str
+        Market type (e.g., "1X2", "BTTS", "OU25").
+    selection : str
+        Selection (e.g., "home", "draw", "over").
+    best_odds_decimal : float or None
+        Pre-loaded best odds for this (match, market, selection) combo.
+        None means no odds data available.
+
+    Returns
+    -------
+    float or None
+        Edge as a decimal (e.g., 0.08 for 8%), or None if data missing.
+    """
+    if prediction is None:
+        return None
+
+    # Get model probability from the Prediction attributes
+    prob_attr = PRED_PROB_MAP.get((market_type, selection))
+    if not prob_attr:
+        return None
+    model_prob = getattr(prediction, prob_attr, None)
+    if model_prob is None:
+        return None
+
+    # Use pre-loaded best odds (no DB query needed)
+    if best_odds_decimal is None or best_odds_decimal <= 1.0:
+        return None
+
+    implied_prob = 1.0 / best_odds_decimal
+    return model_prob - implied_prob
+
+
 def _compute_edge(
     session,
     match_id: int,
@@ -616,7 +799,10 @@ def _compute_edge(
     market_type: str,
     selection: str,
 ) -> Optional[float]:
-    """Compute the edge for a specific market selection.
+    """Compute the edge for a specific market selection (LEGACY).
+
+    PC-12-04: Kept for backward compatibility — new code should use
+    ``_compute_edge_from_cache()`` with pre-loaded odds data instead.
 
     Edge = model_prob - implied_prob, where implied_prob = 1/odds.
     Returns None if either the prediction or odds are unavailable.
@@ -673,7 +859,7 @@ def _compute_edge(
 def get_top_picks(max_picks: int = 5) -> List[Dict]:
     """Fetch the highest-edge value bets across all upcoming fixtures.
 
-    E26-03: Used for the Top Picks banner at the top of the Fixtures page.
+    E26-03: Used for the Top Value Picks banner at the top of the Fixtures page.
     Groups by (match_id, market_type, selection) to avoid per-bookmaker
     duplication (same logic as picks.py E26-01).  Returns the top N picks
     sorted by edge descending.
@@ -739,7 +925,7 @@ def get_top_picks(max_picks: int = 5) -> List[Dict]:
     return result[:max_picks]
 
 
-# Market + selection display labels for the Top Picks banner
+# Market + selection display labels for the Top Value Picks banner
 _SELECTION_LABELS = {
     ("1X2", "home"): "Home Win",
     ("1X2", "draw"): "Draw",
@@ -1009,7 +1195,7 @@ st.markdown(
 st.markdown(_TOOLTIP_CSS, unsafe_allow_html=True)
 
 # ── E30-02: View mode toggle ─────────────────────────────────────────────
-# "Upcoming" (default) shows scheduled matches with Top Picks and pipeline health.
+# "Upcoming" (default) shows scheduled matches with Top Value Picks and pipeline health.
 # "Recent Results" shows completed matches with actual vs predicted scores,
 # correctness indicators, and accuracy metrics.
 view_mode = st.radio(
@@ -1019,14 +1205,26 @@ view_mode = st.radio(
     label_visibility="collapsed",
 )
 
+# ── PC-12-02: League filter ─────────────────────────────────────────────
+# Shared across Upcoming and Recent Results views.  Multi-select so users
+# can focus on specific leagues.  Default: all leagues selected.
+_all_leagues = _get_league_names()
+selected_leagues = st.multiselect(
+    "Leagues",
+    options=_all_leagues,
+    default=_all_leagues,
+    key="fixtures_league_filter",
+    help="Filter fixtures by league. All leagues shown by default.",
+)
+
 if view_mode == "Upcoming":
     # ══════════════════════════════════════════════════════════════════════
     # UPCOMING VIEW — scheduled matches (existing behaviour)
     # ══════════════════════════════════════════════════════════════════════
 
-    # ── E26-03: Top Picks Banner ─────────────────────────────────────
+    # ── E26-03 / PC-12-01: Top Value Picks Banner ───────────────────
     # Show the 3-5 highest-edge value bets as a compact banner.
-    with st.spinner("Loading top picks..."):
+    with st.spinner("Loading top value picks..."):
         top_picks = get_top_picks(max_picks=5)
 
     if top_picks:
@@ -1034,7 +1232,7 @@ if view_mode == "Upcoming":
             f'<div style="font-family: Inter, sans-serif; font-size: 14px; '
             f'font-weight: 700; color: {COLOURS["green"]}; text-transform: uppercase; '
             f'letter-spacing: 0.5px; margin-bottom: 8px;">'
-            f'Top Picks</div>',
+            f'Top Value Picks</div>',
             unsafe_allow_html=True,
         )
 
@@ -1046,7 +1244,7 @@ if view_mode == "Upcoming":
                 f'{pick["market_type"]}/{pick["selection"]}',
             )
             edge_pct = pick["edge"] * 100
-            # PC-07-05: Cap displayed edge to ±30% in Top Picks too
+            # PC-07-05: Cap displayed edge to ±30% in Top Value Picks too
             EDGE_DISPLAY_CAP_TP = 30.0
             if edge_pct > EDGE_DISPLAY_CAP_TP:
                 edge_pct_display = f"+>{EDGE_DISPLAY_CAP_TP:.0f}%"
@@ -1192,6 +1390,11 @@ if view_mode == "Upcoming":
     # Load fixtures
     with st.spinner("Loading fixtures..."):
         fixtures = get_all_upcoming_fixtures(days_ahead=days_ahead)
+
+    # PC-12-02: Apply league filter.  Compare against league short_name
+    # (stored in each fixture dict as "league").
+    if selected_leagues and len(selected_leagues) < len(_all_leagues):
+        fixtures = [f for f in fixtures if f.get("league") in selected_leagues]
 
     if not fixtures:
         st.markdown(
@@ -1514,6 +1717,10 @@ else:
     with st.spinner("Loading recent results..."):
         recent = get_recent_results(days_back=30)
 
+    # PC-12-02: Apply league filter to recent results
+    if selected_leagues and len(selected_leagues) < len(_all_leagues):
+        recent = [r for r in recent if r.get("league") in selected_leagues]
+
     if not recent:
         st.markdown(
             '<div class="bv-empty-state">'
@@ -1826,13 +2033,14 @@ with st.expander("Glossary — What do these terms mean?", expanded=False):
         unsafe_allow_html=True,
     )
 
-    # --- Top Picks ---
+    # --- Top Value Picks ---
     st.markdown(
         '<div class="gloss-section">'
-        '<div class="gloss-title">Top Picks Banner</div>'
+        '<div class="gloss-title">Top Value Picks Banner</div>'
         '<div class="gloss-row">'
-        '  <span class="gloss-term">Top Picks</span>'
+        '  <span class="gloss-term">Top Value Picks</span>'
         '  <span class="gloss-def">The 3\u20135 highest-edge value bets across all upcoming fixtures. '
+        'These are the same value bets shown on the Today\u2019s Picks page, ranked by edge. '
         'Shows the best opportunities at a glance without scrolling through every match.</span>'
         '</div>'
         '<div class="gloss-row">'

@@ -338,7 +338,7 @@ single-line expression.
 
 ## Current Status
 
-Last completed: PC-11 (Pipeline Data Integrity & Email Fix — 6 issues, FK constraint, email encoding, BetLog FK) ✅
+Last completed: PC-12 (Dashboard UX Clarity & Performance — 5 issues, Value tag, Top Value Picks, league filter, N+1 fix picks & fixtures) ✅
 Currently working: Owner to decide next work
 Next up: Owner to decide
 
@@ -377,6 +377,7 @@ Post-critical-path (March 2026):
 - PC-09: Prediction Model Stability & Data Integrity Fix ✅ — Pinnacle multicollinearity (max coeff 1.98, was 17K), stale prediction refresh, VB dedup, cross-league odds (6 sport keys), data regen (659 VBs, 0 >30% edge, 78% Pinnacle agreement), 20 tests
 - PC-10: Morning Pipeline Performance Optimization ✅ — Bulk feature loading (330K→30 queries), load_features_bulk() (2 ORM queries), compute_all_features() bulk pre-loading (3 queries), FEATURE_COLS DRY constant, 16 tests
 - PC-11: Pipeline Data Integrity & Email Fix ✅ — FK constraint fix (VBs deleted before predictions), email encoding (UTF-8, as_bytes, Header, sanitize \xa0), BetLog.value_bet_id actual VB ID lookup, Ligue 1 migration verified, 12 integration tests
+- PC-12: Dashboard UX Clarity & Performance ✅ — Value tag on Today's Picks sidebar, Top Value Picks terminology, league filter multiselect, picks N+1 fix (12K→7 queries via bulk Team/Weather/Feature + precomputed stakes), fixtures N+1 fix (500+→5 queries via bulk VB/Prediction/Odds/BestOdds), 26 integration tests
 
 E34 — Multi-User Authentication: ALL 6 issues done ✅
 - E34-01: Password storage + session overhaul ✅

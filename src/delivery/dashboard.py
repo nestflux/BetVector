@@ -259,6 +259,24 @@ def inject_custom_css() -> None:
     [data-testid="stSidebarNav"] {
         padding-top: 1rem;
     }
+    /* PC-12-01: Green "Value" tag on the Today's Picks nav item (2nd item).
+       Uses ::after pseudo-element to append a styled tag without changing
+       the st.Page title string itself.  The tag reinforces that this page
+       shows value bets — bets where model edge ≥ threshold. */
+    [data-testid="stSidebarNav"] li:nth-child(2) span[data-testid="stMarkdownContainer"] p::after,
+    [data-testid="stSidebarNav"] li:nth-child(2) a span::after {
+        content: "  Value";
+        color: #3FB950;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        background: rgba(63, 185, 80, 0.12);
+        padding: 1px 5px;
+        border-radius: 3px;
+        margin-left: 6px;
+        vertical-align: middle;
+    }
     [data-testid="stSidebar"] .stRadio label {
         font-family: 'Inter', sans-serif !important;
         font-size: 14px;

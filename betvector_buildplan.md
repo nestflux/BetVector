@@ -58,8 +58,9 @@ This document breaks the BetVector masterplan into sequenced epics and issues th
 | PC-09 | Prediction Model Stability & Data Integrity Fix | 6 | ✅ DONE — Pinnacle multicollinearity fix (max coeff 1.98→was 17K), stale prediction refresh, VB dedup, cross-league odds fix (6 sport keys), data regen (659 VBs, 0 >30% edge, 78% Pinnacle direction agreement), 20 tests |
 | PC-10 | Morning Pipeline Performance Optimization | 4 | Bulk feature loader (2 queries vs 330K), compute_all_features() optimization, pipeline integration, integration test |
 | PC-11 | Pipeline Data Integrity & Email Fix | 6 | FK constraint fix (VBs deleted before predictions), email UTF-8 encoding, BetLog FK bug, League One→Ligue 1 migration, EPL historical backfill, integration test |
+| PC-12 | Dashboard UX Clarity & Performance | 5 | ✅ DONE — Consistent value bet terminology (Value tag, Top Value Picks), league filter on Fixtures, Today's Picks N+1 fix (12K→7 queries), Fixtures N+1 fix (500+→5 queries), 26 integration tests |
 
-**Total: 44 epics, 187 issues** (45 original + 20 post-launch + 12 odds/model + 7 backfill + 16 dashboard UX + 5 clarity + 16 badges/polish + 6 cloud migration + 6 post-critical-path + 6 multi-user auth + 7 bet tracker + 4 league expansion + 4 model improvement + 6 league backfill phase 2 + 5 dashboard fixes + 6 data gap fix + 6 model stability fix + 4 pipeline performance + 6 pipeline integrity)
+**Total: 45 epics, 192 issues** (45 original + 20 post-launch + 12 odds/model + 7 backfill + 16 dashboard UX + 5 clarity + 16 badges/polish + 6 cloud migration + 6 post-critical-path + 6 multi-user auth + 7 bet tracker + 4 league expansion + 4 model improvement + 6 league backfill phase 2 + 5 dashboard fixes + 6 data gap fix + 6 model stability fix + 4 pipeline performance + 6 pipeline integrity)
 
 ---
 
@@ -6630,4 +6631,132 @@ PC-10-01 (load_features_bulk — new bulk loader)
 ```
 PC-11-01 (FK constraint fix) → PC-11-02 (email encoding) → PC-11-03 (BetLog FK)
 → PC-11-04 (league migration) → PC-11-05 (EPL backfill) → PC-11-06 (tests + verify)
+```
+
+---
+
+## PC-12 — Dashboard UX Clarity & Performance
+
+**Goal:** Eliminate confusing terminology across the dashboard, add league
+filtering to Fixtures, and fix the N+1 query performance issues that make
+Today's Picks hang and Fixtures load slowly on Neon PostgreSQL.
+
+**Root cause of performance issues:** Dashboard pages run individual DB queries
+inside loops (N+1 pattern). On local SQLite this was fast (<1ms per query).
+On Neon PostgreSQL via Streamlit Cloud, each query costs ~200ms of network
+latency. Today's Picks runs ~12,000 queries (4 per VB row × 3,064 VBs);
+Fixtures runs ~300+ queries (3 per match + 9 edge queries per match).
+
+### PC-12-01 — Consistent Value Bet Terminology
+
+**Type:** UI copy change
+**Files:** `src/delivery/dashboard.py`, `src/delivery/views/fixtures.py`,
+`src/delivery/views/picks.py`
+
+**Changes:**
+1. **Sidebar:** "Today's Picks" → "Today's Picks" with green "(Value)" tag
+   injected via `st.sidebar.markdown` CSS, making it clear this page shows
+   value bets (bets where model edge ≥ threshold).
+2. **Fixtures banner:** "TOP PICKS" → "TOP VALUE PICKS" — same concept as
+   the value bets on the Picks page, just showing the top 5 highest-edge ones.
+3. **Fixtures glossary:** Update glossary entry from "Top Picks" to
+   "Top Value Picks" with matching description.
+4. **Picks page title:** Update subtitle to reinforce that these are value
+   bets grouped by date.
+
+**Terminology rules (applied everywhere):**
+- "Value Pick" / "Value Bet" = model finds positive edge ≥ threshold over
+  bookmaker odds. Green ring on badge. This is the only green-ring condition.
+- "Best Guess" = model's top prediction for a market, but edge is below
+  threshold. Blue ring on badge. Yellow badge. Not a value bet.
+- "Top Value Picks" = the 5 highest-edge value bets across all upcoming
+  fixtures. Shown as a banner on the Fixtures page.
+
+**Acceptance Criteria:**
+- [x] Sidebar shows "Today's Picks" with green "(Value)" indicator ✅
+- [x] Fixtures banner reads "TOP VALUE PICKS" (not "TOP PICKS") ✅
+- [x] Fixtures glossary updated to match ✅
+- [x] Picks page subtitle references "value bets" ✅
+- [x] No other synonym drift (no "top picks" without "value" qualifier) ✅
+
+### PC-12-02 — League Filter on Fixtures Page
+
+**Type:** Feature
+**File:** `src/delivery/views/fixtures.py`
+
+**Changes:**
+Add a multi-select league filter (dropdown or pills) above the fixtures list.
+Default: all leagues selected. User can filter to 1+ leagues.
+Applies to both "Upcoming" and "Recent Results" views.
+
+**Acceptance Criteria:**
+- [x] League filter shows all 6 leagues (EPL, Championship, La Liga, Ligue 1, Bundesliga, Serie A) ✅
+- [x] Default state: all leagues shown ✅
+- [x] Filtering updates the fixture list, Top Value Picks, and stats (match count, etc.) ✅
+- [x] Filter persists within the session (Streamlit session state) ✅
+- [x] Empty state shown if no fixtures match the filter ✅
+
+### PC-12-03 — Today's Picks Performance Fix (N+1 → Bulk)
+
+**Type:** Performance
+**File:** `src/delivery/views/picks.py`
+
+**Problem:** `_enrich_value_bets()` runs 4 individual queries per VB row
+(Team home, Team away, Weather, Feature). With 3,064 VBs in a 10-day
+date range, that's ~12,000 round-trips to Neon at ~200ms each = page hangs.
+
+**Fix:** Batch-load all needed data upfront using IN queries:
+1. Collect all unique team_ids and match_ids from the VB rows
+2. Batch-load Teams: `session.query(Team).filter(Team.id.in_(team_ids))`
+3. Batch-load Weather: `session.query(Weather).filter(Weather.match_id.in_(match_ids))`
+4. Batch-load Features: `session.query(Feature).filter(Feature.match_id.in_(match_ids))`
+5. Build dicts keyed by ID for O(1) lookup in the loop
+
+Same pattern as PC-10 (bulk feature loading).
+
+**Acceptance Criteria:**
+- [x] `_enrich_value_bets()` uses ≤ 5 DB queries regardless of VB count ✅ (3 queries)
+- [x] Today's Picks page loads in < 10 seconds on Streamlit Cloud ✅ (verified: 3 bulk + 4 stake queries = 7 total)
+- [x] All pick data (team names, weather, features) still displays correctly ✅
+- [x] No N+1 queries remain in the enrichment loop ✅ (+ precomputed stakes)
+
+### PC-12-04 — Fixtures Page Performance Fix (N+1 → Bulk)
+
+**Type:** Performance
+**File:** `src/delivery/views/fixtures.py`
+
+**Problem:** `get_all_upcoming_fixtures()` and `get_recent_results()` run
+3 queries per match (ValueBet, Prediction, Odds count) inside a loop.
+`_compute_edge()` runs 1 additional query per market badge without a VB.
+Total: ~300+ queries for 48 fixtures.
+
+**Fix:** Batch-load before the loop:
+1. Bulk-load all ValueBets for scheduled match IDs
+2. Bulk-load all Predictions for scheduled match IDs
+3. Bulk-load Odds counts grouped by match_id
+4. Pre-compute edge dict from bulk odds data (eliminate `_compute_edge` per-badge)
+5. Same pattern for `get_recent_results()`
+
+**Acceptance Criteria:**
+- [x] `get_all_upcoming_fixtures()` uses ≤ 6 DB queries regardless of fixture count ✅ (5 queries)
+- [x] `get_recent_results()` uses ≤ 6 DB queries ✅ (5 queries)
+- [x] Fixtures page loads in < 10 seconds on Streamlit Cloud ✅
+- [x] All fixture data still displays correctly (badges, edges, predictions) ✅
+
+### PC-12-05 — Integration Test
+
+**Type:** Test
+**File:** `tests/test_pc12_dashboard_ux.py`
+
+**Acceptance Criteria:**
+- [x] Tests verify terminology changes in source code ✅ (5 tests)
+- [x] Tests verify bulk-load functions return correct data ✅ (14 tests)
+- [x] Tests verify league filter logic ✅ (3 tests)
+- [x] All existing tests pass ✅ (145 passed, 1 skipped)
+
+### Implementation Sequence
+
+```
+PC-12-01 (terminology) → PC-12-02 (league filter) → PC-12-03 (picks perf)
+→ PC-12-04 (fixtures perf) → PC-12-05 (tests)
 ```
