@@ -10,6 +10,7 @@ font = "sans serif"                       # Streamlit base font (overridden with
 
 [server]
 headless = true
+maxMessageSize = 400                      # Raised from 200 (default) to handle 6-league badge rendering
 
 [browser]
 gatherUsageStats = false
