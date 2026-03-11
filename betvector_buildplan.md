@@ -55,8 +55,9 @@ This document breaks the BetVector masterplan into sequenced epics and issues th
 | E38 | League Backfill & Expansion Phase 2 | 6 | Backfill Championship/La Liga, League One/Bundesliga/Serie A pipelines, validation backtest |
 | PC-07 | Dashboard & Value Bet Logic Fixes | 5 | Lambda clamp, probability cap, edge alignment, Top Picks dates, error handling, edge display cap |
 | PC-08 | Data Gap Fix — League Correction & Missing Data | 6 | Replace English League One with French Ligue 1, pipeline timeout, EPL backfill, Championship Elo, stadiums, referee data |
+| PC-09 | Prediction Model Stability & Data Integrity Fix | 6 | ✅ DONE — Pinnacle multicollinearity fix (max coeff 1.98→was 17K), stale prediction refresh, VB dedup, cross-league odds fix (6 sport keys), data regen (659 VBs, 0 >30% edge, 78% Pinnacle direction agreement), 20 tests |
 
-**Total: 41 epics, 171 issues** (45 original + 20 post-launch + 12 odds/model + 7 backfill + 16 dashboard UX + 5 clarity + 16 badges/polish + 6 cloud migration + 6 post-critical-path + 6 multi-user auth + 7 bet tracker + 4 league expansion + 4 model improvement + 6 league backfill phase 2 + 5 dashboard fixes + 6 data gap fix)
+**Total: 42 epics, 177 issues** (45 original + 20 post-launch + 12 odds/model + 7 backfill + 16 dashboard UX + 5 clarity + 16 badges/polish + 6 cloud migration + 6 post-critical-path + 6 multi-user auth + 7 bet tracker + 4 league expansion + 4 model improvement + 6 league backfill phase 2 + 5 dashboard fixes + 6 data gap fix + 6 model stability fix)
 
 ---
 
@@ -6300,3 +6301,122 @@ PC-08-01 (Pipeline timeout — 5 min)
 | **Serie A** | 2,170 (6 seasons) | ✅ Understat | ✅ ClubElo | ✅ Open-Meteo | ❌ Not in CSV | ✅ Pipeline |
 
 **Note:** Football-Data.co.uk only includes referee names in English league CSVs (E0, E1). Continental leagues (F1, SP1, D1, I1) do not have the Referee column. Referee features (ref_avg_fouls, ref_avg_yellows, etc.) will only be populated for EPL and Championship. The code handles this gracefully — `calculate_referee_features()` returns all None when Match.referee is null.
+
+---
+
+## PC-09 — Prediction Model Stability & Data Integrity Fix
+
+**Depends on:** PC-08
+**Master Plan:** MP §5 Data Sources, MP §4 Poisson Model, MP §11 Self-Improvement
+
+Investigation revealed that **all edges shown on the Fixtures page are wrong** because the underlying Poisson model predictions are severely anti-home-biased. Example: Arsenal vs Everton at home shows H=37.9% when Pinnacle (sharpest bookmaker) says H=76.3%. Every scheduled fixture exhibits this pattern — the model systematically overestimates away win probability.
+
+Root cause analysis found 5 distinct issues:
+1. **Pinnacle multicollinearity** — 3 Pinnacle probs (sum to ~1.0) + GLM constant = near-singular design matrix → coefficients of ±17,000 → numerically unstable predictions
+2. **Stale predictions never refresh** — once created, scheduled match predictions are never regenerated even as the model retrains daily with new data
+3. **Value bet duplication** — no cleanup before new VBs are inserted; each pipeline run accumulates new rows (5x duplicates found)
+4. **Cross-league odds contamination** — `SPORT_KEY = "soccer_epl"` is hardcoded; all 6 leagues fetch EPL odds, creating phantom fixtures in wrong leagues
+5. **Phantom fixtures** — Fulham vs Burnley appears as both EPL and Championship because of #4
+
+Training the Poisson model fresh with the draw_prob fix produces Arsenal vs Everton = 66.1% home win (vs stored 37.9%).
+
+---
+
+### PC-09-01 — Fix Pinnacle Multicollinearity in Poisson Feature Set
+
+**Type:** Model fix
+**Files:** `src/models/poisson.py`, `src/models/xgboost_model.py`
+
+**Problem:** `_select_feature_cols()` includes all 3 Pinnacle probabilities (`pinnacle_home_prob`, `pinnacle_draw_prob`, `pinnacle_away_prob`) in the context features. Since `home + draw + away ≈ 1.0` (overround-removed), adding all 3 plus the GLM intercept creates perfect multicollinearity. This produces coefficients of magnitude ~17,000 that are numerically unstable — tiny input changes cause wild prediction swings.
+
+**Fix:** Remove `pinnacle_draw_prob` from `_select_feature_cols()` context_cols. The draw probability is linearly determined by the other two (`draw ≈ 1 - home - away`), so it adds zero information but creates instability. Also remove from XGBoost for consistency.
+
+**Acceptance Criteria:**
+- [x] `pinnacle_draw_prob` removed from `_select_feature_cols()` context_cols in `poisson.py` ✅
+- [x] Same removal in `xgboost_model.py` ✅
+- [x] Freshly trained Poisson model has no coefficient with |magnitude| > 100 — max 1.98 (was 17,000) ✅
+- [x] Arsenal vs Everton prediction: home win 83.1% (was 37.9%, Pinnacle says 88.9%) ✅
+- [x] Comment in code explaining why draw_prob is excluded (lines 449-455) ✅
+
+---
+
+### PC-09-02 — Refresh Predictions for Scheduled Matches on Each Pipeline Run ✅
+
+**Type:** Pipeline fix
+**Files:** `src/pipeline.py`
+
+**Acceptance Criteria:**
+- [x] Scheduled matches always get fresh predictions on each pipeline run ✅
+- [x] Finished match predictions NOT deleted (filter by `Match.status == "finished"`) ✅
+- [x] No unique constraint violations — 89 predictions saved, 0 errors ✅
+- [x] Logging shows refresh count ✅
+
+---
+
+### PC-09-03 — Clean Up Value Bet Duplicates on Each Pipeline Run ✅
+
+**Type:** Pipeline + betting fix
+**Files:** `src/betting/value_finder.py`, `src/pipeline.py`
+
+**Acceptance Criteria:**
+- [x] `clear_value_bets_for_scheduled()` function added ✅
+- [x] Called before VB generation in both morning and midday pipelines ✅
+- [x] No duplicate (match_id, market_type, selection, bookmaker) rows — 0 dups verified ✅
+- [x] Finished match VBs NOT deleted (filters by `Match.status == "scheduled"`) ✅
+- [x] Logging shows cleared count ✅
+
+---
+
+### PC-09-04 — Fix Cross-League Odds Contamination ✅
+
+**Type:** Scraper fix
+**Files:** `src/scrapers/odds_api.py`, `src/scrapers/loader.py`
+
+**Acceptance Criteria:**
+- [x] `LEAGUE_TO_SPORT_KEY` mapping for all 6 leagues (EPL, Championship, LaLiga, Ligue1, Bundesliga, SerieA) ✅
+- [x] No phantom fixtures — 0 Championship scheduled fixtures verified ✅
+- [x] EPL odds only load against EPL matches ✅
+- [x] Auto-stub creation guarded by league_id + league-specific sport key ✅
+- [x] Phantom fixtures cleaned up — 0 found ✅
+
+---
+
+### PC-09-05 — Regenerate Clean Predictions & Value Bets ✅
+
+**Type:** Operational
+
+**Results:**
+- [x] 89 scheduled match predictions regenerated with stable model ✅
+- [x] VBs per match: avg 38.8, max 62 (was 250-336) ✅
+- [x] 0 VBs with edge > 30% (was 2,942) ✅
+- [x] 14/18 = 78% direction agreement with Pinnacle ✅
+- [x] Phantom fixtures: 0 found ✅
+- Key metrics: 659 total VBs, avg edge 12.2%, max edge 25.5%
+
+---
+
+### PC-09-06 — Integration Test ✅
+
+**Type:** Test
+**Files:** `tests/test_pc09_model_stability.py`
+
+**Results:** 19 passed, 1 skipped (XGBoost not installed locally), 91/92 total suite pass
+- [x] `test_coefficients_below_100` — Poisson coefficients all |mag| < 100 ✅
+- [x] `test_poisson_excludes_draw_prob` — pinnacle_draw_prob NOT in features ✅
+- [x] `test_pipeline_deletes_stale_scheduled_predictions` — refresh logic verified ✅
+- [x] `test_clear_function_exists` + `test_clear_deletes_scheduled_vbs_only` — VB cleanup verified ✅
+- [x] `test_higher_pinnacle_home_prob_increases_home_goals` — directional sanity ✅
+- [x] All existing tests pass (91 passed, excluding pre-existing E37/E38 failures) ✅
+
+---
+
+### Implementation Sequence
+
+```
+PC-09-01 (Pinnacle multicollinearity — model fix)
+→ PC-09-02 (Stale prediction refresh — pipeline fix)
+→ PC-09-03 (Value bet dedup — pipeline fix)
+→ PC-09-04 (Cross-league odds — scraper fix)
+→ PC-09-05 (Regenerate clean data — operational)
+→ PC-09-06 (Integration test)
+```

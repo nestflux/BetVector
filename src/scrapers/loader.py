@@ -796,8 +796,11 @@ def load_odds_the_odds_api(
                     )
                     continue
 
-                # Both teams exist — derive the EPL season from the match date.
-                # EPL runs Aug–May, so Aug 2025 → "2025-26", Mar 2026 → "2025-26".
+                # Both teams exist — derive the season from the match date.
+                # European leagues run Aug–May, so Aug 2025 → "2025-26",
+                # Mar 2026 → "2025-26".  PC-09-04: This auto-stub is safe
+                # because the team lookup above is scoped to league_id,
+                # and the odds scraper now uses league-specific sport keys.
                 match_dt = pd.to_datetime(match_date)
                 if match_dt.month >= 8:
                     season = f"{match_dt.year}-{str(match_dt.year + 1)[2:]}"

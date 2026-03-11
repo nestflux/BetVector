@@ -499,8 +499,11 @@ class XGBoostModel(BaseModel):
             f"{attack_prefix}market_value_ratio",
             f"{attack_prefix}is_heavy_weather",
             # Market-implied features (E20-01, E20-02)
+            # NOTE (PC-09-01): pinnacle_draw_prob excluded — it is linearly
+            # dependent on home + away (sum ≈ 1.0), causing multicollinearity
+            # in the Poisson GLM.  Removed here too for feature consistency
+            # across models, even though XGBoost trees are robust to collinearity.
             f"{attack_prefix}pinnacle_home_prob",
-            f"{attack_prefix}pinnacle_draw_prob",
             f"{attack_prefix}pinnacle_away_prob",
             f"{attack_prefix}ah_line",
             # Elo ratings (E21-01)

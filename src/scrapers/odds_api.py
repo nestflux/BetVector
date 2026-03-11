@@ -54,7 +54,28 @@ logger = logging.getLogger(__name__)
 
 DOMAIN = "api.the-odds-api.com"
 
-# The Odds API sport key for English Premier League
+# ============================================================================
+# League → Sport Key Mapping (PC-09-04)
+# ============================================================================
+# Each league has its own Odds API sport key.  Previously, "soccer_epl" was
+# hardcoded for ALL leagues, causing cross-league contamination — e.g.,
+# Championship pipeline fetched EPL odds and created phantom EPL fixtures
+# in the Championship league via auto-stub creation.
+#
+# The mapping below uses the league's ``short_name`` from config/leagues.yaml
+# to look up the correct Odds API sport key.  If a league is not in this
+# mapping, odds fetching is gracefully skipped for that league.
+
+LEAGUE_TO_SPORT_KEY: Dict[str, str] = {
+    "EPL": "soccer_epl",
+    "Championship": "soccer_championship",
+    "LaLiga": "soccer_spain_la_liga",
+    "Ligue1": "soccer_france_ligue_one",
+    "Bundesliga": "soccer_germany_bundesliga",
+    "SerieA": "soccer_italy_serie_a",
+}
+
+# Fallback for backwards compatibility (used by _fetch_odds if no override)
 SPORT_KEY = "soccer_epl"
 
 # ============================================================================
@@ -271,6 +292,20 @@ class TheOddsAPIScraper(BaseScraper):
         """
         league_name = getattr(league_config, "short_name", "EPL")
 
+        # PC-09-04: Resolve the correct Odds API sport key for this league.
+        # Previously, SPORT_KEY was always "soccer_epl" regardless of league,
+        # causing cross-league contamination (e.g., Championship fetching EPL
+        # odds and creating phantom EPL fixtures in the Championship league).
+        sport_key = LEAGUE_TO_SPORT_KEY.get(league_name)
+        if sport_key is None:
+            logger.warning(
+                "[the_odds_api] No sport key mapping for league '%s' — "
+                "skipping odds fetch.  Add an entry to LEAGUE_TO_SPORT_KEY "
+                "in odds_api.py if this league should have live odds.",
+                league_name,
+            )
+            return pd.DataFrame()
+
         # Validate API key
         if not self._check_api_key():
             return pd.DataFrame()
@@ -281,11 +316,11 @@ class TheOddsAPIScraper(BaseScraper):
 
         # Fetch odds from The Odds API
         logger.info(
-            "[the_odds_api] Fetching odds for %s (season %s)",
-            league_name, season,
+            "[the_odds_api] Fetching odds for %s (season %s, sport_key=%s)",
+            league_name, season, sport_key,
         )
 
-        raw_data = self._fetch_odds()
+        raw_data = self._fetch_odds(sport_key=sport_key)
         if raw_data is None:
             logger.warning("[the_odds_api] No data returned from API")
             return pd.DataFrame()
@@ -336,15 +371,24 @@ class TheOddsAPIScraper(BaseScraper):
     # API Communication
     # ========================================================================
 
-    def _fetch_odds(self) -> Optional[List[Dict[str, Any]]]:
+    def _fetch_odds(
+        self, sport_key: Optional[str] = None,
+    ) -> Optional[List[Dict[str, Any]]]:
         """Make the authenticated API call and return the parsed JSON response.
+
+        Parameters
+        ----------
+        sport_key : str, optional
+            The Odds API sport key (e.g., "soccer_epl", "soccer_spain_la_liga").
+            Falls back to the module-level SPORT_KEY constant if not provided.
 
         Returns
         -------
         list of dict or None
             List of event objects from the API, or None on failure.
         """
-        url = f"{self._base_url}/sports/{SPORT_KEY}/odds"
+        key = sport_key or SPORT_KEY
+        url = f"{self._base_url}/sports/{key}/odds"
 
         params = {
             "apiKey": self._api_key,

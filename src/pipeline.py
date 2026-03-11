@@ -678,8 +678,19 @@ class Pipeline:
             # --- Step 5: Find value bets ---
             print(f"[Step 5/7] Finding value bets...")
             try:
-                from src.betting.value_finder import ValueFinder
+                from src.betting.value_finder import (
+                    ValueFinder, clear_value_bets_for_scheduled,
+                )
                 finder = ValueFinder()
+
+                # PC-09-03: Clear stale value bets for scheduled matches
+                # before recalculating.  This prevents duplicate accumulation
+                # across pipeline runs (the VB unique constraint includes
+                # detected_at, so each run would create new rows otherwise).
+                cleared = clear_value_bets_for_scheduled()
+                if cleared:
+                    print(f"  → Cleared {cleared} stale value bets")
+
                 # Per-league edge threshold (E36-03): Championship uses 3% (less
                 # efficient market), La Liga and EPL use 5% (well-served markets).
                 # Falls back to the global default if no league override is set.
@@ -878,10 +889,20 @@ class Pipeline:
             # --- Step 2: Recalculate edges ---
             print(f"[Step 2/3] Recalculating value bets for {league_name}...")
             try:
-                from src.betting.value_finder import ValueFinder
+                from src.betting.value_finder import (
+                    ValueFinder, clear_value_bets_for_scheduled,
+                )
                 from src.models.storage import get_latest_predictions
 
                 finder = ValueFinder()
+
+                # PC-09-03: Clear stale value bets for scheduled matches
+                # before recalculating with latest odds.  Prevents duplicate
+                # accumulation across pipeline runs.
+                cleared = clear_value_bets_for_scheduled()
+                if cleared:
+                    print(f"  → Cleared {cleared} stale value bets")
+
                 # Per-league edge threshold (E36-03): Championship uses 3% (less
                 # efficient market), La Liga and EPL use 5% (well-served markets).
                 global_threshold = config.settings.value_betting.edge_threshold
@@ -1798,16 +1819,48 @@ class Pipeline:
                 logger.info("Skipping '%s' — not loaded", model_key)
                 continue
 
-            # Check which matches still need predictions from this model
+            # Check which matches still need predictions from this model.
+            #
+            # PC-09-02: Scheduled (upcoming) matches always get fresh
+            # predictions because the model retrains daily with new data and
+            # features may have changed (recent form, updated odds).  Only
+            # FINISHED match predictions are cached — they're historical
+            # records that don't change.
             with get_session() as session:
+                # IDs of finished matches that already have predictions
                 existing_pred_ids = set(
                     r[0] for r in session.query(Prediction.match_id)
+                    .join(Match, Match.id == Prediction.match_id)
                     .filter(
                         Prediction.model_name == model.name,
                         Prediction.model_version == model.version,
+                        Match.status == "finished",
                     )
                     .all()
                 )
+
+                # Delete stale predictions for SCHEDULED matches so they
+                # get regenerated with the freshly-trained model.
+                stale_scheduled = (
+                    session.query(Prediction)
+                    .join(Match, Match.id == Prediction.match_id)
+                    .filter(
+                        Prediction.model_name == model.name,
+                        Prediction.model_version == model.version,
+                        Match.status == "scheduled",
+                    )
+                    .all()
+                )
+                if stale_scheduled:
+                    stale_count = len(stale_scheduled)
+                    for sp in stale_scheduled:
+                        session.delete(sp)
+                    session.commit()
+                    logger.info(
+                        "Refreshing predictions for %d scheduled matches "
+                        "(deleted stale %s predictions)",
+                        stale_count, model.name,
+                    )
 
             predict_features = features_df[
                 ~features_df["match_id"].isin(existing_pred_ids)

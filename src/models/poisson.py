@@ -442,11 +442,18 @@ class PoissonModel(BaseModel):
             f"{attack_prefix}is_heavy_weather",
             # --- Market-implied features (E20-01, E20-02) ---
             # Pinnacle implied probabilities: the market's best estimate of
-            # each outcome.  Overround-removed so they sum to 1.0.
+            # each outcome.  Overround-removed so they sum to ~1.0.
             # For home goals model: high home_prob → more home goals expected.
             # For away goals model: high away_prob → more away goals expected.
+            #
+            # IMPORTANT (PC-09-01): Only 2 of the 3 Pinnacle probabilities are
+            # included.  ``pinnacle_draw_prob`` is excluded because
+            # ``home + draw + away ≈ 1.0`` creates perfect multicollinearity
+            # with the GLM intercept.  Including all 3 produces numerically
+            # unstable coefficients (magnitude ~17,000) that cause wild
+            # prediction swings.  Dropping draw_prob breaks the collinearity
+            # while preserving the same information (draw ≈ 1 − home − away).
             f"{attack_prefix}pinnacle_home_prob",
-            f"{attack_prefix}pinnacle_draw_prob",
             f"{attack_prefix}pinnacle_away_prob",
             # Asian Handicap line: the sharpest market-implied strength
             # difference.  AH = -1.5 means market expects home to win by ~1.5.

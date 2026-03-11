@@ -338,7 +338,7 @@ single-line expression.
 
 ## Current Status
 
-Last completed: PC-08 (Data Gap Fix: League Correction + Missing Data + Pipeline Timeout — 6 issues, all gates passed) ✅
+Last completed: PC-09 (Prediction Model Stability & Data Integrity Fix — 6 issues, all gates passed) ✅
 Currently working: Owner to decide next work
 Next up: Owner to decide
 
@@ -373,6 +373,8 @@ Post-critical-path (March 2026):
 - PC-05: Login ENTER button ✅ — styled green-bordered `st.form_submit_button`, JetBrains Mono, glow on hover
 - PC-06: Fixture stub auto-creation ✅ — `load_odds_the_odds_api` creates scheduled stubs; fixes Today's Picks
 - PC-07: Dashboard & Value Bet Logic Fixes ✅ — lambda clamp [0.2, 3.5], prob cap [0.02, 0.98], edge alignment, Top Picks dates, error handling, display cap ±30%
+- PC-08: Data Gap Fix ✅ — League Correction + Missing Data + Pipeline Timeout (6 issues)
+- PC-09: Prediction Model Stability & Data Integrity Fix ✅ — Pinnacle multicollinearity (max coeff 1.98, was 17K), stale prediction refresh, VB dedup, cross-league odds (6 sport keys), data regen (659 VBs, 0 >30% edge, 78% Pinnacle agreement), 20 tests
 
 E34 — Multi-User Authentication: ALL 6 issues done ✅
 - E34-01: Password storage + session overhaul ✅

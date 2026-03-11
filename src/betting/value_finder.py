@@ -415,6 +415,65 @@ class ValueFinder:
 
 
 # ============================================================================
+# Scheduled Value Bet Cleanup (PC-09-03)
+# ============================================================================
+# Each pipeline run recalculates value bets for ALL scheduled matches using
+# the freshly-trained model and latest odds.  Since the ``value_bets`` table's
+# unique constraint includes ``detected_at``, each run creates new rows even
+# when the bet is identical — causing duplication (5x duplicates per match per
+# pipeline run cycle).
+#
+# Solution: delete ALL value bets for scheduled matches at the START of each
+# pipeline's VB detection phase.  This gives a clean slate before the fresh
+# calculations run.  Finished-match value bets are preserved for historical
+# performance tracking (backtest, P&L analysis).
+
+
+def clear_value_bets_for_scheduled() -> int:
+    """Delete all value bets for matches that are still scheduled.
+
+    Called at the start of value bet detection (both morning and midday
+    pipelines) to prevent duplicate accumulation across pipeline runs.
+    Only deletes VBs where the associated match has ``status='scheduled'``.
+    Finished-match VBs are preserved for historical performance tracking.
+
+    Returns
+    -------
+    int
+        Number of value bet rows deleted.
+    """
+    with get_session() as session:
+        # Subquery: match IDs with status='scheduled'
+        scheduled_ids = (
+            session.query(Match.id)
+            .filter(Match.status == "scheduled")
+            .subquery()
+        )
+
+        # Delete all VBs for those matches
+        deleted_count = (
+            session.query(ValueBetORM)
+            .filter(ValueBetORM.match_id.in_(scheduled_ids))
+            .delete(synchronize_session="fetch")
+        )
+
+        session.commit()
+
+    if deleted_count > 0:
+        logger.info(
+            "clear_value_bets_for_scheduled: Cleared %d stale value bets "
+            "for scheduled matches",
+            deleted_count,
+        )
+    else:
+        logger.debug(
+            "clear_value_bets_for_scheduled: No stale value bets to clear"
+        )
+
+    return deleted_count
+
+
+# ============================================================================
 # Module-level helpers
 # ============================================================================
 
