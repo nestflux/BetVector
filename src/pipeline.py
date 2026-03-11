@@ -1703,7 +1703,6 @@ class Pipeline:
 
         from src.database.db import get_session
         from src.database.models import Match, Prediction
-        from src.features.engineer import compute_all_features
         from src.models.base_model import (
             MatchPrediction,
             derive_market_probabilities,
@@ -1746,22 +1745,22 @@ class Pipeline:
 
         # Build training features from ALL seasons.
         # The current season's features_df is passed in.  For historical
-        # seasons, call compute_all_features() which reads existing features
-        # from the DB (idempotent — no recomputation if already stored).
+        # seasons, use load_features_bulk() which reads ALL pre-computed
+        # features in 2 DB queries total (PC-10-03).  Previously this
+        # called compute_all_features() per season, which made 5 queries
+        # per match (~65,000 queries per league × 6 leagues = ~330,000
+        # total).  Now it's 2 queries per league = ~12 total.
         all_features = features_df
         if hist_seasons:
             logger.info(
                 "Loading historical features for training: %s",
                 ", ".join(hist_seasons),
             )
-            hist_dfs = []
-            for hist_season in hist_seasons:
-                hist_df = compute_all_features(league_id, hist_season)
-                if not hist_df.empty:
-                    hist_dfs.append(hist_df)
-            if hist_dfs:
+            from src.features.engineer import load_features_bulk
+            hist_df = load_features_bulk(league_id, hist_seasons)
+            if not hist_df.empty:
                 all_features = pd.concat(
-                    [features_df] + hist_dfs, ignore_index=True,
+                    [features_df, hist_df], ignore_index=True,
                 )
 
         # Filter features to finished matches only for training

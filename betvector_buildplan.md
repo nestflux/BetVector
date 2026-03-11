@@ -56,8 +56,9 @@ This document breaks the BetVector masterplan into sequenced epics and issues th
 | PC-07 | Dashboard & Value Bet Logic Fixes | 5 | Lambda clamp, probability cap, edge alignment, Top Picks dates, error handling, edge display cap |
 | PC-08 | Data Gap Fix — League Correction & Missing Data | 6 | Replace English League One with French Ligue 1, pipeline timeout, EPL backfill, Championship Elo, stadiums, referee data |
 | PC-09 | Prediction Model Stability & Data Integrity Fix | 6 | ✅ DONE — Pinnacle multicollinearity fix (max coeff 1.98→was 17K), stale prediction refresh, VB dedup, cross-league odds fix (6 sport keys), data regen (659 VBs, 0 >30% edge, 78% Pinnacle direction agreement), 20 tests |
+| PC-10 | Morning Pipeline Performance Optimization | 4 | Bulk feature loader (2 queries vs 330K), compute_all_features() optimization, pipeline integration, integration test |
 
-**Total: 42 epics, 177 issues** (45 original + 20 post-launch + 12 odds/model + 7 backfill + 16 dashboard UX + 5 clarity + 16 badges/polish + 6 cloud migration + 6 post-critical-path + 6 multi-user auth + 7 bet tracker + 4 league expansion + 4 model improvement + 6 league backfill phase 2 + 5 dashboard fixes + 6 data gap fix + 6 model stability fix)
+**Total: 43 epics, 181 issues** (45 original + 20 post-launch + 12 odds/model + 7 backfill + 16 dashboard UX + 5 clarity + 16 badges/polish + 6 cloud migration + 6 post-critical-path + 6 multi-user auth + 7 bet tracker + 4 league expansion + 4 model improvement + 6 league backfill phase 2 + 5 dashboard fixes + 6 data gap fix + 6 model stability fix + 4 pipeline performance)
 
 ---
 
@@ -6420,3 +6421,115 @@ PC-09-01 (Pinnacle multicollinearity — model fix)
 → PC-09-05 (Regenerate clean data — operational)
 → PC-09-06 (Integration test)
 ```
+
+---
+
+## PC-10 — Morning Pipeline Performance Optimization
+
+**Depends on:** PC-09
+**Master Plan:** MP §7 Pipeline Orchestrator, MP §5 Architecture
+
+The morning pipeline takes **30+ minutes** on GitHub Actions because `_generate_predictions()` calls `compute_all_features()` once per historical season, and each call loops through every match making **5 DB queries per match** — even when features already exist. With 6 leagues × 5 historical seasons × 200-400 matches per season, this produces **~330,000 unnecessary database queries** per morning run.
+
+Midday and evening pipelines are already efficient — **only morning needs optimization.**
+
+---
+
+### PC-10-01 — Add `load_features_bulk()` to engineer.py
+
+**Type:** Performance optimization
+**File:** `src/features/engineer.py`
+
+**Problem:** No bulk feature loading function exists. `_generate_predictions()` abuses `compute_all_features()` as a feature reader, triggering per-match query loops (5 queries × ~13,000 matches = ~65,000 queries per league).
+
+**Fix:** Add `load_features_bulk(league_id, seasons)` — loads ALL pre-computed features for multiple seasons in 2 total ORM queries:
+1. Fetch all matches for league+seasons
+2. Fetch all Feature rows for those match IDs using `Feature.match_id.in_(match_ids)`
+3. Build `{match_id: {1: home_feat, 0: away_feat}}` dict, flatten to DataFrame
+
+Reuses: `feature_cols` list from `_read_existing_features()` (line 417-454), flattening logic from `_flatten_features()` (line 358-390).
+
+**Acceptance Criteria:**
+- [ ] New function `load_features_bulk()` in `src/features/engineer.py`
+- [ ] Uses exactly 2 ORM queries regardless of match count
+- [ ] Returns identical DataFrame format to `compute_all_features()`
+- [ ] Handles empty results gracefully (returns empty DataFrame)
+- [ ] Logs: "Bulk-loaded N features for M matches across K seasons"
+- [ ] Matches that lack features (both home + away) are silently skipped
+
+---
+
+### PC-10-02 — Optimize `compute_all_features()` for Current Season
+
+**Type:** Performance optimization
+**File:** `src/features/engineer.py`
+
+**Problem:** Current-season match loop makes 5 queries per skipped match (~380 EPL matches × 5 = ~1,900 unnecessary queries per league).
+
+**Fix:** Add bulk pre-loading at the top of `compute_all_features()`:
+1. Bulk existence check: one query for all Feature match_ids → `set()`
+2. Pre-load team names: one query for all Teams → `{team_id: name}` dict
+3. Bulk read existing features: one query for all Feature rows → `{match_id: {is_home: Feature}}` dict
+
+Per-match loop uses dict lookups (0 queries) for skipped matches. New matches still computed via `compute_features()`.
+
+**Acceptance Criteria:**
+- [ ] `compute_all_features()` pre-loads in 3 bulk queries
+- [ ] Per-match loop no longer opens DB sessions for skipped matches
+- [ ] Feature computation for new matches still works
+- [ ] Output DataFrame identical to current implementation
+- [ ] Logs still show progress at every 50th match
+
+---
+
+### PC-10-03 — Update `_generate_predictions()` to Use Bulk Loader
+
+**Type:** Pipeline integration
+**File:** `src/pipeline.py`
+
+**Problem:** `_generate_predictions()` (line 1747-1765) loops through historical seasons calling `compute_all_features()` one season at a time.
+
+**Fix:** Replace the historical season loop with a single `load_features_bulk()` call.
+
+**Acceptance Criteria:**
+- [ ] `_generate_predictions()` uses `load_features_bulk()` for historical data
+- [ ] Historical feature loading: 2 queries per league (was ~65,000)
+- [ ] Training DataFrame has same match count as before
+- [ ] Model training produces same-quality predictions (Brier within ±0.01)
+- [ ] Logging shows bulk load stats
+
+---
+
+### PC-10-04 — Integration Test + Performance Benchmark
+
+**Type:** Test
+**File:** `tests/test_pc10_pipeline_performance.py`
+
+**Acceptance Criteria:**
+- [ ] Test: `load_features_bulk()` returns correct DataFrame for synthetic data
+- [ ] Test: `load_features_bulk()` handles empty seasons (returns empty DataFrame)
+- [ ] Test: `load_features_bulk()` output matches `compute_all_features()` output
+- [ ] Test: `compute_all_features()` with pre-loaded dicts skips DB queries for existing matches
+- [ ] Test: `_generate_predictions()` produces predictions with bulk-loaded features
+- [ ] All existing tests still pass (182+ tests)
+
+---
+
+### Implementation Sequence
+
+```
+PC-10-01 (load_features_bulk — new bulk loader)
+→ PC-10-02 (compute_all_features — current season optimization)
+→ PC-10-03 (_generate_predictions — pipeline integration)
+→ PC-10-04 (Integration test + benchmark)
+```
+
+### Performance Impact
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Historical feature queries (per league) | ~65,000 | 2 |
+| Current season feature queries (per league) | ~1,900 | 3 |
+| Total queries (6 leagues, morning run) | ~330,000 | ~30 |
+| Historical feature load time (est.) | ~20 min | ~5 sec |
+| Current season feature time (no new matches) | ~3 min | ~10 sec |
