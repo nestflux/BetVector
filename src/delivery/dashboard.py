@@ -344,15 +344,23 @@ def _get_emergency_password() -> str:
 
     Resolution order: environment variable → Streamlit secrets.
     Returns an empty string if neither is configured (open local dev mode).
+
+    NOTE (PC-10): On Streamlit Cloud, secrets are injected into
+    ``st.secrets`` at runtime by the platform — there is NO physical
+    ``secrets.toml`` file on the server.  The previous implementation
+    gated ``st.secrets.get()`` behind a file-existence check, which
+    always failed on Cloud, causing the dashboard to fall through to
+    open dev mode (no login required).  Now we always try ``st.secrets``
+    regardless of whether a physical file exists.
     """
     pwd = os.environ.get("DASHBOARD_PASSWORD", "")
     if not pwd:
         try:
-            secrets_path = Path(__file__).resolve().parents[2] / ".streamlit" / "secrets.toml"
-            home_secrets = Path.home() / ".streamlit" / "secrets.toml"
-            if secrets_path.exists() or home_secrets.exists():
-                pwd = st.secrets.get("DASHBOARD_PASSWORD", "")
+            pwd = st.secrets.get("DASHBOARD_PASSWORD", "")
         except Exception:
+            # st.secrets raises FileNotFoundError locally when no
+            # secrets.toml exists, or StreamlitAPIException on Cloud
+            # if secrets are not configured.  Both are safe to swallow.
             pwd = ""
     return pwd
 
@@ -386,8 +394,18 @@ def check_password() -> bool:
     if is_authenticated():
         return True
 
-    # No password configured — open dev access (no credentials set up yet)
-    if not emergency_pwd:
+    # PC-10: Detect Streamlit Cloud — if database secrets are configured,
+    # we're running in production and MUST require authentication.
+    # Open dev mode is only allowed for local development (no secrets at all).
+    is_cloud = False
+    try:
+        if st.secrets.get("database", {}).get("connection_string", ""):
+            is_cloud = True
+    except Exception:
+        pass
+
+    # No password configured — open dev access (local development only)
+    if not emergency_pwd and not is_cloud:
         set_session_user(1, "owner")
         return True
 
