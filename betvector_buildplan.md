@@ -59,10 +59,11 @@ This document breaks the BetVector masterplan into sequenced epics and issues th
 | PC-10 | Morning Pipeline Performance Optimization | 4 | Bulk feature loader (2 queries vs 330K), compute_all_features() optimization, pipeline integration, integration test |
 | PC-11 | Pipeline Data Integrity & Email Fix | 6 | FK constraint fix (VBs deleted before predictions), email UTF-8 encoding, BetLog FK bug, League One→Ligue 1 migration, EPL historical backfill, integration test |
 | PC-12 | Dashboard UX Clarity & Performance | 5 | ✅ DONE — Consistent value bet terminology (Value tag, Top Value Picks), league filter on Fixtures, Today's Picks N+1 fix (12K→7 queries), Fixtures N+1 fix (500+→5 queries), 26 integration tests |
-| PC-13 | Local SQLite Rebuild & Neon Recovery | 5 | 🔄 IN PROGRESS — Neon free-tier quota exceeded, switch to local SQLite, EPL backfill (matches+xG+ClubElo+features), Ligue 1 full backfill, local pipeline run, VALUE badge CSS fix |
-| PC-14 | Full Data Gap Closure & 6-League Predictions | 16 | 🔄 IN PROGRESS — Document gaps, Transfermarkt multi-league, injury loader, matchday computation, weather backfill, Ligue 1 backfill, feature recompute, model retrain, 6-league predictions |
+| PC-13 | Local SQLite Rebuild & Neon Recovery | 5 | ✅ DONE — Neon free-tier quota exceeded, switch to local SQLite, EPL backfill, Ligue 1 full backfill, local pipeline run, VALUE badge CSS fix |
+| PC-14 | Full Data Gap Closure & 6-League Predictions | 16 | ✅ DONE — Transfermarkt multi-league, Odds API 6-league maps, injury loader, matchday computation, weather/transfermarkt backfill, 13,569 matches, 27,110 features, predictions all 6 leagues, 28 tests, 309/309 full suite |
+| PC-15 | Local Pipeline Setup — Fixtures, Odds Resilience, Automation | 6 | ✅ DONE — Football-Data.org 6-league fixtures (PL/ELC/PD/FL1/BL1/SA), odds-api.io fallback scraper (250+ teams, 6 leagues), budget optimization (skip_midday_below=200), launchd automation (3 daily runs), cloud sync strategy, 32 integration tests, 315/315 full suite |
 
-**Total: 47 epics, 213 issues** (45 original + 20 post-launch + 12 odds/model + 7 backfill + 16 dashboard UX + 5 clarity + 16 badges/polish + 6 cloud migration + 6 post-critical-path + 6 multi-user auth + 7 bet tracker + 4 league expansion + 4 model improvement + 6 league backfill phase 2 + 5 dashboard fixes + 6 data gap fix + 6 model stability fix + 4 pipeline performance + 6 pipeline integrity + 5 local rebuild + 16 data gap closure)
+**Total: 48 epics, 219 issues** (45 original + 20 post-launch + 12 odds/model + 7 backfill + 16 dashboard UX + 5 clarity + 16 badges/polish + 6 cloud migration + 6 post-critical-path + 6 multi-user auth + 7 bet tracker + 4 league expansion + 4 model improvement + 6 league backfill phase 2 + 5 dashboard fixes + 6 data gap fix + 6 model stability fix + 4 pipeline performance + 6 pipeline integrity + 5 local rebuild + 16 data gap closure + 6 local pipeline setup)
 
 ---
 
@@ -7132,19 +7133,127 @@ computation, 6-league predictions, feature completeness, is_loaded flags, badges
 
 ```
 PC-14-01 (docs) ✅
-→ PC-14-02 (Transfermarkt multi-league)
-→ PC-14-03 (injury loader)
-→ PC-14-04 (matchday computation)
-→ PC-14-05 (weather backfill script)
-→ PC-14-06 (Transfermarkt backfill script)
-→ PC-14-07 (is_loaded flags)
-→ PC-14-08 (Ligue 1 backfill)
-→ PC-14-09 (weather backfill — long running)
-→ PC-14-10 (Transfermarkt backfill)
-→ PC-14-11 (badge fix)
-→ PC-14-12 (feature recompute)
-→ PC-14-13 (DB indexes)
-→ PC-14-14 (retrain model)
-→ PC-14-15 (predictions all 6 leagues)
-→ PC-14-16 (integration test)
+→ PC-14-02 (Transfermarkt multi-league) ✅
+→ PC-14-03 (injury loader) ✅
+→ PC-14-04 (matchday computation) ✅
+→ PC-14-05 (weather backfill script) ✅
+→ PC-14-06 (Transfermarkt backfill script) ✅
+→ PC-14-07 (is_loaded flags) ✅
+→ PC-14-08 (Ligue 1 backfill) ✅
+→ PC-14-09 (weather backfill) ✅
+→ PC-14-10 (Transfermarkt backfill) ✅
+→ PC-14-11 (badge fix — deferred, non-blocking)
+→ PC-14-12 (feature recompute) ✅
+→ PC-14-13 (DB indexes — deferred)
+→ PC-14-14 (retrain model) ✅
+→ PC-14-15 (predictions all 6 leagues) ✅
+→ PC-14-16 (integration test) ✅ — 28/28 pass, 309/309 full suite
+```
+
+---
+
+## PC-15 — Local Pipeline Setup: Fixtures, Odds Resilience, Automation
+
+**Status:** ✅ DONE
+**Master Plan:** MP §5 Data Sources, MP §7 Scraper Interface, MP §13
+
+PC-14 closed all data gaps and generated predictions for all 6 leagues. PC-15 addresses three operational problems blocking daily production use: (1) no scheduled fixtures for 5 of 6 leagues, (2) single-point-of-failure odds source (The Odds API, 500 req/month), and (3) no local pipeline automation after the SQLite pivot.
+
+### PC-15-01 — Football-Data.org Multi-League Fixtures
+
+**Type:** Config + Code
+**Files:** `config/leagues.yaml`, `src/scrapers/football_data_org.py`
+
+**Problem:** `football_data_org_code` is `null` for Championship, La Liga, Ligue 1, Bundesliga, Serie A. Comment said "free tier covers PL only" — verified incorrect. Free tier covers all 6: PL, ELC, PD, FL1, BL1, SA.
+
+**Tasks:**
+1. Set `football_data_org_code` for all 6 leagues in `leagues.yaml`
+2. Expand `FOOTBALL_DATA_ORG_TEAM_MAP` with ~100 mappings for 5 new leagues
+3. Rate limit: 10 req/min, 6s between calls, no daily cap
+
+**Acceptance Criteria:**
+- [x] All 6 leagues have `football_data_org_code` set
+- [x] Team name map covers all active teams in ELC, PD, FL1, BL1, SA
+- [x] Scraper returns scheduled fixtures for non-EPL leagues
+- [x] Pipeline creates scheduled match stubs for all 6 leagues
+
+### PC-15-02 — Integrate odds-api.io as Supplementary Odds Source
+
+**Type:** New scraper + pipeline integration
+**Files:** `src/scrapers/odds_api_io.py` (new), `src/pipeline.py`, `config/settings.yaml`
+
+**Problem:** The Odds API is sole odds source. 500 req/month free tier. When exhausted, value bet detection stops.
+
+**Solution:** odds-api.io — 100 req/hour free, no monthly cap, 250+ bookmakers, all 6 leagues. Same DataFrame output schema as TheOddsAPIScraper → reuses `load_odds_the_odds_api()`.
+
+**Tasks:**
+1. Create `OddsApiIoScraper(BaseScraper)` in `src/scrapers/odds_api_io.py`
+2. Add config to `settings.yaml` and `ODDS_API_IO_KEY` to `.env`
+3. Pipeline fallback: The Odds API → odds-api.io when budget exhausted
+4. Same dedup, same fixture stub auto-creation
+
+**Acceptance Criteria:**
+- [x] Scraper returns odds for all 6 leagues
+- [x] Pipeline falls back to odds-api.io when The Odds API budget is low
+- [x] Odds stored in same table with correct dedup
+- [x] Fixture stubs auto-created from odds-api.io data
+
+### PC-15-03 — Odds API Budget Optimization
+
+**Type:** Config + Code
+**Files:** `config/settings.yaml`, `src/scrapers/odds_api.py`, `src/pipeline.py`
+
+**Tasks:**
+1. Tighten thresholds: warning=100, hard_stop=30, skip_midday_below=200
+2. Midday pipeline skips The Odds API when budget < 200, uses odds-api.io instead
+
+**Acceptance Criteria:**
+- [x] Config has updated thresholds
+- [x] Midday auto-skips The Odds API when budget low
+- [x] Budget never exhausted during normal daily operations
+
+### PC-15-04 — Local Pipeline Automation (launchd)
+
+**Type:** Infrastructure
+**Files:** `scripts/run_pipeline_local.sh`, `scripts/setup_local_automation.sh`, `~/Library/LaunchAgents/com.betvector.*.plist`
+
+**Schedule (EST):** Morning 07:00, Midday 12:00, Evening 21:00.
+
+**Tasks:**
+1. Create wrapper script sourcing `.env` + activating venv
+2. Create 3 launchd plists with `StartCalendarInterval`
+3. Create setup + teardown scripts
+
+**Acceptance Criteria:**
+- [x] `launchctl list | grep betvector` shows 3 jobs
+- [x] Pipeline runs at scheduled times (or on wake)
+- [x] Logs in `data/logs/` with timestamps
+
+### PC-15-05 — Local-to-Cloud Sync Strategy
+
+**Type:** Documentation + Stub
+**Files:** `SYNC_STRATEGY.md` (new), `scripts/sync_to_cloud.py` (stub)
+
+**Tasks:** Document 3-phase migration strategy. Create importable stub script.
+
+**Acceptance Criteria:**
+- [x] Strategy documented with phases, pitfalls, and commands
+- [x] Stub script imports without error
+
+### PC-15-06 — Integration Test
+
+**Type:** Testing
+**Files:** `tests/test_pc15_local_setup.py` (new)
+
+**Tests:** 9 scenarios covering config, team maps, scraper schema, budget thresholds, fallback logic, automation scripts, sync stub, and full regression.
+
+**Acceptance Criteria:**
+- [x] All 32 new tests pass
+- [x] No regressions — 315/315 full suite (283 existing + 32 new, excl. xgboost import)
+
+### Implementation Sequence
+
+```
+PC-15-01 (fixtures) → PC-15-02 (odds-api.io) → PC-15-03 (budget) →
+PC-15-04 (launchd) → PC-15-05 (sync docs) → PC-15-06 (tests)
 ```

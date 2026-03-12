@@ -57,6 +57,51 @@ from src.database.seed import seed_all
 
 logger = logging.getLogger(__name__)
 
+# Path for persisting The Odds API budget between pipeline runs.
+# The morning pipeline saves the remaining request count from API response
+# headers, and the midday pipeline reads it to decide whether to skip
+# The Odds API and use odds-api.io instead (budget-aware fallback).
+import json
+import os
+
+_BUDGET_FILE = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "data", "logs", "odds_api_budget.json",
+)
+
+
+def _persist_budget(remaining: int) -> None:
+    """Save The Odds API remaining request count to a JSON file.
+
+    Called after each Odds API request in both morning and midday pipelines.
+    The midday pipeline reads this to decide if it should skip The Odds API
+    and use odds-api.io instead (see skip_midday_below in settings.yaml).
+    """
+    try:
+        os.makedirs(os.path.dirname(_BUDGET_FILE), exist_ok=True)
+        with open(_BUDGET_FILE, "w") as f:
+            json.dump({
+                "remaining": remaining,
+                "updated_at": datetime.utcnow().isoformat(),
+            }, f)
+    except OSError as e:
+        logger.warning("[pipeline] Could not persist budget: %s", e)
+
+
+def _read_persisted_budget() -> Optional[int]:
+    """Read The Odds API remaining request count from the persisted file.
+
+    Returns None if the file doesn't exist or can't be read (e.g., first
+    run ever, or file was deleted).  Caller should treat None as "unknown"
+    and proceed with the API call.
+    """
+    try:
+        with open(_BUDGET_FILE, "r") as f:
+            data = json.load(f)
+        return int(data.get("remaining", 0))
+    except (OSError, json.JSONDecodeError, ValueError, TypeError):
+        return None
+
 
 # ============================================================================
 # Pipeline Result Dataclass
@@ -472,28 +517,63 @@ class Pipeline:
                     errors.append(err)
                     print(f"  → Understat: FAILED ({e})")
 
-            # 1e-pre. The Odds API (live pre-match odds from 50+ bookmakers)
-            # Fetched here so odds are available for value bet detection.
-            # One API call returns all upcoming EPL matches with all bookmaker odds.
+            # 1e-pre. Odds sources — dual source with automatic fallback
+            # Primary: The Odds API (the-odds-api.com) — 500 req/month free tier
+            # Fallback: odds-api.io — 100 req/hour free tier (no monthly cap)
+            # If primary returns empty (budget exhausted), fallback activates.
             the_odds_api_df = None
+            odds_source_used = None
             try:
                 from src.scrapers.odds_api import TheOddsAPIScraper
                 odds_api_scraper = TheOddsAPIScraper()
                 the_odds_api_df = odds_api_scraper.scrape(
                     league_config=league_cfg, season=current_season,
                 )
+                # Persist budget remaining for midday budget-aware skip.
+                # Response headers populate _requests_remaining after the call.
+                if odds_api_scraper._requests_remaining is not None:
+                    _persist_budget(odds_api_scraper._requests_remaining)
                 if the_odds_api_df is not None and not the_odds_api_df.empty:
+                    odds_source_used = "The Odds API"
                     print(
                         f"  → The Odds API: {len(the_odds_api_df)} odds records "
                         f"from {the_odds_api_df['bookmaker'].nunique()} bookmakers"
                     )
                 else:
-                    print("  → The Odds API: No odds data returned (check API key)")
+                    print("  → The Odds API: No odds data (budget may be exhausted)")
             except Exception as e:
                 err = f"The Odds API scrape failed for {league_name}: {e}"
                 logger.error(err)
                 errors.append(err)
                 print(f"  → The Odds API: FAILED ({e})")
+
+            # Fallback to odds-api.io if The Odds API returned nothing
+            if the_odds_api_df is None or the_odds_api_df.empty:
+                try:
+                    from src.scrapers.odds_api_io import OddsApiIoScraper
+                    fallback_scraper = OddsApiIoScraper()
+                    the_odds_api_df = fallback_scraper.scrape(
+                        league_config=league_cfg, season=current_season,
+                    )
+                    if the_odds_api_df is not None and not the_odds_api_df.empty:
+                        odds_source_used = "odds-api.io"
+                        print(
+                            f"  → odds-api.io (fallback): {len(the_odds_api_df)} odds records "
+                            f"from {the_odds_api_df['bookmaker'].nunique()} bookmakers"
+                        )
+                    else:
+                        print("  → odds-api.io (fallback): No odds data returned")
+                except Exception as e:
+                    err = f"odds-api.io fallback failed for {league_name}: {e}"
+                    logger.error(err)
+                    errors.append(err)
+                    print(f"  → odds-api.io (fallback): FAILED ({e})")
+
+            if odds_source_used:
+                logger.info(
+                    "[pipeline] Odds source for %s: %s",
+                    league_name, odds_source_used,
+                )
 
             # 1f. ClubElo ratings (daily Elo ratings for all clubs)
             # Elo captures long-term team quality beyond rolling form.
@@ -871,26 +951,93 @@ class Pipeline:
                 errors.append(err)
                 print(f"  → API-Football odds: FAILED ({e})")
 
-            # 1c. The Odds API — refresh live pre-match odds (50+ bookmakers)
-            # Midday refresh captures line movements since the morning fetch.
+            # 1c. Odds refresh — dual source with budget-aware fallback
+            # PC-15-03: At midday, check The Odds API budget. If below
+            # skip_midday_below threshold, skip it entirely and go straight
+            # to odds-api.io (which has no monthly cap). This preserves
+            # The Odds API budget for morning calls which are higher priority.
+            oa_df = None
+            midday_odds_source = None
+            skip_midday_threshold = 200
+            try:
+                skip_midday_threshold = int(getattr(
+                    getattr(config.settings.scraping, "the_odds_api", None),
+                    "skip_midday_below", 200,
+                ))
+            except (AttributeError, TypeError, ValueError):
+                pass
+
+            # Check if The Odds API has enough budget for midday calls.
+            # Budget is persisted to a JSON file by the morning pipeline after
+            # each Odds API call.  A fresh TheOddsAPIScraper() instance has
+            # _requests_remaining=None (only populated from response headers),
+            # so we read the persisted budget instead of creating a new instance.
+            midday_skip_primary = False
             try:
                 from src.scrapers.odds_api import TheOddsAPIScraper
                 from src.scrapers.loader import load_odds_the_odds_api
 
-                odds_api_scraper = TheOddsAPIScraper()
-                oa_df = odds_api_scraper.scrape(
-                    league_config=league_cfg, season=current_season,
-                )
-                if oa_df is not None and not oa_df.empty:
-                    oa_result = load_odds_the_odds_api(oa_df, league_id)
-                    print(f"  → Odds (The Odds API): {oa_result}")
+                # Read persisted budget from morning pipeline run
+                persisted_remaining = _read_persisted_budget()
+                if (persisted_remaining is not None
+                        and persisted_remaining < skip_midday_threshold):
+                    midday_skip_primary = True
+                    print(
+                        f"  → The Odds API: Skipping midday (budget {persisted_remaining} "
+                        f"< threshold {skip_midday_threshold}) — using odds-api.io instead"
+                    )
+                    logger.info(
+                        "[pipeline] Skipping midday Odds API for %s (budget %d < %d)",
+                        league_name, persisted_remaining,
+                        skip_midday_threshold,
+                    )
                 else:
-                    print("  → The Odds API: No odds data returned")
+                    odds_api_scraper = TheOddsAPIScraper()
+                    oa_df = odds_api_scraper.scrape(
+                        league_config=league_cfg, season=current_season,
+                    )
+                    # Persist updated budget after the call
+                    if odds_api_scraper._requests_remaining is not None:
+                        _persist_budget(odds_api_scraper._requests_remaining)
+                    if oa_df is not None and not oa_df.empty:
+                        midday_odds_source = "The Odds API"
+                        oa_result = load_odds_the_odds_api(oa_df, league_id)
+                        print(f"  → Odds (The Odds API): {oa_result}")
+                    else:
+                        print("  → The Odds API: No odds data (budget may be exhausted)")
             except Exception as e:
                 err = f"The Odds API refresh failed for {league_name}: {e}"
                 logger.error(err)
                 errors.append(err)
                 print(f"  → The Odds API odds: FAILED ({e})")
+
+            # Fallback to odds-api.io if The Odds API was skipped or returned nothing
+            if midday_skip_primary or oa_df is None or oa_df.empty:
+                try:
+                    from src.scrapers.odds_api_io import OddsApiIoScraper
+                    from src.scrapers.loader import load_odds_the_odds_api
+
+                    fallback_scraper = OddsApiIoScraper()
+                    oa_df = fallback_scraper.scrape(
+                        league_config=league_cfg, season=current_season,
+                    )
+                    if oa_df is not None and not oa_df.empty:
+                        midday_odds_source = "odds-api.io"
+                        oa_result = load_odds_the_odds_api(oa_df, league_id)
+                        print(f"  → odds-api.io (fallback): {oa_result}")
+                    else:
+                        print("  → odds-api.io (fallback): No odds data returned")
+                except Exception as e:
+                    err = f"odds-api.io midday fallback failed for {league_name}: {e}"
+                    logger.error(err)
+                    errors.append(err)
+                    print(f"  → odds-api.io (fallback): FAILED ({e})")
+
+            if midday_odds_source:
+                logger.info(
+                    "[pipeline] Midday odds source for %s: %s",
+                    league_name, midday_odds_source,
+                )
 
             # --- Step 2: Recalculate edges ---
             print(f"[Step 2/3] Recalculating value bets for {league_name}...")

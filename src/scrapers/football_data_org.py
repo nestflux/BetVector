@@ -17,7 +17,8 @@ API Details (v4):
   - Rate limit: 10 requests/minute (free tier) → 6-second minimum between calls
   - Returns all fixtures for a competition-season in a single response (~380 rows)
 
-Coverage: Premier League (competition code "PL") is available on the free tier.
+Coverage: Free tier covers PL (EPL), ELC (Championship), PD (La Liga),
+FL1 (Ligue 1), BL1 (Bundesliga), SA (Serie A) — all 6 BetVector leagues.
 No daily request cap — only a per-minute rate limit.
 
 Install: No extra packages needed — uses ``requests`` (already in requirements).
@@ -53,7 +54,8 @@ logger = logging.getLogger(__name__)
 # match it, and a warning is logged so we can add the explicit mapping.
 
 FOOTBALL_DATA_ORG_TEAM_MAP: Dict[str, str] = {
-    # --- Current 2025-26 EPL squads ---
+    # ── EPL (PL) ─────────────────────────────────────────────────────────
+    # DB canonical names come from Football-Data.co.uk CSV column headers.
     "Arsenal FC": "Arsenal",
     "Aston Villa FC": "Aston Villa",
     "AFC Bournemouth": "AFC Bournemouth",
@@ -74,8 +76,7 @@ FOOTBALL_DATA_ORG_TEAM_MAP: Dict[str, str] = {
     "Tottenham Hotspur FC": "Tottenham Hotspur",
     "West Ham United FC": "West Ham United",
     "Wolverhampton Wanderers FC": "Wolverhampton Wanderers",
-
-    # --- Recently promoted/relegated (historical coverage) ---
+    # EPL promoted/relegated (historical coverage)
     "Ipswich Town FC": "Ipswich Town",
     "Leeds United FC": "Leeds United",
     "Leicester City FC": "Leicester City",
@@ -86,6 +87,167 @@ FOOTBALL_DATA_ORG_TEAM_MAP: Dict[str, str] = {
     "West Bromwich Albion FC": "West Bromwich Albion",
     "Huddersfield Town AFC": "Huddersfield Town",
     "Cardiff City FC": "Cardiff City",
+
+    # ── Championship (ELC) ───────────────────────────────────────────────
+    # API uses "FC"/"AFC" suffixes; DB uses Football-Data.co.uk short forms
+    "Birmingham City FC": "Birmingham",
+    "Blackburn Rovers FC": "Blackburn",
+    "Bristol City FC": "Bristol City",
+    "Charlton Athletic FC": "Charlton",
+    "Coventry City FC": "Coventry",
+    "Derby County FC": "Derby",
+    "Hull City AFC": "Hull",
+    # "Ipswich Town FC" — already mapped above (promoted to EPL)
+    # "Leicester City FC" — already mapped above
+    "Middlesbrough FC": "Middlesbrough",
+    "Millwall FC": "Millwall",
+    # "Norwich City FC" — already mapped above
+    "Oxford United FC": "Oxford",
+    "Portsmouth FC": "Portsmouth",
+    "Preston North End FC": "Preston",
+    "Queens Park Rangers FC": "QPR",
+    # "Sheffield United FC" — already mapped above
+    "Sheffield Wednesday FC": "Sheffield Weds",
+    # "Southampton FC" — already mapped above (relegated from EPL)
+    "Stoke City FC": "Stoke",
+    "Swansea City AFC": "Swansea",
+    # "Watford FC" — already mapped above
+    # "West Bromwich Albion FC" — already mapped above
+    "Wrexham AFC": "Wrexham",
+    # Championship historical (promoted/relegated between seasons)
+    "Barnsley FC": "Barnsley",
+    "Blackpool FC": "Blackpool",
+    "Peterborough United FC": "Peterboro",
+    "Plymouth Argyle FC": "Plymouth",
+    "Reading FC": "Reading",
+    "Rotherham United FC": "Rotherham",
+    "Wigan Athletic FC": "Wigan",
+    "Wycombe Wanderers FC": "Wycombe",
+
+    # ── La Liga (PD) ─────────────────────────────────────────────────────
+    # API uses official Spanish club names; DB uses Football-Data short forms
+    "Athletic Club": "Ath Bilbao",
+    "CA Osasuna": "Osasuna",
+    "Club Atlético de Madrid": "Ath Madrid",
+    "Deportivo Alavés": "Alaves",
+    "Elche CF": "Elche",
+    "FC Barcelona": "Barcelona",
+    "Getafe CF": "Getafe",
+    "Girona FC": "Girona",
+    "Levante UD": "Levante",
+    "RC Celta de Vigo": "Celta",
+    "RCD Espanyol de Barcelona": "Espanol",
+    "RCD Mallorca": "Mallorca",
+    "Rayo Vallecano de Madrid": "Vallecano",
+    "Real Betis Balompié": "Betis",
+    "Real Madrid CF": "Real Madrid",
+    "Real Oviedo": "Oviedo",
+    "Real Sociedad de Fútbol": "Sociedad",
+    "Sevilla FC": "Sevilla",
+    "Valencia CF": "Valencia",
+    "Villarreal CF": "Villarreal",
+    # La Liga historical
+    "Cádiz CF": "Cadiz",
+    "Granada CF": "Granada",
+    "SD Huesca": "Huesca",
+    "SD Eibar": "Eibar",
+    "UD Almería": "Almeria",
+    "UD Las Palmas": "Las Palmas",
+    "CD Leganés": "Leganes",
+    "Real Valladolid CF": "Valladolid",
+
+    # ── Ligue 1 (FL1) ───────────────────────────────────────────────────
+    # API uses official French club names; DB uses Football-Data short forms
+    "AJ Auxerre": "Auxerre",
+    "AS Monaco FC": "Monaco",
+    "Angers SCO": "Angers",
+    "FC Lorient": "Lorient",
+    "FC Metz": "Metz",
+    "FC Nantes": "Nantes",
+    "Le Havre AC": "Le Havre",
+    "Lille OSC": "Lille",
+    "OGC Nice": "Nice",
+    "Olympique Lyonnais": "Lyon",
+    "Olympique de Marseille": "Marseille",
+    "Paris FC": "Paris FC",
+    "Paris Saint-Germain FC": "Paris SG",
+    "RC Strasbourg Alsace": "Strasbourg",
+    "Racing Club de Lens": "Lens",
+    "Stade Brestois 29": "Brest",
+    "Stade Rennais FC 1901": "Rennes",
+    "Toulouse FC": "Toulouse",
+    # Ligue 1 historical
+    "Montpellier HSC": "Montpellier",
+    "Stade de Reims": "Reims",
+    "AS Saint-Étienne": "St Etienne",
+    "AC Ajaccio": "Ajaccio",
+    "Girondins de Bordeaux": "Bordeaux",
+    "Clermont Foot 63": "Clermont",
+    "Dijon FCO": "Dijon",
+    "Nîmes Olympique": "Nimes",
+    "ES Troyes AC": "Troyes",
+
+    # ── Bundesliga (BL1) ─────────────────────────────────────────────────
+    # API uses official German club names; DB uses Football-Data short forms
+    "1. FC Heidenheim 1846": "Heidenheim",
+    "1. FC Köln": "FC Koln",
+    "1. FC Union Berlin": "Union Berlin",
+    "1. FSV Mainz 05": "Mainz",
+    "Bayer 04 Leverkusen": "Leverkusen",
+    "Borussia Dortmund": "Dortmund",
+    "Borussia Mönchengladbach": "M'gladbach",
+    "Eintracht Frankfurt": "Ein Frankfurt",
+    "FC Augsburg": "Augsburg",
+    "FC Bayern München": "Bayern Munich",
+    "FC St. Pauli 1910": "St Pauli",
+    "Hamburger SV": "Hamburg",
+    "RB Leipzig": "RB Leipzig",
+    "SC Freiburg": "Freiburg",
+    "SV Werder Bremen": "Werder Bremen",
+    "TSG 1899 Hoffenheim": "Hoffenheim",
+    "VfB Stuttgart": "Stuttgart",
+    "VfL Wolfsburg": "Wolfsburg",
+    # Bundesliga historical
+    "VfL Bochum 1848": "Bochum",
+    "SV Darmstadt 98": "Darmstadt",
+    "SpVgg Greuther Fürth 1903": "Greuther Furth",
+    "Hertha BSC": "Hertha",
+    "Holstein Kiel": "Holstein Kiel",
+    "FC Schalke 04": "Schalke 04",
+    "DSC Arminia Bielefeld": "Bielefeld",
+
+    # ── Serie A (SA) ─────────────────────────────────────────────────────
+    # API uses official Italian club names; DB uses Football-Data short forms
+    "AC Milan": "Milan",
+    "AC Pisa 1909": "Pisa",
+    "ACF Fiorentina": "Fiorentina",
+    "AS Roma": "Roma",
+    "Atalanta BC": "Atalanta",
+    "Bologna FC 1909": "Bologna",
+    "Cagliari Calcio": "Cagliari",
+    "Como 1907": "Como",
+    "FC Internazionale Milano": "Inter",
+    "Genoa CFC": "Genoa",
+    "Hellas Verona FC": "Verona",
+    "Juventus FC": "Juventus",
+    "Parma Calcio 1913": "Parma",
+    "SS Lazio": "Lazio",
+    "SSC Napoli": "Napoli",
+    "Torino FC": "Torino",
+    "US Cremonese": "Cremonese",
+    "US Lecce": "Lecce",
+    "US Sassuolo Calcio": "Sassuolo",
+    "Udinese Calcio": "Udinese",
+    # Serie A historical
+    "Benevento Calcio": "Benevento",
+    "FC Crotone": "Crotone",
+    "Empoli FC": "Empoli",
+    "Frosinone Calcio": "Frosinone",
+    "AC Monza": "Monza",
+    "UC Sampdoria": "Sampdoria",
+    "US Salernitana 1919": "Salernitana",
+    "Spezia Calcio": "Spezia",
+    "Venezia FC": "Venezia",
 }
 
 
@@ -207,13 +369,12 @@ class FootballDataOrgScraper(BaseScraper):
         league_name = getattr(league_config, "short_name", "unknown")
 
         # --- Guard: league must have a Football-Data.org competition code ---
-        # Free tier covers Premier League (PL) only.  Other leagues set
-        # football_data_org_code: null in leagues.yaml to skip gracefully.
+        # Free tier covers all 6 BetVector leagues (PL, ELC, PD, FL1, BL1, SA).
+        # If a league has football_data_org_code: null, skip gracefully.
         fd_org_code = getattr(league_config, "football_data_org_code", None)
         if not fd_org_code:
             logger.info(
-                "[%s] No football_data_org_code configured for %s — skipping "
-                "(Football-Data.org free tier covers PL only).",
+                "[%s] No football_data_org_code configured for %s — skipping.",
                 self.source_name, league_name,
             )
             return pd.DataFrame()

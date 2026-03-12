@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  BetVector — Midday Pipeline (PC-15-04)
+  =======================================
+  Runs at 12:00 local time daily.
+  Re-fetches odds from bookmakers and recalculates value bet edges.
+  Budget-aware: skips The Odds API when budget is low, uses odds-api.io
+  fallback instead (config: skip_midday_below threshold).
+
+  Install:  cp this file ~/Library/LaunchAgents/ && launchctl load ~/Library/LaunchAgents/com.betvector.midday.plist
+  Unload:   launchctl unload ~/Library/LaunchAgents/com.betvector.midday.plist
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.betvector.midday</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/kyng/Documents/BetVector/scripts/run_pipeline_local.sh</string>
+        <string>midday</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/kyng/Documents/BetVector</string>
+
+    <!-- Run at 12:00 local time every day -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>12</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <!-- Log stdout and stderr to data/logs/ -->
+    <key>StandardOutPath</key>
+    <string>/Users/kyng/Documents/BetVector/data/logs/launchd_midday_stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/kyng/Documents/BetVector/data/logs/launchd_midday_stderr.log</string>
+
+</dict>
+</plist>

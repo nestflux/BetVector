@@ -203,11 +203,17 @@ scraping:
       "16": "Ladbrokes"
   the_odds_api:
     base_url: "https://api.the-odds-api.com/v4"
-    # Free tier: 500 requests/month.  EPL 3x/day = ~90/month (well within limit).
-    # Each request returns all upcoming EPL matches with odds from all bookmakers.
+    # Free tier: 500 requests/month.  6 leagues × 3 calls/day = 18/day = ~540/month.
+    # With odds-api.io fallback (PC-15-02), midday calls can be skipped to save budget.
+    # Budget math:
+    #   Morning only (6 leagues): 6 req/day × 30 = 180/month
+    #   Morning + midday: 12 req/day × 30 = 360/month
+    #   Auto-skip midday below 200 → drops to 6/day → preserves remaining
     monthly_request_limit: 500
-    warning_threshold: 50                 # Warn when remaining drops below this
-    hard_stop_threshold: 10               # Stop non-critical requests below this
+    warning_threshold: 100                # Warn when remaining drops below this
+    hard_stop_threshold: 30               # Stop ALL non-critical requests below this
+    skip_midday_below: 200                # Skip midday Odds API call when budget < this
+                                          # odds-api.io fallback handles midday instead
     # Regions determine which bookmakers are included in the response:
     #   uk = UK books (Bet365, William Hill, Ladbrokes)
     #   us = US sportsbooks (FanDuel, DraftKings, BetMGM)
@@ -240,6 +246,23 @@ scraping:
       "888sport": "888sport"
       "betrivers": "BetRivers"
       "marathonbet": "Marathonbet"
+  # ── odds-api.io (PC-15-02) — supplementary odds source ─────────────
+  # Automatic fallback when The Odds API monthly budget is exhausted.
+  # Free tier: 100 requests/hour (resets hourly, no monthly cap).
+  # API key: ODDS_API_IO_KEY env var (register free at odds-api.io).
+  odds_api_io:
+    base_url: "https://api.odds-api.io/v3"
+    enabled: true
+    # Bookmakers to request (free tier: max 2 per /odds request)
+    # Bet365 = well-calibrated sharp book, Betway = European coverage
+    bookmakers:
+      - "Bet365"
+      - "Betway"
+    # Markets: ML = 1X2 match result, Totals = over/under goals
+    markets:
+      - "ML"
+      - "Totals"
+
   understat:
     min_request_interval_seconds: 3       # Extra polite — scraping a free site
   football_data_org:

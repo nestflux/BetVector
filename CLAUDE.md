@@ -338,7 +338,7 @@ single-line expression.
 
 ## Current Status
 
-Last completed: PC-14 (Full Data Gap Closure & 6-League Predictions — Transfermarkt multi-league, Odds API 6-league maps, injury loader, matchday computation, weather/transfermarkt backfill, 13.5K matches, 27K features, predictions all 6 leagues, 28 tests) ✅
+Last completed: PC-15 (Local Pipeline Setup — Fixtures, Odds Resilience, Automation) ✅
 Currently working: (none — awaiting next task)
 Next up: TBD
 

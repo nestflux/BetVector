@@ -49,7 +49,7 @@ leagues:
     fbref_league_id: null
     api_football_id: 40
     understat_league: null   # Understat covers EPL, La Liga, Bundesliga, Serie A, Ligue 1 only
-    football_data_org_code: null  # Football-Data.org free tier covers PL only; Championship skipped
+    football_data_org_code: "ELC"  # Football-Data.org free tier — verified covers Championship
     transfermarkt_id: "GB2"
     is_active: true
     seasons:
@@ -69,7 +69,7 @@ leagues:
   # Well-served market (Pinnacle, Betway cover it well) → EPL-level 5% threshold
   # Understat key: "La_Liga" (underscore + uppercase L — NOT "La liga")
   # ClubElo covers La Liga teams fully
-  # Football-Data.org free tier covers PL only → football_data_org_code: null
+  # Football-Data.org free tier covers La Liga via competition code "PD"
   # -------------------------------------------------------------------------
   - name: "La Liga"
     short_name: "LaLiga"
@@ -78,7 +78,7 @@ leagues:
     fbref_league_id: "ESP-La Liga"
     api_football_id: 140
     understat_league: "La_Liga"   # Understat API key (verified: returns 380 matches/season)
-    football_data_org_code: null  # Football-Data.org free tier covers PL only
+    football_data_org_code: "PD"  # Football-Data.org free tier — verified covers La Liga
     transfermarkt_id: "ES1"
     is_active: true
     seasons:
@@ -100,7 +100,7 @@ leagues:
   # Well-served market (Pinnacle covers it well) → edge_threshold_override: 0.05
   # Understat key: "Ligue_1" — full xG/NPxG/PPDA/deep coverage
   # ClubElo covers all Ligue 1 teams fully (Level 1 French football)
-  # Football-Data.org free tier covers PL only → football_data_org_code: null
+  # Football-Data.org free tier covers Ligue 1 via competition code "FL1"
   # -------------------------------------------------------------------------
   - name: "Ligue 1"
     short_name: "Ligue1"
@@ -109,7 +109,7 @@ leagues:
     fbref_league_id: "FRA-Ligue-1"
     api_football_id: 61
     understat_league: "Ligue_1"  # Full Understat coverage (xG, NPxG, PPDA, deep)
-    football_data_org_code: null # Football-Data.org free tier covers PL only
+    football_data_org_code: "FL1" # Football-Data.org free tier — verified covers Ligue 1
     transfermarkt_id: "FR1"
     is_active: true
     seasons:
@@ -129,7 +129,7 @@ leagues:
   # Well-served market (Pinnacle covers it well) → edge_threshold_override: 0.05 (5%)
   # Understat key: "Bundesliga" — full coverage of all seasons
   # ClubElo covers all Bundesliga teams fully
-  # Football-Data.org free tier covers PL only → football_data_org_code: null
+  # Football-Data.org free tier covers Bundesliga via competition code "BL1"
   # -------------------------------------------------------------------------
   - name: "Bundesliga"
     short_name: "Bundesliga"
@@ -138,7 +138,7 @@ leagues:
     fbref_league_id: "GER-Bundesliga"
     api_football_id: 78
     understat_league: "Bundesliga"  # Full Understat coverage (xG, NPxG, PPDA, deep)
-    football_data_org_code: null    # Football-Data.org free tier covers PL only
+    football_data_org_code: "BL1"   # Football-Data.org free tier — verified covers Bundesliga
     transfermarkt_id: "L1"
     is_active: true
     seasons:
@@ -158,7 +158,7 @@ leagues:
   # Well-served market (Pinnacle covers it well) → edge_threshold_override: 0.05 (5%)
   # Understat key: "Serie_A" — full coverage of all seasons (xG, NPxG, PPDA, deep)
   # ClubElo covers all Serie A teams fully (Level 1 + relegated Level 2)
-  # Football-Data.org free tier covers PL only → football_data_org_code: null
+  # Football-Data.org free tier covers Serie A via competition code "SA"
   # -------------------------------------------------------------------------
   - name: "Serie A"
     short_name: "SerieA"
@@ -167,7 +167,7 @@ leagues:
     fbref_league_id: "ITA-Serie A"
     api_football_id: 135
     understat_league: "Serie_A"    # Full Understat coverage (xG, NPxG, PPDA, deep)
-    football_data_org_code: null   # Football-Data.org free tier covers PL only
+    football_data_org_code: "SA"   # Football-Data.org free tier — verified covers Serie A
     transfermarkt_id: "IT1"
     is_active: true
     seasons:
