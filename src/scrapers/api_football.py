@@ -122,6 +122,44 @@ API_FOOTBALL_EPL_TEAM_MAP: Dict[str, str] = {
     "Ipswich": "Ipswich",
     "Luton Town": "Luton",
     "Luton": "Luton",
+    # ── Multi-league names (API-Football → DB canonical name) ──────────
+    # Championship
+    "Oxford United": "Oxford",
+    "Hull City": "Hull",
+    "Sheffield Wednesday": "Sheffield Weds",
+    "Stoke City": "Stoke",
+    # La Liga
+    "Athletic Club": "Ath Bilbao",
+    "Atletico Madrid": "Ath Madrid",
+    "Real Betis": "Betis",
+    "Celta Vigo": "Celta",
+    "Real Sociedad": "Sociedad",
+    "Rayo Vallecano": "Vallecano",
+    "Espanyol": "Espanol",
+    # Ligue 1
+    "Paris Saint Germain": "Paris SG",
+    "Stade Brestois 29": "Brest",
+    "Saint Etienne": "St Etienne",
+    # Bundesliga
+    "Borussia Mönchengladbach": "M'gladbach",
+    "Borussia Monchengladbach": "M'gladbach",
+    "FSV Mainz 05": "Mainz",
+    "Borussia Dortmund": "Dortmund",
+    "Bayern München": "Bayern Munich",
+    "Bayer Leverkusen": "Leverkusen",
+    "Eintracht Frankfurt": "Ein Frankfurt",
+    "VfB Stuttgart": "Stuttgart",
+    "VfL Wolfsburg": "Wolfsburg",
+    "VfL Bochum": "Bochum",
+    "FC Augsburg": "Augsburg",
+    "SC Freiburg": "Freiburg",
+    "1899 Hoffenheim": "Hoffenheim",
+    "1. FC Heidenheim": "Heidenheim",
+    "FC St. Pauli": "St Pauli",
+    # Serie A
+    "AC Milan": "Milan",
+    "AS Roma": "Roma",
+    "Hellas Verona": "Verona",
 }
 
 

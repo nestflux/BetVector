@@ -1504,12 +1504,35 @@ if view_mode == "Upcoming":
                 else:
                     border_style = ""
 
+                # ── Date & kickoff — symmetrical on either side of team names ──
+                # Format the match date as "Sat 15 Mar" for compact display.
+                _match_date = fix["date"]
+                if hasattr(_match_date, "strftime"):
+                    date_display = _match_date.strftime("%a %d %b")
+                else:
+                    # Fallback: parse string "YYYY-MM-DD"
+                    try:
+                        date_display = datetime.strptime(str(_match_date), "%Y-%m-%d").strftime("%a %d %b")
+                    except (ValueError, TypeError):
+                        date_display = str(_match_date)
+                date_html = (
+                    f'<span style="font-family: JetBrains Mono, monospace; font-size: 12px; '
+                    f'color: {COLOURS["text_secondary"]}; min-width: 80px;">'
+                    f'{date_display}</span>'
+                )
+
                 kickoff_html = ""
                 if fix["kickoff"] and fix["kickoff"] != "TBD":
                     kickoff_html = (
-                        f'<span style="font-family: JetBrains Mono, monospace; font-size: 13px; '
-                        f'color: {COLOURS["text_secondary"]}; min-width: 50px;">'
+                        f'<span style="font-family: JetBrains Mono, monospace; font-size: 12px; '
+                        f'color: {COLOURS["text_secondary"]}; min-width: 50px; text-align: right;">'
                         f'{fix["kickoff"]}</span>'
+                    )
+                else:
+                    kickoff_html = (
+                        f'<span style="font-family: JetBrains Mono, monospace; font-size: 12px; '
+                        f'color: {COLOURS["grey"]}; min-width: 50px; text-align: right;">'
+                        f'TBD</span>'
                     )
 
                 league_badge = (
@@ -1582,25 +1605,35 @@ if view_mode == "Upcoming":
                 fix_home = render_team_badge(fix["home_team_id"], fix["home_team"], size=20)
                 fix_away = render_team_badge(fix["away_team_id"], fix["away_team"], size=20)
 
-                # Fixture card
+                # Fixture card — Redesigned layout:
+                # Row 1: [date] ---- [home vs away] ---- [kickoff time]
+                #         Symmetrical: date left, teams centered, time right
+                # Row 2: [market badges] [model pred] | [league] [diag badges]
                 st.markdown(
                     f'<div class="bv-card" style="padding: 12px 16px; {border_style}">'
+                    # ── Row 1: Date / Teams / Kickoff (symmetrical) ──
                     f'<div style="display: flex; justify-content: space-between; '
-                    f'align-items: center; margin-bottom: 6px;">'
-                    f'<div style="display: flex; align-items: center; gap: 12px;">'
-                    f'{kickoff_html}'
+                    f'align-items: center; margin-bottom: 8px;">'
+                    # Left: date
+                    f'<div style="flex: 0 0 90px;">{date_html}</div>'
+                    # Center: team names
+                    f'<div style="flex: 1; text-align: center;">'
                     f'<span style="font-family: Inter, sans-serif; font-size: 15px; '
                     f'font-weight: 600; color: {COLOURS["text"]};">'
                     f'{fix_home} vs {fix_away}</span>'
-                    f'{pred_html}'
+                    f'</div>'
+                    # Right: kickoff time
+                    f'<div style="flex: 0 0 90px; text-align: right;">{kickoff_html}</div>'
+                    f'</div>'
+                    # ── Row 2: Market badges + Model pred | League + Diagnostics ──
+                    f'<div style="display: flex; justify-content: space-between; '
+                    f'align-items: center;">'
+                    f'<div style="display: flex; align-items: center; gap: 4px;">'
+                    f'{market_html}{pred_html}'
                     f'</div>'
                     f'<div style="display: flex; align-items: center;">'
                     f'{league_badge}{diag_html}'
                     f'</div>'
-                    f'</div>'
-                    f'<div style="display: flex; align-items: center; gap: 4px; '
-                    f'padding-left: 62px;">'
-                    f'{market_html}'
                     f'</div>'
                     f'</div>',
                     unsafe_allow_html=True,
@@ -1857,16 +1890,37 @@ else:
                     fix["away_team_id"], fix["away_team"], size=20,
                 )
 
-                # Result card — four rows:
-                # Row 1: Teams + Score + Result icon + League badge
-                # Row 2: Predicted score (muted)
-                # Row 3: Market badges
+                # ── Date display for the result card ──
+                _res_date = fix["date"]
+                if hasattr(_res_date, "strftime"):
+                    _res_date_display = _res_date.strftime("%a %d %b")
+                else:
+                    try:
+                        _res_date_display = datetime.strptime(
+                            str(_res_date), "%Y-%m-%d"
+                        ).strftime("%a %d %b")
+                    except (ValueError, TypeError):
+                        _res_date_display = str(_res_date)
+                res_date_html = (
+                    f'<span style="font-family: JetBrains Mono, monospace; '
+                    f'font-size: 12px; color: {COLOURS["text_secondary"]}; '
+                    f'min-width: 80px;">{_res_date_display}</span>'
+                )
+
+                # Result card — Redesigned layout:
+                # Row 1: [date] -- [home SCORE away ✅/❌] -- [kickoff/FT]
+                # Row 2: predicted score (muted)
+                # Row 3: [market badges] | [league badge]
                 st.markdown(
                     f'<div class="bv-card" style="padding: 12px 16px; {border_style}">'
-                    # Row 1: match header with actual score
+                    # ── Row 1: Date / Teams with Score / FT indicator ──
                     f'<div style="display: flex; justify-content: space-between; '
                     f'align-items: center; margin-bottom: 4px;">'
-                    f'<div style="display: flex; align-items: center; gap: 12px;">'
+                    # Left: date
+                    f'<div style="flex: 0 0 90px;">{res_date_html}</div>'
+                    # Center: teams with score
+                    f'<div style="flex: 1; text-align: center; display: flex; '
+                    f'align-items: center; justify-content: center; gap: 12px;">'
                     f'<span style="font-family: Inter, sans-serif; font-size: 15px; '
                     f'font-weight: 600; color: {COLOURS["text"]};">'
                     f'{fix_home}</span>'
@@ -1875,15 +1929,16 @@ else:
                     f'font-weight: 600; color: {COLOURS["text"]};">'
                     f'{fix_away}</span>'
                     f'</div>'
-                    f'<div style="display: flex; align-items: center;">'
+                    # Right: league badge
+                    f'<div style="flex: 0 0 90px; text-align: right;">'
                     f'{league_badge}'
                     f'</div>'
                     f'</div>'
-                    # Row 2: predicted score
-                    f'<div style="padding-left: 4px;">{pred_text}</div>'
-                    # Row 3: market badges
+                    # ── Row 2: predicted score (muted) ──
+                    f'<div style="text-align: center;">{pred_text}</div>'
+                    # ── Row 3: market badges ──
                     f'<div style="display: flex; align-items: center; gap: 4px; '
-                    f'margin-top: 6px; padding-left: 4px;">'
+                    f'margin-top: 6px;">'
                     f'{market_html}'
                     f'</div>'
                     f'</div>',
