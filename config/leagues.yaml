@@ -22,6 +22,8 @@ leagues:
     # Football-Data.org API competition code (free tier: PL=Premier League only)
     # Set to null for leagues not covered by Football-Data.org free tier.
     football_data_org_code: "PL"
+    # Transfermarkt Datasets CDN competition ID (dcaribou/transfermarkt-datasets)
+    transfermarkt_id: "GB1"
     is_active: true
     seasons:
       - "2020-21"
@@ -48,6 +50,7 @@ leagues:
     api_football_id: 40
     understat_league: null   # Understat covers EPL, La Liga, Bundesliga, Serie A, Ligue 1 only
     football_data_org_code: null  # Football-Data.org free tier covers PL only; Championship skipped
+    transfermarkt_id: "GB2"
     is_active: true
     seasons:
       - "2020-21"
@@ -76,6 +79,7 @@ leagues:
     api_football_id: 140
     understat_league: "La_Liga"   # Understat API key (verified: returns 380 matches/season)
     football_data_org_code: null  # Football-Data.org free tier covers PL only
+    transfermarkt_id: "ES1"
     is_active: true
     seasons:
       - "2020-21"
@@ -106,6 +110,7 @@ leagues:
     api_football_id: 61
     understat_league: "Ligue_1"  # Full Understat coverage (xG, NPxG, PPDA, deep)
     football_data_org_code: null # Football-Data.org free tier covers PL only
+    transfermarkt_id: "FR1"
     is_active: true
     seasons:
       - "2020-21"
@@ -134,6 +139,7 @@ leagues:
     api_football_id: 78
     understat_league: "Bundesliga"  # Full Understat coverage (xG, NPxG, PPDA, deep)
     football_data_org_code: null    # Football-Data.org free tier covers PL only
+    transfermarkt_id: "L1"
     is_active: true
     seasons:
       - "2020-21"
@@ -162,6 +168,7 @@ leagues:
     api_football_id: 135
     understat_league: "Serie_A"    # Full Understat coverage (xG, NPxG, PPDA, deep)
     football_data_org_code: null   # Football-Data.org free tier covers PL only
+    transfermarkt_id: "IT1"
     is_active: true
     seasons:
       - "2020-21"

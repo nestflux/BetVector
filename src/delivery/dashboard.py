@@ -262,9 +262,11 @@ def inject_custom_css() -> None:
     /* PC-12-01: Green "Value" tag on the Today's Picks nav item (2nd item).
        Uses ::after pseudo-element to append a styled tag without changing
        the st.Page title string itself.  The tag reinforces that this page
-       shows value bets — bets where model edge ≥ threshold. */
-    [data-testid="stSidebarNav"] li:nth-child(2) span[data-testid="stMarkdownContainer"] p::after,
-    [data-testid="stSidebarNav"] li:nth-child(2) a span::after {
+       shows value bets — bets where model edge ≥ threshold.
+       Selector targets only the LAST direct child span of the anchor
+       (the text label "Today's Picks"), not the nested icon/emoji spans
+       which were each getting their own "Value" badge (duplicate tag bug). */
+    [data-testid="stSidebarNav"] li:nth-child(2) a > span:last-child::after {
         content: "  Value";
         color: #3FB950;
         font-size: 10px;

@@ -24,6 +24,8 @@ Loader functions (each independent and idempotent):
     BetLog.clv from Pinnacle closing odds in the Odds table.
   - ``load_clubelo_ratings(df, league_id)`` — loads ClubElo Elo ratings
     into the club_elo table with team name matching and idempotency.
+  - ``load_injuries(df, league_id)`` — loads injury data from API-Football
+    into the team_injuries table (PC-14-03).
 
 All loaders use explicit duplicate checks before inserting.  Running
 any loader twice with the same data produces zero new records.
@@ -40,8 +42,8 @@ import pandas as pd
 
 from src.database.db import get_session
 from src.database.models import (
-    BetLog, ClubElo, League, Match, MatchStat, Odds, Team, TeamMarketValue,
-    Weather,
+    BetLog, ClubElo, League, Match, MatchStat, Odds, Team, TeamInjury,
+    TeamMarketValue, Weather,
 )
 
 logger = logging.getLogger(__name__)
@@ -1740,5 +1742,124 @@ def load_clubelo_ratings(
     logger.info(
         "load_clubelo_ratings: %d new, %d skipped, %d errors",
         new, skipped, errors,
+    )
+    return summary
+
+
+# ============================================================================
+# Injury Loader (PC-14-03)
+# ============================================================================
+
+def load_injuries(
+    df: pd.DataFrame,
+    league_id: int,
+) -> Dict[str, int]:
+    """Load injury data from API-Football into the team_injuries table.
+
+    Takes the DataFrame returned by ``APIFootballScraper.scrape_injuries()``
+    and maps team names to canonical DB Team records, then inserts or updates
+    injury rows.  Deduplication uses (team_id, player_name, reported_at) —
+    running twice with the same data produces zero duplicates.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Columns: team, player, type, reason (from API-Football).
+        ``team`` should already be mapped to canonical DB names by the scraper.
+    league_id : int
+        Database ID of the league (used for team lookup scope).
+
+    Returns
+    -------
+    dict
+        Keys: new (inserted), updated (status changed), skipped (duplicate), errors, total.
+    """
+    from datetime import date as _date
+
+    if df is None or df.empty:
+        logger.warning("load_injuries: empty DataFrame, nothing to load")
+        return {"new": 0, "updated": 0, "skipped": 0, "errors": 0, "total": 0}
+
+    new = 0
+    updated = 0
+    skipped = 0
+    errors = 0
+    today_str = _date.today().isoformat()
+
+    with get_session() as session:
+        # Build team name → id lookup for this league
+        teams = session.query(Team).filter_by(league_id=league_id).all()
+        name_to_id: Dict[str, int] = {t.name: t.id for t in teams}
+
+        for _, row in df.iterrows():
+            try:
+                team_name = str(row.get("team", "")).strip()
+                player_name = str(row.get("player", "")).strip()
+                injury_type = str(row.get("type", "")).strip() or None
+                reason = str(row.get("reason", "")).strip() or None
+
+                if not team_name or not player_name:
+                    errors += 1
+                    continue
+
+                team_id = name_to_id.get(team_name)
+                if team_id is None:
+                    logger.debug(
+                        "load_injuries: team '%s' not found in league %d — skipping",
+                        team_name, league_id,
+                    )
+                    errors += 1
+                    continue
+
+                # Dedup: check for existing injury record with same
+                # (team_id, player_name, reported_at=today)
+                existing = session.query(TeamInjury).filter_by(
+                    team_id=team_id,
+                    player_name=player_name,
+                    reported_at=today_str,
+                ).first()
+
+                if existing is not None:
+                    # Update type/reason if they changed
+                    changed = False
+                    if injury_type and existing.injury_type != injury_type:
+                        existing.injury_type = injury_type
+                        changed = True
+                    if reason and existing.status != "returned":
+                        # Keep existing status unless the API says something new
+                        pass
+                    if changed:
+                        updated += 1
+                    else:
+                        skipped += 1
+                    continue
+
+                # Insert new injury record
+                record = TeamInjury(
+                    team_id=team_id,
+                    player_name=player_name,
+                    injury_type=injury_type or reason,
+                    status="injured",
+                    reported_at=today_str,
+                    source="api_football",
+                )
+                session.add(record)
+                new += 1
+
+            except Exception as e:
+                logger.error(
+                    "load_injuries: error loading row %s: %s", dict(row), e,
+                )
+                errors += 1
+
+        session.commit()
+
+    summary = {
+        "new": new, "updated": updated, "skipped": skipped,
+        "errors": errors, "total": new + updated + skipped + errors,
+    }
+    logger.info(
+        "load_injuries: %d new, %d updated, %d skipped, %d errors",
+        new, updated, skipped, errors,
     )
     return summary

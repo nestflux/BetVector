@@ -66,41 +66,51 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 FEATURE_COLS = [
+    # --- Rolling form (5-match) — Source: Match table (all leagues) ---
     "form_5", "goals_scored_5", "goals_conceded_5",
-    "xg_5", "xga_5", "xg_diff_5", "shots_5", "shots_on_target_5",
-    "possession_5",
-    # Advanced stats — 5-match window (E16-01)
+    # --- xG rolling (5-match) — Source: Understat (all except Championship) ---
+    "xg_5", "xga_5", "xg_diff_5",
+    # --- FBref columns — PERMANENTLY NULL (Cloudflare blocked since Jan 2026) ---
+    "shots_5", "shots_on_target_5", "possession_5",
+    # --- Advanced stats 5-match (E16-01) — Source: Understat (not Championship) ---
     "npxg_5", "npxga_5", "npxg_diff_5",
     "ppda_5", "ppda_allowed_5", "deep_5", "deep_allowed_5",
+    # --- Rolling form (10-match) — Source: Match table (all leagues) ---
     "form_10", "goals_scored_10", "goals_conceded_10",
-    "xg_10", "xga_10", "xg_diff_10", "shots_10", "shots_on_target_10",
-    "possession_10",
-    # Advanced stats — 10-match window (E16-01)
+    # --- xG rolling (10-match) — Source: Understat (all except Championship) ---
+    "xg_10", "xga_10", "xg_diff_10",
+    # --- FBref columns — PERMANENTLY NULL (see DATA_GAPS.md §2) ---
+    "shots_10", "shots_on_target_10", "possession_10",
+    # --- Advanced stats 10-match (E16-01) — Source: Understat (not Championship) ---
     "npxg_10", "npxga_10", "npxg_diff_10",
     "ppda_10", "ppda_allowed_10", "deep_10", "deep_allowed_10",
+    # --- Venue-specific (5-match, home/away only) — Source: Match + Understat ---
     "venue_form_5", "venue_goals_scored_5", "venue_goals_conceded_5",
     "venue_xg_5", "venue_xga_5",
+    # --- Head-to-head (last 5 meetings) — Source: Match table (all leagues) ---
     "h2h_wins", "h2h_draws", "h2h_losses",
     "h2h_goals_scored", "h2h_goals_conceded",
+    # --- Context — Source: Match table (all leagues) ---
     "rest_days",
-    # Market value + weather features (E16-02)
+    # --- Market value (E16-02) — Source: Transfermarkt CDN (current snapshot only) ---
     "market_value_ratio", "squad_value_log",
+    # --- Weather (E16-02) — Source: Open-Meteo API (all leagues, needs backfill) ---
     "temperature_c", "wind_speed_kmh", "precipitation_mm",
     "is_heavy_weather",
-    # Market-implied features (E20-01, E20-02)
+    # --- Market-implied (E20-01, E20-02) — Source: The Odds API / Pinnacle ---
     "pinnacle_home_prob", "pinnacle_draw_prob", "pinnacle_away_prob",
     "pinnacle_overround", "ah_line",
-    # Elo rating features (E21-01)
+    # --- Elo ratings (E21-01) — Source: ClubElo API + internal Elo (all leagues) ---
     "elo_rating", "elo_diff",
-    # Referee features (E21-02)
+    # --- Referee (E21-02) — Source: Football-Data CSVs (EPL + Championship ONLY) ---
     "ref_avg_fouls", "ref_avg_yellows", "ref_avg_goals", "ref_home_win_pct",
-    # Fixture congestion features (E21-03)
+    # --- Fixture congestion (E21-03) — Source: Match table (all leagues) ---
     "days_since_last_match", "is_congested",
-    # Set-piece xG breakdown (E22-01)
+    # --- Set-piece xG (E22-01) — Source: Understat shot data (not Championship) ---
     "set_piece_xg_5", "open_play_xg_5",
-    # Injury impact features (E22-02)
+    # --- Injury impact (E22-02) — Source: API-Football + manual flags ---
     "injury_impact", "key_player_out",
-    # Multi-league context features (E36-03)
+    # --- Multi-league context (E36-03) — Source: Match table (all leagues) ---
     "league_home_adv_5", "is_newly_promoted",
 ]
 
@@ -139,6 +149,25 @@ def compute_features(match_id: int, league_id: int) -> Dict[str, Dict[str, Any]]
         home_team_id = match.home_team_id
         away_team_id = match.away_team_id
         matchday = match.matchday
+
+        # PC-14-04: Compute matchday when NULL — count distinct match dates
+        # in the same (league_id, season) on or before this match's date.
+        # This gives a sequential matchday number (1, 2, 3, ...).
+        if matchday is None and match_date and match.season:
+            from sqlalchemy import func as sa_func
+            distinct_dates = (
+                session.query(sa_func.count(sa_func.distinct(Match.date)))
+                .filter(
+                    Match.league_id == league_id,
+                    Match.season == match.season,
+                    Match.date <= match_date,
+                )
+                .scalar()
+            ) or 0
+            matchday = distinct_dates
+            # Persist computed matchday back to the Match row
+            match.matchday = matchday
+            session.commit()
 
         # Get team names for logging
         home_team = session.query(Team).filter_by(id=home_team_id).first()

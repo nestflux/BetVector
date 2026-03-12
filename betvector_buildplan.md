@@ -59,8 +59,10 @@ This document breaks the BetVector masterplan into sequenced epics and issues th
 | PC-10 | Morning Pipeline Performance Optimization | 4 | Bulk feature loader (2 queries vs 330K), compute_all_features() optimization, pipeline integration, integration test |
 | PC-11 | Pipeline Data Integrity & Email Fix | 6 | FK constraint fix (VBs deleted before predictions), email UTF-8 encoding, BetLog FK bug, League One→Ligue 1 migration, EPL historical backfill, integration test |
 | PC-12 | Dashboard UX Clarity & Performance | 5 | ✅ DONE — Consistent value bet terminology (Value tag, Top Value Picks), league filter on Fixtures, Today's Picks N+1 fix (12K→7 queries), Fixtures N+1 fix (500+→5 queries), 26 integration tests |
+| PC-13 | Local SQLite Rebuild & Neon Recovery | 5 | 🔄 IN PROGRESS — Neon free-tier quota exceeded, switch to local SQLite, EPL backfill (matches+xG+ClubElo+features), Ligue 1 full backfill, local pipeline run, VALUE badge CSS fix |
+| PC-14 | Full Data Gap Closure & 6-League Predictions | 16 | 🔄 IN PROGRESS — Document gaps, Transfermarkt multi-league, injury loader, matchday computation, weather backfill, Ligue 1 backfill, feature recompute, model retrain, 6-league predictions |
 
-**Total: 45 epics, 192 issues** (45 original + 20 post-launch + 12 odds/model + 7 backfill + 16 dashboard UX + 5 clarity + 16 badges/polish + 6 cloud migration + 6 post-critical-path + 6 multi-user auth + 7 bet tracker + 4 league expansion + 4 model improvement + 6 league backfill phase 2 + 5 dashboard fixes + 6 data gap fix + 6 model stability fix + 4 pipeline performance + 6 pipeline integrity)
+**Total: 47 epics, 213 issues** (45 original + 20 post-launch + 12 odds/model + 7 backfill + 16 dashboard UX + 5 clarity + 16 badges/polish + 6 cloud migration + 6 post-critical-path + 6 multi-user auth + 7 bet tracker + 4 league expansion + 4 model improvement + 6 league backfill phase 2 + 5 dashboard fixes + 6 data gap fix + 6 model stability fix + 4 pipeline performance + 6 pipeline integrity + 5 local rebuild + 16 data gap closure)
 
 ---
 
@@ -6759,4 +6761,390 @@ Total: ~300+ queries for 48 fixtures.
 ```
 PC-12-01 (terminology) → PC-12-02 (league filter) → PC-12-03 (picks perf)
 → PC-12-04 (fixtures perf) → PC-12-05 (tests)
+```
+
+---
+
+## PC-13 — Local SQLite Rebuild & Neon Recovery
+
+**Status:** 🔄 IN PROGRESS (2026-03-11)
+
+**Context:** Neon PostgreSQL free-tier data transfer quota (5 GiB) exceeded
+after heavy backfill + multiple pipeline runs. All cloud database connections
+blocked — pipeline fails, dashboard offline, Streamlit Community Cloud broken.
+Recovery strategy: switch to local SQLite until Neon monthly quota resets.
+
+### PC-13-01 — Switch to Local SQLite ✅ DONE
+
+**Type:** Infrastructure
+**Files:** `.env`, `.streamlit/secrets.toml`
+
+**Problem:** Neon PostgreSQL returns `OperationalError: Your project has
+exceeded the data transfer quota` on every connection attempt. Both the
+morning pipeline (GitHub Actions) and Streamlit dashboard are non-functional.
+
+**Fix:**
+1. Comment out `DATABASE_URL` in `.env` → triggers built-in fallback to
+   `data/betvector.db` via `_build_connection_url()` in `src/database/db.py`
+2. Create `.streamlit/secrets.toml` placeholder to suppress Streamlit
+   "No secrets found" warning banner
+3. Kill stale dashboard process (PID 78014) connected to Neon
+4. Restart dashboard on local SQLite at localhost:8501
+
+**Results:**
+- Local SQLite DB found with 10,017 matches across 6 leagues
+- Dashboard fully functional on localhost:8501
+- EPL: 2 seasons (2024-25, 2025-26) — missing 4 historical
+- Ligue 1: 0 matches (empty)
+- Other 4 leagues: Full data (Championship, La Liga, Bundesliga, Serie A)
+
+**Acceptance Criteria:**
+- [x] `DATABASE_URL` commented out in `.env` ✅
+- [x] Dashboard loads at localhost:8501 on SQLite ✅
+- [x] `.streamlit/secrets.toml` placeholder created ✅
+
+### PC-13-02 — EPL Historical Backfill (Local) 🔄 IN PROGRESS
+
+**Type:** Data
+**Script:** `scripts/backfill_historical.py`
+
+**Problem:** Local SQLite has only 2 EPL seasons (760 matches). Need 4
+historical seasons (2020-21 through 2023-24) for model training quality.
+
+**Steps and Status:**
+1. ✅ Matches + Odds: `backfill_historical.py matches --league EPL`
+   → 1,520 matches, 22,800 odds (54s)
+2. ✅ Understat xG: `backfill_historical.py understat --league EPL`
+   → 3,040 MatchStats with xG/NPxG/PPDA/deep (27s)
+3. 🔄 ClubElo: `backfill_historical.py clubelo --league EPL`
+   → 824 unique dates, ~2s/date ≈ 27 min total (running in background)
+4. ⏳ Features: `backfill_historical.py features --league EPL`
+   → Recompute all 70+ rolling/context features for 6 seasons (~4,560 rows)
+
+**Acceptance Criteria:**
+- [x] EPL matches: 2,280+ (760 existing + 1,520 historical) ✅
+- [x] EPL odds: 33,800+ ✅
+- [x] EPL MatchStats: 4,560+ (3,040 new + 1,520 existing) ✅
+- [ ] EPL ClubElo: ~124,000 records for 824 dates 🔄
+- [ ] EPL Features: 4,560+ (2,280 matches × 2 teams)
+
+### PC-13-03 — Ligue 1 Full Backfill (Local)
+
+**Type:** Data
+**Script:** `scripts/backfill_historical.py all --league Ligue1`
+
+**Problem:** Ligue 1 (league_id=4) has 0 matches in local SQLite. The
+League One → Ligue 1 migration was applied to the cloud DB only. Need
+full 6-season backfill locally.
+
+**Steps:**
+1. Matches + Odds (Football-Data.co.uk F1 CSV)
+2. Understat xG for all seasons
+3. ClubElo ratings (or internal Elo if ClubElo lacks coverage)
+4. Feature computation
+
+**Acceptance Criteria:**
+- [ ] Ligue 1 has 6 seasons (2020-21 through 2025-26)
+- [ ] Match count: 2,100+ (varies: 380/season × 5 + 306 in 2023-24)
+- [ ] Features computed for all matches
+- [ ] Teams are French (PSG, Lyon, Marseille, etc.)
+
+### PC-13-04 — VALUE Badge CSS Fix ✅ DONE
+
+**Type:** Bug fix
+**File:** `src/delivery/dashboard.py`
+
+**Problem:** Sidebar "Today's Picks" nav item showed TWO VALUE badges
+instead of one. Root cause: CSS selector `li:nth-child(2) a span::after`
+matched ALL 4 nested spans inside the anchor tag (icon outer wrapper,
+icon inner wrapper, emoji span, text label span).
+
+**Fix:** Changed CSS selector from `a span::after` to
+`a > span:last-child::after` which targets only the direct-child text
+label span. Removed the redundant `stMarkdownContainer` selector line.
+
+**Acceptance Criteria:**
+- [x] Single VALUE badge on Today's Picks nav item ✅
+- [x] Badge styling preserved (green background, monospace font) ✅
+
+### PC-13-05 — Local Pipeline Run & Neon Recovery
+
+**Type:** Operations
+**Depends on:** PC-13-02, PC-13-03
+
+**Tasks:**
+1. Run local morning pipeline: `python run_pipeline.py morning`
+2. Verify predictions generated for all leagues with scheduled matches
+3. Verify email alerts sent (if any matches today)
+4. Document Neon recovery steps for when quota resets:
+   - Uncomment `DATABASE_URL` in `.env`
+   - Re-run morning pipeline via GitHub Actions
+   - Verify Streamlit Cloud dashboard comes back online
+
+**Acceptance Criteria:**
+- [ ] Morning pipeline completes without errors locally
+- [ ] Predictions generated for EPL + any leagues with Odds API fixtures
+- [ ] Email sent to users (or confirmed no matches scheduled today)
+- [ ] Neon recovery procedure documented
+
+### Implementation Sequence
+
+```
+PC-13-01 (switch to SQLite) ✅
+→ PC-13-04 (VALUE badge fix) ✅
+→ PC-13-02 (EPL backfill — matches ✅, xG ✅, ClubElo 🔄, features ⏳)
+→ PC-13-03 (Ligue 1 backfill)
+→ PC-13-05 (local pipeline run + Neon recovery docs)
+```
+
+---
+
+## PC-14 — Full Data Gap Closure & 6-League Predictions
+
+**Status:** 🔄 IN PROGRESS (2026-03-12)
+
+**Context:** Database audit revealed 12 data gaps preventing predictions across all 6 leagues.
+Root causes: Transfermarkt hardcoded to EPL, injuries scraped but never stored, weather/market
+values never backfilled, Ligue 1 missing 2 seasons, 3 leagues with zero predictions. This epic
+fixes all fixable gaps, documents the unfixable ones (see `DATA_GAPS.md`), and gets the system
+predicting across all 6 leagues.
+
+### PC-14-01 — Document Unfixable Data Gaps + Update Build Plan ✅ DONE
+
+**Type:** Documentation
+**Files:** `DATA_GAPS.md` (new), `betvector_buildplan.md`, `src/features/engineer.py`
+
+**Deliverables:**
+1. Created `DATA_GAPS.md` documenting 6 unfixable gaps (Championship xG, FBref shots/possession,
+   continental referee data, venue xG cold-start, Transfermarkt history, xG cold-start)
+2. Added source comments to all `FEATURE_COLS` entries in `engineer.py`
+3. Added PC-14 epic (16 issues) to build plan
+
+**Acceptance Criteria:**
+- [x] `DATA_GAPS.md` exists with every unfixable gap documented
+- [x] Build plan has PC-14-01 through PC-14-16
+- [x] FEATURE_COLS has inline comments noting data source per column group
+
+### PC-14-02 — Transfermarkt Multi-League Support
+
+**Type:** Code fix
+**Files:** `src/scrapers/transfermarkt.py`, `config/leagues.yaml`
+
+**Problem:** `TransfermarktScraper` hardcodes `competition_id = "GB1"` and
+`TRANSFERMARKT_TEAM_MAP` only has EPL teams. The `scrape()` method filters
+the entire players CSV to one competition ID.
+
+**Fix:**
+1. Add `transfermarkt_id` to each league in `config/leagues.yaml`
+   (GB1, GB2, ES1, FR1, L1, IT1)
+2. Refactor `scrape()` to read competition ID from `league_config.transfermarkt_id`
+3. Expand `TRANSFERMARKT_TEAM_MAP` with mappings for all 6 leagues (~120 teams)
+
+**Acceptance Criteria:**
+- [ ] `scrape(league_config=la_liga_cfg)` returns La Liga team data
+- [ ] Works for all 6 leagues
+- [ ] No hardcoded competition_id in scraper code
+
+### PC-14-03 — Injury Loader + Pipeline Integration
+
+**Type:** Code fix
+**Files:** `src/scrapers/loader.py`, `src/pipeline.py`
+
+**Problem:** Pipeline scrapes injuries (line 430) but the DataFrame is printed and
+discarded — no `load_injuries()` function exists. `TeamInjury` model is defined
+but never written to.
+
+**Fix:**
+1. Add `load_injuries(df, league_id)` to `loader.py`
+2. In `pipeline.py`, after injuries print, call `load_injuries()`
+
+**Acceptance Criteria:**
+- [ ] After morning pipeline, `team_injuries` table has rows
+- [ ] Running twice = zero duplicates
+- [ ] `calculate_injury_features()` can read the data
+
+### PC-14-04 — Matchday Computation
+
+**Type:** Code fix
+**Files:** `src/features/engineer.py`
+
+**Problem:** `Feature.matchday` is 100% NULL (25,966 rows). `Match.matchday` is never
+populated by the Football-Data CSV loader.
+
+**Fix:**
+1. In `compute_features()`, when `match.matchday` is NULL, compute it from match
+   ordering within (league_id, season)
+2. Store in both `Feature.matchday` and `Match.matchday`
+
+**Acceptance Criteria:**
+- [ ] `Feature.matchday` non-NULL for all rows after recomputation
+- [ ] `Match.matchday` backfilled for all 12,983 matches
+- [ ] `season_progress` correctly computed
+
+### PC-14-05 — Weather Backfill Support in Backfill Script
+
+**Type:** Code enhancement
+**Files:** `scripts/backfill_historical.py`
+
+**Problem:** Weather scraper works but only runs for current season (limit 50). No
+backfill command for historical weather. Open-Meteo has data back to 1940.
+
+**Fix:**
+1. Add `weather` command to backfill CLI
+2. Query matches without Weather rows, call `WeatherScraper.scrape_for_matches()`
+3. Batch in groups of 50
+
+**Acceptance Criteria:**
+- [ ] `backfill_historical.py weather --league EPL` populates Weather rows
+- [ ] Works for all 6 leagues
+
+### PC-14-06 — Transfermarkt Backfill Support in Backfill Script
+
+**Type:** Code enhancement
+**Depends on:** PC-14-02
+**Files:** `scripts/backfill_historical.py`
+
+**Fix:** Add `transfermarkt` command to backfill CLI.
+
+**Acceptance Criteria:**
+- [ ] `backfill_historical.py transfermarkt --league EPL` populates `team_market_values`
+- [ ] Works for all 6 leagues
+
+### PC-14-07 — Fix Season `is_loaded` Flags + Start/End Dates
+
+**Type:** Data fix
+**Files:** `scripts/fix_season_flags.py` (new)
+
+**Fix:** Query match counts per (league_id, season). Set `is_loaded=1` + dates where
+data exists. Set `is_loaded=0` where no matches.
+
+**Acceptance Criteria:**
+- [ ] All seasons with match data have `is_loaded=1`
+- [ ] `start_date`/`end_date` populated from MIN/MAX match dates
+
+### PC-14-08 — Ligue 1 2024-25 + 2025-26 Backfill
+
+**Type:** Data
+**Depends on:** PC-14-07
+
+**Tasks:** Run matches, understat, shot-xg, clubelo for Ligue 1 2024-25 + 2025-26.
+
+**Acceptance Criteria:**
+- [ ] Ligue 1 has ~306+ matches for 2024-25 and in-progress 2025-26
+- [ ] MatchStats (xG) populated
+- [ ] ClubElo records populated (currently stops at 2023-08-06)
+
+### PC-14-09 — Weather Backfill for All 6 Leagues
+
+**Type:** Data (long-running)
+**Depends on:** PC-14-05
+
+**Tasks:** Run `backfill_historical.py weather` for each league. ~12,983 matches total.
+
+**Acceptance Criteria:**
+- [ ] Weather table has rows for >90% of matches
+- [ ] Spot-check: reasonable temperature ranges per country
+
+### PC-14-10 — Transfermarkt Market Values Backfill
+
+**Type:** Data
+**Depends on:** PC-14-06
+
+**Tasks:** Run `backfill_historical.py transfermarkt` for each league.
+
+**Acceptance Criteria:**
+- [ ] `team_market_values` has rows for all 6 leagues
+- [ ] Current season teams all have market values
+
+### PC-14-11 — Badge ID Mismatch Fix
+
+**Type:** Data cleanup
+**Files:** `data/badges/`
+
+**Problem:** 177 badge files, 178 teams, 50 mismatched IDs, 49 extra files.
+
+**Acceptance Criteria:**
+- [ ] Every team has `data/badges/{id}.png` or is documented as missing
+- [ ] No orphan badge files
+
+### PC-14-12 — Full Feature Recomputation
+
+**Type:** Compute
+**Depends on:** PC-14-04, PC-14-08, PC-14-09, PC-14-10
+
+**Tasks:** Recompute features for all 6 leagues, all seasons with `force_recompute=True`.
+
+**Acceptance Criteria:**
+- [ ] 100% match-to-feature coverage across all 6 leagues
+- [ ] Weather features >90% non-NULL
+- [ ] Matchday 100% non-NULL
+- [ ] Market value features non-NULL for current season
+
+### PC-14-13 — Add Missing DB Indexes
+
+**Type:** Performance
+**Files:** `src/database/models.py`
+
+**Tasks:** Add indexes on `club_elo(team_id, rating_date)`, `teams(league_id, name)`,
+`seasons(league_id, season)`.
+
+**Acceptance Criteria:**
+- [ ] Indexes created without errors
+- [ ] Common queries use index scans
+
+### PC-14-14 — Retrain Model on Complete 6-League Dataset
+
+**Type:** ML
+**Depends on:** PC-14-12
+
+**Tasks:** Retrain Poisson + XGBoost on complete data. Walk-forward backtest all 6 leagues.
+
+**Acceptance Criteria:**
+- [ ] Both models retrained and saved
+- [ ] Backtest results logged for all 6 leagues
+- [ ] No temporal integrity violations
+
+### PC-14-15 — Generate Predictions for All 6 Leagues
+
+**Type:** Operations
+**Depends on:** PC-14-14
+
+**Tasks:** Run morning pipeline. Verify predictions for all 6 leagues.
+
+**Acceptance Criteria:**
+- [ ] `predictions` table has rows for all 6 leagues
+- [ ] `value_bets` has entries from all leagues where edge > threshold
+- [ ] Ligue 1, Bundesliga, Serie A specifically have predictions
+
+### PC-14-16 — Integration Test
+
+**Type:** Testing
+**Files:** `tests/test_pc14_integration.py` (new)
+
+**Tests:** Weather backfill, Transfermarkt multi-league, injury loader, matchday
+computation, 6-league predictions, feature completeness, is_loaded flags, badges.
+
+**Acceptance Criteria:**
+- [ ] All new tests pass
+- [ ] No regressions in existing 182+ test suite
+
+### Implementation Sequence
+
+```
+PC-14-01 (docs) ✅
+→ PC-14-02 (Transfermarkt multi-league)
+→ PC-14-03 (injury loader)
+→ PC-14-04 (matchday computation)
+→ PC-14-05 (weather backfill script)
+→ PC-14-06 (Transfermarkt backfill script)
+→ PC-14-07 (is_loaded flags)
+→ PC-14-08 (Ligue 1 backfill)
+→ PC-14-09 (weather backfill — long running)
+→ PC-14-10 (Transfermarkt backfill)
+→ PC-14-11 (badge fix)
+→ PC-14-12 (feature recompute)
+→ PC-14-13 (DB indexes)
+→ PC-14-14 (retrain model)
+→ PC-14-15 (predictions all 6 leagues)
+→ PC-14-16 (integration test)
 ```

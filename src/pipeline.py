@@ -431,7 +431,13 @@ class Pipeline:
                     league_config=league_cfg, season=current_season,
                 )
                 if api_football_injuries is not None and not api_football_injuries.empty:
-                    print(f"  → API-Football injuries: {len(api_football_injuries)} records")
+                    # PC-14-03: Store injuries in DB (previously printed and discarded)
+                    from src.scrapers.loader import load_injuries
+                    inj_result = load_injuries(api_football_injuries, league_id)
+                    print(
+                        f"  → API-Football injuries: {len(api_football_injuries)} records "
+                        f"({inj_result['new']} new, {inj_result['skipped']} skipped)"
+                    )
                 else:
                     print("  → API-Football injuries: No data returned")
 

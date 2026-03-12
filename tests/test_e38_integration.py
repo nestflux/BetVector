@@ -108,7 +108,7 @@ MIN_MATCH_COUNTS = {
     "EPL": 700,          # 760 in local DB (2024-25 + 2025-26; historical on Neon)
     "Championship": 3_000,  # 3,181 (6 full seasons)
     "LaLiga": 2_000,     # 2,160 (6 seasons × ~360 matches)
-    "Ligue1": 2_000,     # ~2,280 (6 seasons × ~380/306 matches)
+    "Ligue1": 1_900,     # ~1,977 (French Ligue 1: 18-20 teams, ~306-380 matches/season)
     "Bundesliga": 1_600, # 1,746 (6 seasons × ~291 matches)
     "SerieA": 2_000,     # 2,170 (6 seasons × ~362 matches)
 }

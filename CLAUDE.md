@@ -338,9 +338,9 @@ single-line expression.
 
 ## Current Status
 
-Last completed: PC-12 (Dashboard UX Clarity & Performance — 5 issues, Value tag, Top Value Picks, league filter, N+1 fix picks & fixtures) ✅
-Currently working: Owner to decide next work
-Next up: Owner to decide
+Last completed: PC-14 (Full Data Gap Closure & 6-League Predictions — Transfermarkt multi-league, Odds API 6-league maps, injury loader, matchday computation, weather/transfermarkt backfill, 13.5K matches, 27K features, predictions all 6 leagues, 28 tests) ✅
+Currently working: (none — awaiting next task)
+Next up: TBD
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
@@ -378,6 +378,8 @@ Post-critical-path (March 2026):
 - PC-10: Morning Pipeline Performance Optimization ✅ — Bulk feature loading (330K→30 queries), load_features_bulk() (2 ORM queries), compute_all_features() bulk pre-loading (3 queries), FEATURE_COLS DRY constant, 16 tests
 - PC-11: Pipeline Data Integrity & Email Fix ✅ — FK constraint fix (VBs deleted before predictions), email encoding (UTF-8, as_bytes, Header, sanitize \xa0), BetLog.value_bet_id actual VB ID lookup, Ligue 1 migration verified, 12 integration tests
 - PC-12: Dashboard UX Clarity & Performance ✅ — Value tag on Today's Picks sidebar, Top Value Picks terminology, league filter multiselect, picks N+1 fix (12K→7 queries via bulk Team/Weather/Feature + precomputed stakes), fixtures N+1 fix (500+→5 queries via bulk VB/Prediction/Odds/BestOdds), 26 integration tests
+- PC-13: Local SQLite Rebuild & Neon Recovery ✅ — Switched from Neon PostgreSQL to local SQLite (quota exceeded), EPL backfill, pipeline running locally
+- PC-14: Full Data Gap Closure & 6-League Predictions ✅ — Transfermarkt multi-league (5 leagues, CDN lacks GB2), Odds API team maps (250 entries, 6 leagues), load_injuries() pipeline hookup, matchday NULL computation, weather+transfermarkt backfill CLI, season flag fix, DATA_GAPS.md (7 gaps), 13,569 matches, 27,110 features, predictions for all 6 leagues (EPL 671, Championship 421, LaLiga 260, Ligue1 675, Bundesliga 675, SerieA 840), 28 integration tests, 309/309 full suite
 
 E34 — Multi-User Authentication: ALL 6 issues done ✅
 - E34-01: Password storage + session overhaul ✅

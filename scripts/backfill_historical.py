@@ -1017,14 +1017,168 @@ def run_features_backfill(args, league_cfg, league_id) -> list:
     return results
 
 
+# ============================================================================
+# Weather Backfill (PC-14-05)
+# ============================================================================
+
+def run_weather_backfill(args, league_cfg, league_id) -> dict:
+    """Backfill weather data for all matches missing Weather rows.
+
+    Queries matches in the target league that don't have a corresponding
+    Weather record, builds match dicts for the WeatherScraper, and loads
+    results via load_weather().  Processes in batches of 50 to avoid
+    memory issues.
+
+    Open-Meteo has historical data back to 1940, so this works for all
+    historical seasons.  The scraper auto-switches between forecast API
+    (future dates) and archive API (past dates).
+    """
+    from src.database.models import Match, Team, Weather
+    from src.scrapers.weather_scraper import WeatherScraper
+    from src.scrapers.loader import load_weather
+    from sqlalchemy import func
+
+    league_name = league_cfg.short_name
+    print(f"--- Weather Backfill for {league_name} ---")
+
+    # Find matches without weather data
+    with get_session() as session:
+        subq = session.query(Weather.match_id)
+        matches_without_weather = (
+            session.query(Match)
+            .filter(
+                Match.league_id == league_id,
+                Match.status.in_(["finished", "completed"]),
+                ~Match.id.in_(subq),
+            )
+            .order_by(Match.date)
+            .all()
+        )
+        # Detach from session — build plain dicts
+        match_dicts = []
+        for m in matches_without_weather:
+            home_team = session.query(Team).filter_by(id=m.home_team_id).first()
+            match_dicts.append({
+                "match_id": m.id,
+                "date": m.date,
+                "home_team": home_team.name if home_team else f"team_{m.home_team_id}",
+                "kickoff_hour": 15,  # Default 3pm if unknown
+            })
+
+    total = len(match_dicts)
+    print(f"  Found {total} matches without weather data")
+
+    if total == 0:
+        return {"new": 0, "skipped": 0, "errors": 0, "total": 0}
+
+    if args.dry_run:
+        print(f"  [DRY RUN] Would fetch weather for {total} matches")
+        return {"new": 0, "skipped": 0, "errors": 0, "total": total}
+
+    # Process in batches of 50
+    scraper = WeatherScraper()
+    batch_size = 50
+    total_new = 0
+    total_skipped = 0
+    total_errors = 0
+
+    for i in range(0, total, batch_size):
+        batch = match_dicts[i:i + batch_size]
+        batch_num = (i // batch_size) + 1
+        total_batches = (total + batch_size - 1) // batch_size
+
+        print(f"  Batch {batch_num}/{total_batches} ({len(batch)} matches)...")
+
+        try:
+            weather_df = scraper.scrape_for_matches(
+                batch, league_short_name=league_name,
+            )
+            if weather_df is not None and not weather_df.empty:
+                result = load_weather(weather_df)
+                total_new += result.get("new", 0)
+                total_skipped += result.get("skipped", 0)
+                print(f"    → {result.get('new', 0)} new, {result.get('skipped', 0)} skipped")
+            else:
+                print("    → No weather data returned for this batch")
+        except Exception as e:
+            logger.error("Weather backfill batch %d error: %s", batch_num, e)
+            total_errors += 1
+            print(f"    → ERROR: {e}")
+
+    summary = {
+        "new": total_new, "skipped": total_skipped,
+        "errors": total_errors, "total": total_new + total_skipped,
+    }
+    print(f"\nWeather backfill complete: {total_new} new, {total_skipped} skipped, "
+          f"{total_errors} errors")
+    return summary
+
+
+# ============================================================================
+# Transfermarkt Backfill (PC-14-06)
+# ============================================================================
+
+def run_transfermarkt_backfill(args, league_cfg, league_id) -> dict:
+    """Backfill Transfermarkt market values for the target league.
+
+    Downloads current snapshot from CDN (one download for all leagues — same
+    CSV, filtered by competition_id from league_config.transfermarkt_id).
+    Creates TeamMarketValue rows via load_market_values().
+
+    NOTE: CDN only serves current snapshot — no historical time series.
+    See DATA_GAPS.md §5 for details.
+    """
+    from src.scrapers.transfermarkt import TransfermarktScraper
+    from src.scrapers.loader import load_market_values
+
+    league_name = league_cfg.short_name
+    transfermarkt_id = getattr(league_cfg, "transfermarkt_id", None)
+
+    print(f"--- Transfermarkt Backfill for {league_name} ---")
+
+    if not transfermarkt_id:
+        print(f"  SKIP: No transfermarkt_id configured for {league_name}")
+        return {"new": 0, "skipped": 0, "errors": 0, "total": 0}
+
+    print(f"  Competition ID: {transfermarkt_id}")
+    print("  NOTE: CDN only serves current snapshot — no historical data")
+
+    if args.dry_run:
+        print("  [DRY RUN] Would download and load market values")
+        return {"new": 0, "skipped": 0, "errors": 0, "total": 0}
+
+    scraper = TransfermarktScraper()
+    # Use latest season since CDN is always current
+    seasons = getattr(league_cfg, "seasons", ["2025-26"])
+    latest_season = seasons[-1] if seasons else "2025-26"
+
+    try:
+        df = scraper.scrape(league_config=league_cfg, season=latest_season)
+        if df is not None and not df.empty:
+            result = load_market_values(df, league_id)
+            print(f"  → {result.get('new', 0)} new, {result.get('skipped', 0)} skipped, "
+                  f"{result.get('errors', 0)} errors")
+            return result
+        else:
+            print("  → No market value data returned")
+            return {"new": 0, "skipped": 0, "errors": 0, "total": 0}
+    except Exception as e:
+        logger.error("Transfermarkt backfill error for %s: %s", league_name, e)
+        print(f"  → ERROR: {e}")
+        return {"new": 0, "skipped": 0, "errors": 1, "total": 0}
+
+
 def main() -> None:
     """Main entry point for the historical backfill script."""
     parser = argparse.ArgumentParser(
-        description="BetVector Historical Data Backfill (E23-01 through E23-05)",
+        description="BetVector Historical Data Backfill (E23-01 through PC-14)",
     )
     parser.add_argument(
         "command",
-        choices=["matches", "understat", "shot-xg", "clubelo", "features", "all", "smart"],
+        choices=[
+            "matches", "understat", "shot-xg", "clubelo", "features",
+            "weather", "transfermarkt", "all", "smart",
+        ],
         help=(
             "What to backfill: "
             "'matches' = E23-01 (match results + odds from Football-Data.co.uk), "
@@ -1032,7 +1186,9 @@ def main() -> None:
             "'shot-xg' = E23-03 (set-piece vs open-play xG breakdown), "
             "'clubelo' = E23-04 (ClubElo ratings for match dates), "
             "'features' = E23-05 (recompute all features for all seasons), "
-            "'all' = all five in sequence, "
+            "'weather' = PC-14-05 (Open-Meteo weather for all matches), "
+            "'transfermarkt' = PC-14-06 (squad market values from CDN), "
+            "'all' = all steps in sequence, "
             "'smart' = check DB first, skip steps with complete data"
         ),
     )
@@ -1204,6 +1360,12 @@ def main() -> None:
     run_features = args.command in ("features", "all") or (
         args.command == "__smart__" and "features" in args._smart_steps
     )
+    run_weather = args.command in ("weather", "all") or (
+        args.command == "__smart__" and "weather" in args._smart_steps
+    )
+    run_transfermarkt = args.command in ("transfermarkt", "all") or (
+        args.command == "__smart__" and "transfermarkt" in args._smart_steps
+    )
 
     if run_matches:
         match_results = run_matches_backfill(args, league_cfg, league_id)
@@ -1229,6 +1391,18 @@ def main() -> None:
     if run_clubelo:
         clubelo_result = run_clubelo_backfill(args, league_cfg, league_id)
         if clubelo_result["errors"]:
+            has_errors = True
+        print()
+
+    if run_weather:
+        weather_result = run_weather_backfill(args, league_cfg, league_id)
+        if weather_result.get("errors"):
+            has_errors = True
+        print()
+
+    if run_transfermarkt:
+        tm_result = run_transfermarkt_backfill(args, league_cfg, league_id)
+        if tm_result.get("errors"):
             has_errors = True
         print()
 
