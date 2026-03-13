@@ -309,21 +309,27 @@ Wait for owner to respond with approval before making the change.
 
 ## Rule 9 — No Inline Multi-Line Python
 
-Never use `python -c "..."` with multi-line code. The permission
-allow-list wildcard `Bash(python *)` does not match across newlines,
-so multi-line `-c` commands always trigger a manual permission prompt.
+Never use `python -c "..."` with multi-line code, and never use
+`cat > file << 'HEREDOC'` in Bash either. The permission allow-list
+wildcard `*` does not match across newlines, so both patterns always
+trigger a manual permission prompt — blocking autonomous advancement.
 
-Instead, write a temporary script and run it:
+Instead, use the **Write tool** to create the script, then run it
+with a single-line Bash command:
 
-```bash
-# ✅ Do this — always matches the allow list
+```
+# ✅ Do this — zero permission prompts
+Step 1: Write tool → creates /tmp/bv_check.py
+Step 2: Bash → python /tmp/bv_check.py   (matches "Bash(python *)")
+
+# ❌ Never this — cat heredoc triggers prompt (newlines break glob)
 cat > /tmp/bv_check.py << 'PYEOF'
 import os
 print("hello")
 PYEOF
 python /tmp/bv_check.py
 
-# ❌ Never this — triggers permission prompt every time
+# ❌ Never this — python -c triggers prompt (same newline issue)
 python -c "
 import os
 print('hello')
