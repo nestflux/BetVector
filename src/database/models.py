@@ -1501,6 +1501,15 @@ class PlayerValue(Base):
     # Top player ≈ 1.0, bottom ≈ 1/squad_size.
     # Maps directly to InjuryFlag impact_rating scale.
     value_percentile = Column(Float, nullable=False)
+    # Minutes-based importance percentile (0.0–1.0), computed from TM
+    # appearances data.  Rolling average minutes per match over last 10
+    # appearances, ranked within the team.  A player who starts 90 min
+    # every week ≈ 1.0; a bench player with 10 min cameos ≈ 0.1.
+    # NULL when no TM appearance data exists for this player.
+    # Blended 50/50 with value_percentile to form composite impact_rating
+    # for injury features — a high-value bench player is less impactful
+    # when injured than a lower-value starter.  (E40-07)
+    minutes_percentile = Column(Float, nullable=True)
     # Date this snapshot was taken (YYYY-MM-DD)
     snapshot_date = Column(String, nullable=False)
     source = Column(String, nullable=False, server_default="transfermarkt")

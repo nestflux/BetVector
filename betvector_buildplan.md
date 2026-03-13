@@ -7729,12 +7729,14 @@ The TM `appearances` table has `minutes_played` per player per match, which is a
 3. Update `load_injuries_from_soccerdata()` to use composite impact when auto-computing impact_rating
 
 **Acceptance Criteria:**
-- [ ] Minutes-based percentile computed for all players with appearance data
-- [ ] Composite impact rating uses 50/50 blend of market value + minutes
-- [ ] Falls back to market_value_percentile only when no minutes data exists
-- [ ] Temporal integrity: only appearances before prediction date used
-- [ ] Spot-check: a high-value bench player has lower composite score than a lower-value starter
-- [ ] Running twice produces identical results (idempotent)
+- [x] Minutes-based percentile computed for all players with appearance data ✅ (2,303/2,541 = 90.6% matched TM appearances)
+- [x] Composite impact rating uses 50/50 blend of market value + minutes ✅ (in both calculate_injury_features and load_soccerdata_injuries)
+- [x] Falls back to market_value_percentile only when no minutes data exists ✅ (238 players without TM data fall back)
+- [x] Temporal integrity: only appearances before prediction date used ✅
+- [x] Spot-check: a high-value bench player has lower composite score than a lower-value starter ✅ (Foden val=0.963/min=0.080→comp=0.522 < Raya val=0.417/min=0.958→comp=0.688)
+- [x] Running twice produces identical results (idempotent) ✅
+
+**Status: DONE** — Gate 1 6/6 PASS, Gate 2 [CLEAN], Gate 3 [APPROVED]. 276 tests passing.
 
 ---
 

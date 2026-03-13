@@ -2156,3 +2156,171 @@ def fix_injury_club_mapping(session) -> Dict[str, int]:
     )
 
     return stats
+
+
+# ============================================================================
+# E40-07: Minutes-Based Impact Rating
+# ============================================================================
+# Market value alone is an imperfect proxy for match importance.  A player
+# worth €80M who sits on the bench has less real impact when injured than
+# a €20M player who starts every match.  The TM appearances table has
+# minutes_played per player per match — a much better measure of actual
+# on-pitch contribution.
+#
+# We compute a rolling-average minutes per match over each player's last
+# 10 appearances at a given club, then rank within the team to produce a
+# minutes_percentile (0.0–1.0).  This is stored on the PlayerValue table
+# and blended 50/50 with the existing market value_percentile to form a
+# composite impact_rating in calculate_injury_features().
+#
+# Result: a high-value bench warmer gets a LOWER composite rating than a
+# lower-value player who plays every minute — which is the correct signal
+# for predicting the impact of their absence.
+# ============================================================================
+
+
+def compute_minutes_importance(session) -> Dict[str, int]:
+    """Compute minutes-based importance percentile for players using TM data.
+
+    For each player-team combination in our PlayerValue table:
+      1. Look up their TM appearances (filtered to our matched games)
+      2. Compute rolling average minutes over last 10 appearances
+      3. Rank within team to produce minutes_percentile (0.0–1.0)
+      4. Store on PlayerValue.minutes_percentile
+
+    This enables composite impact ratings that blend market value with
+    actual playing time, giving a more accurate injury importance signal.
+
+    Args:
+        session: SQLAlchemy session.
+
+    Returns:
+        Dict with stats: total_players, matched, updated, no_appearances.
+    """
+    from src.database.models import PlayerValue
+
+    stats = {
+        "total_players": 0,
+        "matched": 0,
+        "updated": 0,
+        "no_appearances": 0,
+    }
+
+    # 1. Build TM club_id → our team_id mapping
+    tm_club_to_team = _build_tm_club_to_team_map(session)
+    if not tm_club_to_team:
+        logger.error("No TM club mapping — cannot compute minutes importance")
+        return stats
+
+    # Reverse: our team_id → set of TM club_ids
+    team_to_tm_clubs: Dict[int, set] = {}
+    for cid, tid in tm_club_to_team.items():
+        team_to_tm_clubs.setdefault(tid, set()).add(cid)
+
+    # 2. Load TM appearances
+    appearances = load_tm_appearances()
+    if appearances.empty:
+        logger.error("No TM appearances — cannot compute minutes importance")
+        return stats
+
+    # Filter to our leagues' club IDs
+    our_club_ids = set(tm_club_to_team.keys())
+    app_filtered = appearances[
+        appearances["player_club_id"].isin(our_club_ids)
+    ].copy()
+
+    # Ensure minutes_played is numeric
+    app_filtered["minutes_played"] = pd.to_numeric(
+        app_filtered["minutes_played"], errors="coerce"
+    ).fillna(0)
+
+    logger.info(
+        "TM appearances for our leagues: %d rows", len(app_filtered)
+    )
+
+    # 3. Build per-player average minutes: for each (player_name, club_id),
+    #    take the last 10 appearances and compute average minutes
+    # Sort by date descending within each player-club group, take top 10
+    app_filtered = app_filtered.sort_values("date", ascending=False)
+    player_avg_minutes: Dict[tuple, float] = {}
+
+    grouped = app_filtered.groupby(["player_name", "player_club_id"])
+    for (pname, club_id), group in grouped:
+        last_10 = group.head(10)
+        avg_min = last_10["minutes_played"].mean()
+        player_avg_minutes[(pname, int(club_id))] = avg_min
+
+    logger.info(
+        "Computed avg minutes for %d player-club combos",
+        len(player_avg_minutes),
+    )
+
+    # 4. Load all PlayerValue records and compute minutes_percentile
+    all_pvs = session.query(PlayerValue).all()
+    stats["total_players"] = len(all_pvs)
+
+    # Group PlayerValues by team_id
+    pvs_by_team: Dict[int, list] = {}
+    for pv in all_pvs:
+        pvs_by_team.setdefault(pv.team_id, []).append(pv)
+
+    # For each team, find minutes for each player, then rank
+    for team_id, team_pvs in pvs_by_team.items():
+        tm_clubs = team_to_tm_clubs.get(team_id, set())
+        if not tm_clubs:
+            # No TM mapping for this team → skip
+            for pv in team_pvs:
+                stats["no_appearances"] += 1
+            continue
+
+        # Find minutes for each player in this team
+        player_minutes: list = []
+        for pv in team_pvs:
+            pv_name = pv.player_name.strip()
+            best_avg = None
+            # Try matching across all TM club IDs for this team
+            for tm_cid in tm_clubs:
+                avg = player_avg_minutes.get((pv_name, tm_cid))
+                if avg is not None:
+                    if best_avg is None or avg > best_avg:
+                        best_avg = avg
+            if best_avg is not None:
+                player_minutes.append((pv, best_avg))
+                stats["matched"] += 1
+            else:
+                player_minutes.append((pv, None))
+                stats["no_appearances"] += 1
+
+        # Compute percentile rank within team for players that have data
+        players_with_data = [
+            (pv, m) for pv, m in player_minutes if m is not None
+        ]
+        if not players_with_data:
+            continue
+
+        # Sort by avg_minutes ascending — highest gets highest percentile
+        players_with_data.sort(key=lambda x: x[1])
+        n = len(players_with_data)
+        for rank_idx, (pv, avg_min) in enumerate(players_with_data):
+            # Percentile: (rank / total) — 1-indexed so bottom = 1/n,
+            # top = n/n = 1.0
+            pctile = round((rank_idx + 1) / n, 4)
+            pv.minutes_percentile = pctile
+            stats["updated"] += 1
+
+    # 5. Commit all updates
+    try:
+        session.flush()
+        session.commit()
+    except Exception as e:
+        logger.error("Minutes importance commit failed: %s", e)
+        session.rollback()
+
+    logger.info(
+        "Minutes importance complete: %d total players, %d matched TM data, "
+        "%d updated, %d no TM appearances",
+        stats["total_players"], stats["matched"],
+        stats["updated"], stats["no_appearances"],
+    )
+
+    return stats

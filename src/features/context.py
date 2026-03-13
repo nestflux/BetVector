@@ -1081,6 +1081,10 @@ def calculate_injury_features(
         # impact_rating.  Uses the latest PlayerValue snapshot (the same
         # percentile is used for all historical dates — acceptable since
         # market value rank within a squad is relatively stable).
+        #
+        # E40-07: also load minutes_percentile for composite impact rating.
+        # Composite = 0.5 × market_value_percentile + 0.5 × minutes_pctile
+        # Falls back to value_percentile only if no minutes data exists.
         pvs = session.query(PlayerValue).filter_by(
             team_id=team_id,
         ).all()
@@ -1088,16 +1092,30 @@ def calculate_injury_features(
             pv.player_name.lower().strip(): pv.value_percentile
             for pv in pvs
         }
+        # Minutes percentile lookup — None if not yet computed (E40-07)
+        pv_minutes: Dict[str, Optional[float]] = {
+            pv.player_name.lower().strip(): pv.minutes_percentile
+            for pv in pvs
+        }
 
-    # Compute features from historical injuries
+    # Compute features from historical injuries using composite impact
+    # rating (E40-07).  Blending market value with actual playing time
+    # gives a more accurate injury importance signal — a high-value bench
+    # player has less match impact when injured than a lower-value starter.
     total_impact = 0.0
     has_key = False
     for inj in injuries:
-        # Use PlayerValue percentile as impact_rating
-        impact = pv_percentile.get(
-            inj.player_name.lower().strip(),
-            0.5,  # Default if player not in PlayerValue table
-        )
+        player_key = inj.player_name.lower().strip()
+        val_pct = pv_percentile.get(player_key, 0.5)
+        min_pct = pv_minutes.get(player_key)
+
+        # Composite: 50/50 blend of market value + minutes importance
+        # Falls back to value_percentile only if no minutes data (E40-07)
+        if min_pct is not None:
+            impact = 0.5 * val_pct + 0.5 * min_pct
+        else:
+            impact = val_pct
+
         total_impact += impact
         if impact >= KEY_PLAYER_THRESHOLD:
             has_key = True

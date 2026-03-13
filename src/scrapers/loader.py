@@ -1678,11 +1678,14 @@ def load_soccerdata_injuries(
 
         # Build lookup: (team_id, player_name_lower) → value_percentile
         pv_lookup: Dict[tuple, float] = {}
+        # Also build minutes_percentile lookup for composite impact (E40-07)
+        pv_minutes_lookup: Dict[tuple, Optional[float]] = {}
         for pv in player_values:
             key = (pv.team_id, pv.player_name.lower().strip())
             # Keep the most recent (highest percentile wins on tie)
             if key not in pv_lookup or pv.value_percentile > pv_lookup[key]:
                 pv_lookup[key] = pv.value_percentile
+            pv_minutes_lookup[key] = getattr(pv, "minutes_percentile", None)
 
         for _, row in df.iterrows():
             player_name = str(row.get("player_name", "")).strip()
@@ -1705,10 +1708,18 @@ def load_soccerdata_injuries(
                 not_found_teams.add(team_name)
                 continue
 
-            # Auto-compute impact_rating from PlayerValue percentile
-            # If the player isn't in our values table, use 0.5 (mid-range)
+            # Auto-compute impact_rating from composite of market value
+            # percentile and minutes percentile (E40-07).
+            # Composite = 0.5 × value_pct + 0.5 × minutes_pct
+            # Falls back to value_percentile only if no minutes data.
+            # If the player isn't in our values table, use 0.5 (mid-range).
             pv_key = (team.id, player_name.lower().strip())
-            impact_rating = pv_lookup.get(pv_key, 0.5)
+            value_pct = pv_lookup.get(pv_key, 0.5)
+            minutes_pct = pv_minutes_lookup.get(pv_key)
+            if minutes_pct is not None:
+                impact_rating = 0.5 * value_pct + 0.5 * minutes_pct
+            else:
+                impact_rating = value_pct
 
             # Check for existing flag (dedup by team_id + player_name)
             existing = session.query(InjuryFlag).filter_by(
