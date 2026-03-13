@@ -344,9 +344,9 @@ single-line expression.
 
 ## Current Status
 
-Last completed: PC-17 (Badge Full Coverage + Fixtures Layout Final) ✅
-Currently working: (none — awaiting next task)
-Next up: TBD
+Last completed: E39-04 — Historical Injury Backfill ✅
+Currently working: E39-05 — Recompute Features + Backtest
+Next up: E39-06 — Dashboard Injury Display
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)

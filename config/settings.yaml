@@ -263,6 +263,19 @@ scraping:
       - "ML"
       - "Totals"
 
+  # ── Soccerdata API (E39-02) — primary live injury data source ──────
+  # Free tier: 75 requests/day, all leagues, 7-year history.
+  # Auth: SOCCERDATA_API_KEY env var as auth_token query parameter.
+  # Morning pipeline uses 6 req/day (one per league) for sidelined data.
+  # Date format: DD/MM/YYYY.  API base: https://api.soccerdataapi.com
+  soccerdata:
+    base_url: "https://api.soccerdataapi.com"
+    min_request_interval_seconds: 3       # Be polite — paid API
+    daily_request_limit: 75               # Free tier cap
+    warning_threshold: 20                 # Warn when remaining drops below this
+    hard_stop_threshold: 5                # Stop non-critical requests below this
+    max_matches_per_league: 3             # Limit match detail calls to conserve budget
+
   understat:
     min_request_interval_seconds: 3       # Extra polite — scraping a free site
   football_data_org:

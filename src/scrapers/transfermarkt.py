@@ -676,6 +676,141 @@ class TransfermarktScraper(BaseScraper):
         return result
 
     # -----------------------------------------------------------------------
+    # Player-Level Data (E39-01)
+    # -----------------------------------------------------------------------
+    # Position mapping: Transfermarkt "position" → abbreviated code.
+    # Used for PlayerValue.position and injury display.
+    _POSITION_MAP = {
+        "Goalkeeper": "GK",
+        "Defender": "DF",
+        "Midfield": "MF",
+        "Attack": "FW",
+    }
+
+    def scrape_players(
+        self,
+        league_config: object,
+        season: str,
+    ) -> pd.DataFrame:
+        """Fetch individual player market values for all teams in a league.
+
+        Downloads the same ``players.csv.gz`` as ``scrape()``, but returns
+        per-player data instead of team-level aggregates.  Used to populate
+        the ``player_values`` table, which provides:
+
+        - **Automated injury impact_rating:** a player's value_percentile
+          (rank within squad by market value) maps directly to how important
+          they are.  Haaland = top percentile ~ 1.0, backup keeper ~ 0.04.
+        - **Bench strength feature:** compare bench vs starter market values.
+
+        Parameters
+        ----------
+        league_config : ConfigNamespace
+            Must have ``transfermarkt_id`` (e.g. "GB1").
+        season : str
+            Season string for raw file naming, e.g. ``"2025-26"``.
+
+        Returns
+        -------
+        pd.DataFrame
+            One row per player: player_name, team_name, position (GK/DF/MF/FW),
+            market_value_eur, snapshot_date.  Empty DataFrame on failure.
+        """
+        league_name = getattr(league_config, "short_name", "unknown")
+        competition_id = getattr(league_config, "transfermarkt_id", None)
+        if not competition_id:
+            logger.warning(
+                "[%s] No transfermarkt_id for %s — skipping player scrape",
+                self.source_name, league_name,
+            )
+            return pd.DataFrame()
+
+        logger.info(
+            "[%s] Fetching player-level market values for %s %s",
+            self.source_name, league_name, season,
+        )
+
+        # --- Download players.csv.gz (same file as team-level scrape) ---
+        players_url = f"{self._cdn_base}/players.csv.gz"
+        try:
+            response = self._request_with_retry(
+                url=players_url,
+                domain=self.DOMAIN,
+                headers={"Accept": "application/gzip"},
+            )
+        except (ScraperError, Exception) as e:
+            logger.error("[%s] Failed to download players.csv.gz: %s",
+                         self.source_name, e)
+            return pd.DataFrame()
+
+        try:
+            players_df = pd.read_csv(
+                io.BytesIO(response.content),
+                compression="gzip",
+            )
+        except Exception as e:
+            logger.error("[%s] Failed to parse players CSV: %s",
+                         self.source_name, e)
+            return pd.DataFrame()
+
+        if players_df.empty:
+            return pd.DataFrame()
+
+        # --- Filter to target league's active players ---
+        league_players = players_df[
+            players_df["current_club_domestic_competition_id"] == competition_id
+        ].copy()
+
+        if league_players.empty:
+            logger.warning(
+                "[%s] No players for %s (competition_id=%s)",
+                self.source_name, league_name, competition_id,
+            )
+            return pd.DataFrame()
+
+        # Only active players (appeared in recent season)
+        current_year = datetime.utcnow().year
+        min_last_season = current_year - 1
+        league_players = league_players[
+            league_players["last_season"] >= min_last_season
+        ].copy()
+
+        # Only players with market values
+        valued = league_players[
+            league_players["market_value_in_eur"].notna()
+        ].copy()
+
+        if valued.empty:
+            logger.warning("[%s] No %s players with market values",
+                           self.source_name, league_name)
+            return pd.DataFrame()
+
+        # --- Map position to abbreviated code ---
+        valued["pos_code"] = valued["position"].map(self._POSITION_MAP)
+
+        # --- Map team names to canonical DB names ---
+        valued["team_name"] = valued["current_club_name"].apply(
+            self._map_team_name
+        )
+
+        # --- Build output DataFrame ---
+        result = pd.DataFrame({
+            "player_name": valued["name"].values,
+            "team_name": valued["team_name"].values,
+            "position": valued["pos_code"].values,
+            "market_value_eur": valued["market_value_in_eur"].values,
+            "snapshot_date": date.today().isoformat(),
+        })
+
+        logger.info(
+            "[%s] %s: %d players with market values across %d teams",
+            self.source_name, league_name, len(result),
+            result["team_name"].nunique(),
+        )
+
+        return result
+
+    # -----------------------------------------------------------------------
     # Team Name Mapping
     # -----------------------------------------------------------------------
 

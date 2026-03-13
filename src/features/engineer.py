@@ -272,16 +272,14 @@ def compute_features(match_id: int, league_id: int) -> Dict[str, Dict[str, Any]]
     home_features.update(home_congestion)
     away_features.update(away_congestion)
 
-    # --- Injury impact features (E22-02) ---
-    # Manual injury flags from the Settings page.  Teams missing key players
-    # (impact_rating >= 0.7) perform measurably worse.  injury_impact is the
-    # total "damage" from all absences; key_player_out is a binary signal.
-    # NOTE: Unlike other features, injury flags are current-state data (not
-    # match-date-specific).  They reflect the owner's latest input about
-    # who is injured NOW — suitable for upcoming match predictions only.
-    # For historical matches, these will be 0/0 (no flags entered for past).
-    home_injury = calculate_injury_features(home_team_id)
-    away_injury = calculate_injury_features(away_team_id)
+    # --- Injury impact features (E22-02, E39-04) ---
+    # For upcoming matches (no match_date or future date): reads live InjuryFlag
+    # table populated by Soccerdata API (E39-02).
+    # For historical matches (match_date in the past): reads team_injuries table
+    # with temporal filtering (only injuries active on that date) and uses
+    # PlayerValue percentile as the impact_rating (E39-04).
+    home_injury = calculate_injury_features(home_team_id, match_date=match_date)
+    away_injury = calculate_injury_features(away_team_id, match_date=match_date)
     home_features.update(home_injury)
     away_features.update(away_injury)
 

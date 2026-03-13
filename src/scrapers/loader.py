@@ -26,6 +26,14 @@ Loader functions (each independent and idempotent):
     into the club_elo table with team name matching and idempotency.
   - ``load_injuries(df, league_id)`` — loads injury data from API-Football
     into the team_injuries table (PC-14-03).
+  - ``load_player_values(df, league_id)`` — loads individual player market
+    values from Transfermarkt into the player_values table (E39-01).
+  - ``load_soccerdata_injuries(df, league_id)`` — loads sidelined data from
+    the Soccerdata API into the injury_flags table with auto-computed
+    impact_rating from PlayerValue percentile (E39-02).
+  - ``load_historical_injuries(df, league_id)`` — loads historical injury
+    data from salimt/football-datasets CSV into the team_injuries table
+    for date-aware backtesting (E39-04).
 
 All loaders use explicit duplicate checks before inserting.  Running
 any loader twice with the same data produces zero new records.
@@ -42,8 +50,8 @@ import pandas as pd
 
 from src.database.db import get_session
 from src.database.models import (
-    BetLog, ClubElo, League, Match, MatchStat, Odds, Team, TeamInjury,
-    TeamMarketValue, Weather,
+    BetLog, ClubElo, InjuryFlag, League, Match, MatchStat, Odds, PlayerValue,
+    Team, TeamInjury, TeamMarketValue, Weather,
 )
 
 logger = logging.getLogger(__name__)
@@ -1465,6 +1473,439 @@ def load_market_values(
         new_count, skipped_count, not_found,
     )
     return summary
+
+
+# ============================================================================
+# PLAYER VALUES — Per-Player Market Values (E39-01)
+# ============================================================================
+# Individual player market values from Transfermarkt CDN.  Used to auto-compute
+# injury impact_rating (player importance as market value percentile within
+# squad) and bench strength feature (bench vs starter market value ratio).
+#
+# value_percentile is computed here at load time:
+#   rank players by market_value_eur descending within each team
+#   top player gets percentile ≈ 1.0, bottom ≈ 1/squad_size
+#
+# This percentile maps directly to the InjuryFlag impact_rating scale:
+#   0.1–0.3 = rotation player, 0.4–0.5 = starter, 0.6–0.7 = key, 0.8–1.0 = star
+# ============================================================================
+
+
+def load_player_values(
+    df: pd.DataFrame,
+    league_id: int,
+) -> Dict[str, int]:
+    """Load individual player market values into the player_values table.
+
+    Computes ``value_percentile`` per team — the player's rank by market value
+    within their squad, normalized to 0.0–1.0.  This percentile serves as the
+    automated ``impact_rating`` for injury features: losing a top-percentile
+    player (Haaland, Salah) has a much larger impact than losing a rotation
+    player.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame from ``TransfermarktScraper.scrape_players()`` with columns:
+        player_name, team_name, position, market_value_eur, snapshot_date.
+    league_id : int
+        Database ID of the league.
+
+    Returns
+    -------
+    dict
+        Summary: ``{"new": int, "skipped": int, "not_found": int}``.
+    """
+    if df.empty:
+        return {"new": 0, "skipped": 0, "not_found": 0}
+
+    new_count = 0
+    skipped_count = 0
+    not_found_teams = set()
+
+    # --- Pre-compute value_percentile per team ---
+    # Rank players within each team by market value (descending).
+    # Percentile = rank / count_within_team.
+    # Rank 1 (highest value) → percentile ≈ 1.0, lowest → ≈ 1/n.
+    df = df.copy()
+    df["rank"] = df.groupby("team_name")["market_value_eur"].rank(
+        method="min", ascending=False
+    )
+    df["team_size"] = df.groupby("team_name")["market_value_eur"].transform(
+        "count"
+    )
+    # Invert rank so highest value = highest percentile
+    # rank 1 (best) → (n - 1 + 1) / n = 1.0
+    # rank n (worst) → (n - n + 1) / n = 1/n
+    df["value_percentile"] = (df["team_size"] - df["rank"] + 1) / df["team_size"]
+    # Clamp to [0.0, 1.0] for safety
+    df["value_percentile"] = df["value_percentile"].clip(0.0, 1.0)
+
+    for _, row in df.iterrows():
+        team_name = row["team_name"]
+        snapshot_date = row["snapshot_date"]
+
+        with get_session() as session:
+            # Find team in DB
+            team = session.query(Team).filter_by(
+                name=team_name, league_id=league_id,
+            ).first()
+
+            if team is None:
+                if team_name not in not_found_teams:
+                    logger.warning(
+                        "load_player_values: Team '%s' not found in DB — "
+                        "skipping all players.",
+                        team_name,
+                    )
+                    not_found_teams.add(team_name)
+                continue
+
+            # Idempotency check: (team_id, player_name, snapshot_date)
+            existing = session.query(PlayerValue).filter_by(
+                team_id=team.id,
+                player_name=row["player_name"],
+                snapshot_date=snapshot_date,
+            ).first()
+
+            if existing:
+                skipped_count += 1
+                continue
+
+            pv = PlayerValue(
+                team_id=team.id,
+                player_name=row["player_name"],
+                position=row.get("position"),
+                market_value_eur=float(row["market_value_eur"]),
+                value_percentile=round(float(row["value_percentile"]), 4),
+                snapshot_date=snapshot_date,
+                source="transfermarkt",
+            )
+            session.add(pv)
+            new_count += 1
+
+    summary = {
+        "new": new_count,
+        "skipped": skipped_count,
+        "not_found": len(not_found_teams),
+    }
+    logger.info(
+        "load_player_values: %d new, %d skipped (duplicates), "
+        "%d teams not found",
+        new_count, skipped_count, len(not_found_teams),
+    )
+    return summary
+
+
+# ============================================================================
+# Soccerdata Injury Loading — InjuryFlag Bridge (E39-02)
+# ============================================================================
+# The Soccerdata API provides live sidelined (injured/suspended) player
+# data.  This loader writes that data into the ``injury_flags`` table
+# (NOT the ``team_injuries`` table, which is for historical data).
+#
+# Key design decisions:
+#   1. **impact_rating is auto-computed:** Looks up the player's
+#      value_percentile from the most recent PlayerValue snapshot.
+#      Top player in squad = 1.0, lowest value = ~0.04.
+#      If the player is not in PlayerValue, defaults to 0.5.
+#
+#   2. **Recovery detection:** Players who were previously in the sidelined
+#      list but are no longer reported are NOT automatically removed.
+#      This is intentional — Soccerdata may not report players if there
+#      are no matches today.  Manual clearing or time-based expiry
+#      should be handled separately.
+#
+#   3. **Idempotent:** Re-running with the same data updates status/
+#      impact_rating but doesn't create duplicates.
+# ============================================================================
+
+def load_soccerdata_injuries(
+    df: pd.DataFrame,
+    league_id: int,
+) -> Dict[str, int]:
+    """Load sidelined data from Soccerdata API into the injury_flags table.
+
+    Maps Soccerdata team/player names to canonical DB records and auto-
+    computes ``impact_rating`` from the player's ``value_percentile`` in
+    the PlayerValue table.
+
+    **Impact rating automation:**
+      Instead of manually assigning impact ratings (which requires deep
+      football knowledge), we use market value as a proxy for importance.
+      A player worth EUR 80M to their club (value_percentile ≈ 1.0) is
+      objectively more impactful when missing than a EUR 2M backup
+      (value_percentile ≈ 0.08).  This correlation between market value
+      and match impact is well-established in football analytics.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Columns: player_name, team_name, status ('out'/'doubt'),
+        description (injury reason).
+    league_id : int
+        Database ID of the league.
+
+    Returns
+    -------
+    dict
+        Keys: new, updated, skipped, not_found, total.
+    """
+    if df is None or df.empty:
+        logger.warning("load_soccerdata_injuries: empty DataFrame")
+        return {"new": 0, "updated": 0, "skipped": 0, "not_found": 0, "total": 0}
+
+    df = df.copy()
+
+    new_count = 0
+    updated_count = 0
+    skipped_count = 0
+    not_found_teams: set = set()
+
+    with get_session() as session:
+        # Build team name → Team lookup for this league
+        teams = session.query(Team).filter_by(league_id=league_id).all()
+        name_to_team: Dict[str, Team] = {t.name: t for t in teams}
+        name_lower_map: Dict[str, Team] = {
+            t.name.lower(): t for t in teams
+        }
+
+        # Load latest PlayerValue snapshot for impact_rating lookup
+        # Group by (team_id, player_name), take the most recent snapshot
+        player_values = session.query(PlayerValue).filter(
+            PlayerValue.team_id.in_([t.id for t in teams])
+        ).all()
+
+        # Build lookup: (team_id, player_name_lower) → value_percentile
+        pv_lookup: Dict[tuple, float] = {}
+        for pv in player_values:
+            key = (pv.team_id, pv.player_name.lower().strip())
+            # Keep the most recent (highest percentile wins on tie)
+            if key not in pv_lookup or pv.value_percentile > pv_lookup[key]:
+                pv_lookup[key] = pv.value_percentile
+
+        for _, row in df.iterrows():
+            player_name = str(row.get("player_name", "")).strip()
+            team_name = str(row.get("team_name", "")).strip()
+            status = str(row.get("status", "doubt")).strip()
+            description = str(row.get("description", "")).strip()
+
+            if not player_name or not team_name:
+                continue
+
+            # Validate status is a valid InjuryFlag status
+            if status not in ("out", "doubt", "suspended"):
+                status = "doubt"
+
+            # Find team in DB — try exact match, then case-insensitive
+            team = name_to_team.get(team_name)
+            if not team:
+                team = name_lower_map.get(team_name.lower())
+            if not team:
+                not_found_teams.add(team_name)
+                continue
+
+            # Auto-compute impact_rating from PlayerValue percentile
+            # If the player isn't in our values table, use 0.5 (mid-range)
+            pv_key = (team.id, player_name.lower().strip())
+            impact_rating = pv_lookup.get(pv_key, 0.5)
+
+            # Check for existing flag (dedup by team_id + player_name)
+            existing = session.query(InjuryFlag).filter_by(
+                team_id=team.id,
+                player_name=player_name,
+            ).first()
+
+            if existing is not None:
+                # Update if status or impact changed
+                changed = False
+                if existing.status != status:
+                    existing.status = status
+                    changed = True
+                if abs(existing.impact_rating - impact_rating) > 0.001:
+                    existing.impact_rating = impact_rating
+                    changed = True
+                if description and existing.estimated_return != description:
+                    existing.estimated_return = description
+                    changed = True
+                if changed:
+                    from datetime import datetime
+                    existing.updated_at = datetime.now().isoformat()
+                    updated_count += 1
+                else:
+                    skipped_count += 1
+            else:
+                # Insert new injury flag
+                flag = InjuryFlag(
+                    team_id=team.id,
+                    player_name=player_name,
+                    status=status,
+                    estimated_return=description or None,
+                    impact_rating=impact_rating,
+                )
+                session.add(flag)
+                new_count += 1
+
+        session.commit()
+
+    if not_found_teams:
+        logger.warning(
+            "load_soccerdata_injuries: %d teams not found in DB: %s",
+            len(not_found_teams),
+            sorted(not_found_teams),
+        )
+
+    total = new_count + updated_count + skipped_count
+    summary = {
+        "new": new_count,
+        "updated": updated_count,
+        "skipped": skipped_count,
+        "not_found": len(not_found_teams),
+        "total": total,
+    }
+    logger.info(
+        "load_soccerdata_injuries: %d new, %d updated, %d skipped, "
+        "%d teams not found",
+        new_count, updated_count, skipped_count, len(not_found_teams),
+    )
+    return summary
+
+
+# ============================================================================
+# Historical Injury Backfill — salimt/football-datasets CSV (E39-04)
+# ============================================================================
+# Loads historical injury data into the ``team_injuries`` table for
+# date-aware feature computation during backtesting.  Unlike live injury
+# flags (which only track the *current* squad state), historical injuries
+# have start/end dates and are queried with ``match_date`` to reconstruct
+# who was injured on a given day.
+
+
+def load_historical_injuries(
+    df: pd.DataFrame,
+    league_id: int,
+) -> Dict:
+    """Load historical injury data into the team_injuries table.
+
+    Deduplication is done via (team_id, player_name, reported_at).
+    If a record already exists for the same player and date, it is
+    skipped (idempotent re-runs produce zero new rows).
+
+    If a matching ``PlayerValue`` record exists, the player's
+    ``market_value_eur`` is attached to the injury record for later
+    use in ``calculate_injury_features(match_date=...)``.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Processed injury data.  Expected columns:
+        ``team_name``, ``player_name``, ``injury_type``, ``from_date``,
+        ``end_date``, ``days_missed``.
+    league_id : int
+        Database league ID.
+
+    Returns
+    -------
+    dict
+        ``{new, skipped, not_found, total}``.
+    """
+    if df is None or df.empty:
+        return {"new": 0, "skipped": 0, "not_found": 0, "total": 0}
+
+    new_count = 0
+    skipped_count = 0
+    not_found_teams: set = set()
+
+    with get_session() as session:
+        # Build team name → id lookup
+        teams = session.query(Team).filter_by(league_id=league_id).all()
+        name_to_id: Dict[str, int] = {t.name: t.id for t in teams}
+        name_lower: Dict[str, int] = {t.name.lower(): t.id for t in teams}
+
+        # PlayerValue market_value lookup for impact enrichment
+        team_ids = [t.id for t in teams]
+        pv_lookup: Dict[tuple, float] = {}
+        if team_ids:
+            pvs = session.query(PlayerValue).filter(
+                PlayerValue.team_id.in_(team_ids),
+            ).all()
+            for pv in pvs:
+                pv_lookup[(pv.team_id, pv.player_name.lower().strip())] = (
+                    pv.market_value_eur
+                )
+
+        for _, row in df.iterrows():
+            team_name = str(row.get("team_name", "")).strip()
+            player_name = str(row.get("player_name", "")).strip()
+            from_date = str(row.get("from_date", "")).strip()
+            end_date = str(row.get("end_date", "")).strip() or None
+            injury_type = row.get("injury_type")
+            days_missed = row.get("days_missed")
+
+            if (not team_name or not player_name or not from_date
+                    or from_date in ("nan", "None", "NaT")):
+                continue
+
+            # Resolve team
+            team_id = name_to_id.get(team_name)
+            if not team_id:
+                team_id = name_lower.get(team_name.lower())
+            if not team_id:
+                not_found_teams.add(team_name)
+                continue
+
+            # Dedup check — same player, same team, same date
+            existing = session.query(TeamInjury).filter_by(
+                team_id=team_id,
+                player_name=player_name,
+                reported_at=from_date,
+            ).first()
+            if existing is not None:
+                skipped_count += 1
+                continue
+
+            # Enrich with market value if available
+            market_value = pv_lookup.get(
+                (team_id, player_name.lower().strip()),
+            )
+
+            injury = TeamInjury(
+                team_id=team_id,
+                player_name=player_name,
+                injury_type=str(injury_type) if injury_type else None,
+                days_out=int(days_missed) if pd.notna(days_missed) else None,
+                player_market_value=market_value,
+                status="returned" if end_date else "injured",
+                reported_at=from_date,
+                expected_return=end_date,
+                source="salimt_football_datasets",
+            )
+            session.add(injury)
+            new_count += 1
+
+            # Batch commit every 500 to keep memory reasonable
+            if new_count % 500 == 0:
+                session.commit()
+
+        session.commit()
+
+    if not_found_teams:
+        logger.warning(
+            "load_historical_injuries: %d teams not found: %s",
+            len(not_found_teams),
+            sorted(not_found_teams)[:10],
+        )
+
+    logger.info(
+        "load_historical_injuries: %d new, %d skipped, %d teams not found",
+        new_count, skipped_count, len(not_found_teams),
+    )
+    return {
+        "new": new_count,
+        "skipped": skipped_count,
+        "not_found": len(not_found_teams),
+        "total": new_count + skipped_count,
+    }
 
 
 # ============================================================================

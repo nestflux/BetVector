@@ -492,6 +492,41 @@ class Pipeline:
                 errors.append(err)
                 print(f"  → API-Football: FAILED ({e})")
 
+            # 1c-ii. Soccerdata — live sidelined/injured player data (E39-03)
+            # Primary injury source — replaces API-Football (free tier blocks
+            # current-season injury data).  Uses 1 request per league from
+            # the 75/day free tier budget.  Impact ratings are auto-computed
+            # from PlayerValue percentiles loaded in E39-01.
+            soccerdata_injuries_df = None
+            try:
+                from src.scrapers.soccerdata import SoccerdataScraper
+                from src.scrapers.loader import load_soccerdata_injuries
+
+                sd_scraper = SoccerdataScraper()
+                soccerdata_injuries_df = sd_scraper.scrape_injuries(
+                    league_config=league_cfg, season=current_season,
+                )
+                if (soccerdata_injuries_df is not None
+                        and not soccerdata_injuries_df.empty):
+                    sd_inj_result = load_soccerdata_injuries(
+                        soccerdata_injuries_df, league_id,
+                    )
+                    print(
+                        f"  → Soccerdata injuries: "
+                        f"{len(soccerdata_injuries_df)} sidelined "
+                        f"({sd_inj_result['new']} new, "
+                        f"{sd_inj_result['updated']} updated)"
+                    )
+                else:
+                    print("  → Soccerdata injuries: No data "
+                          "(no matches today or API unavailable)")
+
+            except Exception as e:
+                err = f"Soccerdata injury scrape failed for {league_name}: {e}"
+                logger.error(err)
+                errors.append(err)
+                print(f"  → Soccerdata injuries: FAILED ({e})")
+
             # 1d. Understat (xG data — replaces blocked FBref)
             # Smart skip (PC-09): if all finished matches already have
             # MatchStat rows, skip the Understat API calls entirely.
@@ -1442,6 +1477,30 @@ class Pipeline:
                               f"{mv_result['not_found']} not found")
                     else:
                         print(f"    → {lg.short_name}: no data returned")
+
+                    # E39-03: Also refresh player-level values (for injury
+                    # impact_rating auto-computation and bench_strength feature)
+                    try:
+                        from src.scrapers.loader import load_player_values
+                        pv_df = tm_scraper.scrape_players(
+                            league_config=lg, season=lg_season,
+                        )
+                        if pv_df is not None and not pv_df.empty:
+                            pv_result = load_player_values(pv_df, lg_id)
+                            print(f"    → {lg.short_name} player values: "
+                                  f"{pv_result['new']} new, "
+                                  f"{pv_result['skipped']} skipped")
+                        else:
+                            print(f"    → {lg.short_name} player values: "
+                                  f"no data returned")
+                    except Exception as pv_e:
+                        logger.warning(
+                            "Player value refresh failed for %s: %s",
+                            lg.short_name, pv_e,
+                        )
+                        print(f"    → {lg.short_name} player values: "
+                              f"FAILED ({pv_e})")
+
             except Exception as e:
                 err = f"Transfermarkt market value refresh failed: {e}"
                 logger.error(err)

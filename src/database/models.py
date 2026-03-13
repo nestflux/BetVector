@@ -1393,6 +1393,86 @@ class TeamMarketValue(Base):
 
 
 # ============================================================================
+# 20b. PLAYER_VALUES  (E39-01 — Individual Player Market Values)
+# ============================================================================
+# Per-player market value snapshots from Transfermarkt CDN.  The existing
+# TransfermarktScraper downloads individual player data (name, club, value,
+# position) but aggregates to team level — discarding the player details.
+#
+# This model stores the individual data to enable:
+#   - **Automated injury impact_rating:** a player's market value percentile
+#     within their squad proxies their importance (Haaland = top percentile
+#     = impact_rating ~1.0, backup keeper = low percentile = ~0.1)
+#   - **Bench strength feature:** compare market value of bench vs starters
+#
+# value_percentile is computed at load time: rank players by market_value_eur
+# descending within their team.  Top player ≈ 1.0, bottom ≈ 0.04 (for a
+# 25-man squad).  This percentile maps directly to the InjuryFlag
+# impact_rating scale (0.0–1.0).
+
+
+class PlayerValue(Base):
+    """Individual player market value snapshot from Transfermarkt CDN.
+
+    One row per player per snapshot date.  Used to auto-compute injury
+    impact_rating (how important is the absent player?) and bench strength
+    (how much quality is on the bench vs starting XI?).
+    """
+    __tablename__ = "player_values"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    team_id = Column(
+        Integer, ForeignKey("teams.id"), nullable=False,
+    )
+    # Player's display name from Transfermarkt (e.g., "Erling Haaland")
+    player_name = Column(String, nullable=False)
+    # Position category: GK (goalkeeper), DF (defender), MF (midfielder),
+    # FW (forward).  Mapped from Transfermarkt's detailed sub_position.
+    position = Column(String, nullable=True)
+    # Market value in EUR — Transfermarkt's estimated transfer value.
+    # e.g. Haaland ~€180M, rotation player ~€2M, youth prospect ~€500K
+    market_value_eur = Column(Float, nullable=False)
+    # Percentile rank within the player's squad (0.0–1.0).
+    # Computed at load time: rank by market_value_eur descending.
+    # Top player ≈ 1.0, bottom ≈ 1/squad_size.
+    # Maps directly to InjuryFlag impact_rating scale.
+    value_percentile = Column(Float, nullable=False)
+    # Date this snapshot was taken (YYYY-MM-DD)
+    snapshot_date = Column(String, nullable=False)
+    source = Column(String, nullable=False, server_default="transfermarkt")
+    created_at = Column(
+        String, nullable=False, server_default=func.now(),
+    )
+
+    # Relationships
+    team = relationship("Team")
+
+    __table_args__ = (
+        # One entry per player per team per snapshot — idempotent loading
+        UniqueConstraint(
+            "team_id", "player_name", "snapshot_date",
+            name="uq_player_values_team_player_date",
+        ),
+        CheckConstraint(
+            "value_percentile >= 0.0 AND value_percentile <= 1.0",
+            name="ck_player_values_percentile_range",
+        ),
+        Index("idx_player_values_team", "team_id"),
+        Index("idx_player_values_date", "snapshot_date"),
+    )
+
+    def __repr__(self) -> str:
+        val_m = (self.market_value_eur or 0) / 1_000_000
+        return (
+            f"PlayerValue(team={self.team_id}, "
+            f"player='{self.player_name}', "
+            f"value=€{val_m:.1f}M, "
+            f"pct={self.value_percentile:.2f}, "
+            f"date='{self.snapshot_date}')"
+        )
+
+
+# ============================================================================
 # 21. TEAM_INJURIES  (E15-03 — Placeholder)
 # ============================================================================
 # Placeholder model for future injury data integration.  The original build

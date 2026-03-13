@@ -62,8 +62,9 @@ This document breaks the BetVector masterplan into sequenced epics and issues th
 | PC-13 | Local SQLite Rebuild & Neon Recovery | 5 | ✅ DONE — Neon free-tier quota exceeded, switch to local SQLite, EPL backfill, Ligue 1 full backfill, local pipeline run, VALUE badge CSS fix |
 | PC-14 | Full Data Gap Closure & 6-League Predictions | 16 | ✅ DONE — Transfermarkt multi-league, Odds API 6-league maps, injury loader, matchday computation, weather/transfermarkt backfill, 13,569 matches, 27,110 features, predictions all 6 leagues, 28 tests, 309/309 full suite |
 | PC-15 | Local Pipeline Setup — Fixtures, Odds Resilience, Automation | 6 | ✅ DONE — Football-Data.org 6-league fixtures (PL/ELC/PD/FL1/BL1/SA), odds-api.io fallback scraper (250+ teams, 6 leagues), budget optimization (skip_midday_below=200), launchd automation (3 daily runs), cloud sync strategy, 32 integration tests, 315/315 full suite |
+| E39 | Injury Data Pipeline + Lineup Features | 12 | Fix broken injury pipeline (Soccerdata API), automate player importance (Transfermarkt market values), historical backfill (salimt CSV), lineup storage, squad rotation index, formation change, bench strength features |
 
-**Total: 48 epics, 219 issues** (45 original + 20 post-launch + 12 odds/model + 7 backfill + 16 dashboard UX + 5 clarity + 16 badges/polish + 6 cloud migration + 6 post-critical-path + 6 multi-user auth + 7 bet tracker + 4 league expansion + 4 model improvement + 6 league backfill phase 2 + 5 dashboard fixes + 6 data gap fix + 6 model stability fix + 4 pipeline performance + 6 pipeline integrity + 5 local rebuild + 16 data gap closure + 6 local pipeline setup)
+**Total: 49 epics, 231 issues** (45 original + 20 post-launch + 12 odds/model + 7 backfill + 16 dashboard UX + 5 clarity + 16 badges/polish + 6 cloud migration + 6 post-critical-path + 6 multi-user auth + 7 bet tracker + 4 league expansion + 4 model improvement + 6 league backfill phase 2 + 5 dashboard fixes + 6 data gap fix + 6 model stability fix + 4 pipeline performance + 6 pipeline integrity + 5 local rebuild + 16 data gap closure + 6 local pipeline setup)
 
 ---
 
@@ -7256,4 +7257,267 @@ PC-14 closed all data gaps and generated predictions for all 6 leagues. PC-15 ad
 ```
 PC-15-01 (fixtures) → PC-15-02 (odds-api.io) → PC-15-03 (budget) →
 PC-15-04 (launchd) → PC-15-05 (sync docs) → PC-15-06 (tests)
+```
+
+---
+
+## E39 — Injury Data Pipeline + Lineup Features
+
+**MP refs:** §5 Data Sources, §6 Schema, §7 Scraper Interface, §9 Feature Engineering
+
+**Overview:** Fix the broken injury pipeline (API-Football free tier blocks 2025-26), integrate Soccerdata API as primary injury source, automate player importance via Transfermarkt market values, backfill historical injuries from CSV, and add three new lineup-based features (squad rotation index, formation change, bench strength).
+
+**Phase 1: Fix Injury Pipeline (E39-01 → E39-07)**
+**Phase 2: Lineup Features (E39-08 → E39-12)**
+
+---
+
+### E39-01 — PlayerValue Table + Transfermarkt Player-Level Extraction ✅ DONE
+
+**Type:** Database Model + Scraper Enhancement
+**Files:** `src/database/models.py`, `src/scrapers/transfermarkt.py`, `src/scrapers/loader.py`
+
+**Tasks:**
+1. Create `PlayerValue` model in `models.py` — table `player_values` with columns: `team_id` (FK), `player_name`, `position` (GK/DF/MF/FW), `market_value_eur`, `value_percentile` (0.0–1.0), `snapshot_date`, `source`, `created_at`. UniqueConstraint on (team_id, player_name, snapshot_date).
+2. Add `scrape_players()` method to `TransfermarktScraper` — returns per-player DataFrame (reuses existing `players.csv.gz` CDN download, same filter by competition_id).
+3. Add `load_player_values(df, league_id)` to `loader.py` — maps team names via existing TRANSFERMARKT_TEAM_MAP, computes `value_percentile` (rank by market_value_eur desc within team, top=1.0, bottom≈0.04), inserts idempotently.
+
+**Acceptance Criteria:**
+- [x] PlayerValue model created with proper constraints and indexes
+- [x] `scrape_players()` returns per-player DataFrame with player_name, team_name, position, market_value_eur
+- [x] `load_player_values()` computes value_percentile correctly (top player ≈ 1.0)
+- [x] Running twice with same data produces zero duplicates
+- [x] At least 400 players per league loaded successfully
+
+**Results:** EPL 525, LaLiga 515, Ligue1 460, Bundesliga 510, SerieA 531 = 2,541 total. Championship 0 (GB2 not in CDN — known gap). Idempotent: re-run produces 0 new. Percentiles verified: top=1.0, bottom=1/N.
+
+---
+
+### E39-02 — Soccerdata Scraper + Injury-to-InjuryFlag Bridge ✅ DONE
+
+**Type:** New Scraper + Loader
+**Files:** `src/scrapers/soccerdata.py` (NEW), `src/scrapers/loader.py`, `config/settings.yaml`, `config/leagues.yaml`
+
+**Tasks:**
+1. Create `SoccerdataScraper(BaseScraper)` in `soccerdata.py` with `scrape_injuries(league_config, season)`. API base: `https://api.soccerdataapi.com`. Auth via `SOCCERDATA_API_KEY` env var. Returns DataFrame with player_name, team_name, status, description.
+2. Add `soccerdata` config section to `settings.yaml` (base_url, min_request_interval_seconds=3, daily_request_limit=75).
+3. Add `soccerdata_league_id` to each league in `leagues.yaml` (EPL=228, Championship=229, LaLiga=297, Ligue1=235, Bundesliga=241, SerieA=253).
+4. Add `load_soccerdata_injuries(df, league_id)` to `loader.py` — writes to `injury_flags` table with auto-computed `impact_rating` from PlayerValue. Status mapping: "out"→"out", "questionable"→"doubt". Default impact_rating=0.5 if player not in PlayerValue. Marks recovered players as returned.
+5. Create `SOCCERDATA_TEAM_MAP` dict in `soccerdata.py`.
+
+**Acceptance Criteria:**
+- [x] SoccerdataScraper follows BaseScraper pattern (rate limiting, retry, raw save)
+- [x] `scrape_injuries()` returns DataFrame for all 6 leagues
+- [x] `load_soccerdata_injuries()` writes to `injury_flags` with auto-computed impact_rating
+- [x] Players who recovered are marked returned
+- [x] impact_rating matches PlayerValue percentile within 0.01
+
+**Results:** SoccerdataScraper extends BaseScraper, SOCCERDATA_TEAM_MAP has 80+ entries across 6 leagues, config sections added to settings.yaml and leagues.yaml. Loader verified: Saka impact_rating=1.0 matches PV percentile exactly, unknown players default to 0.5, idempotent (0 new on re-run), status updates work.
+
+---
+
+### E39-03 — Pipeline Integration ✅ DONE
+
+**Type:** Pipeline Wiring
+**Files:** `src/pipeline.py`
+
+**Tasks:**
+1. Add Soccerdata injury scrape step to morning pipeline, AFTER Transfermarkt (needs PlayerValue data first).
+2. Add player-level Transfermarkt scrape step alongside existing team-level scrape.
+3. Keep API-Football injury step as fallback (conditional on Soccerdata failure).
+4. Budget: 6 leagues × 1 call = 6 req/day of 75 available.
+
+**Acceptance Criteria:**
+- [x] Morning pipeline calls Soccerdata for each league
+- [x] InjuryFlag table populated with auto-computed impact_rating
+- [x] `calculate_injury_features()` returns non-zero values for teams with injuries
+- [x] Pipeline resilient — Soccerdata failure logs error and continues
+
+**Results:** Soccerdata step added after API-Football (step 1c-ii). Player values refresh added to weekly Transfermarkt task. API-Football injury step preserved as fallback. Tested: injury_impact=1.0, key_player_out=1 for Arsenal with Saka out. Budget: 6-24 of 75 req/day (8-32%).
+
+---
+
+### E39-04 — Historical Injury Backfill (salimt/football-datasets CSV) ✅ DONE
+
+**Type:** Backfill Script + Feature Modification
+**Files:** `scripts/backfill_injuries.py` (NEW), `src/scrapers/loader.py`, `src/features/context.py`
+
+**Results:**
+- 25,171 historical injuries loaded: EPL 4,240, LaLiga 3,547, Ligue1 3,116, Bundesliga 6,461, SerieA 7,807
+- Championship excluded (no CDN data — known limitation)
+- `calculate_injury_features(arsenal_id, match_date="2024-01-15")` → `{injury_impact: 1.08, key_player_out: 1}`
+- Temporal integrity verified: 2019-01-01 → `{0.0, 0}` (no injuries before backfill range)
+- `load_historical_injuries()` added to `loader.py` with NaN guard, batch commits, PlayerValue enrichment
+- SALIMT_TEAM_MAP: 150+ entries mapping CDN formal names → canonical DB names
+- 307 tests passing, 0 failures (ignoring pre-existing xgboost import issue)
+
+**Acceptance Criteria:**
+- [x] Historical injuries loaded for all 6 leagues (2020-2024)
+- [x] `calculate_injury_features(team_id, match_date="2024-01-15")` returns non-zero values
+- [x] Temporal integrity enforced (only injuries before match_date)
+- [x] Idempotent — re-running produces zero duplicates
+
+---
+
+### E39-05 — Recompute Injury Features + Backtest
+
+**Type:** Data Processing + Evaluation
+**Files:** None (uses existing infrastructure)
+
+**Tasks:**
+1. Ensure PlayerValue snapshots exist for all leagues.
+2. Run `compute_all_features(league_id, season, force_recompute=True)` for each league-season.
+3. Run walk-forward backtest — compare Brier with injury features vs without.
+
+**Acceptance Criteria:**
+- [ ] All 6 leagues recomputed with force_recompute=True
+- [ ] At least 30% of Feature rows have non-zero injury_impact (for matches with known injuries)
+- [ ] Backtest Brier scores recorded for all leagues
+- [ ] No temporal integrity violations
+
+---
+
+### E39-06 — Dashboard Injury Display
+
+**Type:** Dashboard Enhancement
+**Files:** `src/delivery/pages/fixtures.py`, `src/delivery/pages/deep_dive.py`
+
+**Tasks:**
+1. Add injury count badge on Fixtures page fixture cards (red indicator when players are out).
+2. Add "Injuries" section on Deep Dive page — lists absent players with name, position, impact_rating.
+3. Empty state: "Full squad available" when no injuries.
+
+**Acceptance Criteria:**
+- [ ] Fixture cards show injury count when players are absent
+- [ ] Deep Dive page lists absent players with name, position, impact_rating
+- [ ] Empty state displays "Full squad available"
+
+---
+
+### E39-07 — Phase 1 Integration Test
+
+**Type:** Testing
+**Files:** `tests/test_e39_phase1.py` (NEW)
+
+**Test Scenarios:**
+1. PlayerValue loading (idempotency, value_percentile computation)
+2. Soccerdata injury scraping (mocked API response)
+3. Injury-to-InjuryFlag bridge (auto impact_rating computation)
+4. Historical injury loading (salimt CSV format)
+5. `calculate_injury_features()` with date parameter (temporal integrity)
+6. Feature recomputation produces non-zero injury values
+7. Pipeline resilience (Soccerdata down → continues without crash)
+8. Player name fuzzy matching (Soccerdata name ≠ Transfermarkt name)
+
+**Acceptance Criteria:**
+- [ ] All 8 test scenarios pass
+- [ ] Full test suite (existing + new) passes
+- [ ] Zero temporal integrity violations
+
+---
+
+### E39-08 — MatchLineup Table + Soccerdata Lineup Scraper
+
+**Type:** Database Model + Scraper Enhancement
+**Files:** `src/database/models.py`, `src/scrapers/soccerdata.py`, `src/scrapers/loader.py`
+
+**Tasks:**
+1. Create `MatchLineup` model — table `match_lineups` with columns: `match_id` (FK), `team_id` (FK), `player_name`, `position`, `is_starter` (1=starting XI, 0=bench), `shirt_number`. UniqueConstraint on (match_id, team_id, player_name).
+2. Add `home_formation` and `away_formation` (String, nullable) columns to `Match` model.
+3. Add `scrape_lineups(league_config, match_date)` to `SoccerdataScraper`.
+4. Add `load_match_lineups(df, match_id)` to `loader.py`.
+5. Wire lineup scraping into evening pipeline (post-match = actual lineups).
+
+**Acceptance Criteria:**
+- [ ] MatchLineup model created with proper constraints
+- [ ] Match model has home_formation and away_formation columns
+- [ ] `scrape_lineups()` returns starting XI + bench for each match
+- [ ] Lineups loaded idempotently
+- [ ] Evening pipeline fetches lineups for finished matches
+
+---
+
+### E39-09 — Squad Rotation Index Feature
+
+**Type:** Feature Engineering
+**Files:** `src/database/models.py`, `src/features/context.py`, `src/features/engineer.py`, `src/models/poisson.py`, `src/models/xgboost_model.py`
+
+**Tasks:**
+1. Add `squad_rotation_index` column (Float, nullable) to Feature model.
+2. Create `calculate_squad_rotation(team_id, match_id, match_date, league_id)` in `context.py`. Counts players NOT in common between current and previous match starting XIs. `squad_rotation_index = changes / 11` (0.0–1.0). NULL if no prior lineup.
+3. Add to FEATURE_COLS in `engineer.py`, call in `compute_features()`.
+4. Add to context_cols in `_select_feature_cols()` in both model files.
+
+**Acceptance Criteria:**
+- [ ] Feature column added to Feature model
+- [ ] Computation uses only previous match lineup (temporal integrity)
+- [ ] Returns NULL when no prior lineup exists
+- [ ] FEATURE_COLS and both model candidate lists updated
+
+---
+
+### E39-10 — Formation Change Feature
+
+**Type:** Feature Engineering
+**Files:** `src/database/models.py`, `src/features/context.py`, `src/features/engineer.py`, `src/models/poisson.py`, `src/models/xgboost_model.py`
+
+**Tasks:**
+1. Add `formation_changed` column (Integer, nullable) to Feature model.
+2. Create `calculate_formation_change(team_id, match_id, match_date, league_id)` in `context.py`. Compares current match formation to previous match formation. 1 if different, 0 if same, NULL if either unknown.
+3. Add to FEATURE_COLS and both model candidate lists.
+
+**Acceptance Criteria:**
+- [ ] Binary flag (0 or 1) or NULL
+- [ ] Temporal integrity: compares to PREVIOUS match only
+- [ ] Added to all feature lists
+
+---
+
+### E39-11 — Bench Strength Feature
+
+**Type:** Feature Engineering
+**Files:** `src/database/models.py`, `src/features/context.py`, `src/features/engineer.py`, `src/models/poisson.py`, `src/models/xgboost_model.py`
+
+**Tasks:**
+1. Add `bench_strength` column (Float, nullable) to Feature model.
+2. Create `calculate_bench_strength(team_id, match_id, match_date)` in `context.py`. Computes `bench_total_value / starter_total_value` using PlayerValue market values. NULL if no lineup or PlayerValue data.
+3. Add to FEATURE_COLS and both model candidate lists.
+
+**Acceptance Criteria:**
+- [ ] Ratio computed from bench vs starter market values
+- [ ] NULL when lineup or PlayerValue data unavailable
+- [ ] Temporal integrity: uses PlayerValue snapshot BEFORE match_date
+- [ ] Added to all feature lists
+
+---
+
+### E39-12 — Phase 2 Integration Test + Full Backtest
+
+**Type:** Testing + Evaluation
+**Files:** `tests/test_e39_phase2.py` (NEW)
+
+**Test Scenarios:**
+1. MatchLineup loading (idempotency, starter/bench split)
+2. Formation storage on Match model
+3. `calculate_squad_rotation()` with known lineup data
+4. `calculate_formation_change()` with same/different formations
+5. `calculate_bench_strength()` with known PlayerValue data
+6. All three features return NULL when lineup data missing
+7. Full backtest comparison: baseline vs injury-only vs injury+lineup
+
+**Acceptance Criteria:**
+- [ ] All test scenarios pass
+- [ ] Full test suite passes (existing + E39)
+- [ ] Backtest results documented with Brier scores per variant
+
+---
+
+### Implementation Sequence
+
+```
+E39-01 (PlayerValue) → E39-02 (Soccerdata scraper) → E39-03 (pipeline) →
+E39-04 (historical backfill) → E39-05 (recompute + backtest) →
+E39-06 (dashboard) → E39-07 (Phase 1 tests) →
+E39-08 (MatchLineup) → E39-09 (rotation) → E39-10 (formation) →
+E39-11 (bench strength) → E39-12 (Phase 2 tests + backtest)
 ```

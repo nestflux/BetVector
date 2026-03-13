@@ -24,6 +24,8 @@ leagues:
     football_data_org_code: "PL"
     # Transfermarkt Datasets CDN competition ID (dcaribou/transfermarkt-datasets)
     transfermarkt_id: "GB1"
+    # Soccerdata API league ID (soccerdataapi.com — E39-02)
+    soccerdata_league_id: 228
     is_active: true
     seasons:
       - "2020-21"
@@ -51,6 +53,8 @@ leagues:
     understat_league: null   # Understat covers EPL, La Liga, Bundesliga, Serie A, Ligue 1 only
     football_data_org_code: "ELC"  # Football-Data.org free tier — verified covers Championship
     transfermarkt_id: "GB2"
+    # Soccerdata API league ID (soccerdataapi.com — E39-02)
+    soccerdata_league_id: 229
     is_active: true
     seasons:
       - "2020-21"
@@ -80,6 +84,8 @@ leagues:
     understat_league: "La_Liga"   # Understat API key (verified: returns 380 matches/season)
     football_data_org_code: "PD"  # Football-Data.org free tier — verified covers La Liga
     transfermarkt_id: "ES1"
+    # Soccerdata API league ID (soccerdataapi.com — E39-02)
+    soccerdata_league_id: 297
     is_active: true
     seasons:
       - "2020-21"
@@ -111,6 +117,8 @@ leagues:
     understat_league: "Ligue_1"  # Full Understat coverage (xG, NPxG, PPDA, deep)
     football_data_org_code: "FL1" # Football-Data.org free tier — verified covers Ligue 1
     transfermarkt_id: "FR1"
+    # Soccerdata API league ID (soccerdataapi.com — E39-02)
+    soccerdata_league_id: 235
     is_active: true
     seasons:
       - "2020-21"
@@ -140,6 +148,8 @@ leagues:
     understat_league: "Bundesliga"  # Full Understat coverage (xG, NPxG, PPDA, deep)
     football_data_org_code: "BL1"   # Football-Data.org free tier — verified covers Bundesliga
     transfermarkt_id: "L1"
+    # Soccerdata API league ID (soccerdataapi.com — E39-02)
+    soccerdata_league_id: 241
     is_active: true
     seasons:
       - "2020-21"
@@ -169,6 +179,8 @@ leagues:
     understat_league: "Serie_A"    # Full Understat coverage (xG, NPxG, PPDA, deep)
     football_data_org_code: "SA"   # Football-Data.org free tier — verified covers Serie A
     transfermarkt_id: "IT1"
+    # Soccerdata API league ID (soccerdataapi.com — E39-02)
+    soccerdata_league_id: 253
     is_active: true
     seasons:
       - "2020-21"
