@@ -338,7 +338,7 @@ single-line expression.
 
 ## Current Status
 
-Last completed: PC-16 (Badge Audit & Fixtures Layout Redesign) ✅
+Last completed: PC-17 (Badge Full Coverage + Fixtures Layout Final) ✅
 Currently working: (none — awaiting next task)
 Next up: TBD
 
@@ -382,6 +382,7 @@ Post-critical-path (March 2026):
 - PC-14: Full Data Gap Closure & 6-League Predictions ✅ — Transfermarkt multi-league (5 leagues, CDN lacks GB2), Odds API team maps (250 entries, 6 leagues), load_injuries() pipeline hookup, matchday NULL computation, weather+transfermarkt backfill CLI, season flag fix, DATA_GAPS.md (7 gaps), 13,569 matches, 27,110 features, predictions for all 6 leagues (EPL 671, Championship 421, LaLiga 260, Ligue1 675, Bundesliga 675, SerieA 840), 28 integration tests, 309/309 full suite
 - PC-15: Local Pipeline Setup ✅ — Fixtures, Odds Resilience, Automation
 - PC-16: Badge Audit & Fixtures Layout Redesign ✅ — Force re-downloaded 122 badges from API-Football, fixed Paris FC/Bielefeld swap, fixed Leeds United ID, downloaded 27 missing badges, 183/183 full coverage, zero cross-team mismatches. Fixtures card layout redesigned: date left, teams centered, kickoff right, model+markets row below. Added ~35 multi-league name mappings to API_FOOTBALL_EPL_TEAM_MAP.
+- PC-17: Badge Full Coverage + Allow-List Sync ✅ — Fixed Paris FC/Bielefeld badge swap (API-Football IDs set), downloaded all 27 remaining missing badges (Darmstadt, Hertha, Barnsley, Norwich, WBA, Almeria, Granada, Levante, Bordeaux, Clermont, Dijon, Nimes, Troyes, Benevento, Crotone, Frosinone, Salernitana, Sampdoria, Spezia, etc.), 183/183 full badge coverage, zero mismatches. Synced project allow-list with global (added pgrep, nohup, kill, pkill, lsof + 11 more).
 
 E34 — Multi-User Authentication: ALL 6 issues done ✅
 - E34-01: Password storage + session overhaul ✅
