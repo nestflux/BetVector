@@ -517,6 +517,10 @@ class XGBoostModel(BaseModel):
             # Injury impact (E22-02)
             f"{attack_prefix}injury_impact",
             f"{attack_prefix}key_player_out",
+            # --- Lineup features (E39-09, E39-10, E39-11) ---
+            f"{attack_prefix}squad_rotation_index",
+            f"{attack_prefix}formation_changed",
+            f"{attack_prefix}bench_strength",
             # Multi-league context (E36-03):
             # league_home_adv_5: home advantage over the last 5 home matches,
             #   per league — captures that Championship has higher home advantage

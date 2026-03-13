@@ -710,6 +710,25 @@ class Feature(Base):
     # TEMPORAL INTEGRITY: only checks prior-season matches (season end < match date).
     is_newly_promoted = Column(Integer, nullable=True)  # 1=promoted, 0=established
 
+    # --- Lineup-based features (E39-09, E39-10, E39-11) ---
+    # Squad rotation index (E39-09) — fraction of starting XI changed from
+    # the team's previous match.  0.0 = identical lineup, 1.0 = all 11 changed.
+    # Captures manager rotation strategy: high rotation correlates with
+    # fixture congestion, cup matches, or deliberate squad management.
+    # NULL if no prior lineup data available for this team.
+    squad_rotation_index = Column(Float, nullable=True)
+    # Formation change (E39-10) — 1 if team's formation differs from their
+    # previous match, 0 if same.  Tactical changes often signal a reactive
+    # approach (adjusting to opponent) vs stability (consistent system).
+    # NULL if either formation is unknown.
+    formation_changed = Column(Integer, nullable=True)
+    # Bench strength (E39-11) — ratio of bench total market value to
+    # starter total market value.  Higher ratio = deeper squad.
+    # Typically 0.3–0.8.  Rich clubs (Man City, Real Madrid) have benches
+    # worth nearly as much as most other teams' starting XIs.
+    # NULL if no lineup or PlayerValue data available.
+    bench_strength = Column(Float, nullable=True)
+
     computed_at = Column(
         String, nullable=False, server_default=func.now(),
     )

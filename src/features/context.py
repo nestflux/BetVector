@@ -42,8 +42,8 @@ from sqlalchemy.orm import Session
 
 from src.database.db import get_session
 from src.database.models import (
-    ClubElo, InjuryFlag, Match, Odds, PlayerValue, TeamInjury,
-    TeamMarketValue, Weather,
+    ClubElo, InjuryFlag, Match, MatchLineup, Odds, PlayerValue,
+    TeamInjury, TeamMarketValue, Weather,
 )
 
 logger = logging.getLogger(__name__)
@@ -1341,3 +1341,363 @@ def calculate_is_newly_promoted(
     )
 
     return {"is_newly_promoted": is_promoted}
+
+
+# ============================================================================
+# Squad Rotation Index (E39-09)
+# ============================================================================
+# Measures how many starting XI players changed compared to the team's
+# previous match.  squad_rotation_index = num_changed / 11.
+#
+# High rotation (>0.5) typically happens during fixture congestion or when
+# managers deliberately rest players ahead of a bigger match.  Low rotation
+# (0.0-0.1) indicates a settled XI — often correlates with better results
+# because the manager trusts these 11 players the most.
+#
+# TEMPORAL INTEGRITY:
+#   Only considers matches BEFORE match_date, so we never leak future info.
+#   Returns None when no prior lineup data exists (e.g., first match of
+#   season or before lineup scraping began).  Models handle None via
+#   fillna(mean).fillna(0.0).
+# ============================================================================
+
+
+def calculate_squad_rotation(
+    team_id: int,
+    match_id: int,
+    match_date: str,
+    league_id: int,
+) -> Dict[str, Any]:
+    """Calculate squad rotation index for a team in a specific match.
+
+    Compares the starting XI of the current match with the starting XI
+    from the team's most recent previous match (in the same league,
+    before match_date).
+
+    squad_rotation_index = number_of_changes / 11
+
+    Parameters
+    ----------
+    team_id : int
+        Database ID of the team.
+    match_id : int
+        Database ID of the current match (to get its lineup).
+    match_date : str
+        ISO date (YYYY-MM-DD) of the match being predicted.
+    league_id : int
+        Database ID of the league (limits search to same league).
+
+    Returns
+    -------
+    dict
+        ``{"squad_rotation_index": float | None}``
+        None if either current or previous lineup is unavailable.
+    """
+    default = {"squad_rotation_index": None}
+
+    with get_session() as session:
+        # Get current match starters
+        current_starters = (
+            session.query(MatchLineup.player_name)
+            .filter(
+                MatchLineup.match_id == match_id,
+                MatchLineup.team_id == team_id,
+                MatchLineup.is_starter == 1,
+            )
+            .all()
+        )
+
+        if not current_starters:
+            # No lineup data for this match — return None
+            return default
+
+        current_names = {
+            row[0].lower().strip() for row in current_starters
+        }
+
+        if len(current_names) < 1:
+            return default
+
+        # Find the team's most recent previous match (same league, before date)
+        prev_match = (
+            session.query(Match)
+            .filter(
+                Match.league_id == league_id,
+                Match.date < match_date,
+                Match.status == "finished",
+                (
+                    (Match.home_team_id == team_id)
+                    | (Match.away_team_id == team_id)
+                ),
+            )
+            .order_by(Match.date.desc())
+            .first()
+        )
+
+        if prev_match is None:
+            return default
+
+        # Get previous match starters
+        prev_starters = (
+            session.query(MatchLineup.player_name)
+            .filter(
+                MatchLineup.match_id == prev_match.id,
+                MatchLineup.team_id == team_id,
+                MatchLineup.is_starter == 1,
+            )
+            .all()
+        )
+
+        if not prev_starters:
+            # No lineup data for previous match
+            return default
+
+        prev_names = {
+            row[0].lower().strip() for row in prev_starters
+        }
+
+    # Count players NOT in common between current and previous starting XIs.
+    # A player appearing in current but not previous = a "change".
+    # Use min(11, len(current)) as denominator for safety.
+    common = current_names & prev_names
+    denominator = max(len(current_names), 1)
+    changes = denominator - len(common)
+    rotation_index = round(changes / denominator, 4)
+
+    logger.debug(
+        "Squad rotation for team_id=%d, match_id=%d: "
+        "%d/%d players changed (index=%.3f)",
+        team_id, match_id, changes, denominator, rotation_index,
+    )
+
+    return {"squad_rotation_index": rotation_index}
+
+
+# ============================================================================
+# Formation Change Feature (E39-10)
+# ============================================================================
+# Binary flag: 1 if the team's formation in this match differs from their
+# formation in their most recent previous match, 0 if the same.
+#
+# Formation changes signal tactical adaptation — a manager switching from
+# 4-3-3 to 5-4-1 against a strong opponent, or from 4-4-2 to 4-2-3-1
+# for extra midfield control.  Frequent changes may indicate instability
+# (struggling to find a winning formula) or flexibility (adapting to
+# opponents).
+#
+# Returns None when either the current or previous match formation is
+# unknown (NULL).  Models handle None via fillna(mean).fillna(0.0).
+#
+# TEMPORAL INTEGRITY: Only compares with matches BEFORE match_date.
+# ============================================================================
+
+
+def calculate_formation_change(
+    team_id: int,
+    match_id: int,
+    match_date: str,
+    league_id: int,
+) -> Dict[str, Any]:
+    """Check whether team's formation changed from previous match.
+
+    Compares the formation used in the current match against the formation
+    in the team's most recent previous match in the same league.
+
+    Parameters
+    ----------
+    team_id : int
+        Database ID of the team.
+    match_id : int
+        Database ID of the current match.
+    match_date : str
+        ISO date (YYYY-MM-DD) of the match being predicted.
+    league_id : int
+        Database ID of the league.
+
+    Returns
+    -------
+    dict
+        ``{"formation_changed": 0 | 1 | None}``
+        None if either match has no formation data.
+    """
+    default = {"formation_changed": None}
+
+    with get_session() as session:
+        # Get current match to determine this team's formation
+        current_match = session.query(Match).filter_by(id=match_id).first()
+        if current_match is None:
+            return default
+
+        # Determine which side (home/away) this team is on
+        if current_match.home_team_id == team_id:
+            current_formation = current_match.home_formation
+        elif current_match.away_team_id == team_id:
+            current_formation = current_match.away_formation
+        else:
+            return default
+
+        if not current_formation:
+            return default
+
+        # Find the team's most recent previous match (same league, before date)
+        prev_match = (
+            session.query(Match)
+            .filter(
+                Match.league_id == league_id,
+                Match.date < match_date,
+                Match.status == "finished",
+                (
+                    (Match.home_team_id == team_id)
+                    | (Match.away_team_id == team_id)
+                ),
+            )
+            .order_by(Match.date.desc())
+            .first()
+        )
+
+        if prev_match is None:
+            return default
+
+        # Determine previous formation
+        if prev_match.home_team_id == team_id:
+            prev_formation = prev_match.home_formation
+        else:
+            prev_formation = prev_match.away_formation
+
+        if not prev_formation:
+            return default
+
+    # Normalise formations before comparing (strip whitespace)
+    changed = 1 if current_formation.strip() != prev_formation.strip() else 0
+
+    logger.debug(
+        "Formation change for team_id=%d, match_id=%d: "
+        "%s → %s (changed=%d)",
+        team_id, match_id, prev_formation, current_formation, changed,
+    )
+
+    return {"formation_changed": changed}
+
+
+# ============================================================================
+# Bench Strength Feature (E39-11)
+# ============================================================================
+# Ratio of bench total market value to starter total market value.
+#
+# bench_strength = sum(bench player values) / sum(starter player values)
+#
+# Typically 0.3–0.8.  Elite clubs (Man City ~0.7) have benches worth nearly
+# as much as most other teams' starting XIs, giving them a massive advantage
+# in congested fixture periods — they can rotate freely without dropping
+# quality.  Mid-table teams (~0.4) see noticeable performance drops when
+# forced to rotate due to thin bench quality.
+#
+# Returns None when no lineup or PlayerValue data is available.
+# Models handle None via fillna(mean).fillna(0.0).
+#
+# TEMPORAL INTEGRITY: Uses the PlayerValue snapshot closest to (but not
+# after) the match date.  Since PlayerValue snapshots are updated infrequently
+# (typically once per season), we use the latest available snapshot for the
+# team — this is acceptable because market value rank within a squad is
+# relatively stable across a season.
+# ============================================================================
+
+
+def calculate_bench_strength(
+    team_id: int,
+    match_id: int,
+    match_date: str,
+) -> Dict[str, Any]:
+    """Calculate bench-to-starter market value ratio.
+
+    Uses MatchLineup to identify starters vs bench, then PlayerValue
+    to assign market values.  Returns the ratio bench_value / starter_value.
+
+    Parameters
+    ----------
+    team_id : int
+        Database ID of the team.
+    match_id : int
+        Database ID of the match.
+    match_date : str
+        ISO date (YYYY-MM-DD) — used for temporal integrity on
+        PlayerValue snapshot selection.
+
+    Returns
+    -------
+    dict
+        ``{"bench_strength": float | None}``
+        None if lineup or market value data is unavailable.
+    """
+    default = {"bench_strength": None}
+
+    with get_session() as session:
+        # Get all lineup entries for this team in this match
+        lineup = (
+            session.query(MatchLineup)
+            .filter(
+                MatchLineup.match_id == match_id,
+                MatchLineup.team_id == team_id,
+            )
+            .all()
+        )
+
+        if not lineup:
+            return default
+
+        starters = [p for p in lineup if p.is_starter == 1]
+        bench = [p for p in lineup if p.is_starter == 0]
+
+        if not starters:
+            return default
+
+        # Get PlayerValue data for this team.
+        # Use the latest snapshot before or on match_date for temporal integrity.
+        pvs = (
+            session.query(PlayerValue)
+            .filter(
+                PlayerValue.team_id == team_id,
+                PlayerValue.snapshot_date <= match_date,
+            )
+            .all()
+        )
+
+        if not pvs:
+            return default
+
+        # Build a lookup: player_name (lowered, stripped) → market_value_eur
+        # If multiple snapshots exist, take the most recent per player.
+        pv_lookup: Dict[str, float] = {}
+        for pv in pvs:
+            key = pv.player_name.lower().strip()
+            # Keep the most recent snapshot (pvs are unordered, so
+            # only replace if this snapshot is newer).
+            if key not in pv_lookup or pv.snapshot_date > pv_lookup.get(
+                f"_date_{key}", ""
+            ):
+                pv_lookup[key] = pv.market_value_eur or 0.0
+                pv_lookup[f"_date_{key}"] = pv.snapshot_date or ""
+
+    # Sum market values for starters and bench
+    starter_value = sum(
+        pv_lookup.get(p.player_name.lower().strip(), 0.0)
+        for p in starters
+    )
+    bench_value = sum(
+        pv_lookup.get(p.player_name.lower().strip(), 0.0)
+        for p in bench
+    )
+
+    if starter_value <= 0:
+        # Can't compute ratio with zero starter value
+        return default
+
+    ratio = round(bench_value / starter_value, 4)
+
+    logger.debug(
+        "Bench strength for team_id=%d, match_id=%d: "
+        "bench=%.0f / starters=%.0f = %.3f",
+        team_id, match_id, bench_value, starter_value, ratio,
+    )
+
+    return {"bench_strength": ratio}

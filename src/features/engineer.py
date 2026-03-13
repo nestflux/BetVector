@@ -38,15 +38,18 @@ from src.config import config
 from src.database.db import get_session
 from src.database.models import Feature, Match, Team
 from src.features.context import (
+    calculate_bench_strength,
     calculate_congestion_features,
     calculate_context_features,
     calculate_elo_features,
+    calculate_formation_change,
     calculate_injury_features,
     calculate_is_newly_promoted,
     calculate_league_home_advantage,
     calculate_market_odds_features,
     calculate_market_value_features,
     calculate_referee_features,
+    calculate_squad_rotation,
     calculate_weather_features,
 )
 from src.features.rolling import (
@@ -112,6 +115,8 @@ FEATURE_COLS = [
     "injury_impact", "key_player_out",
     # --- Multi-league context (E36-03) — Source: Match table (all leagues) ---
     "league_home_adv_5", "is_newly_promoted",
+    # --- Lineup features (E39-09, E39-10, E39-11) — Source: Soccerdata lineups ---
+    "squad_rotation_index", "formation_changed", "bench_strength",
 ]
 
 
@@ -282,6 +287,44 @@ def compute_features(match_id: int, league_id: int) -> Dict[str, Dict[str, Any]]
     away_injury = calculate_injury_features(away_team_id, match_date=match_date)
     home_features.update(home_injury)
     away_features.update(away_injury)
+
+    # --- Squad rotation index (E39-09) ---
+    # Fraction of starting XI changed vs the team's previous match.
+    # 0.0 = identical XI, 1.0 = completely different lineup.
+    # NULL when no lineup data available (models handle via fillna).
+    home_rotation = calculate_squad_rotation(
+        home_team_id, match_id, match_date, league_id,
+    )
+    away_rotation = calculate_squad_rotation(
+        away_team_id, match_id, match_date, league_id,
+    )
+    home_features.update(home_rotation)
+    away_features.update(away_rotation)
+
+    # --- Formation change (E39-10) ---
+    # Binary flag: 1 if the team's formation differs from their previous
+    # match, 0 if same.  NULL when formation data is unavailable.
+    home_formation = calculate_formation_change(
+        home_team_id, match_id, match_date, league_id,
+    )
+    away_formation = calculate_formation_change(
+        away_team_id, match_id, match_date, league_id,
+    )
+    home_features.update(home_formation)
+    away_features.update(away_formation)
+
+    # --- Bench strength (E39-11) ---
+    # Ratio of bench total market value to starter total market value.
+    # Higher ratio = deeper squad = better ability to handle rotation.
+    # NULL when no lineup or PlayerValue data available.
+    home_bench = calculate_bench_strength(
+        home_team_id, match_id, match_date,
+    )
+    away_bench = calculate_bench_strength(
+        away_team_id, match_id, match_date,
+    )
+    home_features.update(home_bench)
+    away_features.update(away_bench)
 
     # --- Multi-league context features (E36-03) ---
 

@@ -482,6 +482,15 @@ class PoissonModel(BaseModel):
             # key_player_out = binary flag for star player absence.
             # Losing a 1.0-rated player (Haaland, Salah) has outsized impact.
             f"{attack_prefix}key_player_out",
+            # --- Lineup features (E39-09, E39-10, E39-11) ---
+            # squad_rotation_index: fraction of XI changed from previous match.
+            # High rotation signals congestion fatigue or deliberate resting.
+            f"{attack_prefix}squad_rotation_index",
+            # formation_changed: binary flag — 1 if tactical system changed.
+            f"{attack_prefix}formation_changed",
+            # bench_strength: bench_value / starter_value ratio.
+            # Higher = deeper squad (more capable of handling rotation).
+            f"{attack_prefix}bench_strength",
         ]
 
         # Only include columns that exist in the DataFrame

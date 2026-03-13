@@ -7456,57 +7456,21 @@ PC-15-04 (launchd) → PC-15-05 (sync docs) → PC-15-06 (tests)
 
 ---
 
-### E39-09 — Squad Rotation Index Feature
+### E39-09 — Squad Rotation Index Feature ✅ DONE
 
-**Type:** Feature Engineering
-**Files:** `src/database/models.py`, `src/features/context.py`, `src/features/engineer.py`, `src/models/poisson.py`, `src/models/xgboost_model.py`
-
-**Tasks:**
-1. Add `squad_rotation_index` column (Float, nullable) to Feature model.
-2. Create `calculate_squad_rotation(team_id, match_id, match_date, league_id)` in `context.py`. Counts players NOT in common between current and previous match starting XIs. `squad_rotation_index = changes / 11` (0.0–1.0). NULL if no prior lineup.
-3. Add to FEATURE_COLS in `engineer.py`, call in `compute_features()`.
-4. Add to context_cols in `_select_feature_cols()` in both model files.
-
-**Acceptance Criteria:**
-- [ ] Feature column added to Feature model
-- [ ] Computation uses only previous match lineup (temporal integrity)
-- [ ] Returns NULL when no prior lineup exists
-- [ ] FEATURE_COLS and both model candidate lists updated
+**Result:** `squad_rotation_index` (Float, nullable) added to Feature model. `calculate_squad_rotation()` in context.py compares starting XIs between current and previous match via case-insensitive name matching. Uses `Match.date < match_date` for temporal integrity. Returns None when no prior lineup exists. Added to FEATURE_COLS (71 total), poisson.py, xgboost_model.py. DB migration applied. 40/40 tests pass.
 
 ---
 
-### E39-10 — Formation Change Feature
+### E39-10 — Formation Change Feature ✅ DONE
 
-**Type:** Feature Engineering
-**Files:** `src/database/models.py`, `src/features/context.py`, `src/features/engineer.py`, `src/models/poisson.py`, `src/models/xgboost_model.py`
-
-**Tasks:**
-1. Add `formation_changed` column (Integer, nullable) to Feature model.
-2. Create `calculate_formation_change(team_id, match_id, match_date, league_id)` in `context.py`. Compares current match formation to previous match formation. 1 if different, 0 if same, NULL if either unknown.
-3. Add to FEATURE_COLS and both model candidate lists.
-
-**Acceptance Criteria:**
-- [ ] Binary flag (0 or 1) or NULL
-- [ ] Temporal integrity: compares to PREVIOUS match only
-- [ ] Added to all feature lists
+**Result:** `formation_changed` (Integer, nullable, 0/1) added to Feature model. `calculate_formation_change()` in context.py compares current match formation to previous match formation via `Match.date < match_date`. Returns None when either formation is unknown. Added to all feature lists. 40/40 tests pass.
 
 ---
 
-### E39-11 — Bench Strength Feature
+### E39-11 — Bench Strength Feature ✅ DONE
 
-**Type:** Feature Engineering
-**Files:** `src/database/models.py`, `src/features/context.py`, `src/features/engineer.py`, `src/models/poisson.py`, `src/models/xgboost_model.py`
-
-**Tasks:**
-1. Add `bench_strength` column (Float, nullable) to Feature model.
-2. Create `calculate_bench_strength(team_id, match_id, match_date)` in `context.py`. Computes `bench_total_value / starter_total_value` using PlayerValue market values. NULL if no lineup or PlayerValue data.
-3. Add to FEATURE_COLS and both model candidate lists.
-
-**Acceptance Criteria:**
-- [ ] Ratio computed from bench vs starter market values
-- [ ] NULL when lineup or PlayerValue data unavailable
-- [ ] Temporal integrity: uses PlayerValue snapshot BEFORE match_date
-- [ ] Added to all feature lists
+**Result:** `bench_strength` (Float, nullable) added to Feature model. `calculate_bench_strength()` in context.py computes bench_value / starter_value using MatchLineup + PlayerValue with `snapshot_date <= match_date` for temporal integrity. Returns None when no lineup or PlayerValue data available. Added to all feature lists. 40/40 tests pass.
 
 ---
 

@@ -344,9 +344,9 @@ single-line expression.
 
 ## Current Status
 
-Last completed: E39-08 — MatchLineup Table + Soccerdata Lineup Scraper ✅
-Currently working: E39-09 — Squad Rotation Index Feature
-Next up: E39-10 — Formation Change Feature
+Last completed: E39-11 — Bench Strength Feature ✅
+Currently working: E39-12 — Phase 2 Integration Test + Full Backtest
+Next up: (none — E39 final issue)
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
