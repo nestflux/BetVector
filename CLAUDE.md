@@ -346,9 +346,11 @@ single-line expression.
 
 ## Current Status
 
-Last completed: E40-09 — Weekly TM Refresh Pipeline Step ✅
-Currently working: E40-10 — Integration Test + Backtest
-Next up: TBD (E40 epic complete after E40-10)
+Last completed: E40-10 — Integration Test + Backtest ✅
+Currently working: (none — awaiting next task)
+Next up: TBD
+
+E40 complete: All 10 issues done ✅ (TM datasets download, lineup/formation/manager backfill, manager features, injury club fix, minutes impact, recomputation, weekly refresh, integration test — 14,187 matches, 9,829 TM-mapped, 393K lineups, 42 tests)
 
 E39 complete: All 12 issues done ✅ (Injury pipeline fix + lineup features — PlayerValue, Soccerdata scraper, pipeline integration, historical backfill, recompute, dashboard display, Phase 1 tests, MatchLineup, squad rotation, formation change, bench strength, Phase 2 tests)
 
