@@ -38,6 +38,7 @@ from difflib import get_close_matches
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
+from sqlalchemy import text
 
 from src.config import config
 from src.scrapers.base_scraper import BaseScraper, ScraperError
@@ -1835,6 +1836,323 @@ def backfill_managers_from_tm(session) -> Dict[str, int]:
         "%d skipped (already set), %d errors",
         stats["updated"], stats["skipped_null_tm"],
         stats["skipped_already_set"], stats["errors"],
+    )
+
+
+# ============================================================================
+# E40-06: Injury Club Mapping Fix
+# ============================================================================
+# The salimt/football-datasets CSV maps each injury to the player's CURRENT
+# club — not the club they were at when the injury occurred.  This means a
+# player injured at Club A in 2022 who later transferred to Club B has their
+# injury incorrectly attributed to Club B, corrupting injury_impact features
+# for historical backtesting.
+#
+# We fix this by cross-referencing against TM appearances data (which records
+# player_club_id at the time of each match) and TM transfers (which record
+# exact transfer dates).  For each injury, we find the club the player was
+# actually at on the reported_at date and correct the team_id if it differs.
+# ============================================================================
+
+
+def _build_tm_club_to_team_map(session) -> Dict[int, int]:
+    """Build a mapping from Transfermarkt club_id → our DB team_id.
+
+    Uses the TM games table's home/away club IDs + names, maps names via
+    TRANSFERMARKT_TEAM_MAP to canonical DB names, then looks up Team.id.
+
+    Returns:
+        Dict mapping TM club_id (int) → our team_id (int).
+    """
+    games = load_tm_games()
+    if games.empty:
+        return {}
+
+    # Extract unique clubs from home + away sides of games
+    home = games[["home_club_id", "home_club_name"]].drop_duplicates()
+    home.columns = ["club_id", "club_name"]
+    away = games[["away_club_id", "away_club_name"]].drop_duplicates()
+    away.columns = ["club_id", "club_name"]
+    clubs = pd.concat([home, away]).drop_duplicates(subset=["club_id"]).dropna()
+
+    # Map TM name → canonical name → team_id
+    clubs = clubs.copy()
+    clubs["canonical"] = clubs["club_name"].map(TRANSFERMARKT_TEAM_MAP)
+    mapped = clubs.dropna(subset=["canonical"])
+
+    teams = session.execute(
+        text("SELECT id, name FROM teams")
+    ).fetchall()
+    name_to_id: Dict[str, int] = {r[1]: r[0] for r in teams}
+
+    mapped = mapped.copy()
+    mapped["team_id"] = mapped["canonical"].map(name_to_id)
+    final = mapped.dropna(subset=["team_id"])
+
+    return dict(
+        zip(final["club_id"].astype(int), final["team_id"].astype(int))
+    )
+
+
+def fix_injury_club_mapping(session) -> Dict[str, int]:
+    """Fix historical injury club attributions using TM appearance data.
+
+    The salimt/football-datasets injury records incorrectly map injuries to
+    the player's *current* club rather than the club they were at when the
+    injury occurred.  This function corrects team_id on each team_injuries
+    row by cross-referencing the player's actual club at the reported_at date
+    using TM appearances (primary) and transfers (fallback).
+
+    Strategy:
+      1. Load TM appearances filtered to our leagues' club IDs
+      2. For each injury row with a reported_at date, find the player's
+         most recent appearance before (or nearest to) that date
+      3. Use appearance's player_club_id to determine correct club
+      4. Fallback: if no appearance match, check TM transfers table for
+         the latest transfer before the injury date
+      5. If correct club differs from current team_id, update it
+      6. Championship injuries are skipped (no TM data for GB2)
+
+    All corrections are logged with before/after team_id and player name
+    for audit trail.  Running twice produces zero additional corrections
+    (idempotent — we compare against the already-corrected value).
+
+    Args:
+        session: SQLAlchemy session.
+
+    Returns:
+        Dict with stats: checked, corrected, no_match, skipped_no_date,
+        skipped_championship, errors.
+    """
+    from src.database.models import TeamInjury, Team
+    from collections import defaultdict
+
+    stats = {
+        "total": 0,
+        "checked": 0,
+        "corrected": 0,
+        "no_match": 0,
+        "skipped_no_date": 0,
+        "skipped_championship": 0,
+        "errors": 0,
+    }
+
+    # 1. Build TM club_id → our team_id mapping
+    tm_club_to_team = _build_tm_club_to_team_map(session)
+    if not tm_club_to_team:
+        logger.error("No TM club mapping available — cannot fix injuries")
+        return stats
+
+    our_club_ids = set(tm_club_to_team.keys())
+    logger.info(
+        "TM club → team mapping ready: %d entries", len(tm_club_to_team)
+    )
+
+    # 2. Load TM appearances filtered to our leagues
+    appearances = load_tm_appearances()
+    if appearances.empty:
+        logger.error("No TM appearances data — cannot fix injuries")
+        return stats
+
+    app_filtered = appearances[
+        appearances["player_club_id"].isin(our_club_ids)
+    ].copy()
+    logger.info(
+        "TM appearances for our leagues: %d rows", len(app_filtered)
+    )
+
+    # Build per-player appearance history: name → [(date, club_id), ...]
+    # Sorted by date ascending for binary-search-style lookups
+    player_app_history: Dict[str, list] = defaultdict(list)
+    for _, row in app_filtered[
+        ["player_name", "date", "player_club_id"]
+    ].iterrows():
+        pname = row["player_name"]
+        if pd.isna(pname) or not pname:
+            continue
+        player_app_history[pname].append(
+            (str(row["date"]), int(row["player_club_id"]))
+        )
+
+    for name in player_app_history:
+        player_app_history[name].sort(key=lambda x: x[0])
+
+    logger.info(
+        "Built appearance history for %d players", len(player_app_history)
+    )
+
+    # 3. Load TM transfers as fallback — per-player sorted by date
+    transfers = load_tm_transfers()
+    player_transfer_history: Dict[str, list] = defaultdict(list)
+    if not transfers.empty:
+        for _, row in transfers[
+            ["player_name", "transfer_date", "to_club_id"]
+        ].iterrows():
+            pname = row["player_name"]
+            if pd.isna(pname) or not pname:
+                continue
+            to_club = row["to_club_id"]
+            if pd.isna(to_club):
+                continue
+            player_transfer_history[pname].append(
+                (str(row["transfer_date"]), int(to_club))
+            )
+        for name in player_transfer_history:
+            player_transfer_history[name].sort(key=lambda x: x[0])
+        logger.info(
+            "Built transfer history for %d players",
+            len(player_transfer_history),
+        )
+
+    # 4. Identify Championship team_ids to skip
+    champ_team_ids = set()
+    champ_teams = session.execute(text("""
+        SELECT DISTINCT t.id
+        FROM teams t
+        JOIN matches m ON (t.id = m.home_team_id OR t.id = m.away_team_id)
+        JOIN leagues l ON m.league_id = l.id
+        WHERE l.name = 'Championship'
+    """)).fetchall()
+    champ_team_ids = {r[0] for r in champ_teams}
+
+    # Also identify teams that are ONLY in Championship (not in any other league)
+    non_champ_team_ids = set()
+    non_champ = session.execute(text("""
+        SELECT DISTINCT t.id
+        FROM teams t
+        JOIN matches m ON (t.id = m.home_team_id OR t.id = m.away_team_id)
+        JOIN leagues l ON m.league_id = l.id
+        WHERE l.name != 'Championship'
+    """)).fetchall()
+    non_champ_team_ids = {r[0] for r in non_champ}
+
+    # Championship-only teams: in Championship but not in any other league
+    champ_only_ids = champ_team_ids - non_champ_team_ids
+
+    # Build team_id → name for logging
+    team_names: Dict[int, str] = {}
+    all_teams = session.query(Team).all()
+    for t in all_teams:
+        team_names[t.id] = t.name
+
+    # 5. Load all injuries and process
+    all_injuries = session.query(TeamInjury).all()
+    stats["total"] = len(all_injuries)
+    logger.info("Processing %d team_injuries rows", stats["total"])
+
+    corrections_to_apply: list = []
+
+    for injury in all_injuries:
+        if not injury.reported_at:
+            stats["skipped_no_date"] += 1
+            continue
+
+        # Skip Championship-only teams (no TM data for GB2)
+        if injury.team_id in champ_only_ids:
+            stats["skipped_championship"] += 1
+            continue
+
+        player_name = injury.player_name
+        reported_at = injury.reported_at
+
+        # Try appearances first — most reliable source
+        correct_club_id = None
+
+        if player_name in player_app_history:
+            hist = player_app_history[player_name]
+            # Find most recent appearance on or before reported_at
+            best_club = None
+            for app_date, club_id in hist:
+                if app_date <= reported_at:
+                    best_club = club_id
+                else:
+                    break
+            if best_club is not None:
+                correct_club_id = best_club
+            elif hist:
+                # No appearances before injury → use earliest known club
+                correct_club_id = hist[0][1]
+
+        # Fallback: try transfer history
+        if correct_club_id is None and player_name in player_transfer_history:
+            t_hist = player_transfer_history[player_name]
+            best_club = None
+            for t_date, to_club in t_hist:
+                if t_date <= reported_at:
+                    best_club = to_club
+                else:
+                    break
+            if best_club is not None:
+                correct_club_id = best_club
+
+        if correct_club_id is None:
+            stats["no_match"] += 1
+            continue
+
+        stats["checked"] += 1
+
+        # Map TM club_id → our team_id
+        correct_team_id = tm_club_to_team.get(correct_club_id)
+        if correct_team_id is None:
+            # Club not in our leagues — skip
+            stats["no_match"] += 1
+            continue
+
+        # Compare — if different, schedule correction
+        if correct_team_id != injury.team_id:
+            corrections_to_apply.append(
+                (injury.id, injury.team_id, correct_team_id, player_name,
+                 reported_at)
+            )
+
+    # 6. Apply corrections in batches
+    batch_size = 500
+    logger.info(
+        "Applying %d injury club corrections", len(corrections_to_apply)
+    )
+
+    for i in range(0, len(corrections_to_apply), batch_size):
+        batch = corrections_to_apply[i: i + batch_size]
+        batch_ids = [row[0] for row in batch]
+
+        injuries_by_id = {
+            inj.id: inj
+            for inj in session.query(TeamInjury).filter(
+                TeamInjury.id.in_(batch_ids)
+            ).all()
+        }
+
+        for inj_id, old_team, new_team, pname, rdate in batch:
+            injury_obj = injuries_by_id.get(inj_id)
+            if injury_obj is None:
+                stats["errors"] += 1
+                continue
+
+            old_name = team_names.get(old_team, str(old_team))
+            new_name = team_names.get(new_team, str(new_team))
+            logger.info(
+                "INJURY FIX: %s (%s) — %s → %s",
+                pname, rdate, old_name, new_name,
+            )
+
+            injury_obj.team_id = new_team
+            stats["corrected"] += 1
+
+        try:
+            session.flush()
+            session.commit()
+        except Exception as e:
+            logger.error("Injury correction batch commit failed: %s", e)
+            session.rollback()
+            stats["errors"] += 1
+
+    logger.info(
+        "Injury club mapping fix complete: %d total, %d checked, "
+        "%d corrected, %d no TM match, %d skipped (no date), "
+        "%d skipped (Championship), %d errors",
+        stats["total"], stats["checked"], stats["corrected"],
+        stats["no_match"], stats["skipped_no_date"],
+        stats["skipped_championship"], stats["errors"],
     )
 
     return stats

@@ -346,9 +346,9 @@ single-line expression.
 
 ## Current Status
 
-Last completed: E40-05 — Manager Feature Engineering ✅
-Currently working: E40-06 — Injury Club Mapping Fix
-Next up: E40-07 — Minutes-Based Impact Rating
+Last completed: E40-06 — Injury Club Mapping Fix ✅
+Currently working: E40-07 — Minutes-Based Impact Rating
+Next up: E40-08 — Feature Recomputation
 
 E39 complete: All 12 issues done ✅ (Injury pipeline fix + lineup features — PlayerValue, Soccerdata scraper, pipeline integration, historical backfill, recompute, dashboard display, Phase 1 tests, MatchLineup, squad rotation, formation change, bench strength, Phase 2 tests)
 

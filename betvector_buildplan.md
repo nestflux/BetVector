@@ -7696,11 +7696,13 @@ The TM `appearances` table has `player_club_id` (the club at time of the match) 
 2. Validate: count corrections made, verify with known transfer histories
 
 **Acceptance Criteria:**
-- [ ] All team_injuries rows checked against TM historical club data
-- [ ] Corrections logged with before/after team_id + player name + date
-- [ ] At least 10% of historical injuries expected to be corrected (players who transferred)
-- [ ] No injuries from Championship matches affected (GB2 not in TM data)
-- [ ] Running twice produces zero additional corrections (idempotent)
+- [x] All team_injuries rows checked against TM historical club data ✅ (22,619 checked via appearances + transfers, 2,955 no TM match)
+- [x] Corrections logged with before/after team_id + player name + date ✅ (logger.info per correction: "INJURY FIX: {player} ({date}) — {old} → {new}")
+- [x] At least 10% of historical injuries expected to be corrected ✅ (8,508 corrected = 37.6% of checked)
+- [x] No injuries from Championship matches affected ✅ (1,122 Championship-only team injuries skipped)
+- [x] Running twice produces zero additional corrections (idempotent) ✅ (second run: 0 corrected)
+
+**Status: DONE** — Gate 1 5/5 PASS, Gate 2 [CLEAN], Gate 3 [APPROVED]. Spot-checks: Lukaku Inter→Chelsea→Inter→Roma timeline correct, Coutinho Barcelona→Aston Villa correct. 276 tests passing (excl. pre-existing xgboost/e35/e38 failures).
 
 ---
 
