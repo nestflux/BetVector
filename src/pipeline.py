@@ -1546,6 +1546,46 @@ class Pipeline:
 
         result.emails_sent = emails_sent
 
+        # --- E40-09: Weekly TM datasets refresh (Sunday evening) ---
+        # Downloads the latest transfermarkt-datasets ZIP (updated every
+        # Monday), maps new games, and loads lineups/formations/managers.
+        # Config-driven: check transfermarkt_datasets.refresh_enabled and
+        # refresh_day in settings.yaml.
+        try:
+            from datetime import datetime as _dt
+
+            # Read config with safe defaults if section not yet added
+            tm_ds = getattr(
+                getattr(config.settings, "scraping", None),
+                "transfermarkt_datasets", None,
+            )
+            tm_enabled = getattr(tm_ds, "refresh_enabled", True) if tm_ds else True
+            tm_day = getattr(tm_ds, "refresh_day", 6) if tm_ds else 6
+            today_weekday = _dt.today().weekday()
+
+            if tm_enabled and today_weekday == tm_day:
+                print(f"\n[TM Refresh] Running weekly Transfermarkt datasets refresh...")
+                from src.scrapers.transfermarkt import refresh_transfermarkt_datasets
+                with get_session() as tm_session:
+                    tm_stats = refresh_transfermarkt_datasets(tm_session)
+                print(
+                    f"  → TM weekly refresh: downloaded={tm_stats['downloaded']}, "
+                    f"new_mappings={tm_stats['new_mappings']}, "
+                    f"lineups={tm_stats['lineups']}, "
+                    f"formations={tm_stats['formations']}, "
+                    f"managers={tm_stats['managers']}"
+                )
+            elif tm_enabled:
+                logger.debug(
+                    "TM refresh skipped: today is weekday %d, refresh_day=%d",
+                    today_weekday, tm_day,
+                )
+        except Exception as e:
+            err = f"TM datasets refresh failed: {e}"
+            logger.error(err)
+            errors.append(err)
+            print(f"  → TM refresh: FAILED ({e})")
+
         duration = time.time() - start_time
         status = "completed"
 

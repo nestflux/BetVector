@@ -346,9 +346,9 @@ single-line expression.
 
 ## Current Status
 
-Last completed: E40-08 — Feature Recomputation ✅
-Currently working: E40-09 — Weekly TM Refresh Pipeline Step
-Next up: E40-10 — Integration Test + Backtest
+Last completed: E40-09 — Weekly TM Refresh Pipeline Step ✅
+Currently working: E40-10 — Integration Test + Backtest
+Next up: TBD (E40 epic complete after E40-10)
 
 E39 complete: All 12 issues done ✅ (Injury pipeline fix + lineup features — PlayerValue, Soccerdata scraper, pipeline integration, historical backfill, recompute, dashboard display, Phase 1 tests, MatchLineup, squad rotation, formation change, bench strength, Phase 2 tests)
 

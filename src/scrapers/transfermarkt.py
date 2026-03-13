@@ -2324,3 +2324,110 @@ def compute_minutes_importance(session) -> Dict[str, int]:
     )
 
     return stats
+
+
+# ============================================================================
+# E40-09: Weekly TM Refresh Pipeline Step
+# ============================================================================
+# The dcaribou/transfermarkt-datasets ZIP is updated every Monday.
+# This function integrates into the Sunday evening pipeline to:
+#   1. Re-download the ZIP (if >7 days old)
+#   2. Map any new games since last run
+#   3. Load lineups, formations, and manager names for newly matched games
+# All backfill functions from E40-02/03/04 are already idempotent, so running
+# them on the full dataset is safe — they skip existing records automatically.
+# ============================================================================
+
+
+def refresh_transfermarkt_datasets(session) -> Dict[str, Any]:
+    """Weekly refresh of TM datasets: download, map, and load new data.
+
+    Called from the evening pipeline on the configured refresh day (Sunday
+    by default).  Downloads the latest ZIP if it's stale, maps any new
+    games to our matches table, and loads lineups/formations/managers for
+    newly matched games.
+
+    All underlying functions are idempotent — safe to run repeatedly.
+
+    Args:
+        session: SQLAlchemy session.
+
+    Returns:
+        Dict with stats: downloaded (bool), new_mappings, lineups, formations,
+        managers.
+    """
+    stats: Dict[str, Any] = {
+        "downloaded": False,
+        "new_mappings": 0,
+        "lineups": 0,
+        "formations": 0,
+        "managers": 0,
+    }
+
+    # 1. Download latest ZIP (idempotent — skips if <max_age_days old)
+    try:
+        # Read max_age from config with safe default
+        tm_ds = getattr(
+            getattr(config.settings, "scraping", None),
+            "transfermarkt_datasets", None,
+        )
+        max_age = getattr(tm_ds, "max_age_days", 7) if tm_ds else 7
+        # Check file mtime before download to detect whether new data arrived
+        games_path = os.path.join(TM_DATASETS_DIR, "games.csv.gz")
+        old_mtime = os.path.getmtime(games_path) if os.path.exists(games_path) else 0
+
+        download_transfermarkt_datasets(max_age_days=max_age)
+
+        new_mtime = os.path.getmtime(games_path) if os.path.exists(games_path) else 0
+        stats["downloaded"] = new_mtime > old_mtime
+        if stats["downloaded"]:
+            logger.info("TM refresh: downloaded fresh dataset ZIP")
+        else:
+            logger.info("TM refresh: using existing dataset (still fresh)")
+    except Exception as e:
+        logger.error("TM refresh: download failed — %s", e)
+        return stats
+
+    # 2. Build/update match mapping — finds new games since last run
+    try:
+        mapping = build_tm_match_mapping(session)
+        # Persist mapping — updates transfermarkt_game_id on Match rows
+        updated_count = persist_tm_match_mapping(session, mapping)
+        stats["new_mappings"] = updated_count
+        logger.info(
+            "TM refresh: match mapping — %d total, %d new",
+            len(mapping), stats["new_mappings"],
+        )
+    except Exception as e:
+        logger.error("TM refresh: match mapping failed — %s", e)
+        return stats
+
+    # 3. Load lineups for any newly matched games (idempotent)
+    try:
+        lineup_result = backfill_lineups_from_tm(session)
+        stats["lineups"] = lineup_result.get("inserted", 0)
+    except Exception as e:
+        logger.error("TM refresh: lineup backfill failed — %s", e)
+
+    # 4. Load formations for newly matched games (idempotent)
+    try:
+        formation_result = backfill_formations_from_tm(session)
+        stats["formations"] = formation_result.get("updated", 0)
+    except Exception as e:
+        logger.error("TM refresh: formation backfill failed — %s", e)
+
+    # 5. Load manager names for newly matched games (idempotent)
+    try:
+        manager_result = backfill_managers_from_tm(session)
+        stats["managers"] = manager_result.get("updated", 0)
+    except Exception as e:
+        logger.error("TM refresh: manager backfill failed — %s", e)
+
+    logger.info(
+        "TM weekly refresh complete: downloaded=%s, new_mappings=%d, "
+        "lineups=%d, formations=%d, managers=%d",
+        stats["downloaded"], stats["new_mappings"],
+        stats["lineups"], stats["formations"], stats["managers"],
+    )
+
+    return stats

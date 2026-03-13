@@ -7796,12 +7796,14 @@ The TM `appearances` table has `minutes_played` per player per match, which is a
 3. Config in `settings.yaml`: `transfermarkt_datasets.refresh_day: 6` (Sunday), `transfermarkt_datasets.refresh_enabled: true`
 
 **Acceptance Criteria:**
-- [ ] Weekly refresh runs automatically on Sunday evening pipeline
-- [ ] Only downloads ZIP if >7 days since last download
-- [ ] New matches from the past week get lineup + formation + manager data
-- [ ] Config-driven: refresh day and enabled flag in settings.yaml
-- [ ] Does not interfere with regular evening pipeline steps (try/except wrapped)
-- [ ] Logged clearly: "TM weekly refresh: loaded X lineups, Y formations, Z managers"
+- [x] Weekly refresh runs automatically on Sunday evening pipeline ✅
+- [x] Only downloads ZIP if >7 days since last download ✅
+- [x] New matches from the past week get lineup + formation + manager data ✅
+- [x] Config-driven: refresh day and enabled flag in settings.yaml ✅
+- [x] Does not interfere with regular evening pipeline steps (try/except wrapped) ✅
+- [x] Logged clearly: "TM weekly refresh: loaded X lineups, Y formations, Z managers" ✅
+
+**Status: DONE** — Gate 1 6/6 PASS, Gate 2 [CLEAN], Gate 3 [APPROVED]. `refresh_transfermarkt_datasets()` in transfermarkt.py, pipeline integration in `run_evening()`, config under `scraping.transfermarkt_datasets`. 276 tests passing, 0 regressions.
 
 ---
 

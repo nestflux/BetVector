@@ -286,6 +286,13 @@ scraping:
     cdn_base_url: "https://pub-e682421888d945d684bcae8890b0ec20.r2.dev/data"
     competition_id: "GB1"                 # EPL in Transfermarkt
     min_request_interval_seconds: 2       # Polite to CDN
+  # Weekly refresh of the dcaribou/transfermarkt-datasets ZIP (E40-09)
+  # Contains 10 CSV tables updated every Monday — lineup, formation,
+  # manager data for historical + recent matches across all 5 leagues.
+  transfermarkt_datasets:
+    refresh_enabled: true                 # Set false to disable weekly refresh
+    refresh_day: 6                        # 0=Monday, 6=Sunday — run post-weekend
+    max_age_days: 7                       # Redownload only if ZIP is older than this
   weather:
     forecast_url: "https://api.open-meteo.com/v1/forecast"
     archive_url: "https://archive-api.open-meteo.com/v1/archive"
