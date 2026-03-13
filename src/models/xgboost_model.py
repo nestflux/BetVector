@@ -521,6 +521,11 @@ class XGBoostModel(BaseModel):
             f"{attack_prefix}squad_rotation_index",
             f"{attack_prefix}formation_changed",
             f"{attack_prefix}bench_strength",
+            # --- Manager features (E40-05) ---
+            f"{attack_prefix}new_manager_flag",
+            f"{attack_prefix}manager_tenure_days",
+            f"{attack_prefix}manager_win_pct",
+            f"{attack_prefix}manager_change_count",
             # Multi-league context (E36-03):
             # league_home_adv_5: home advantage over the last 5 home matches,
             #   per league — captures that Championship has higher home advantage

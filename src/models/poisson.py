@@ -491,6 +491,19 @@ class PoissonModel(BaseModel):
             # bench_strength: bench_value / starter_value ratio.
             # Higher = deeper squad (more capable of handling rotation).
             f"{attack_prefix}bench_strength",
+            # --- Manager features (E40-05) ---
+            # new_manager_flag: 1 if manager changed within last 30 days.
+            # Captures the well-documented "new manager bounce" effect.
+            f"{attack_prefix}new_manager_flag",
+            # manager_tenure_days: how long the current manager has been
+            # in charge.  Longer tenure = more tactical stability.
+            f"{attack_prefix}manager_tenure_days",
+            # manager_win_pct: current manager's win rate at this club.
+            # Separates quality of manager from team quality.
+            f"{attack_prefix}manager_win_pct",
+            # manager_change_count: distinct managers in prior 365 days.
+            # Instability signal — frequent changes destabilise squads.
+            f"{attack_prefix}manager_change_count",
         ]
 
         # Only include columns that exist in the DataFrame

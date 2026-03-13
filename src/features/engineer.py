@@ -46,6 +46,7 @@ from src.features.context import (
     calculate_injury_features,
     calculate_is_newly_promoted,
     calculate_league_home_advantage,
+    calculate_manager_features,
     calculate_market_odds_features,
     calculate_market_value_features,
     calculate_referee_features,
@@ -117,6 +118,9 @@ FEATURE_COLS = [
     "league_home_adv_5", "is_newly_promoted",
     # --- Lineup features (E39-09, E39-10, E39-11) — Source: Soccerdata lineups ---
     "squad_rotation_index", "formation_changed", "bench_strength",
+    # --- Manager features (E40-05) — Source: Transfermarkt games table ---
+    "new_manager_flag", "manager_tenure_days",
+    "manager_win_pct", "manager_change_count",
 ]
 
 
@@ -349,6 +353,20 @@ def compute_features(match_id: int, league_id: int) -> Dict[str, Dict[str, Any]]
     )
     home_features.update(home_promoted)
     away_features.update(away_promoted)
+
+    # --- Manager features (E40-05) ---
+    # Manager changes create a measurable short-term "bounce" effect.
+    # 4 features: new_manager_flag, manager_tenure_days, manager_win_pct,
+    # and manager_change_count.  Each team has its own manager, so these
+    # are computed per-team.  NULL when no manager data available.
+    home_manager = calculate_manager_features(
+        home_team_id, match_id, match_date, league_id,
+    )
+    away_manager = calculate_manager_features(
+        away_team_id, match_id, match_date, league_id,
+    )
+    home_features.update(home_manager)
+    away_features.update(away_manager)
 
     # --- Save to database ---
     save_features(match_id, home_team_id, is_home=1, features=home_features)

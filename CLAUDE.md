@@ -101,7 +101,9 @@ E35-01 → E35-02 → E35-03 →
 E35-04 → E35-05 → E35-06 → E35-07 →
 E36-01 → E36-02 → E36-03 → E36-04 →
 E37-01 → E37-02 → E37-03 → E37-04 →
-E38-01 → E38-02 → E38-03 → E38-04 → E38-05 → E38-06
+E38-01 → E38-02 → E38-03 → E38-04 → E38-05 → E38-06 →
+E40-01 → E40-02 → E40-03 → E40-04 → E40-05 →
+E40-06 → E40-07 → E40-08 → E40-09 → E40-10
 ```
 
 The sequence is the law. Auto-advance after gates pass. Only stop for
@@ -344,9 +346,9 @@ single-line expression.
 
 ## Current Status
 
-Last completed: E39-12 — Phase 2 Integration Test + Full Backtest ✅
-Currently working: (none — awaiting next task)
-Next up: TBD
+Last completed: E40-05 — Manager Feature Engineering ✅
+Currently working: E40-06 — Injury Club Mapping Fix
+Next up: E40-07 — Minutes-Based Impact Rating
 
 E39 complete: All 12 issues done ✅ (Injury pipeline fix + lineup features — PlayerValue, Soccerdata scraper, pipeline integration, historical backfill, recompute, dashboard display, Phase 1 tests, MatchLineup, squad rotation, formation change, bench strength, Phase 2 tests)
 

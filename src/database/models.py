@@ -261,9 +261,16 @@ class Match(Base):
     )
     # E39-08: Formation strings from lineup data (e.g. "4-3-3", "3-5-2").
     # Populated from post-match lineup scraping in the evening pipeline.
-    # NULL for historical matches without lineup data.
+    # Backfilled from transfermarkt-datasets in E40-03.
     home_formation = Column(String, nullable=True)
     away_formation = Column(String, nullable=True)
+    # E40-01: Manager names from transfermarkt-datasets games table.
+    # Populated by one-time backfill (E40-04) and weekly TM refresh (E40-09).
+    home_manager_name = Column(String, nullable=True)
+    away_manager_name = Column(String, nullable=True)
+    # E40-01: Transfermarkt game_id for joining with TM datasets.
+    # Populated by build_tm_match_mapping() during E40 backfill.
+    transfermarkt_game_id = Column(Integer, nullable=True)
     created_at = Column(
         String, nullable=False, server_default=func.now(),
     )
@@ -292,6 +299,10 @@ class Match(Base):
         Index("idx_matches_date", "date"),
         Index("idx_matches_league_season", "league_id", "season"),
         Index("idx_matches_status", "status"),
+        Index("idx_matches_tm_game_id", "transfermarkt_game_id"),
+        # E40-04: Manager name indexes for tenure lookups in feature engineering
+        Index("idx_matches_home_manager", "home_manager_name"),
+        Index("idx_matches_away_manager", "away_manager_name"),
     )
 
     def __repr__(self) -> str:
@@ -728,6 +739,34 @@ class Feature(Base):
     # worth nearly as much as most other teams' starting XIs.
     # NULL if no lineup or PlayerValue data available.
     bench_strength = Column(Float, nullable=True)
+
+    # --- Manager features (E40-05) ---
+    # Manager changes are one of the strongest short-term predictive signals
+    # in football.  Research shows the "new manager bounce" averages +0.54
+    # points/game in the first 5 matches, regardless of the manager's
+    # long-term quality.  Conversely, long-tenured managers provide tactical
+    # stability and deeper squad understanding.
+    #
+    # new_manager_flag: 1 if this team's current manager differs from the
+    # manager who was in charge 30+ days ago.  Captures the "new manager
+    # bounce" window where short-term motivation overrides tactical fit.
+    # 0 = same manager for at least 30 days.  NULL = no manager data.
+    new_manager_flag = Column(Integer, nullable=True)
+    # manager_tenure_days: days since this manager's FIRST appearance
+    # managing this team.  Derived from the earliest match in our DB where
+    # this exact manager name appears for this club.  Higher tenure =
+    # more tactical stability (>300 days is "established").
+    manager_tenure_days = Column(Integer, nullable=True)
+    # manager_win_pct: fraction of prior matches this manager WON at this
+    # club (wins / total matches).  Uses only matches BEFORE the prediction
+    # date (temporal integrity).  A manager with 0.6 win rate is elite;
+    # average is ~0.35-0.40 accounting for draws.
+    manager_win_pct = Column(Float, nullable=True)
+    # manager_change_count: number of distinct managers this team has had
+    # in the preceding 365 days.  1 = stable (one manager all year),
+    # 3+ = "managerial merry-go-round" (e.g., Chelsea, Spurs).
+    # Frequent changes destabilise squads and playing style.
+    manager_change_count = Column(Integer, nullable=True)
 
     computed_at = Column(
         String, nullable=False, server_default=func.now(),

@@ -63,6 +63,7 @@ This document breaks the BetVector masterplan into sequenced epics and issues th
 | PC-14 | Full Data Gap Closure & 6-League Predictions | 16 | ✅ DONE — Transfermarkt multi-league, Odds API 6-league maps, injury loader, matchday computation, weather/transfermarkt backfill, 13,569 matches, 27,110 features, predictions all 6 leagues, 28 tests, 309/309 full suite |
 | PC-15 | Local Pipeline Setup — Fixtures, Odds Resilience, Automation | 6 | ✅ DONE — Football-Data.org 6-league fixtures (PL/ELC/PD/FL1/BL1/SA), odds-api.io fallback scraper (250+ teams, 6 leagues), budget optimization (skip_midday_below=200), launchd automation (3 daily runs), cloud sync strategy, 32 integration tests, 315/315 full suite |
 | E39 | Injury Data Pipeline + Lineup Features | 12 | Fix broken injury pipeline (Soccerdata API), automate player importance (Transfermarkt market values), historical backfill (salimt CSV), lineup storage, squad rotation index, formation change, bench strength features |
+| E40 | Transfermarkt-Datasets Deep Integration | 10 | One-time backfill from dcaribou/transfermarkt-datasets: historical lineups (400K+ rows), formations, manager names + 4 new manager features, injury club mapping fix, minutes-based impact rating, feature recomputation, weekly refresh pipeline step |
 
 **Total: 49 epics, 231 issues** (45 original + 20 post-launch + 12 odds/model + 7 backfill + 16 dashboard UX + 5 clarity + 16 badges/polish + 6 cloud migration + 6 post-critical-path + 6 multi-user auth + 7 bet tracker + 4 league expansion + 4 model improvement + 6 league backfill phase 2 + 5 dashboard fixes + 6 data gap fix + 6 model stability fix + 4 pipeline performance + 6 pipeline integrity + 5 local rebuild + 16 data gap closure + 6 local pipeline setup)
 
@@ -7488,4 +7489,359 @@ E39-04 (historical backfill) → E39-05 (recompute + backtest) →
 E39-06 (dashboard) → E39-07 (Phase 1 tests) →
 E39-08 (MatchLineup) → E39-09 (rotation) → E39-10 (formation) →
 E39-11 (bench strength) → E39-12 (Phase 2 tests + backtest)
+```
+
+---
+
+## E40 — Transfermarkt-Datasets Deep Integration
+
+**MP refs:** §5 Data Sources, §6 Schema, §7 Scraper Interface, §9 Feature Engineering, §11 Self-Improvement
+
+**Overview:** Integrate the full dcaribou/transfermarkt-datasets (CC0 license, weekly-updated GitHub repo) to solve five major data gaps at once: (1) zero historical lineup data → backfill 400K+ MatchLineup rows across 5 leagues, (2) zero formation data → backfill Match.home_formation/away_formation, (3) no manager tracking → add manager columns + 4 predictive features, (4) injury-to-wrong-club mapping → fix via historical club-at-time lookup, (5) impact_rating based only on market value → enhance with minutes-played data. A weekly pipeline refresh step ensures continuity between the one-time backfill and the daily prediction pipeline.
+
+**Data Source:** https://github.com/dcaribou/transfermarkt-datasets
+- CDN: https://pub-e682421888d945d684bcae8890b0ec20.r2.dev/data/transfermarkt-datasets.zip (187 MB)
+- Tables used: `games` (78K matches, manager + formation), `game_lineups` (2.7M lineup rows), `appearances` (1.7M player-match records), `transfers` (100K), `players` (34K)
+- Coverage: GB1 (EPL), ES1 (La Liga), FR1 (Ligue 1), L1 (Bundesliga), IT1 (Serie A) — 2012–2025
+- Gap: No Championship (GB2) data — Championship remains data-poor for these features
+
+**Current State (before E40):**
+- `match_lineups` table: **0 rows** (schema exists from E39-08, but no data — Soccerdata API's 75 req/day limit made historical backfill impractical)
+- `Match.home_formation` / `away_formation`: **0 populated** (only populated post-match by evening pipeline, zero historical)
+- Manager tracking: **No columns exist** on Match table
+- `squad_rotation_index`: **0% populated** (28,374 features, all NULL)
+- `formation_changed`: **0% populated** (all NULL)
+- `bench_strength`: **0% populated** (all NULL)
+- `team_injuries.team_id`: mapped to player's **current** club, not club-at-time-of-injury
+
+**Continuity Design (historical backfill → daily pipeline):**
+- **Lineups:** Historical from TM game_lineups (E40-02). Going forward, Soccerdata evening pipeline continues capturing post-match lineups. TM weekly refresh (E40-09) fills any Soccerdata misses.
+- **Formations:** Historical from TM games (E40-03). Going forward, Soccerdata evening pipeline captures formations. TM weekly refresh fills gaps.
+- **Manager names:** Historical from TM games (E40-04). Going forward, TM weekly refresh updates manager names for recent matches. Manager changes are rare (2–3 per league per season), so 1–7 day lag is acceptable — features change slowly (tenure +1/day, win_pct moves marginally).
+- **Impact ratings:** Historical from TM appearances (E40-07). Going forward, PlayerValue snapshots (already in morning pipeline) provide market values. Minutes data updated weekly via TM refresh.
+- **Injury mapping:** One-time fix (E40-06). Going forward, Soccerdata scrapes live injuries with correct current club.
+
+**Phase 1: Foundation & Backfill (E40-01 → E40-04)**
+**Phase 2: New Features & Enhancement (E40-05 → E40-07)**
+**Phase 3: Recomputation, Pipeline & Validation (E40-08 → E40-10)**
+
+---
+
+### E40-01 — Data Download, Team Name Mapping & Game Matching
+
+**Type:** Data Infrastructure
+**Files:** `src/scrapers/transfermarkt.py`, `src/scrapers/loader.py` (new functions), `data/raw/transfermarkt/datasets/` (data directory)
+
+**Context:** The transfermarkt-datasets ZIP contains 10 CSV tables. We need to: (a) download and store them persistently, (b) extend the existing TRANSFERMARKT_TEAM_MAP for any missing historical teams (relegated sides from 2012–2020 not yet mapped), and (c) build a robust game-matching function that joins TM `games` to our `matches` table via (date + home_team + away_team). This match mapping is the foundation — every subsequent issue depends on it.
+
+**Tasks:**
+1. Create `download_transfermarkt_datasets()` function — downloads ZIP from R2 CDN, extracts to `data/raw/transfermarkt/datasets/`, returns dict of DataFrame handles. Idempotent: skip download if files exist and are <7 days old.
+2. Audit TM team names vs our DB team names for all 5 leagues (2012–2025). Add any missing entries to `TRANSFERMARKT_TEAM_MAP`. Expected: ~20–30 new entries for relegated teams from 2012–2019 era.
+3. Create `build_tm_match_mapping(session)` function — loads TM `games.csv.gz`, filters to our 5 leagues + our date range (2020+), maps team names via TRANSFERMARKT_TEAM_MAP, joins to our `matches` table on `(date, home_team_id, away_team_id)`. Returns dict: `{tm_game_id: our_match_id}`. Log unmatched games for debugging.
+4. Add `transfermarkt_game_id` column to Match model (Integer, nullable, indexed) — stores the TM game_id for matched games, enabling fast lookups in subsequent issues.
+
+**Acceptance Criteria:**
+- [x] ZIP downloads to `data/raw/transfermarkt/datasets/` with all 10 CSV files ✅
+- [x] All TM team names for our 5 leagues (2020–2025) map to a canonical DB team name — zero unresolved names ✅ (137/137 mapped for 2020+, 176/176 all-time)
+- [x] Game matching achieves ≥90% match rate for our non-Championship matches ✅ (91.6% — 9,829 of 10,735)
+- [x] `transfermarkt_game_id` column added to Match model with index ✅
+- [x] Unmatched games logged with reason (date mismatch, team name mismatch, etc.) ✅
+- [x] Running twice produces identical results (idempotent) ✅
+
+**Status: DONE** — Gate 1 6/6 PASS, Gate 2 [CLEAN], Gate 3 [APPROVED]. 301 tests passing, 0 regressions.
+
+---
+
+### E40-02 — Historical Lineup Backfill
+
+**Type:** Data Backfill
+**Depends on:** E40-01 (match mapping)
+**Files:** `src/scrapers/loader.py` (new function), `src/database/models.py` (MatchLineup)
+
+**Context:** The `match_lineups` table has the schema (from E39-08) but zero rows. The TM `game_lineups` table has 2.7M rows with starting XI + substitutes for 90%+ of our matched games. This issue loads them in, giving us the data foundation for squad_rotation_index, formation_changed, and bench_strength features.
+
+**Tasks:**
+1. Create `backfill_lineups_from_tm(session)` function:
+   - Load `game_lineups.csv.gz` — filter to game_ids that appear in our match mapping
+   - Map columns: `type="starting_lineup"` → `is_starter=1`, `type="substitutes"` → `is_starter=0`
+   - Map `club_id` → our `team_id` via match context (home/away club from the matched game)
+   - Map `position` values (TM uses "Goalkeeper", "Defender", etc.) → our codes (GK, DF, MF, FW)
+   - Insert into `match_lineups` table using `session.merge()` or INSERT OR IGNORE for idempotency
+   - Batch processing: commit every 1,000 games to avoid memory issues
+2. Validate loaded data: verify ~22 starters per game (11 per team), ~30–40 total rows per game (starters + subs)
+
+**Acceptance Criteria:**
+- [x] MatchLineup table populated with 300K+ rows ✅ (393,021 rows across 9,376 games)
+- [x] Each loaded game has exactly 22 starters (11 per team) ✅ (9,374/9,376 = 99.98%)
+- [x] Position codes mapped correctly (GK, DF, MF, FW) ✅ (GK: 43,814, DF: 123,969, MF: 123,127, FW: 102,111)
+- [x] `is_starter` correctly set (1 for starting XI, 0 for bench) ✅ (206,253 starters, 186,768 bench)
+- [x] Running twice produces zero duplicate rows (idempotent) ✅ (0 inserted, 393,021 skipped on re-run)
+- [x] No Championship (GB2) rows loaded (dataset doesn't cover it) ✅
+
+**Status: DONE** — Gate 1 6/6 PASS, Gate 2 [CLEAN], Gate 3 [APPROVED] (NaN guard fix applied). 301 tests passing.
+
+---
+
+### E40-03 — Formation Backfill
+
+**Type:** Data Backfill
+**Depends on:** E40-01 (match mapping)
+**Files:** `src/scrapers/loader.py` (new function)
+
+**Context:** `Match.home_formation` and `Match.away_formation` are currently NULL for all historical matches. The TM `games` table has formation data for ~90% of matches (e.g., "4-3-3", "3-5-2"). This populates them.
+
+**Tasks:**
+1. Create `backfill_formations_from_tm(session)` function:
+   - Load `games.csv.gz` — filter to matched games via the TM match mapping
+   - For each matched game: set `Match.home_formation = tm_game.home_club_formation`, `Match.away_formation = tm_game.away_club_formation`
+   - Only update NULL formations (don't overwrite any already populated by Soccerdata evening pipeline)
+   - Batch commit every 500 matches
+2. Validate: count matches with non-NULL formations before and after
+
+**Acceptance Criteria:**
+- [x] Matches with formation data increases from 0 to ≥8,000 ✅ (9,374 — 95.4% of TM-matched)
+- [x] Formation strings are valid format ✅ (30 unique formations, 0 garbage, all contain digits)
+- [x] Only NULL formations updated (idempotent) ✅ (re-run: 0 updated, 9,375 skipped already set)
+- [x] Running twice produces identical results ✅
+
+**Status: DONE** — Gate 1 4/4 PASS, Gate 2 [CLEAN], Gate 3 [APPROVED]. 301 tests passing.
+
+---
+
+### E40-04 — Manager Schema & Backfill
+
+**Type:** Schema Change + Data Backfill
+**Depends on:** E40-01 (match mapping)
+**Files:** `src/database/models.py`, `src/scrapers/loader.py` (new function)
+
+**Context:** No manager tracking exists anywhere in the system. The TM `games` table has `home_club_manager_name` and `away_club_manager_name` for 100% of matches across all 5 leagues. Adding these columns enables the manager features in E40-05.
+
+**Tasks:**
+1. Add two new columns to Match model:
+   - `home_manager_name` (String, nullable) — Manager name for home team
+   - `away_manager_name` (String, nullable) — Manager name for away team
+   - Add index on each (for manager tenure lookups)
+2. Create `backfill_managers_from_tm(session)` function:
+   - Load `games.csv.gz` — filter to matched games
+   - For each matched game: set `Match.home_manager_name`, `Match.away_manager_name`
+   - Only update NULL values (don't overwrite future data from other sources)
+   - Batch commit every 500 matches
+3. Run ALTER TABLE on existing database to add columns
+
+**Acceptance Criteria:**
+- [x] `home_manager_name` and `away_manager_name` columns exist on Match model ✅ (with indexes)
+- [x] ≥95% of non-Championship matches have manager names ✅ (9,829/9,829 = 100%)
+- [x] Manager names are non-empty strings ✅ (0 bad values)
+- [x] Running twice produces identical results (idempotent) ✅
+- [x] Spot-check: Arsenal = Arteta since Sep 2020 (102 home matches), Guardiola at City (104 home) ✅
+
+**Status: DONE** — Gate 1 5/5 PASS, Gate 2 [CLEAN], Gate 3 [APPROVED]. 301 tests passing.
+
+---
+
+### E40-05 — Manager Feature Engineering
+
+**Type:** Feature Engineering
+**Depends on:** E40-04 (manager data in Match table)
+**Files:** `src/database/models.py` (Feature model), `src/features/context.py` (new functions), `src/models/poisson.py`, `src/models/xgboost_model.py`, `config/features.yaml`
+
+**Context:** Manager changes are one of the strongest short-term predictive signals in football. The "new manager bounce" averages +0.54 points/game in the first 5 matches. Manager tenure correlates with tactical stability. This issue adds 4 new feature columns and the computation logic.
+
+**Tasks:**
+1. Add 4 new columns to Feature model:
+   - `new_manager_flag` (Integer, nullable, 0/1) — 1 if this team's manager is different from the manager 30+ days ago (captures the "new manager bounce" window)
+   - `manager_tenure_days` (Integer, nullable) — Number of days since this manager's first appearance managing this team (derived from earliest match with this manager name for this club)
+   - `manager_win_pct` (Float, nullable) — Win percentage of this manager at this club across all prior matches (wins / total matches, using only matches before prediction date)
+   - `manager_change_count` (Integer, nullable) — Number of different managers this team has had in the last 365 days (stability signal; Spurs had 8 in 5 years)
+2. Create `calculate_manager_features(team_id, match_id, match_date, league_id, session)` in `context.py`:
+   - Query all matches for this team before `match_date` that have a manager name
+   - Derive manager appointment date from first appearance of current manager name
+   - Compute all 4 features with strict temporal integrity
+   - Return dict with feature values (None if insufficient manager data)
+3. Add the 4 features to `FEATURE_COLS`, Poisson model, and XGBoost model feature lists
+4. Run ALTER TABLE to add columns to existing features table
+
+**Acceptance Criteria:**
+- [x] 4 new columns exist on Feature model with correct types ✅ (new_manager_flag INTEGER, manager_tenure_days INTEGER, manager_win_pct FLOAT, manager_change_count INTEGER)
+- [x] `new_manager_flag` = 1 for matches within 30 days of a manager change, 0 otherwise ✅
+- [x] `manager_tenure_days` correctly counts from first appearance of manager name at this club ✅ (Arsenal Arteta: 1,996 days)
+- [x] `manager_win_pct` uses only matches BEFORE prediction date (temporal integrity) ✅ (strict `Match.date < match_date` filter)
+- [x] `manager_change_count` counts distinct managers in prior 365 days ✅ (Chelsea: 3 managers)
+- [x] All features return None when no manager data available (graceful degradation) ✅ (Championship matches return all None)
+- [x] Features added to FEATURE_COLS, poisson.py, xgboost_model.py ✅
+- [x] Spot-check: Arsenal's Arteta → tenure starts Dec 2019, win_pct ≈ 0.58 ✅ (win_pct = 0.6039)
+
+**Status: DONE** — Gate 1 8/8 PASS, Gate 2 [CLEAN], Gate 3 [APPROVED]. 301 tests passing, 0 regressions.
+
+---
+
+### E40-06 — Injury Club Mapping Fix
+
+**Type:** Data Correction
+**Depends on:** E40-01 (match mapping for access to TM data)
+**Files:** `src/scrapers/loader.py` (new function)
+
+**Context:** The `team_injuries` table (loaded from salimt/football-datasets CSV in E39-04) maps each injury to the player's **current** club, not the club they were at when the injury occurred. Example: if Player X was injured at Club A in 2022, then transferred to Club B in 2023, the injury record incorrectly shows `team_id = Club B`. This inflates Club B's historical injury burden and deflates Club A's, corrupting the `injury_impact` feature for backtesting.
+
+The TM `appearances` table has `player_club_id` (the club at time of the match) and the `transfers` table has exact `transfer_date`. Together they let us determine the correct club for each historical injury.
+
+**Tasks:**
+1. Create `fix_injury_club_mapping(session)` function:
+   - Load TM `appearances.csv.gz` and `transfers.csv.gz`
+   - For each `team_injuries` row: look up the player's club at `reported_at` date
+     - First try: find an appearance record near that date → use `player_club_id`
+     - Fallback: use `transfers` table to find the active club at that date (latest transfer before injury date)
+   - If the correct `team_id` differs from current, update the row
+   - Log all corrections for audit trail
+2. Validate: count corrections made, verify with known transfer histories
+
+**Acceptance Criteria:**
+- [ ] All team_injuries rows checked against TM historical club data
+- [ ] Corrections logged with before/after team_id + player name + date
+- [ ] At least 10% of historical injuries expected to be corrected (players who transferred)
+- [ ] No injuries from Championship matches affected (GB2 not in TM data)
+- [ ] Running twice produces zero additional corrections (idempotent)
+
+---
+
+### E40-07 — Minutes-Based Impact Rating
+
+**Type:** Feature Enhancement
+**Depends on:** E40-01 (match mapping for access to TM data), E40-02 (lineup data)
+**Files:** `src/scrapers/loader.py` (new function), `src/features/context.py` (update)
+
+**Context:** Currently, `InjuryFlag.impact_rating` is derived solely from `PlayerValue.value_percentile` (market value rank within squad). But market value doesn't always reflect actual playing importance — a high-value player who sits on the bench has less match impact than a lower-value player who starts every week.
+
+The TM `appearances` table has `minutes_played` per player per match, which is a much better proxy for actual importance. A player who plays 90 minutes every week is demonstrably more important than one with similar market value who only gets 20 minutes.
+
+**Tasks:**
+1. Create `compute_minutes_importance(session)` function:
+   - Load TM `appearances.csv.gz` filtered to our matched games
+   - For each player-team combination: compute rolling average minutes per match over last 10 appearances
+   - Compute `minutes_percentile` within each team (rank by avg_minutes desc, top=1.0)
+   - Store as new field on PlayerValue or a new lightweight lookup table
+2. Update `calculate_injury_features()` in `context.py`:
+   - Composite impact: `impact_rating = 0.5 × market_value_percentile + 0.5 × minutes_percentile`
+   - Falls back to market_value_percentile only if no minutes data available
+   - Temporal integrity: only use appearances before prediction date
+3. Update `load_injuries_from_soccerdata()` to use composite impact when auto-computing impact_rating
+
+**Acceptance Criteria:**
+- [ ] Minutes-based percentile computed for all players with appearance data
+- [ ] Composite impact rating uses 50/50 blend of market value + minutes
+- [ ] Falls back to market_value_percentile only when no minutes data exists
+- [ ] Temporal integrity: only appearances before prediction date used
+- [ ] Spot-check: a high-value bench player has lower composite score than a lower-value starter
+- [ ] Running twice produces identical results (idempotent)
+
+---
+
+### E40-08 — Feature Recomputation
+
+**Type:** Data Recomputation
+**Depends on:** E40-02 (lineups), E40-03 (formations), E40-05 (manager features), E40-07 (impact rating)
+**Files:** `src/features/context.py`, pipeline scripts
+
+**Context:** With backfilled lineups, formations, manager data, and improved impact ratings, we can now recompute the features that have been NULL since E39. This is the big payoff — 28,374 feature rows going from 0% populated to 75%+ populated for squad/formation/manager features.
+
+**Tasks:**
+1. Recompute `squad_rotation_index` for all matches with backfilled lineup data:
+   - Each match now has a previous match with lineup data → rotation index can be calculated
+   - Expected: 0% → ~75% populated (some early-season matches lack a "previous match")
+2. Recompute `formation_changed` for all matches with backfilled formation data:
+   - Expected: 0% → ~85% populated (formation data is ~90% coverage from TM)
+3. Recompute `bench_strength` for all matches with backfilled lineup + player value data:
+   - Expected: 0% → ~70% populated (needs both lineup AND player value snapshots)
+4. Compute all 4 new manager features for all matches:
+   - Expected: ~90%+ populated for non-Championship matches
+5. Recompute `injury_impact` and `key_player_out` with corrected club mapping + composite impact ratings
+6. Batch processing: process 500 matches at a time, commit after each batch
+
+**Acceptance Criteria:**
+- [ ] `squad_rotation_index`: ≥70% of non-Championship features populated (up from 0%)
+- [ ] `formation_changed`: ≥80% of non-Championship features populated (up from 0%)
+- [ ] `bench_strength`: ≥60% of non-Championship features populated (up from 0%)
+- [ ] `new_manager_flag`: ≥85% of non-Championship features populated
+- [ ] `manager_tenure_days`: ≥85% of non-Championship features populated
+- [ ] `manager_win_pct`: ≥85% of non-Championship features populated
+- [ ] `manager_change_count`: ≥85% of non-Championship features populated
+- [ ] Zero temporal integrity violations — no feature uses data from after match date
+- [ ] No regressions in previously-computed features (injury_impact still 100%)
+
+---
+
+### E40-09 — Weekly TM Refresh Pipeline Step
+
+**Type:** Pipeline Integration
+**Depends on:** E40-01 (download function), E40-02/03/04 (backfill functions)
+**Files:** `src/pipeline.py`, `config/settings.yaml`
+
+**Context:** The one-time backfill populates historical data, but new matches happen every week. The daily pipeline already has Soccerdata for post-match lineups and Transfermarkt CDN for player values — but manager names have no other source. A weekly refresh of the TM dataset (which updates every Monday) ensures manager data stays current and catches any lineup/formation gaps that Soccerdata missed.
+
+**Design Decision:** Run as part of the Sunday evening pipeline (post-weekend matches). Not a separate cron job — keeps all pipeline logic in one place.
+
+**Tasks:**
+1. Add `refresh_transfermarkt_datasets(session)` function:
+   - Download latest TM ZIP (only if >7 days since last download)
+   - Run match mapping for any new games not yet mapped
+   - For newly matched games: load lineups, formations, manager names (same functions from E40-02/03/04, already idempotent)
+   - Log: "TM refresh: X new lineups, Y new formations, Z new managers loaded"
+2. Add to evening pipeline: if `datetime.today().weekday() == 6` (Sunday), call `refresh_transfermarkt_datasets()` after the regular evening steps
+3. Config in `settings.yaml`: `transfermarkt_datasets.refresh_day: 6` (Sunday), `transfermarkt_datasets.refresh_enabled: true`
+
+**Acceptance Criteria:**
+- [ ] Weekly refresh runs automatically on Sunday evening pipeline
+- [ ] Only downloads ZIP if >7 days since last download
+- [ ] New matches from the past week get lineup + formation + manager data
+- [ ] Config-driven: refresh day and enabled flag in settings.yaml
+- [ ] Does not interfere with regular evening pipeline steps (try/except wrapped)
+- [ ] Logged clearly: "TM weekly refresh: loaded X lineups, Y formations, Z managers"
+
+---
+
+### E40-10 — Integration Test + Backtest
+
+**Type:** Testing + Validation
+**Depends on:** E40-08 (all features recomputed), E40-09 (pipeline step added)
+**Files:** `tests/test_e40_tm_integration.py` (new)
+
+**Context:** Final validation that the entire integration works: data quality, feature population, temporal integrity, model performance impact, and pipeline continuity.
+
+**Tasks:**
+1. Data quality tests:
+   - Lineup counts: verify 22 starters per game for loaded games
+   - Formation format: verify all populated formations match pattern r"^\d+-\d+(-\d+)*$"
+   - Manager names: verify non-empty, consistent per team per season segment
+   - Match mapping: verify ≥90% match rate
+2. Feature population tests:
+   - Assert squad_rotation_index, formation_changed, bench_strength, manager features all exceed minimum thresholds
+   - Assert no temporal violations (spot-check 100 random features)
+3. Pipeline continuity test:
+   - Simulate a new match being added after backfill
+   - Verify squad_rotation_index can be computed for the new match (previous match lineup exists from backfill)
+   - Verify manager features compute correctly for new match
+4. Walk-forward backtest:
+   - Run full backtest on EPL 2023–2025 with backfilled features vs. baseline (NULL features)
+   - Report Brier score and ROI diff
+   - Features should improve or at worst not degrade Brier score
+5. Regression test: run full test suite, assert no new failures
+
+**Acceptance Criteria:**
+- [ ] All data quality tests pass (lineup counts, formation format, manager names)
+- [ ] Feature population exceeds minimum thresholds for all 7 new/backfilled features
+- [ ] Zero temporal integrity violations detected
+- [ ] Pipeline continuity verified — new matches can compute all features
+- [ ] Backtest Brier score ≤ baseline (lower is better; features add signal)
+- [ ] Full test suite: zero new failures vs. pre-E40 baseline
+- [ ] At least 15 test scenarios covering all E40 issues
+
+---
+
+### Implementation Sequence
+
+```
+E40-01 (download + mapping) → E40-02 (lineups) → E40-03 (formations) →
+E40-04 (manager schema + backfill) → E40-05 (manager features) →
+E40-06 (injury club fix) → E40-07 (minutes impact) →
+E40-08 (recompute all) → E40-09 (weekly refresh) → E40-10 (tests + backtest)
 ```
