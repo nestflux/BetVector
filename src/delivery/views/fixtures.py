@@ -74,7 +74,7 @@ from sqlalchemy.orm import aliased
 
 from src.config import config
 from src.database.db import get_session
-from src.database.models import League, Match, Odds, Prediction, Team, ValueBet
+from src.database.models import InjuryFlag, League, Match, Odds, Prediction, Team, ValueBet
 from src.delivery.views._badge_helper import render_team_badge
 
 
@@ -387,6 +387,28 @@ def get_all_upcoming_fixtures(days_ahead: int = 14) -> List[Dict]:
             if max_odds and max_odds > 1.0:
                 best_odds[(mid, mt, sel)] = max_odds
 
+        # ── Query 6: Bulk-load active injury counts per team (E39-06) ────
+        # Count players currently flagged as "out" or "suspended" for each
+        # team in upcoming fixtures.  Displayed as a red injury badge on
+        # fixture cards so users can see squad availability at a glance.
+        all_team_ids = set()
+        for m, ht, at, _lg in matches:
+            all_team_ids.add(ht.id)
+            all_team_ids.add(at.id)
+
+        injury_counts: Dict[int, int] = {}
+        if all_team_ids:
+            for tid, cnt in (
+                session.query(InjuryFlag.team_id, func.count(InjuryFlag.id))
+                .filter(
+                    InjuryFlag.team_id.in_(list(all_team_ids)),
+                    InjuryFlag.status.in_(("out", "suspended")),
+                )
+                .group_by(InjuryFlag.team_id)
+                .all()
+            ):
+                injury_counts[tid] = cnt
+
         # ── Enrich each match using O(1) dict lookups ─────────────────────
         results = []
         for match, home_team, away_team, league in matches:
@@ -468,6 +490,9 @@ def get_all_upcoming_fixtures(days_ahead: int = 14) -> List[Dict]:
                 "market_probs": market_probs,
                 "predicted_home_goals": pred_home_goals,
                 "predicted_away_goals": pred_away_goals,
+                # E39-06: Injury counts for badge display
+                "home_injuries": injury_counts.get(home_team.id, 0),
+                "away_injuries": injury_counts.get(away_team.id, 0),
             })
 
     return results
@@ -1579,6 +1604,25 @@ if view_mode == "Upcoming":
                         f'border: 1px solid {COLOURS["green"]}; cursor: help;">'
                         f"{vb_label}</span>"
                     )
+
+                # E39-06: Injury count badge — red badge showing total
+                # absent players across both teams.  Helps users quickly
+                # spot fixtures affected by key absentees.
+                total_injuries = fix.get("home_injuries", 0) + fix.get("away_injuries", 0)
+                if total_injuries > 0:
+                    inj_title = (
+                        f'{fix.get("home_injuries", 0)} home + '
+                        f'{fix.get("away_injuries", 0)} away player(s) out/suspended'
+                    )
+                    diag_badges.append(
+                        f'<span title="{inj_title}" style="'
+                        f"display: inline-block; padding: 1px 5px; margin-left: 4px; "
+                        f"border-radius: 3px; font-family: 'JetBrains Mono', monospace; "
+                        f"font-size: 9px; font-weight: 600; color: {COLOURS['red']}; "
+                        f'border: 1px solid {COLOURS["red"]}; cursor: help;">'
+                        f"\U0001FA79 {total_injuries} INJ</span>"
+                    )
+
                 diag_html = "".join(diag_badges)
 
                 # Market badges with dynamic threshold (E30-01)

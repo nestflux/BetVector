@@ -1,13 +1,13 @@
 {
-  "league": "LaLiga",
+  "league": "EPL",
   "season": "2024-25",
   "model": "Poisson",
-  "brier_score": 0.565276,
-  "roi": 8.24,
+  "brier_score": 0.611774,
+  "roi": -11.64,
   "total_matches": 380,
   "total_predicted": 380,
-  "total_value_bets": 275,
-  "total_staked": 7022.06,
-  "total_pnl": 578.3,
+  "total_value_bets": 1319,
+  "total_staked": 7538.13,
+  "total_pnl": -877.38,
   "note": "E39-05: with injury features (injury_impact + key_player_out populated from historical backfill)"
 }

@@ -39,6 +39,7 @@ Master Plan refs: MP §3 Flow 1 Step 8, MP §8 Design System
 """
 
 import json
+from html import escape as html_escape
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -51,8 +52,10 @@ from src.analysis.narrative import generate_match_narrative
 from src.database.db import get_session
 from src.database.models import (
     Feature,
+    InjuryFlag,
     League,
     Match,
+    PlayerValue,
     Prediction,
     Team,
     TeamMarketValue,
@@ -199,6 +202,55 @@ def load_match_data(match_id: int) -> Optional[Dict]:
             .first()
         )
 
+        # E39-06: Load active injuries for both teams.  These are
+        # current InjuryFlag records with status "out" or "suspended".
+        # Cross-referenced with PlayerValue for position display.
+        home_injuries_raw = (
+            session.query(InjuryFlag)
+            .filter(
+                InjuryFlag.team_id == home_team.id,
+                InjuryFlag.status.in_(("out", "suspended")),
+            )
+            .order_by(InjuryFlag.impact_rating.desc())
+            .all()
+        )
+        away_injuries_raw = (
+            session.query(InjuryFlag)
+            .filter(
+                InjuryFlag.team_id == away_team.id,
+                InjuryFlag.status.in_(("out", "suspended")),
+            )
+            .order_by(InjuryFlag.impact_rating.desc())
+            .all()
+        )
+
+        # Look up position from PlayerValue for each injured player
+        def _enrich_injuries(injuries_raw, team_id):
+            """Add position from PlayerValue to each injury record."""
+            enriched = []
+            for inj in injuries_raw:
+                # Try to find player's position from PlayerValue table
+                pv = (
+                    session.query(PlayerValue.position)
+                    .filter(
+                        PlayerValue.team_id == team_id,
+                        PlayerValue.player_name == inj.player_name,
+                    )
+                    .order_by(PlayerValue.snapshot_date.desc())
+                    .first()
+                )
+                enriched.append({
+                    "player_name": inj.player_name,
+                    "status": inj.status,
+                    "estimated_return": inj.estimated_return,
+                    "impact_rating": inj.impact_rating,
+                    "position": pv[0] if pv else None,
+                })
+            return enriched
+
+        home_injuries = _enrich_injuries(home_injuries_raw, home_team.id)
+        away_injuries = _enrich_injuries(away_injuries_raw, away_team.id)
+
         # Head-to-head: last 5 meetings between these teams
         h2h_matches = (
             session.query(Match, HomeTeam.name.label("hn"), AwayTeam.name.label("an"))
@@ -284,6 +336,9 @@ def load_match_data(match_id: int) -> Optional[Dict]:
             }
             for m, hn, an in h2h_matches
         ],
+        # E39-06: Injury data for both teams
+        "home_injuries": home_injuries,
+        "away_injuries": away_injuries,
     }
 
 
@@ -1267,6 +1322,120 @@ else:
                 f'in favour of {favoured}</p>',
                 unsafe_allow_html=True,
             )
+
+    # --- Section 8: Injuries (E39-06) ---
+    # Shows absent players for both teams with name, position, status,
+    # impact rating, and estimated return.  Helps users assess how
+    # weakened each squad is for the upcoming match.
+    home_injuries = data.get("home_injuries", [])
+    away_injuries = data.get("away_injuries", [])
+
+    st.divider()
+    st.markdown(
+        '<div class="bv-section-header">Injuries &amp; Absences</div>',
+        unsafe_allow_html=True,
+    )
+
+    if not home_injuries and not away_injuries:
+        # Empty state: both squads fully available
+        st.markdown(
+            f'<div class="bv-card" style="text-align: center; padding: 20px;">'
+            f'<span style="font-family: Inter, sans-serif; font-size: 14px; '
+            f'color: {COLOURS["green"]};">'
+            f'\u2705 Full squad available for both teams</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        col_hi, col_ai = st.columns(2)
+
+        def _render_injury_card(injuries: list, team_name: str, container) -> None:
+            """Render a team's injury list inside a Streamlit column."""
+            with container:
+                if not injuries:
+                    st.markdown(
+                        f'<div class="bv-card" style="text-align: center; padding: 16px;">'
+                        f'<div style="font-family: Inter, sans-serif; font-size: 14px; '
+                        f'font-weight: 600; color: {COLOURS["text"]}; margin-bottom: 8px;">'
+                        f'{html_escape(team_name)}</div>'
+                        f'<span style="font-family: Inter, sans-serif; font-size: 13px; '
+                        f'color: {COLOURS["green"]};">'
+                        f'\u2705 Full squad available</span>'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
+                    return
+
+                # Build player rows
+                rows_html = ""
+                for inj in injuries:
+                    pos = html_escape(inj.get("position") or "—")
+                    status = inj.get("status", "out")
+                    # Status colour: "out" → red, "suspended" → yellow
+                    status_colour = (
+                        COLOURS["yellow"] if status == "suspended"
+                        else COLOURS["red"]
+                    )
+                    status_label = html_escape(status.capitalize())
+                    # Impact rating as a visual bar (0.0–1.0)
+                    impact = inj.get("impact_rating", 0.0)
+                    impact_pct = int(impact * 100)
+                    # Impact colour: high (>=0.7) → red, medium → yellow, low → green
+                    if impact >= 0.7:
+                        impact_colour = COLOURS["red"]
+                    elif impact >= 0.4:
+                        impact_colour = COLOURS["yellow"]
+                    else:
+                        impact_colour = COLOURS["green"]
+
+                    est_return = html_escape(
+                        inj.get("estimated_return") or "Unknown"
+                    )
+                    player_name = html_escape(inj["player_name"])
+
+                    rows_html += (
+                        f'<div style="display: flex; align-items: center; '
+                        f'padding: 6px 0; border-bottom: 1px solid {COLOURS["border"]};">'
+                        # Position badge
+                        f'<span style="font-family: JetBrains Mono, monospace; '
+                        f'font-size: 10px; font-weight: 700; color: {COLOURS["text_secondary"]}; '
+                        f'min-width: 28px; text-align: center;">{pos}</span>'
+                        # Player name (tooltip shows estimated return date)
+                        f'<span title="Return: {est_return}" style="flex: 1; '
+                        f'font-family: Inter, sans-serif; '
+                        f'font-size: 13px; color: {COLOURS["text"]}; padding: 0 8px; '
+                        f'cursor: help;">'
+                        f'{player_name}</span>'
+                        # Status pill
+                        f'<span style="font-family: JetBrains Mono, monospace; '
+                        f'font-size: 9px; font-weight: 600; color: {status_colour}; '
+                        f'border: 1px solid {status_colour}; border-radius: 3px; '
+                        f'padding: 1px 5px; margin-right: 6px;">{status_label}</span>'
+                        # Impact bar
+                        f'<div title="Impact: {impact:.0%}" style="width: 40px; height: 6px; '
+                        f'background: {COLOURS["border"]}; border-radius: 3px; '
+                        f'margin-right: 6px; cursor: help;">'
+                        f'<div style="width: {impact_pct}%; height: 100%; '
+                        f'background: {impact_colour}; border-radius: 3px;"></div>'
+                        f'</div>'
+                        f'</div>'
+                    )
+
+                team_name_escaped = html_escape(team_name)
+                st.markdown(
+                    f'<div class="bv-card" style="padding: 12px 14px;">'
+                    f'<div style="font-family: Inter, sans-serif; font-size: 14px; '
+                    f'font-weight: 600; color: {COLOURS["text"]}; margin-bottom: 8px;">'
+                    f'{team_name_escaped} '
+                    f'<span style="font-family: JetBrains Mono, monospace; font-size: 11px; '
+                    f'color: {COLOURS["red"]};">({len(injuries)} out)</span></div>'
+                    f'{rows_html}'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+
+        _render_injury_card(home_injuries, data["home_team"], col_hi)
+        _render_injury_card(away_injuries, data["away_team"], col_ai)
 
     # ========================================================================
     # Glossary / Key — explains every stat and betting term on this page

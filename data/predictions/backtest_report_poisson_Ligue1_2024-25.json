@@ -1,13 +1,13 @@
 {
-  "league": "Bundesliga",
+  "league": "Ligue1",
   "season": "2024-25",
   "model": "Poisson",
-  "brier_score": 0.591106,
-  "roi": -2.61,
+  "brier_score": 0.581065,
+  "roi": -18.8,
   "total_matches": 306,
   "total_predicted": 306,
-  "total_value_bets": 233,
-  "total_staked": 5798.57,
-  "total_pnl": -151.2,
+  "total_value_bets": 384,
+  "total_staked": 4207.35,
+  "total_pnl": -790.94,
   "note": "E39-05: with injury features (injury_impact + key_player_out populated from historical backfill)"
 }

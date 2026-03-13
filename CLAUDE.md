@@ -344,9 +344,9 @@ single-line expression.
 
 ## Current Status
 
-Last completed: E39-04 — Historical Injury Backfill ✅
-Currently working: E39-05 — Recompute Features + Backtest
-Next up: E39-06 — Dashboard Injury Display
+Last completed: E39-06 — Dashboard Injury Display ✅
+Currently working: E39-07 — Phase 1 Integration Test
+Next up: E39-08 — MatchLineup Table + Soccerdata Lineup Scraper
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
