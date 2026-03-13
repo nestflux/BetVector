@@ -1300,6 +1300,39 @@ class Pipeline:
                 errors.append(err)
                 print(f"  → Understat: FAILED ({e})")
 
+            # 1d. Soccerdata lineups — post-match starting XI + bench (E39-08)
+            # Fetches actual lineups for today's finished matches.
+            # Formation data is stored on the Match record, player entries
+            # in match_lineups.  Feeds squad rotation (E39-09), formation
+            # change (E39-10), and bench strength (E39-11) features.
+            try:
+                from src.scrapers.soccerdata import SoccerdataScraper
+                from src.scrapers.loader import load_match_lineups
+
+                sd_scraper = SoccerdataScraper()
+                sd_lineups_df = sd_scraper.scrape_lineups(
+                    league_config=league_cfg,
+                    match_date=datetime.now().strftime("%Y-%m-%d"),
+                )
+                if (sd_lineups_df is not None
+                        and not sd_lineups_df.empty):
+                    lu_result = load_match_lineups(
+                        sd_lineups_df, league_id,
+                    )
+                    print(
+                        f"  → Soccerdata lineups: "
+                        f"{lu_result['new']} new players, "
+                        f"{lu_result['matches_updated']} matches updated"
+                    )
+                else:
+                    print("  → Soccerdata lineups: No data "
+                          "(no matches today or API unavailable)")
+            except Exception as e:
+                err = f"Soccerdata lineup scrape failed for {league_name}: {e}"
+                logger.error(err)
+                errors.append(err)
+                print(f"  → Soccerdata lineups: FAILED ({e})")
+
             # --- Step 2: Resolve pending bets ---
             print(f"[Step 2/3] Resolving pending bets...")
             try:

@@ -7435,24 +7435,24 @@ PC-15-04 (launchd) → PC-15-05 (sync docs) → PC-15-06 (tests)
 
 ---
 
-### E39-08 — MatchLineup Table + Soccerdata Lineup Scraper
+### E39-08 — MatchLineup Table + Soccerdata Lineup Scraper ✅ DONE
 
 **Type:** Database Model + Scraper Enhancement
-**Files:** `src/database/models.py`, `src/scrapers/soccerdata.py`, `src/scrapers/loader.py`
+**Files:** `src/database/models.py`, `src/scrapers/soccerdata.py`, `src/scrapers/loader.py`, `src/pipeline.py`
 
 **Tasks:**
 1. Create `MatchLineup` model — table `match_lineups` with columns: `match_id` (FK), `team_id` (FK), `player_name`, `position`, `is_starter` (1=starting XI, 0=bench), `shirt_number`. UniqueConstraint on (match_id, team_id, player_name).
 2. Add `home_formation` and `away_formation` (String, nullable) columns to `Match` model.
 3. Add `scrape_lineups(league_config, match_date)` to `SoccerdataScraper`.
-4. Add `load_match_lineups(df, match_id)` to `loader.py`.
+4. Add `load_match_lineups(df, league_id)` to `loader.py`.
 5. Wire lineup scraping into evening pipeline (post-match = actual lineups).
 
 **Acceptance Criteria:**
-- [ ] MatchLineup model created with proper constraints
-- [ ] Match model has home_formation and away_formation columns
-- [ ] `scrape_lineups()` returns starting XI + bench for each match
-- [ ] Lineups loaded idempotently
-- [ ] Evening pipeline fetches lineups for finished matches
+- [x] MatchLineup model created with proper constraints — UniqueConstraint + 2 indexes
+- [x] Match model has home_formation and away_formation columns — String, nullable
+- [x] `scrape_lineups()` returns starting XI + bench — _extract_players processes both
+- [x] Lineups loaded idempotently — dedup by (match_id, team_id, player_name)
+- [x] Evening pipeline fetches lineups — step 1d in run_evening(), try/except wrapped
 
 ---
 

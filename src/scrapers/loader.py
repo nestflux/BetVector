@@ -50,8 +50,8 @@ import pandas as pd
 
 from src.database.db import get_session
 from src.database.models import (
-    BetLog, ClubElo, InjuryFlag, League, Match, MatchStat, Odds, PlayerValue,
-    Team, TeamInjury, TeamMarketValue, Weather,
+    BetLog, ClubElo, InjuryFlag, League, Match, MatchLineup, MatchStat,
+    Odds, PlayerValue, Team, TeamInjury, TeamMarketValue, Weather,
 )
 
 logger = logging.getLogger(__name__)
@@ -1905,6 +1905,175 @@ def load_historical_injuries(
         "skipped": skipped_count,
         "not_found": len(not_found_teams),
         "total": new_count + skipped_count,
+    }
+
+
+# ============================================================================
+# Match Lineup Loading (E39-08)
+# ============================================================================
+# Loads post-match lineup data (starting XI + bench + formation) from the
+# Soccerdata API into the match_lineups table and updates the match's
+# home_formation / away_formation columns.
+#
+# Each match produces ~18–22 rows per team: 11 starters + 7–11 bench.
+# Formation is stored on the Match record for easy access by the
+# formation_changed feature (E39-10).
+# ============================================================================
+
+
+def load_match_lineups(
+    df: pd.DataFrame,
+    league_id: int,
+) -> Dict[str, int]:
+    """Load lineup data from Soccerdata into match_lineups + Match formations.
+
+    Matches Soccerdata team/player names to canonical DB records using
+    the same case-insensitive lookup pattern as other loaders.
+
+    **Idempotent:** Duplicate entries (same match + team + player) are
+    skipped via the UniqueConstraint on match_lineups.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Columns: player_name, team_name, position, is_starter,
+        shirt_number, formation, sd_match_id, home_team, away_team,
+        match_date.
+    league_id : int
+        Database league ID.
+
+    Returns
+    -------
+    dict
+        ``{new, skipped, matches_updated, not_found}``.
+    """
+    if df is None or df.empty:
+        return {"new": 0, "skipped": 0, "matches_updated": 0, "not_found": 0}
+
+    new_count = 0
+    skipped_count = 0
+    matches_updated: set = set()
+    not_found_matches: set = set()
+
+    with get_session() as session:
+        # Build team name lookup for this league
+        teams = session.query(Team).filter_by(league_id=league_id).all()
+        name_to_team: Dict[str, Team] = {t.name: t for t in teams}
+        name_lower_map: Dict[str, Team] = {
+            t.name.lower(): t for t in teams
+        }
+
+        # Group DataFrame rows by match_date + home_team + away_team
+        # to find the corresponding DB Match record
+        for _, row in df.iterrows():
+            player_name = str(row.get("player_name", "")).strip()
+            team_name = str(row.get("team_name", "")).strip()
+            match_date = str(row.get("match_date", "")).strip()
+            home_team_name = str(row.get("home_team", "")).strip()
+            away_team_name = str(row.get("away_team", "")).strip()
+
+            if not player_name or not team_name or not match_date:
+                continue
+
+            # Resolve team
+            team = name_to_team.get(team_name)
+            if not team:
+                team = name_lower_map.get(team_name.lower())
+            if not team:
+                continue
+
+            # Resolve home and away teams for Match lookup
+            home_team = name_to_team.get(home_team_name)
+            if not home_team:
+                home_team = name_lower_map.get(home_team_name.lower())
+            away_team = name_to_team.get(away_team_name)
+            if not away_team:
+                away_team = name_lower_map.get(away_team_name.lower())
+
+            if not home_team or not away_team:
+                not_found_matches.add(
+                    f"{home_team_name} vs {away_team_name} on {match_date}"
+                )
+                continue
+
+            # Find Match in DB
+            match = session.query(Match).filter_by(
+                league_id=league_id,
+                date=match_date,
+                home_team_id=home_team.id,
+                away_team_id=away_team.id,
+            ).first()
+
+            if not match:
+                not_found_matches.add(
+                    f"{home_team_name} vs {away_team_name} on {match_date}"
+                )
+                continue
+
+            # Dedup check: (match_id, team_id, player_name)
+            existing = session.query(MatchLineup).filter_by(
+                match_id=match.id,
+                team_id=team.id,
+                player_name=player_name,
+            ).first()
+
+            if existing is not None:
+                skipped_count += 1
+                continue
+
+            lineup = MatchLineup(
+                match_id=match.id,
+                team_id=team.id,
+                player_name=player_name,
+                position=row.get("position", ""),
+                is_starter=int(row.get("is_starter", 0)),
+                shirt_number=(
+                    int(row["shirt_number"])
+                    if pd.notna(row.get("shirt_number"))
+                    else None
+                ),
+            )
+            session.add(lineup)
+            new_count += 1
+
+            # Update formation on the Match record (once per side).
+            # Track (match_id, side) to ensure BOTH home and away
+            # formations are recorded — not just whichever is seen first.
+            formation = row.get("formation")
+            if formation:
+                if (team.id == match.home_team_id
+                        and not match.home_formation):
+                    match.home_formation = str(formation)
+                    matches_updated.add(match.id)
+                elif (team.id == match.away_team_id
+                        and not match.away_formation):
+                    match.away_formation = str(formation)
+                    matches_updated.add(match.id)
+
+            # Batch commit every 200
+            if new_count > 0 and new_count % 200 == 0:
+                session.commit()
+
+        session.commit()
+
+    if not_found_matches:
+        logger.warning(
+            "load_match_lineups: %d matches not found: %s",
+            len(not_found_matches),
+            sorted(not_found_matches)[:5],
+        )
+
+    logger.info(
+        "load_match_lineups: %d new, %d skipped, %d matches updated, "
+        "%d matches not found",
+        new_count, skipped_count, len(matches_updated),
+        len(not_found_matches),
+    )
+    return {
+        "new": new_count,
+        "skipped": skipped_count,
+        "matches_updated": len(matches_updated),
+        "not_found": len(not_found_matches),
     }
 
 

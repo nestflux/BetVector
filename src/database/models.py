@@ -259,6 +259,11 @@ class Match(Base):
     status = Column(
         String, nullable=False, server_default="scheduled",
     )
+    # E39-08: Formation strings from lineup data (e.g. "4-3-3", "3-5-2").
+    # Populated from post-match lineup scraping in the evening pipeline.
+    # NULL for historical matches without lineup data.
+    home_formation = Column(String, nullable=True)
+    away_formation = Column(String, nullable=True)
     created_at = Column(
         String, nullable=False, server_default=func.now(),
     )
@@ -273,6 +278,7 @@ class Match(Base):
     odds = relationship("Odds", back_populates="match")
     features = relationship("Feature", back_populates="match")
     predictions = relationship("Prediction", back_populates="match")
+    lineups = relationship("MatchLineup", back_populates="match")
 
     __table_args__ = (
         CheckConstraint(
@@ -1611,4 +1617,66 @@ class InjuryFlag(Base):
             f"player='{self.player_name}', "
             f"status='{self.status}', "
             f"impact={self.impact_rating})"
+        )
+
+
+# ============================================================================
+# MatchLineup — Starting XI + bench for each match (E39-08)
+# ============================================================================
+# One row per player per match per team.  Populated from post-match
+# lineup data (evening pipeline) via the Soccerdata API.
+# Historical data (2020–2024) is NULL — impractical to backfill at
+# 75 requests/day API limit.  Models handle NULL gracefully via
+# fillna(mean).fillna(0.0) as established in E25-01.
+
+
+class MatchLineup(Base):
+    """Player lineup entry for a specific match.
+
+    Each match has ~22 rows per team: 11 starters (is_starter=1) and
+    ~7–11 bench players (is_starter=0).  This data feeds three features:
+    squad_rotation_index (E39-09), formation_changed (E39-10), and
+    bench_strength (E39-11).
+    """
+    __tablename__ = "match_lineups"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    match_id = Column(
+        Integer, ForeignKey("matches.id"), nullable=False,
+    )
+    team_id = Column(
+        Integer, ForeignKey("teams.id"), nullable=False,
+    )
+    # Player's display name (as reported by the data source)
+    player_name = Column(String, nullable=False)
+    # Position on the pitch: GK, DF, MF, FW (same codes as PlayerValue)
+    position = Column(String, nullable=True)
+    # 1 = starting XI, 0 = bench / substitute
+    is_starter = Column(Integer, nullable=False, server_default="0")
+    # Shirt number (nullable — not always available)
+    shirt_number = Column(Integer, nullable=True)
+    created_at = Column(
+        String, nullable=False, server_default=func.now(),
+    )
+
+    # Relationships
+    match = relationship("Match", back_populates="lineups")
+    team = relationship("Team")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "match_id", "team_id", "player_name",
+            name="uq_match_lineups_match_team_player",
+        ),
+        Index("idx_match_lineups_match", "match_id"),
+        Index("idx_match_lineups_team", "team_id"),
+    )
+
+    def __repr__(self) -> str:
+        starter = "XI" if self.is_starter else "Bench"
+        return (
+            f"MatchLineup(match={self.match_id}, "
+            f"team={self.team_id}, "
+            f"player='{self.player_name}', "
+            f"{starter})"
         )

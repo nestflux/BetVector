@@ -325,7 +325,250 @@ class SoccerdataScraper(BaseScraper):
 
         return df
 
+    def scrape_lineups(
+        self,
+        league_config: object,
+        match_date: str = "",
+    ) -> pd.DataFrame:
+        """Scrape post-match lineups (starting XI + bench + formation).
+
+        Fetches match details for finished matches on the given date and
+        extracts the lineup data.  This is called in the **evening pipeline**
+        after matches have been played, so the lineups are actual (not
+        projected).
+
+        **Data returned per player:**
+          - player_name, team_name, position (GK/DF/MF/FW)
+          - is_starter (1 for starting XI, 0 for bench)
+          - shirt_number, formation (team's tactical formation e.g. "4-3-3")
+          - match_id (Soccerdata's internal match ID — NOT our DB match ID)
+
+        Parameters
+        ----------
+        league_config : ConfigNamespace
+            League configuration with ``soccerdata_league_id`` attribute.
+        match_date : str
+            Date string in YYYY-MM-DD format.  Defaults to today.
+
+        Returns
+        -------
+        pd.DataFrame
+            Columns: player_name, team_name, position, is_starter,
+            shirt_number, formation, sd_match_id, home_team, away_team,
+            match_date.
+            Empty DataFrame if no data available.
+        """
+        empty = pd.DataFrame(columns=[
+            "player_name", "team_name", "position", "is_starter",
+            "shirt_number", "formation", "sd_match_id", "home_team",
+            "away_team", "match_date",
+        ])
+
+        if not self._check_api_key():
+            return empty
+
+        soccerdata_id = getattr(league_config, "soccerdata_league_id", None)
+        if not soccerdata_id:
+            logger.warning(
+                "[%s] No soccerdata_league_id for %s — skipping lineups",
+                self.source_name,
+                getattr(league_config, "short_name", "unknown"),
+            )
+            return empty
+
+        league_name = getattr(league_config, "short_name", "unknown")
+        if not match_date:
+            match_date = date.today().isoformat()
+
+        # Convert YYYY-MM-DD to DD/MM/YYYY for the API
+        try:
+            dt = date.fromisoformat(match_date)
+            api_date = dt.strftime("%d/%m/%Y")
+        except ValueError:
+            logger.error(
+                "[%s] Invalid match_date '%s' for lineups",
+                self.source_name, match_date,
+            )
+            return empty
+
+        logger.info(
+            "[%s] Scraping lineups for %s on %s",
+            self.source_name, league_name, match_date,
+        )
+
+        # Fetch matches for this date and league
+        try:
+            url = f"{self._base_url}/matches/"
+            params = {
+                "auth_token": self._api_key,
+                "league_id": soccerdata_id,
+                "date": api_date,
+            }
+            response = self._request_with_retry(
+                url, self._DOMAIN, params=params,
+            )
+            data = response.json()
+        except (ScraperError, Exception) as e:
+            logger.error(
+                "[%s] Error fetching matches for lineups: %s",
+                self.source_name, e,
+            )
+            return empty
+
+        match_ids = []
+        match_info = {}  # sd_match_id → (home, away)
+        for match in data.get("results", []):
+            mid = match.get("id")
+            home = match.get("home_name", "")
+            away = match.get("away_name", "")
+            if mid:
+                match_ids.append(mid)
+                match_info[mid] = (
+                    self._map_team_name(home),
+                    self._map_team_name(away),
+                )
+
+        if not match_ids:
+            logger.info(
+                "[%s] No matches found for %s on %s",
+                self.source_name, league_name, match_date,
+            )
+            return empty
+
+        # Fetch lineup for each match (limit to 6 to conserve budget)
+        rows: List[Dict[str, Any]] = []
+        for mid in match_ids[:6]:
+            try:
+                match_rows = self._fetch_match_lineups(
+                    mid, match_info.get(mid, ("", "")), match_date,
+                )
+                rows.extend(match_rows)
+            except (ScraperError, Exception) as e:
+                logger.warning(
+                    "[%s] Error fetching lineup for match %d: %s",
+                    self.source_name, mid, e,
+                )
+
+        if not rows:
+            return empty
+
+        df = pd.DataFrame(rows)
+        logger.info(
+            "[%s] Found %d lineup entries for %s on %s (%d matches)",
+            self.source_name, len(df), league_name, match_date,
+            len(match_ids),
+        )
+        self.save_raw(df, f"{league_name}_lineups", match_date)
+        return df
+
     # --- internal helpers -----------------------------------------------------
+
+    def _fetch_match_lineups(
+        self,
+        match_id: int,
+        team_names: tuple,
+        match_date: str,
+    ) -> List[Dict[str, Any]]:
+        """Fetch lineup data from a single match detail.
+
+        The match detail endpoint returns a ``lineup`` object with
+        ``home`` and ``away`` sections, each containing ``starting_xi``
+        and ``substitutes`` lists.
+
+        Returns a flat list of player dicts.
+        """
+        url = f"{self._base_url}/match/"
+        params = {
+            "auth_token": self._api_key,
+            "match_id": match_id,
+        }
+
+        response = self._request_with_retry(url, self._DOMAIN, params=params)
+        detail = response.json()
+
+        lineup_data = detail.get("lineup", {})
+        teams = detail.get("teams", {})
+        home_name = self._map_team_name(
+            teams.get("home", {}).get("name", team_names[0])
+        )
+        away_name = self._map_team_name(
+            teams.get("away", {}).get("name", team_names[1])
+        )
+
+        # Extract formation from match stats
+        stats = detail.get("stats", {})
+        home_formation = stats.get("home_formation", None)
+        away_formation = stats.get("away_formation", None)
+
+        rows: List[Dict[str, Any]] = []
+
+        def _extract_players(side: str, team_name: str, formation: str):
+            """Extract players from a side's lineup data."""
+            side_data = lineup_data.get(side, {})
+
+            # Starting XI
+            for player in side_data.get("starting_xi", []):
+                rows.append({
+                    "player_name": player.get("name", "Unknown"),
+                    "team_name": team_name,
+                    "position": self._map_position(
+                        player.get("position", "")
+                    ),
+                    "is_starter": 1,
+                    "shirt_number": player.get("number"),
+                    "formation": formation,
+                    "sd_match_id": match_id,
+                    "home_team": home_name,
+                    "away_team": away_name,
+                    "match_date": match_date,
+                })
+
+            # Bench / substitutes
+            for player in side_data.get("substitutes", []):
+                rows.append({
+                    "player_name": player.get("name", "Unknown"),
+                    "team_name": team_name,
+                    "position": self._map_position(
+                        player.get("position", "")
+                    ),
+                    "is_starter": 0,
+                    "shirt_number": player.get("number"),
+                    "formation": formation,
+                    "sd_match_id": match_id,
+                    "home_team": home_name,
+                    "away_team": away_name,
+                    "match_date": match_date,
+                })
+
+        _extract_players("home", home_name, home_formation)
+        _extract_players("away", away_name, away_formation)
+
+        return rows
+
+    @staticmethod
+    def _map_position(raw_position: str) -> str:
+        """Map Soccerdata position strings to our standard codes.
+
+        Standard codes: GK (goalkeeper), DF (defender), MF (midfielder),
+        FW (forward).  Same codes used in PlayerValue.position.
+        """
+        if not raw_position:
+            return ""
+        p = raw_position.strip().lower()
+        if p in ("goalkeeper", "gk", "g"):
+            return "GK"
+        elif p in ("defender", "df", "d", "centre-back", "left-back",
+                    "right-back", "cb", "lb", "rb"):
+            return "DF"
+        elif p in ("midfielder", "mf", "m", "central midfield",
+                    "attacking midfield", "defensive midfield",
+                    "cm", "am", "dm", "cam", "cdm"):
+            return "MF"
+        elif p in ("forward", "fw", "f", "attacker", "striker",
+                    "centre-forward", "left winger", "right winger",
+                    "cf", "st", "lw", "rw"):
+            return "FW"
+        return ""
 
     def _fetch_sidelined_from_livescores(
         self,
