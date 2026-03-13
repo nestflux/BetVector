@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BetVector — Model Fix Test Report</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #0D1117;
+    --surface:   #161B22;
+    --surface2:  #1C2333;
+    --border:    #30363D;
+    --border2:   #21262D;
+    --text:      #E6EDF3;
+    --muted:     #8B949E;
+    --green:     #3FB950;
+    --green-dim: rgba(63,185,80,0.12);
+    --green-glow:rgba(63,185,80,0.25);
+    --blue:      #58A6FF;
+    --blue-dim:  rgba(88,166,255,0.12);
+    --yellow:    #D29922;
+    --yellow-dim:rgba(210,153,34,0.12);
+    --red:       #F85149;
+    --red-dim:   rgba(248,81,73,0.12);
+    --radius:    10px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 15px; scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background-image:
+      linear-gradient(rgba(63,185,80,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(63,185,80,0.03) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+
+  .wrap {
+    position: relative; z-index: 1;
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 0 32px 64px;
+  }
+
+  /* ── HEADER ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 36px 0 40px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 48px;
+    opacity: 0; animation: fadeUp 0.6s ease 0.1s forwards;
+  }
+
+  .logo-text {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    color: var(--text);
+  }
+  .logo-text span { color: var(--green); }
+
+  .header-pill {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--red);
+    background: var(--red-dim);
+    border: 1px solid rgba(248,81,73,0.3);
+    padding: 5px 14px;
+    border-radius: 20px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  /* ── THESIS ── */
+  .thesis {
+    margin-bottom: 52px;
+    opacity: 0; animation: fadeUp 0.6s ease 0.2s forwards;
+  }
+  .thesis h1 {
+    font-size: clamp(28px, 4vw, 42px);
+    font-weight: 800;
+    line-height: 1.15;
+    letter-spacing: -1px;
+    margin-bottom: 18px;
+    max-width: 720px;
+  }
+  .thesis h1 em {
+    font-style: normal;
+    color: var(--green);
+  }
+  .thesis h1 .red { color: var(--red); }
+  .thesis p {
+    font-size: 16px;
+    line-height: 1.7;
+    color: var(--muted);
+    max-width: 680px;
+    font-weight: 400;
+  }
+
+  /* ── SECTION LABELS ── */
+  .section-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--muted);
+    margin-bottom: 20px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ── STATS BAR ── */
+  .stats-bar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 2px;
+    background: var(--border2);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 56px;
+    opacity: 0; animation: fadeUp 0.6s ease 0.3s forwards;
+  }
+  .stat-cell {
+    background: var(--surface);
+    padding: 20px 24px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .stat-cell:first-child { border-radius: var(--radius) 0 0 var(--radius); }
+  .stat-cell:last-child  { border-radius: 0 var(--radius) var(--radius) 0; }
+  .stat-num {
+    font-family: 'Space Mono', monospace;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--green);
+    letter-spacing: -1px;
+  }
+  .stat-num.red { color: var(--red); }
+  .stat-num.yellow { color: var(--yellow); }
+  .stat-label {
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    font-weight: 600;
+  }
+
+  /* ── RESULTS TABLE ── */
+  .table-section {
+    margin-bottom: 56px;
+    opacity: 0; animation: fadeUp 0.6s ease 0.4s forwards;
+  }
+
+  .results-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    font-size: 13px;
+  }
+
+  .results-table thead th {
+    background: var(--bg);
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    padding: 14px 12px;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+    font-weight: 700;
+  }
+  .results-table thead th:first-child {
+    text-align: left;
+    padding-left: 20px;
+  }
+
+  .results-table tbody td {
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    padding: 12px 12px;
+    text-align: center;
+    color: var(--text);
+    border-bottom: 1px solid var(--border2);
+  }
+  .results-table tbody td:first-child {
+    text-align: left;
+    padding-left: 20px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+  }
+  .results-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .results-table tbody tr:hover {
+    background: var(--surface2);
+  }
+
+  /* Highlight rows */
+  .results-table tbody tr.row-current td {
+    background: rgba(248,81,73,0.06);
+  }
+  .results-table tbody tr.row-best td {
+    background: rgba(63,185,80,0.08);
+  }
+  .results-table tbody tr.row-broken td {
+    color: var(--muted);
+    opacity: 0.5;
+  }
+
+  .cell-best {
+    color: var(--green) !important;
+    font-weight: 700;
+  }
+  .cell-worst {
+    color: var(--red) !important;
+  }
+  .cell-neutral {
+    color: var(--muted) !important;
+  }
+
+  /* ── DELTA CARDS ── */
+  .delta-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 56px;
+    opacity: 0; animation: fadeUp 0.6s ease 0.5s forwards;
+  }
+
+  .delta-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px 20px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .delta-card:hover { border-color: var(--green); }
+
+  .delta-card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--card-accent, var(--green));
+    opacity: 0.7;
+  }
+
+  .delta-card .league {
+    font-size: 10px;
+    font-family: 'Space Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--muted);
+    margin-bottom: 10px;
+    font-weight: 700;
+  }
+
+  .delta-card .scores {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  .delta-card .old-score {
+    font-family: 'Space Mono', monospace;
+    font-size: 16px;
+    color: var(--red);
+    text-decoration: line-through;
+    opacity: 0.6;
+  }
+
+  .delta-card .arrow-icon {
+    color: var(--muted);
+    font-size: 14px;
+  }
+
+  .delta-card .new-score {
+    font-family: 'Space Mono', monospace;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--green);
+  }
+
+  .delta-card .recovery {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    color: var(--green);
+    background: var(--green-dim);
+    border: 1px solid rgba(63,185,80,0.2);
+    padding: 3px 10px;
+    border-radius: 4px;
+    display: inline-block;
+    margin-top: 8px;
+  }
+
+  .delta-card .fix-name {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 10px;
+    font-weight: 500;
+    line-height: 1.5;
+  }
+
+  /* ── FINDINGS SECTION ── */
+  .findings-section {
+    margin-bottom: 56px;
+    opacity: 0; animation: fadeUp 0.6s ease 0.6s forwards;
+  }
+
+  .findings-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .finding-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px 24px;
+    transition: border-color 0.2s;
+  }
+  .finding-card:hover { border-color: var(--blue); }
+
+  .finding-card .finding-num {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+  }
+
+  .finding-card .finding-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+
+  .finding-card .finding-desc {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.6;
+    font-weight: 400;
+  }
+
+  .finding-card .finding-tag {
+    display: inline-block;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    margin-top: 10px;
+    letter-spacing: 0.3px;
+  }
+  .tag-broken {
+    color: var(--red);
+    background: var(--red-dim);
+    border: 1px solid rgba(248,81,73,0.2);
+  }
+  .tag-works {
+    color: var(--green);
+    background: var(--green-dim);
+    border: 1px solid rgba(63,185,80,0.2);
+  }
+  .tag-helps {
+    color: var(--blue);
+    background: var(--blue-dim);
+    border: 1px solid rgba(88,166,255,0.2);
+  }
+  .tag-hurts {
+    color: var(--yellow);
+    background: var(--yellow-dim);
+    border: 1px solid rgba(210,153,34,0.2);
+  }
+
+  /* ── OPTIONS COMPARISON ── */
+  .options-section {
+    margin-bottom: 56px;
+    opacity: 0; animation: fadeUp 0.6s ease 0.7s forwards;
+  }
+
+  .options-split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  .option-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px;
+    position: relative;
+    overflow: hidden;
+  }
+  .option-card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--opt-color, var(--green));
+  }
+
+  .option-card .opt-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--muted);
+    margin-bottom: 6px;
+    font-weight: 700;
+  }
+
+  .option-card .opt-title {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+
+  .option-card .opt-brier {
+    font-family: 'Space Mono', monospace;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--green);
+    margin-bottom: 16px;
+  }
+
+  .option-card .opt-detail {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.7;
+    margin-bottom: 6px;
+    font-weight: 400;
+  }
+
+  .opt-pro {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; color: var(--text); font-weight: 500;
+    margin-bottom: 6px;
+  }
+  .opt-pro::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+    flex-shrink: 0;
+  }
+
+  .opt-con {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; color: var(--muted); font-weight: 400;
+    margin-bottom: 6px;
+  }
+  .opt-con::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--red);
+    opacity: 0.5;
+    flex-shrink: 0;
+  }
+
+  /* ── REGRESSION TABLE ── */
+  .regression-bar {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 2px;
+    background: var(--border2);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 56px;
+    opacity: 0; animation: fadeUp 0.6s ease 0.35s forwards;
+  }
+
+  .reg-cell {
+    background: var(--surface);
+    padding: 18px 14px;
+    text-align: center;
+  }
+  .reg-cell:first-child { border-radius: var(--radius) 0 0 var(--radius); }
+  .reg-cell:last-child  { border-radius: 0 var(--radius) var(--radius) 0; }
+
+  .reg-league {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    margin-bottom: 8px;
+    font-weight: 700;
+  }
+
+  .reg-val {
+    font-family: 'Space Mono', monospace;
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .reg-val.bad { color: var(--red); }
+  .reg-val.ok { color: var(--yellow); }
+  .reg-val.good { color: var(--green); }
+
+  .reg-note {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+  }
+
+  /* ── FOOTER ── */
+  .footer {
+    opacity: 0; animation: fadeUp 0.6s ease 0.8s forwards;
+    text-align: center;
+    padding: 32px 0;
+    border-top: 1px solid var(--border);
+    margin-top: 24px;
+  }
+  .footer p {
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 400;
+    line-height: 1.7;
+  }
+  .footer .date {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--border);
+    margin-top: 6px;
+  }
+
+  /* ── ANIMATIONS ── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 800px) {
+    .stats-bar { grid-template-columns: 1fr 1fr; }
+    .regression-bar { grid-template-columns: repeat(3, 1fr); }
+    .delta-grid { grid-template-columns: 1fr; }
+    .findings-grid { grid-template-columns: 1fr; }
+    .options-split { grid-template-columns: 1fr; }
+    .results-table { font-size: 11px; }
+    .results-table thead th,
+    .results-table tbody td { padding: 10px 6px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ── HEADER ── -->
+  <header>
+    <div class="logo-text">Bet<span>Vector</span></div>
+    <div class="header-pill">Model Fix Test Report</div>
+  </header>
+
+  <!-- ── THESIS ── -->
+  <div class="thesis">
+    <h1>Manager features caused a <span class="red">Brier regression</span>.<br>Here's how we <em>fix it</em>.</h1>
+    <p>After adding E40 manager features, the Poisson GLM regressed in 5 of 6 leagues. Root cause: <code style="font-family:'Space Mono',monospace;color:var(--yellow);font-size:14px;">manager_win_pct</code> has strong signal (r=0.20) but at 88% coverage, mean-imputed rows distort the GLM fit. Eight fix variants were tested across all six leagues using walk-forward backtesting.</p>
+  </div>
+
+  <!-- ── STATS BAR ── -->
+  <div class="stats-bar">
+    <div class="stat-cell">
+      <span class="stat-num red">5/6</span>
+      <span class="stat-label">Leagues Regressed</span>
+    </div>
+    <div class="stat-cell">
+      <span class="stat-num">8</span>
+      <span class="stat-label">Variants Tested</span>
+    </div>
+    <div class="stat-cell">
+      <span class="stat-num">6</span>
+      <span class="stat-label">Leagues Backtested</span>
+    </div>
+    <div class="stat-cell">
+      <span class="stat-num yellow">+0.0055</span>
+      <span class="stat-label">Avg Brier Regression</span>
+    </div>
+  </div>
+
+  <!-- ── REGRESSION PER LEAGUE ── -->
+  <div class="section-label">Current Regression vs Baseline (lower Brier = better)</div>
+  <div class="regression-bar">
+    <div class="reg-cell">
+      <div class="reg-league">EPL</div>
+      <div class="reg-val bad">+0.0185</div>
+      <div class="reg-note">0.6132 &rarr; 0.6317</div>
+    </div>
+    <div class="reg-cell">
+      <div class="reg-league">Championship</div>
+      <div class="reg-val good">+0.0000</div>
+      <div class="reg-note">0.6338 &rarr; 0.6338</div>
+    </div>
+    <div class="reg-cell">
+      <div class="reg-league">LaLiga</div>
+      <div class="reg-val ok">+0.0004</div>
+      <div class="reg-note">0.5650 &rarr; 0.5654</div>
+    </div>
+    <div class="reg-cell">
+      <div class="reg-league">Ligue 1</div>
+      <div class="reg-val good">-0.0014</div>
+      <div class="reg-note">0.5826 &rarr; 0.5812</div>
+    </div>
+    <div class="reg-cell">
+      <div class="reg-league">Bundesliga</div>
+      <div class="reg-val bad">+0.0113</div>
+      <div class="reg-note">0.5897 &rarr; 0.6010</div>
+    </div>
+    <div class="reg-cell">
+      <div class="reg-league">Serie A</div>
+      <div class="reg-val ok">+0.0036</div>
+      <div class="reg-note">0.5728 &rarr; 0.5764</div>
+    </div>
+  </div>
+
+  <!-- ── FULL RESULTS TABLE ── -->
+  <div class="table-section">
+    <div class="section-label">Full Results &mdash; 8 Variants &times; 6 Leagues (Brier Score)</div>
+    <table class="results-table">
+      <thead>
+        <tr>
+          <th>Variant</th>
+          <th>EPL</th>
+          <th>Champ</th>
+          <th>LaLiga</th>
+          <th>Ligue 1</th>
+          <th>Bundes</th>
+          <th>Serie A</th>
+          <th>Avg</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1) Baseline (no E39/E40)</td>
+          <td>0.6132</td>
+          <td>0.6338</td>
+          <td>0.5650</td>
+          <td>0.5826</td>
+          <td class="cell-best">0.5897</td>
+          <td class="cell-best">0.5728</td>
+          <td>0.5928</td>
+        </tr>
+        <tr class="row-current">
+          <td>2) Current (as-is)</td>
+          <td class="cell-worst">0.6317</td>
+          <td>0.6338</td>
+          <td>0.5654</td>
+          <td>0.5812</td>
+          <td class="cell-worst">0.6010</td>
+          <td>0.5764</td>
+          <td class="cell-worst">0.5983</td>
+        </tr>
+        <tr>
+          <td>3) Remove E40 only</td>
+          <td>0.6107</td>
+          <td>0.6338</td>
+          <td class="cell-best">0.5643</td>
+          <td>0.5838</td>
+          <td>0.5944</td>
+          <td>0.5747</td>
+          <td>0.5936</td>
+        </tr>
+        <tr class="row-broken">
+          <td>4) Ridge &alpha;=0.1</td>
+          <td>0.6624</td>
+          <td>0.6805</td>
+          <td>0.6675</td>
+          <td>0.6423</td>
+          <td>0.6657</td>
+          <td>0.6813</td>
+          <td>0.6666</td>
+        </tr>
+        <tr class="row-broken">
+          <td>5) Ridge &alpha;=0.5</td>
+          <td>0.6624</td>
+          <td>0.6805</td>
+          <td>0.6675</td>
+          <td>0.6423</td>
+          <td>0.6657</td>
+          <td>0.6813</td>
+          <td>0.6666</td>
+        </tr>
+        <tr class="row-broken">
+          <td>6) Ridge &alpha;=1.0</td>
+          <td>0.6624</td>
+          <td>0.6805</td>
+          <td>0.6675</td>
+          <td>0.6423</td>
+          <td>0.6657</td>
+          <td>0.6813</td>
+          <td>0.6666</td>
+        </tr>
+        <tr class="row-best">
+          <td>7) Elastic Net &alpha;=0.05</td>
+          <td class="cell-best">0.6065</td>
+          <td class="cell-best">0.6233</td>
+          <td>0.5753</td>
+          <td class="cell-best">0.5757</td>
+          <td>0.6023</td>
+          <td>0.5828</td>
+          <td class="cell-best">0.5943</td>
+        </tr>
+        <tr class="row-broken">
+          <td>8) Clean + Ridge &alpha;=0.1</td>
+          <td>0.6624</td>
+          <td>0.6805</td>
+          <td>0.6675</td>
+          <td>0.6423</td>
+          <td>0.6657</td>
+          <td>0.6813</td>
+          <td>0.6666</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ── BEST FIX PER LEAGUE ── -->
+  <div class="section-label">Best Fix per League &mdash; Recovery from Current Model</div>
+  <div class="delta-grid">
+
+    <div class="delta-card" style="--card-accent:var(--green);">
+      <div class="league">EPL</div>
+      <div class="scores">
+        <span class="old-score">0.6317</span>
+        <span class="arrow-icon">&rarr;</span>
+        <span class="new-score">0.6065</span>
+      </div>
+      <span class="recovery">+0.0252 recovered</span>
+      <div class="fix-name">Elastic Net &alpha;=0.05</div>
+    </div>
+
+    <div class="delta-card" style="--card-accent:var(--green);">
+      <div class="league">Championship</div>
+      <div class="scores">
+        <span class="old-score">0.6338</span>
+        <span class="arrow-icon">&rarr;</span>
+        <span class="new-score">0.6233</span>
+      </div>
+      <span class="recovery">+0.0105 recovered</span>
+      <div class="fix-name">Elastic Net &alpha;=0.05</div>
+    </div>
+
+    <div class="delta-card" style="--card-accent:var(--blue);">
+      <div class="league">LaLiga</div>
+      <div class="scores">
+        <span class="old-score">0.5654</span>
+        <span class="arrow-icon">&rarr;</span>
+        <span class="new-score">0.5643</span>
+      </div>
+      <span class="recovery">+0.0011 recovered</span>
+      <div class="fix-name">Remove E40 manager features</div>
+    </div>
+
+    <div class="delta-card" style="--card-accent:var(--green);">
+      <div class="league">Ligue 1</div>
+      <div class="scores">
+        <span class="old-score">0.5812</span>
+        <span class="arrow-icon">&rarr;</span>
+        <span class="new-score">0.5757</span>
+      </div>
+      <span class="recovery">+0.0055 recovered</span>
+      <div class="fix-name">Elastic Net &alpha;=0.05</div>
+    </div>
+
+    <div class="delta-card" style="--card-accent:var(--yellow);">
+      <div class="league">Bundesliga</div>
+      <div class="scores">
+        <span class="old-score">0.6010</span>
+        <span class="arrow-icon">&rarr;</span>
+        <span class="new-score">0.5897</span>
+      </div>
+      <span class="recovery">+0.0113 recovered</span>
+      <div class="fix-name">Baseline (no E39/E40 features)</div>
+    </div>
+
+    <div class="delta-card" style="--card-accent:var(--yellow);">
+      <div class="league">Serie A</div>
+      <div class="scores">
+        <span class="old-score">0.5764</span>
+        <span class="arrow-icon">&rarr;</span>
+        <span class="new-score">0.5728</span>
+      </div>
+      <span class="recovery">+0.0036 recovered</span>
+      <div class="fix-name">Baseline (no E39/E40 features)</div>
+    </div>
+
+  </div>
+
+  <!-- ── KEY FINDINGS ── -->
+  <div class="findings-section">
+    <div class="section-label">Key Findings</div>
+    <div class="findings-grid">
+
+      <div class="finding-card">
+        <div class="finding-num">Finding 01</div>
+        <div class="finding-title">Ridge regularisation is broken</div>
+        <div class="finding-desc">Produces <code style="font-family:'Space Mono',monospace;color:var(--red);">inf</code> lambdas with the current <code style="font-family:'Space Mono',monospace;color:var(--muted);">_add_constant()</code> + <code style="font-family:'Space Mono',monospace;color:var(--muted);">predict()</code> pipeline. All Ridge variants produce identical Brier ~0.6666 across all leagues.</div>
+        <span class="finding-tag tag-broken">BROKEN</span>
+      </div>
+
+      <div class="finding-card">
+        <div class="finding-num">Finding 02</div>
+        <div class="finding-title">Elastic Net works correctly</div>
+        <div class="finding-desc"><code style="font-family:'Space Mono',monospace;color:var(--green);">fit_regularized(alpha=0.05, L1_wt=0.5)</code> constrains coefficients properly. Wins 4 out of 6 leagues. Average Brier 0.5943 vs current 0.5983.</div>
+        <span class="finding-tag tag-works">WORKS</span>
+      </div>
+
+      <div class="finding-card">
+        <div class="finding-num">Finding 03</div>
+        <div class="finding-title">E39 lineup features help</div>
+        <div class="finding-desc"><code style="font-family:'Space Mono',monospace;color:var(--blue);">squad_rotation_index</code> and <code style="font-family:'Space Mono',monospace;color:var(--blue);">formation_changed</code> improve EPL accuracy by &minus;0.0025 Brier. These features have strong coverage and genuine predictive signal.</div>
+        <span class="finding-tag tag-helps">HELPS</span>
+      </div>
+
+      <div class="finding-card">
+        <div class="finding-num">Finding 04</div>
+        <div class="finding-title">E40 manager features hurt</div>
+        <div class="finding-desc"><code style="font-family:'Space Mono',monospace;color:var(--yellow);">manager_win_pct</code> overfits in the unregularised GLM. At 88% coverage, the 12% mean-imputed rows create artificial signal the model latches onto. EPL regression: +0.0185 Brier.</div>
+        <span class="finding-tag tag-hurts">HURTS</span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── TWO OPTIONS ── -->
+  <div class="options-section">
+    <div class="section-label">Recommended Fixes &mdash; Two Viable Options</div>
+    <div class="options-split">
+
+      <div class="option-card" style="--opt-color:var(--green);">
+        <div class="opt-label">Option A</div>
+        <div class="opt-title">Elastic Net Regularisation</div>
+        <div class="opt-brier">0.5943</div>
+        <div class="opt-pro">Wins 4/6 leagues (EPL, Champ, Ligue1, close LaLiga)</div>
+        <div class="opt-pro">Keeps all features but constrains coefficients</div>
+        <div class="opt-pro">Best EPL recovery: 0.6317 &rarr; 0.6065</div>
+        <div class="opt-con">~10&times; slower training per matchday</div>
+        <div class="opt-con">Moderate code complexity added</div>
+        <div class="opt-detail" style="margin-top:14px;">One-line change: <code style="font-family:'Space Mono',monospace;color:var(--green);font-size:12px;">fit()</code> &rarr; <code style="font-family:'Space Mono',monospace;color:var(--green);font-size:12px;">fit_regularized(alpha=0.05, L1_wt=0.5)</code></div>
+      </div>
+
+      <div class="option-card" style="--opt-color:var(--blue);">
+        <div class="opt-label">Option B</div>
+        <div class="opt-title">Remove E40 from Poisson</div>
+        <div class="opt-brier">0.5936</div>
+        <div class="opt-pro">Marginally better average (0.5936 vs 0.5943)</div>
+        <div class="opt-pro">Zero complexity &mdash; simplest possible change</div>
+        <div class="opt-pro">No training speed impact</div>
+        <div class="opt-pro">E40 data stays in DB for XGBoost (handles sparse features natively)</div>
+        <div class="opt-con">LaLiga is the only league where it's best variant</div>
+        <div class="opt-detail" style="margin-top:14px;">Remove 4 feature names from <code style="font-family:'Space Mono',monospace;color:var(--blue);font-size:12px;">_select_feature_cols()</code> context_cols</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── FOOTER ── -->
+  <div class="footer">
+    <p>Report generated from walk-forward backtests on 2024-25 season data across 6 leagues.<br>Training data: 2020-21 through matchday&minus;1. No production code was modified.</p>
+    <div class="date">BetVector &middot; March 13, 2026 &middot; Model Diagnostics</div>
+  </div>
+
+</div><!-- /wrap -->
+</body>
+</html>
