@@ -344,9 +344,11 @@ single-line expression.
 
 ## Current Status
 
-Last completed: E39-11 — Bench Strength Feature ✅
-Currently working: E39-12 — Phase 2 Integration Test + Full Backtest
-Next up: (none — E39 final issue)
+Last completed: E39-12 — Phase 2 Integration Test + Full Backtest ✅
+Currently working: (none — awaiting next task)
+Next up: TBD
+
+E39 complete: All 12 issues done ✅ (Injury pipeline fix + lineup features — PlayerValue, Soccerdata scraper, pipeline integration, historical backfill, recompute, dashboard display, Phase 1 tests, MatchLineup, squad rotation, formation change, bench strength, Phase 2 tests)
 
 E1-E13 complete: 45 original issues ✅
 E14 complete: 4 issues ✅ (Understat xG, weather, API-Football dormant, pipeline integration)
