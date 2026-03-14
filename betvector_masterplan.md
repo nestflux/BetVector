@@ -246,6 +246,7 @@ This is the most important flow — it's what happens every match day.
 - Elo rating model as second prediction model
 - XGBoost/LightGBM model as third prediction model
 - Model ensemble (weighted average of all active models, with adaptive weights per §11.3)
+- **Dixon-Coles correction factor:** Add a ρ (rho) parameter to the Poisson model's scoreline matrix to correct for goal correlation in low-scoring games. Independent Poisson underestimates 0-0 and 1-0 results; Dixon & Coles (1997) fixes this by applying a multiplier τ to the (0,0), (1,0), (0,1), and (1,1) cells. ρ is estimated via MLE on historical data. Implementation: ~50 lines in `poisson.py` — the two GLMs stay untouched, only `_build_scoreline_matrix()` changes. Expected Brier improvement: 0.005–0.015, with biggest gains in draw markets and Under 1.5/2.5.
 - Additional leagues: La Liga, Serie A, Bundesliga, Ligue 1, Champions League, Europa League
 - Smaller value leagues: Eredivisie, Portuguese Liga, Belgian Pro League, Turkish Süper Lig
 - Player-level features (impact of missing key players on team xG)
@@ -377,6 +378,9 @@ The revised data source landscape:
 
 **Decision: Scoreline probability matrix as the universal interface.**
 Every prediction model must output a matrix of probabilities for every scoreline from 0-0 to 6-6 (a 7×7 matrix = 49 probabilities that sum to 1.0). All market probabilities (1X2, O/U, BTTS, AH) are derived from this matrix. This means any model — Poisson, Elo-based, XGBoost, neural net — can be plugged into the ensemble without any changes to the downstream value detection or market derivation logic.
+
+**Future enhancement: Dixon-Coles correction factor.**
+The current Poisson model assumes home and away goals are independent. In practice, low-scoring outcomes (0-0, 1-0, 0-1) are slightly more frequent than independent Poisson predicts — goals are correlated due to tactical game-state dynamics (a cagey match suppresses both teams' scoring). Dixon & Coles (1997) fix this with a single parameter ρ that adjusts probabilities for these four scoreline cells. The two Poisson GLMs remain unchanged — ρ is applied only when building the 7×7 matrix. Expected improvement: Brier 0.005–0.015, especially for draw and Under markets.
 
 **Decision: Config-driven league and model management.**
 Leagues, models, feature windows, thresholds, and schedules are all defined in YAML config files. Adding a league means adding an entry to `config/leagues.yaml` — no code changes. Activating a new model means adding it to `config/models.yaml` with its weight in the ensemble.
