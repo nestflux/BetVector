@@ -18,12 +18,12 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/kyng/Documents/BetVector/scripts/run_pipeline_local.sh</string>
+        <string>/Users/kyng/Projects/BetVector/scripts/run_pipeline_local.sh</string>
         <string>midday</string>
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/Users/kyng/Documents/BetVector</string>
+    <string>/Users/kyng/Projects/BetVector</string>
 
     <!-- Run at 12:00 local time every day -->
     <key>StartCalendarInterval</key>
@@ -36,9 +36,9 @@
 
     <!-- Log stdout and stderr to data/logs/ -->
     <key>StandardOutPath</key>
-    <string>/Users/kyng/Documents/BetVector/data/logs/launchd_midday_stdout.log</string>
+    <string>/Users/kyng/Projects/BetVector/data/logs/launchd_midday_stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/kyng/Documents/BetVector/data/logs/launchd_midday_stderr.log</string>
+    <string>/Users/kyng/Projects/BetVector/data/logs/launchd_midday_stderr.log</string>
 
 </dict>
 </plist>
