@@ -55,6 +55,7 @@ from src.database.models import (
     InjuryFlag,
     League,
     Match,
+    Odds,
     PlayerValue,
     Prediction,
     Team,
@@ -123,6 +124,16 @@ CONFIDENCE_COLOURS = {
     "medium": COLOURS["yellow"],
     "low": "#484F58",  # MP §8: muted text colour for low confidence
 }
+
+# PC-19: Bookmaker probability colour for deep dive comparison.
+# Lighter grey than text_secondary — readable on #161B22 surface without
+# competing with the white model probability numbers.
+BOOKIE_PROB_COLOUR = "#A0ADB8"
+
+# PC-19: Default edge threshold for highlighting (used when match league
+# config isn't available).  Matches with model_prob - bookie_prob >= this
+# threshold get their model number highlighted green with an edge badge.
+DEFAULT_EDGE_THRESHOLD = 0.05
 
 
 # ============================================================================
@@ -251,6 +262,17 @@ def load_match_data(match_id: int) -> Optional[Dict]:
         home_injuries = _enrich_injuries(home_injuries_raw, home_team.id)
         away_injuries = _enrich_injuries(away_injuries_raw, away_team.id)
 
+        # PC-19: Load bookmaker odds for this match.  Used to display
+        # bookmaker implied probabilities alongside model probabilities
+        # on the deep dive page.  We fetch the most recent odds per
+        # (bookmaker, market_type, selection) and prefer FanDuel.
+        odds_rows = (
+            session.query(Odds)
+            .filter_by(match_id=match_id)
+            .order_by(Odds.captured_at.desc())
+            .all()
+        )
+
         # Head-to-head: last 5 meetings between these teams
         h2h_matches = (
             session.query(Match, HomeTeam.name.label("hn"), AwayTeam.name.label("an"))
@@ -276,6 +298,13 @@ def load_match_data(match_id: int) -> Optional[Dict]:
             scoreline_matrix = json.loads(prediction.scoreline_matrix)
         except (json.JSONDecodeError, TypeError):
             scoreline_matrix = None
+
+    # PC-19: Build bookmaker implied probabilities with overround removal.
+    # For each market (1X2, OU25, etc.), collect all selections from the
+    # preferred bookmaker (FanDuel), calculate raw implied probs (1/odds),
+    # then divide each by the sum to remove overround.  This gives a fair
+    # apples-to-apples comparison with the model's own probabilities.
+    bookie_probs = _build_bookie_probs(odds_rows)
 
     return {
         "match_id": match_id,
@@ -339,7 +368,178 @@ def load_match_data(match_id: int) -> Optional[Dict]:
         # E39-06: Injury data for both teams
         "home_injuries": home_injuries,
         "away_injuries": away_injuries,
+        # PC-19: Bookmaker implied probabilities (overround-removed)
+        # Dict keyed by (market_type, selection) → {"prob": float, "bookmaker": str}
+        "bookie_probs": bookie_probs,
     }
+
+
+# ============================================================================
+# PC-19: Bookmaker Implied Probabilities
+# ============================================================================
+
+
+def _build_bookie_probs(odds_rows: List) -> Dict[Tuple[str, str], Dict]:
+    """Build overround-removed bookmaker implied probabilities.
+
+    Takes raw Odds rows from the database and returns a dict keyed by
+    (market_type, selection) with the fair implied probability and
+    bookmaker name.
+
+    Overround removal: bookmakers set odds so implied probs sum to >100%
+    (e.g. 105%).  That extra 5% is their profit margin (vig).  To compare
+    fairly with the model, we divide each raw implied prob by the market
+    total so they sum to exactly 100%.
+
+    Example: if FanDuel has Home 2.10, Draw 3.40, Away 3.60:
+      Raw: 47.6% + 29.4% + 27.8% = 104.8% (4.8% overround)
+      Fair: 45.4% + 28.1% + 26.5% = 100.0%
+
+    Prefers FanDuel when available, falls back to the first bookmaker found.
+
+    Returns:
+        Dict mapping (market_type, selection) to {"prob": float, "bookmaker": str}.
+        Empty dict if no odds available.
+    """
+    if not odds_rows:
+        return {}
+
+    # Group odds by (bookmaker, market_type) keeping only the most recent
+    # per (bookmaker, market_type, selection)
+    latest: Dict[Tuple[str, str, str], object] = {}
+    for row in odds_rows:
+        key = (row.bookmaker, row.market_type, row.selection)
+        if key not in latest:
+            latest[key] = row
+        # odds_rows already ordered by captured_at desc, so first is latest
+
+    # Group by (bookmaker, market_type) → list of (selection, odds_decimal)
+    by_bookie_market: Dict[Tuple[str, str], Dict[str, float]] = {}
+    for (bookie, mkt, sel), row in latest.items():
+        bm_key = (bookie, mkt)
+        by_bookie_market.setdefault(bm_key, {})[sel] = row.odds_decimal
+
+    # For each market_type, pick preferred bookmaker (FanDuel) or fallback
+    # to first bookmaker that has complete odds for that market
+    _pref_lower = PREFERRED_BOOKMAKER.lower()
+
+    # Which selections constitute a "complete" market
+    _market_selections = {
+        "1X2": {"home", "draw", "away"},
+        "OU25": {"over", "under"},
+        "OU15": {"over", "under"},
+        "OU35": {"over", "under"},
+        "BTTS": {"yes", "no"},
+    }
+
+    result: Dict[Tuple[str, str], Dict] = {}
+
+    for market_type, required_sels in _market_selections.items():
+        # Find bookmakers that have this market
+        candidates = []
+        for (bookie, mkt), sels_dict in by_bookie_market.items():
+            if mkt == market_type and required_sels.issubset(sels_dict.keys()):
+                candidates.append((bookie, sels_dict))
+
+        if not candidates:
+            continue
+
+        # Prefer FanDuel, fallback to first available
+        chosen_bookie, chosen_sels = candidates[0]
+        for bookie, sels_dict in candidates:
+            if bookie.lower() == _pref_lower:
+                chosen_bookie, chosen_sels = bookie, sels_dict
+                break
+
+        # Calculate overround-removed fair probabilities
+        # raw_probs[sel] = 1 / odds
+        raw_probs = {
+            sel: 1.0 / odds for sel, odds in chosen_sels.items()
+            if sel in required_sels and odds > 0
+        }
+        total = sum(raw_probs.values())
+        if total <= 0:
+            continue
+
+        for sel, raw_prob in raw_probs.items():
+            fair_prob = raw_prob / total
+            result[(market_type, sel)] = {
+                "prob": fair_prob,
+                "bookmaker": chosen_bookie,
+            }
+
+    return result
+
+
+def _render_prob_cell(
+    label: str,
+    model_prob: float,
+    market_type: str,
+    selection: str,
+    bookie_probs: Dict[Tuple[str, str], Dict],
+) -> str:
+    """Render a single market probability cell with model vs bookmaker comparison.
+
+    PC-19: Shows model probability in white (or green if edge exceeds threshold)
+    and bookmaker implied probability in lighter grey (#A0ADB8) below it.
+    When the model sees an edge, a small green badge shows the difference.
+
+    Args:
+        label: Display label (e.g. "Home Win", "Over 2.5")
+        model_prob: Model's probability (0.0 to 1.0)
+        market_type: Market type key (e.g. "1X2", "OU25")
+        selection: Selection key (e.g. "home", "over")
+        bookie_probs: Dict from _build_bookie_probs()
+
+    Returns:
+        HTML string for the cell.
+    """
+    bookie_info = bookie_probs.get((market_type, selection))
+
+    # Determine if there's an edge worth highlighting
+    has_edge = False
+    edge_pct = 0.0
+    if bookie_info and model_prob is not None:
+        edge_pct = model_prob - bookie_info["prob"]
+        has_edge = edge_pct >= DEFAULT_EDGE_THRESHOLD
+
+    # Model probability colour: green if edge, white otherwise
+    model_colour = COLOURS["green"] if has_edge else COLOURS["text"]
+    model_pct = f"{model_prob:.1%}" if model_prob is not None else "—"
+
+    # Edge badge (only shown when edge exceeds threshold)
+    edge_html = ""
+    if has_edge:
+        edge_html = (
+            f'<span style="display: inline-block; font-family: JetBrains Mono, monospace; '
+            f"font-size: 11px; font-weight: 600; color: {COLOURS['green']}; "
+            f"background: rgba(63, 185, 80, 0.12); border: 1px solid rgba(63, 185, 80, 0.25); "
+            f'border-radius: 4px; padding: 1px 5px; margin-left: 6px;">'
+            f"+{edge_pct:.1%}</span>"
+        )
+
+    # Bookmaker line (shown in lighter grey below model prob)
+    bookie_html = ""
+    if bookie_info:
+        bookie_pct = f"{bookie_info['prob']:.1%}"
+        bookie_name = bookie_info["bookmaker"]
+        bookie_html = (
+            f'<div style="font-family: JetBrains Mono, monospace; font-size: 12px; '
+            f'color: {BOOKIE_PROB_COLOUR}; margin-top: 2px;">'
+            f"{bookie_name}: {bookie_pct}</div>"
+        )
+
+    return (
+        f'<div style="padding: 8px 0;">'
+        f'<div style="font-family: Inter, sans-serif; font-size: 13px; '
+        f'color: {COLOURS["text_secondary"]}; margin-bottom: 4px;">{label}</div>'
+        f'<div style="display: flex; align-items: center;">'
+        f'<span style="font-family: JetBrains Mono, monospace; font-size: 22px; '
+        f'font-weight: 600; color: {model_colour};">{model_pct}</span>'
+        f"{edge_html}</div>"
+        f"{bookie_html}"
+        f"</div>"
+    )
 
 
 # ============================================================================
@@ -819,7 +1019,7 @@ else:
 
         st.divider()
 
-    # --- Section 3: Market Probabilities ---
+    # --- Section 3: Market Probabilities (PC-19: model vs bookmaker) ---
     pred = data["prediction"]
     if pred:
         st.markdown(
@@ -827,34 +1027,38 @@ else:
             unsafe_allow_html=True,
         )
 
-        # 1X2 — the three possible match outcomes
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Home Win", f"{pred.prob_home_win:.1%}")
-        with col2:
-            st.metric("Draw", f"{pred.prob_draw:.1%}")
-        with col3:
-            st.metric("Away Win", f"{pred.prob_away_win:.1%}")
+        bookie_probs = data.get("bookie_probs", {})
 
-        # Over/Under goals — 1.5 and 2.5 thresholds side by side.
-        # O/U 1.5 = will there be 2+ goals? O/U 2.5 = will there be 3+ goals?
-        # Both are derived from the scoreline matrix via derive_market_probabilities().
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Over 1.5", f"{pred.prob_over_15:.1%}")
-        with col2:
-            st.metric("Under 1.5", f"{pred.prob_under_15:.1%}")
-        with col3:
-            st.metric("Over 2.5", f"{pred.prob_over_25:.1%}")
-        with col4:
-            st.metric("Under 2.5", f"{pred.prob_under_25:.1%}")
+        # Mapping from (market_type, selection) → model probability attribute
+        _prob_map = [
+            # 1X2 row
+            [
+                ("Home Win", "1X2", "home", pred.prob_home_win),
+                ("Draw", "1X2", "draw", pred.prob_draw),
+                ("Away Win", "1X2", "away", pred.prob_away_win),
+            ],
+            # O/U row
+            [
+                ("Over 1.5", "OU15", "over", pred.prob_over_15),
+                ("Under 1.5", "OU15", "under", pred.prob_under_15),
+                ("Over 2.5", "OU25", "over", pred.prob_over_25),
+                ("Under 2.5", "OU25", "under", pred.prob_under_25),
+            ],
+            # BTTS row
+            [
+                ("BTTS Yes", "BTTS", "yes", pred.prob_btts_yes),
+                ("BTTS No", "BTTS", "no", pred.prob_btts_no),
+            ],
+        ]
 
-        # BTTS — both teams to score at least one goal each
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("BTTS Yes", f"{pred.prob_btts_yes:.1%}")
-        with col2:
-            st.metric("BTTS No", f"{pred.prob_btts_no:.1%}")
+        for row_items in _prob_map:
+            cols = st.columns(len(row_items))
+            for col, (label, mkt, sel, model_prob) in zip(cols, row_items):
+                with col:
+                    st.markdown(
+                        _render_prob_cell(label, model_prob, mkt, sel, bookie_probs),
+                        unsafe_allow_html=True,
+                    )
 
         st.divider()
 

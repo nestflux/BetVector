@@ -7944,3 +7944,51 @@ were adding imputation noise without contributing signal.
 - [x] Comments explain each removal with rationale
 
 **Status: DONE** ✅
+
+---
+
+## PC-19 — Deep Dive Bookmaker Probability Comparison
+
+**Type:** Dashboard UX
+**Date:** March 2026
+
+### Problem
+
+The Deep Dive page shows model-derived market probabilities (1X2, O/U 1.5, O/U 2.5,
+BTTS) but gives no visual comparison to what the bookmaker thinks. Users have to
+mentally calculate implied probability from decimal odds. Showing both side-by-side
+makes edges instantly visible.
+
+### Design
+
+- **Model probability:** white (`#E6EDF3`) — primary, unchanged
+- **Bookmaker probability:** lighter grey (`#A0ADB8`) — secondary, clearly readable on `#161B22`
+- **Edge highlight:** when model prob exceeds bookmaker by the edge threshold, model
+  number turns green (`#3FB950`) with a small `+X.X%` badge
+- Bookmaker name shown (e.g. "FanDuel: 47.6%")
+- Overround removed from bookmaker odds so comparison is fair (apples-to-apples)
+- Uses best available odds from Odds table, preferring FanDuel
+
+### Implementation
+
+1. Add odds query to `load_match_data()` — fetch latest odds for this match, grouped
+   by market_type/selection
+2. Build `bookmaker_implied_probs` dict with overround-removed fair probabilities
+3. Replace `st.metric()` calls with custom HTML that shows both model + bookmaker
+4. Apply green highlight when edge exceeds threshold from config
+
+### Files Modified
+
+- `src/delivery/views/match_detail.py` — odds loading + market probabilities display
+
+### Acceptance Criteria
+
+- [ ] Bookmaker probability shown next to every model probability on the Deep Dive page
+- [ ] Overround removed from bookmaker implied probs (fair comparison)
+- [ ] Model probability in white, bookmaker in `#A0ADB8` grey
+- [ ] Model probability turns green when edge exceeds threshold
+- [ ] Edge badge shows `+X.X%` for highlighted edges
+- [ ] Graceful fallback when no odds available (show model only, no bookmaker)
+- [ ] Preferred bookmaker (FanDuel) used when available, fallback to best available
+
+**Status: IN PROGRESS**
