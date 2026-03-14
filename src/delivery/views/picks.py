@@ -717,9 +717,12 @@ st.divider()
 # ── Filters ──────────────────────────────────────────────────────────────
 # Date range: default today-3 to today+7 (shows recent results + upcoming)
 # Edge threshold: minimum edge to display
+# PC-19: Default to today + 14 days forward.  Users land on the page and
+# immediately see what's actionable now and coming up, not past results.
+# They can still slide backward to review recent picks if they want.
 _today = date.today()
-_default_from = _today - timedelta(days=3)
-_default_to = _today + timedelta(days=7)
+_default_from = _today
+_default_to = _today + timedelta(days=14)
 
 col_date, col_edge = st.columns([2, 1])
 
