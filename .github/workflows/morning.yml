@@ -3,18 +3,21 @@
 # ============================================================================
 # Full daily pipeline: scrape → features → predict → value bets → email
 #
-# Schedule: 06:00 UTC daily (01:00 AM EST)
-# Manual trigger: workflow_dispatch from GitHub Actions UI
+# Schedule: DISABLED — Neon PostgreSQL quota exceeded (PC-13).
+#           Pipeline now runs locally via macOS launchd (PC-15-04).
+#           Manual trigger retained for future cloud DB migration.
 #
-# Database: Neon PostgreSQL via DATABASE_URL secret
+# Database: Neon PostgreSQL via DATABASE_URL secret (currently over quota)
 # Master Plan refs: MP §5 Architecture → Scheduling (GitHub Actions)
 # ============================================================================
 
 name: Morning Pipeline
 
 on:
-  schedule:
-    - cron: "0 6 * * *"
+  # schedule disabled — Neon PostgreSQL quota exceeded (PC-13).
+  # Pipeline now runs locally via macOS launchd (PC-15-04).
+  # schedule:
+  #   - cron: "0 6 * * *"
   workflow_dispatch:
     inputs:
       verbose:

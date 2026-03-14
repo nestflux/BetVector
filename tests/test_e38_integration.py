@@ -136,7 +136,15 @@ def _get_league_config(short_name: str) -> dict:
 
 
 def _load_backtest_report(league_short_name: str) -> dict:
-    """Load a backtest JSON report from data/predictions/."""
+    """Load a backtest JSON report from data/predictions/.
+
+    Handles two JSON formats produced by different backtest runs:
+      - Nested:  {"summary": {"brier_score": ..., ...}, "calibration": ..., ...}
+      - Flat:    {"brier_score": ..., "total_matches": ..., ...}
+
+    Always returns a dict with a "summary" key containing the core metrics
+    so tests can use ``report["summary"]["brier_score"]`` consistently.
+    """
     # Reports use the naming pattern: backtest_report_poisson_{league}_{season}.json
     path = Path(f"data/predictions/backtest_report_poisson_{league_short_name}_2024-25.json")
     assert path.exists(), (
@@ -144,7 +152,13 @@ def _load_backtest_report(league_short_name: str) -> dict:
         f"Run the backtest first via run_pipeline.py or backtester."
     )
     with path.open() as f:
-        return json.load(f)
+        data = json.load(f)
+
+    # Normalise flat-format reports into nested format
+    if "summary" not in data:
+        data = {"summary": data}
+
+    return data
 
 
 _exit_stack = contextlib.ExitStack()

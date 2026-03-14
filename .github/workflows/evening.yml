@@ -11,8 +11,10 @@
 name: Evening Pipeline
 
 on:
-  schedule:
-    - cron: "0 22 * * *"
+  # schedule disabled — Neon PostgreSQL quota exceeded (PC-13).
+  # Pipeline now runs locally via macOS launchd (PC-15-04).
+  # schedule:
+  #   - cron: "0 22 * * *"
   workflow_dispatch:
     inputs:
       verbose:
