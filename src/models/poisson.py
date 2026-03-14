@@ -394,7 +394,6 @@ class PoissonModel(BaseModel):
             f"{attack_prefix}form_10",
             f"{attack_prefix}goals_scored_5",
             f"{attack_prefix}goals_scored_10",
-            f"{attack_prefix}shots_on_target_5",
             f"{attack_prefix}venue_form_5",
             f"{attack_prefix}venue_goals_scored_5",
             # --- Advanced attack features (E16-01) ---
@@ -405,14 +404,13 @@ class PoissonModel(BaseModel):
             # reaching the opponent's penalty area.  High deep = dangerous
             # team that penetrates defences.
             f"{attack_prefix}deep_5",
-            # --- Set-piece xG breakdown (E22-01) ---
-            # set_piece_xg_5: rolling average set-piece xG.  Teams with tall
-            # squads or specialist set-piece takers produce consistently high
-            # values — a persistent attacking "skill" separate from open play.
-            f"{attack_prefix}set_piece_xg_5",
-            # open_play_xg_5: rolling average open-play xG.  Pure measure of
-            # live-ball attacking quality, independent of dead-ball situations.
-            f"{attack_prefix}open_play_xg_5",
+            # --- REMOVED (PC-18): set_piece_xg_5, open_play_xg_5 ---
+            # 59% coverage in LaLiga, 0% in EPL/Bundesliga/SerieA.
+            # Mean-imputed values create artificial signal the GLM overfits to.
+            # Data retained in DB for future use when coverage improves.
+            # --- REMOVED (PC-18): shots_on_target_5 ---
+            # 0% coverage across all leagues (FBref lost Opta data Jan 2026).
+            # Auto-pruned as constant column, but excluded explicitly for clarity.
         ]
 
         # Defensive features: how bad is the opponent at defending?
@@ -433,13 +431,6 @@ class PoissonModel(BaseModel):
         context_cols = [
             f"{attack_prefix}rest_days",
             f"{attack_prefix}h2h_goals_scored",
-            # --- Market value & weather features (E16-02) ---
-            # Market value ratio: richer squads score more — a €1B squad
-            # vs a €200M squad has a structural quality advantage.
-            f"{attack_prefix}market_value_ratio",
-            # Heavy weather (rain >2mm or wind >30km/h) reduces scoring rates
-            # on average — wet pitch and unpredictable long balls.
-            f"{attack_prefix}is_heavy_weather",
             # --- Market-implied features (E20-01, E20-02) ---
             # Pinnacle implied probabilities: the market's best estimate of
             # each outcome.  Overround-removed so they sum to ~1.0.
@@ -466,11 +457,6 @@ class PoissonModel(BaseModel):
             # Especially valuable early season and for promoted teams.
             f"{attack_prefix}elo_rating",
             f"{attack_prefix}elo_diff",
-            # --- Referee features (E21-02) ---
-            # Referee tendencies affect scoring rates.  Goal-permissive refs
-            # produce higher-scoring matches.  Home bias refs amplify home advantage.
-            f"{attack_prefix}ref_avg_goals",
-            f"{attack_prefix}ref_home_win_pct",
             # --- Fixture congestion features (E21-03) ---
             # Binary flag for <4-day rest.  Congested teams press less,
             # rotate more, and score fewer goals on average.
@@ -482,28 +468,30 @@ class PoissonModel(BaseModel):
             # key_player_out = binary flag for star player absence.
             # Losing a 1.0-rated player (Haaland, Salah) has outsized impact.
             f"{attack_prefix}key_player_out",
-            # --- Lineup features (E39-09, E39-10, E39-11) ---
+            # --- Lineup features (E39-09, E39-10) ---
             # squad_rotation_index: fraction of XI changed from previous match.
             # High rotation signals congestion fatigue or deliberate resting.
             f"{attack_prefix}squad_rotation_index",
             # formation_changed: binary flag — 1 if tactical system changed.
             f"{attack_prefix}formation_changed",
-            # bench_strength: bench_value / starter_value ratio.
-            # Higher = deeper squad (more capable of handling rotation).
-            f"{attack_prefix}bench_strength",
-            # --- Manager features (E40-05) ---
+            # --- Manager features (E40-05, pruned PC-18) ---
             # new_manager_flag: 1 if manager changed within last 30 days.
             # Captures the well-documented "new manager bounce" effect.
             f"{attack_prefix}new_manager_flag",
-            # manager_tenure_days: how long the current manager has been
-            # in charge.  Longer tenure = more tactical stability.
-            f"{attack_prefix}manager_tenure_days",
-            # manager_win_pct: current manager's win rate at this club.
-            # Separates quality of manager from team quality.
-            f"{attack_prefix}manager_win_pct",
             # manager_change_count: distinct managers in prior 365 days.
             # Instability signal — frequent changes destabilise squads.
             f"{attack_prefix}manager_change_count",
+            # --- REMOVED (PC-18): Features below 65% coverage or causing overfitting ---
+            # market_value_ratio: 0% all leagues (TM values never populated). Data in DB.
+            # is_heavy_weather: 13% EPL, 0% elsewhere. Mean-imputed noise.
+            # ref_avg_goals: 76% EPL, 0% elsewhere. Partial coverage, imputation risk.
+            # ref_home_win_pct: 76% EPL, 0% elsewhere. Same issue.
+            # bench_strength: 0% all leagues. Auto-pruned but excluded explicitly.
+            # manager_win_pct: 88% coverage but r=0.20 correlation causes GLM
+            #   overfitting — outsized coefficient on mean-imputed rows. EPL Brier
+            #   regressed +0.0185 vs baseline. Confirmed via 8-variant ablation test.
+            # manager_tenure_days: re-appointment bug (counts from first-ever
+            #   appearance, not current stint) + redundant with new_manager_flag.
         ]
 
         # Only include columns that exist in the DataFrame

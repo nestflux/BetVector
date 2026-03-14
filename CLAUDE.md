@@ -346,7 +346,7 @@ single-line expression.
 
 ## Current Status
 
-Last completed: E40-10 — Integration Test + Backtest ✅
+Last completed: PC-18 — Feature Pruning for Model Accuracy ✅
 Currently working: (none — awaiting next task)
 Next up: TBD
 
@@ -395,6 +395,7 @@ Post-critical-path (March 2026):
 - PC-15: Local Pipeline Setup ✅ — Fixtures, Odds Resilience, Automation
 - PC-16: Badge Audit & Fixtures Layout Redesign ✅ — Force re-downloaded 122 badges from API-Football, fixed Paris FC/Bielefeld swap, fixed Leeds United ID, downloaded 27 missing badges, 183/183 full coverage, zero cross-team mismatches. Fixtures card layout redesigned: date left, teams centered, kickoff right, model+markets row below. Added ~35 multi-league name mappings to API_FOOTBALL_EPL_TEAM_MAP.
 - PC-17: Badge Full Coverage + Allow-List Sync ✅ — Fixed Paris FC/Bielefeld badge swap (API-Football IDs set), downloaded all 27 remaining missing badges (Darmstadt, Hertha, Barnsley, Norwich, WBA, Almeria, Granada, Levante, Bordeaux, Clermont, Dijon, Nimes, Troyes, Benevento, Crotone, Frosinone, Salernitana, Sampdoria, Spezia, etc.), 183/183 full badge coverage, zero mismatches. Synced project allow-list with global (added pgrep, nohup, kill, pkill, lsof + 11 more).
+- PC-18: Feature Pruning for Model Accuracy ✅ — Removed 21 features from Poisson + XGBoost `_select_feature_cols()`: manager_win_pct (overfitting, +0.0185 EPL regression), manager_tenure_days (re-appointment bug), ref_avg_goals/ref_home_win_pct (76% EPL, dead elsewhere), all weather (13% EPL, dead elsewhere), set_piece/open_play_xg (59% LaLiga, dead elsewhere), 11 dead features (0% all leagues). Kept new_manager_flag + manager_change_count (clean signals). Backtest: avg Brier 0.5983→0.5921 (-1.0%), EPL 0.6317→0.6029 (-4.6%), zero regressions across 6 leagues. Data retained in DB.
 
 E34 — Multi-User Authentication: ALL 6 issues done ✅
 - E34-01: Password storage + session overhaul ✅

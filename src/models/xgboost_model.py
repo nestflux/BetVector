@@ -470,15 +470,13 @@ class XGBoostModel(BaseModel):
             f"{attack_prefix}form_10",
             f"{attack_prefix}goals_scored_5",
             f"{attack_prefix}goals_scored_10",
-            f"{attack_prefix}shots_on_target_5",
             f"{attack_prefix}venue_form_5",
             f"{attack_prefix}venue_goals_scored_5",
             # Advanced attack features (E16-01)
             f"{attack_prefix}npxg_5",
             f"{attack_prefix}deep_5",
-            # Set-piece xG breakdown (E22-01)
-            f"{attack_prefix}set_piece_xg_5",
-            f"{attack_prefix}open_play_xg_5",
+            # REMOVED (PC-18): shots_on_target_5 (0% all leagues — FBref dead)
+            # REMOVED (PC-18): set_piece_xg_5, open_play_xg_5 (<65% coverage)
         ]
 
         # Defensive features: how bad is the opponent at defending?
@@ -495,9 +493,6 @@ class XGBoostModel(BaseModel):
         context_cols = [
             f"{attack_prefix}rest_days",
             f"{attack_prefix}h2h_goals_scored",
-            # Market value & weather (E16-02)
-            f"{attack_prefix}market_value_ratio",
-            f"{attack_prefix}is_heavy_weather",
             # Market-implied features (E20-01, E20-02)
             # NOTE (PC-09-01): pinnacle_draw_prob excluded — it is linearly
             # dependent on home + away (sum ≈ 1.0), causing multicollinearity
@@ -509,33 +504,23 @@ class XGBoostModel(BaseModel):
             # Elo ratings (E21-01)
             f"{attack_prefix}elo_rating",
             f"{attack_prefix}elo_diff",
-            # Referee features (E21-02)
-            f"{attack_prefix}ref_avg_goals",
-            f"{attack_prefix}ref_home_win_pct",
             # Fixture congestion (E21-03)
             f"{attack_prefix}is_congested",
             # Injury impact (E22-02)
             f"{attack_prefix}injury_impact",
             f"{attack_prefix}key_player_out",
-            # --- Lineup features (E39-09, E39-10, E39-11) ---
+            # --- Lineup features (E39-09, E39-10) ---
             f"{attack_prefix}squad_rotation_index",
             f"{attack_prefix}formation_changed",
-            f"{attack_prefix}bench_strength",
-            # --- Manager features (E40-05) ---
+            # --- Manager features (E40-05, pruned PC-18) ---
             f"{attack_prefix}new_manager_flag",
-            f"{attack_prefix}manager_tenure_days",
-            f"{attack_prefix}manager_win_pct",
             f"{attack_prefix}manager_change_count",
-            # Multi-league context (E36-03):
-            # league_home_adv_5: home advantage over the last 5 home matches,
-            #   per league — captures that Championship has higher home advantage
-            #   than La Liga.  Stored on the home team's feature row.
-            # is_newly_promoted: 1 if this team just entered the division (either
-            #   relegated from a higher league or promoted from a lower one).
-            #   New teams face a quality step-up that goals-based features can't
-            #   capture in the first few matches of their new season.
+            # Multi-league context (E36-03)
             f"{attack_prefix}league_home_adv_5",
             f"{attack_prefix}is_newly_promoted",
+            # REMOVED (PC-18): market_value_ratio, is_heavy_weather, ref_avg_goals,
+            # ref_home_win_pct, bench_strength, manager_win_pct, manager_tenure_days
+            # See poisson.py PC-18 comments for rationale.
         ]
 
         # Only include columns that exist in the DataFrame

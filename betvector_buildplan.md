@@ -7855,3 +7855,92 @@ E40-04 (manager schema + backfill) → E40-05 (manager features) →
 E40-06 (injury club fix) → E40-07 (minutes impact) →
 E40-08 (recompute all) → E40-09 (weekly refresh) → E40-10 (tests + backtest)
 ```
+
+---
+
+## PC-18 — Feature Pruning for Model Accuracy
+
+**Type:** Model Improvement
+**Date:** March 2026
+
+### Problem
+
+After E40 (manager features), the Poisson GLM regressed in 5 of 6 leagues.
+Root cause analysis revealed `manager_win_pct` (r=0.20 with goals) was being
+given outsized GLM coefficients, amplified by mean-imputation of its 12% NULL
+rows. Additionally, several other features with <65% coverage or 0% coverage
+were adding imputation noise without contributing signal.
+
+### Analysis Performed
+
+1. **Per-league feature coverage audit** — 75 features × 6 leagues, identified
+   10 dead features (0% all leagues), 7 partially dead (<65% in most), and
+   4 in the "imputation risk zone" (65-85%).
+2. **Feature importance test** — GLM coefficients (Poisson) + gain-based
+   importance (XGBoost) across all leagues.
+3. **8-variant ablation test** — Baseline, Current, Remove E40, Ridge (3 alphas),
+   Elastic Net, Clean+Ridge. Tested across all 6 leagues.
+4. **Final pruning test** — Current model vs pruned model, 6-league walk-forward
+   backtest on 2024-25.
+
+### Features Removed (21 total)
+
+**Overfitting / imputation risk:**
+- `manager_win_pct` — r=0.20 but 12% mean-imputed rows cause GLM overfitting (+0.0185 EPL Brier)
+- `manager_tenure_days` — re-appointment bug (counts from first-ever appearance, not current stint) + redundant with `new_manager_flag`
+- `ref_avg_goals` — 76% EPL, 0% everywhere else
+- `ref_home_win_pct` — 76% EPL, 0% everywhere else
+
+**Below 65% coverage:**
+- `temperature_c`, `wind_speed_kmh`, `precipitation_mm`, `is_heavy_weather` — 13% EPL, dead elsewhere
+- `set_piece_xg_5`, `open_play_xg_5` — 59% LaLiga, dead in EPL/Bundesliga/SerieA
+
+**Dead everywhere (0% — auto-pruned but now explicit):**
+- `shots_5`, `shots_on_target_5`, `possession_5`, `shots_10`, `shots_on_target_10`, `possession_10`
+- `market_value_ratio`, `squad_value_log`
+- `ref_avg_fouls`, `ref_avg_yellows`
+- `bench_strength`
+
+### Features Kept
+
+- `new_manager_flag` — clean binary signal (new manager bounce), 88%+ coverage
+- `manager_change_count` — clean integer (instability signal), 88%+ coverage
+- `squad_rotation_index` — 82-84% coverage, genuine predictive signal
+- `formation_changed` — 82-84% coverage, tactical change signal
+- All xG features (82-84% EPL, 100% other top 5 leagues)
+- All form, Elo, odds, congestion, injury features
+
+### Results
+
+| League | Current | Pruned | Delta | Winner |
+|--------|---------|--------|-------|--------|
+| EPL | 0.6317 | 0.6029 | -0.0289 (-4.6%) | PRUNED |
+| Championship | 0.6338 | 0.6339 | +0.0000 | TIE |
+| LaLiga | 0.5654 | 0.5652 | -0.0001 | TIE |
+| Ligue1 | 0.5812 | 0.5789 | -0.0022 (-0.4%) | PRUNED |
+| Bundesliga | 0.6010 | 0.5952 | -0.0058 (-1.0%) | PRUNED |
+| SerieA | 0.5764 | 0.5762 | -0.0002 | TIE |
+| **AVERAGE** | **0.5983** | **0.5921** | **-0.0062 (-1.0%)** | **PRUNED** |
+
+**Pruned wins 3/6, ties 3/6, loses 0/6.** Zero regressions.
+
+### Files Modified
+
+- `src/models/poisson.py` — removed 21 features from `_select_feature_cols()` attack_cols and context_cols
+- `src/models/xgboost_model.py` — same pruning for model consistency
+
+### Implementation Notes
+
+- **Data retained in DB** — all features are still computed and stored. Only the model's feature selection was changed. Features can be re-enabled if coverage improves.
+- **Both models updated** — Poisson and XGBoost use the same pruned feature set for fair comparison.
+- **Detailed comments** — each removed feature has a `# REMOVED (PC-18)` comment explaining why.
+
+**Acceptance Criteria:**
+- [x] 21 features removed from Poisson `_select_feature_cols()`
+- [x] 21 features removed from XGBoost `_select_feature_cols()`
+- [x] Walk-forward backtest: avg Brier improved (0.5983 → 0.5921)
+- [x] Zero regressions across any of the 6 leagues
+- [x] Data retained in database for future use
+- [x] Comments explain each removal with rationale
+
+**Status: DONE** ✅
