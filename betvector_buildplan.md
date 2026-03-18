@@ -8586,6 +8586,13 @@ Compare aggregate ROI and per-league ROI against the PC-21-03 baseline.
 - [ ] Backtest results saved to `data/predictions/`
 - [ ] Decision: keep or rollback
 
+**Rollback criteria (PC-24-01):**
+- **Keep** if aggregate ROI across 6 leagues improves by ≥ 2% AND no league
+  regresses more than 5% ROI vs PC-21-03 baseline
+- **Keep partial** if some leagues improve and none regress > 5% — keep
+  improved thresholds, revert others to baseline
+- **Rollback** if aggregate ROI worsens or any league regresses > 5%
+
 ---
 
 **PC-24-02 — Pinnacle-only edge comparison**
@@ -8594,6 +8601,15 @@ Compare aggregate ROI and per-league ROI against the PC-21-03 baseline.
 **Files:** `src/betting/value_finder.py`, `src/evaluation/backtester.py`
 **MP ref:** MP §4 (value betting), MP §6 (odds table schema, bookmaker field),
   MP §11.4 (odds market feedback loop)
+
+**⚠️ Rule 8 Tier 2 — Owner Approval Required:**
+This changes the value bet detection policy from "compare against all
+bookmakers" to "compare against Pinnacle only." MP §5 currently specifies
+comparison across all available bookmakers. This is an opt-in mode
+(`sharp_only=False` by default) so existing behaviour is preserved, but the
+backtester and pipeline will use the new mode when enabled. The owner has
+reviewed and discussed this change in the PC-24 planning conversation.
+**Status: APPROVED** (owner approved during PC-24 planning session)
 
 Currently `ValueFinder.find_value_bets()` compares model probabilities against
 ALL bookmaker odds (Pinnacle, Bet365, William Hill, market_avg). This means the
@@ -8627,6 +8643,12 @@ PLUS Pinnacle-only filtering. Compare against PC-24-01 results.
 - [ ] Brier score unchanged (predictions not affected)
 - [ ] Decision: keep or rollback
 
+**Rollback criteria (PC-24-02):**
+- **Keep** if aggregate ROI improves by ≥ 1% vs PC-24-01 results AND value
+  bet count drops (confirming higher-quality filtering)
+- **Rollback** if ROI worsens or stays flat (Pinnacle filtering is removing
+  genuine edges, not just noise)
+
 ---
 
 **PC-24-03 — Probability calibration correction (Platt scaling)**
@@ -8638,18 +8660,27 @@ PLUS Pinnacle-only filtering. Compare against PC-24-01 results.
 
 If the model is overconfident (predicts 65% when reality is 60%), all edge
 calculations are inflated by 5 percentage points. Platt scaling applies a
-logistic correction to the raw probabilities after prediction, using
-held-out calibration data.
+logistic correction to the raw λ values (expected goals) before the
+scoreline matrix is built, preserving the Rule 6 contract that all market
+probabilities are derived from the 7×7 matrix via `derive_market_probabilities()`.
+
+**Scoreline matrix contract (Rule 6):** Calibration is applied to λ_home
+and λ_away BEFORE `_build_scoreline_matrix()` is called. The corrected λ
+values produce a corrected 7×7 matrix, and `derive_market_probabilities()`
+operates on that corrected matrix as normal. This ensures the matrix remains
+the single source of truth for all market probabilities — no post-derivation
+probability manipulation.
 
 **How it works:**
 1. During walk-forward backtesting, after training but before prediction,
    split the training data into train (90%) and calibration (10%)
 2. Train the Poisson model on the 90% training split
-3. Generate predictions on the 10% calibration split
-4. Fit a `sklearn.calibration.CalibratedClassifierCV` (or manual Platt)
-   on the calibration predictions vs actual outcomes
-5. Apply the calibration transform to all future predictions in that
-   walk-forward step
+3. Generate predictions on the 10% calibration split (λ_home, λ_away pairs)
+4. Fit calibration scaling factors on the calibration predictions vs actual
+   match outcomes (comparing predicted λ to actual goals scored)
+5. Apply the calibration transform to λ_home and λ_away BEFORE building
+   the scoreline matrix — the corrected λ values flow into
+   `_build_scoreline_matrix()` → `derive_market_probabilities()` as normal
 6. The calibration function is re-fit at each walk-forward step (temporal
    integrity — never calibrate on future data)
 
@@ -8663,13 +8694,21 @@ PLUS Platt calibration. Compare Brier score AND ROI.
 
 **Acceptance Criteria (PC-24-03):**
 - [ ] Calibration module created (`src/models/calibration.py`)
-- [ ] Platt scaling applied after Poisson prediction, before edge calculation
+- [ ] Calibration applied to λ values BEFORE `_build_scoreline_matrix()` (Rule 6 matrix contract preserved)
 - [ ] Calibration uses only historical data (temporal integrity)
 - [ ] MP §11.1 guardrails enforced (200 min, 0.03 threshold, rollback)
 - [ ] 6-league backtest shows Brier improvement (calibrated model more accurate)
 - [ ] ROI impact measured — should improve if overconfidence was the cause
 - [ ] Calibration parameters saved/loaded with model pickle
 - [ ] Decision: keep or rollback
+
+**Rollback criteria (PC-24-03):**
+- **Keep** if Brier score improves by ≥ 0.005 in at least 3/6 leagues AND
+  no league's Brier worsens by > 0.01
+- **Keep** if ROI improves even without Brier improvement (calibration was
+  reducing overconfidence that inflated edges)
+- **Rollback** if Brier worsens in ≥ 4/6 leagues or any league worsens
+  by > 0.01 Brier
 
 ---
 
@@ -8679,6 +8718,16 @@ PLUS Platt calibration. Compare Brier score AND ROI.
 **Files:** `config/settings.yaml`, `src/pipeline.py`, `src/evaluation/backtester.py`
 **MP ref:** MP §4 (staking methods: flat/percentage/kelly),
   MP §6 (bet_log.stake_method field)
+
+**⚠️ Rule 8 Tier 2 — Owner Approval Required:**
+MP §4 specifies flat staking as the default. MP §3 describes Kelly as
+"Advanced — only recommended after 500+ bets." Changing the default from
+flat to Kelly is a product decision affecting all users' onboarding
+experience. However, this only changes the pipeline/backtester default —
+individual users can still choose their staking method via the dashboard
+Settings page. The owner has reviewed and discussed this change in the
+PC-24 planning conversation.
+**Status: APPROVED** (owner approved during PC-24 planning session)
 
 The backtester already supports Kelly staking (`staking_method="kelly"`,
 `kelly_fraction=0.25` for quarter-Kelly). The current default is `"flat"`
@@ -8711,6 +8760,12 @@ against the same with flat staking.
 - [ ] 6-league backtest with Kelly shows ROI improvement vs flat staking
 - [ ] Bankroll drawdown not worse than flat (Kelly should reduce variance)
 - [ ] Decision: keep or rollback
+
+**Rollback criteria (PC-24-04):**
+- **Keep** if ROI improves by ≥ 1% vs flat staking with same layers active
+  AND max drawdown does not increase by > 10pp
+- **Rollback** if ROI worsens or max drawdown increases by > 10pp (Kelly
+  is amplifying bad bets due to residual overconfidence)
 
 ---
 
@@ -8792,7 +8847,7 @@ Tests covering all PC-24 components:
 | `config/settings.yaml` | `sharp_bookmaker`, `staking_method` updates |
 | `src/betting/value_finder.py` | `sharp_only` parameter for Pinnacle filtering |
 | `src/models/calibration.py` | New: Platt scaling calibration module |
-| `src/models/poisson.py` | Optional calibration post-processing in `predict()` |
+| `src/models/poisson.py` | Optional λ calibration in `predict()` before matrix build |
 | `src/evaluation/backtester.py` | Pass-through for `sharp_only`, calibration |
 | `src/pipeline.py` | Wire up new config values |
 | `tests/test_pc24_roi_optimization.py` | New: integration tests |
