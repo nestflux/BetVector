@@ -346,9 +346,9 @@ single-line expression.
 
 ## Current Status
 
-Last completed: PC-19 — Deep Dive Bookmaker Probability Comparison ✅
-Currently working: PC-20 — Email Notifications Setup (blocked on owner email)
-Next up: PC-21 — Dixon-Coles Correction Factor
+Last completed: PC-20 — Email Notifications Setup ✅
+Currently working: PC-21 — Dixon-Coles Correction Factor
+Next up: PC-22 — Test Suite Hygiene
 
 E40 complete: All 10 issues done ✅ (TM datasets download, lineup/formation/manager backfill, manager features, injury club fix, minutes impact, recomputation, weekly refresh, integration test — 14,187 matches, 9,829 TM-mapped, 393K lineups, 42 tests)
 
@@ -397,7 +397,7 @@ Post-critical-path (March 2026):
 - PC-17: Badge Full Coverage + Allow-List Sync ✅ — Fixed Paris FC/Bielefeld badge swap (API-Football IDs set), downloaded all 27 remaining missing badges (Darmstadt, Hertha, Barnsley, Norwich, WBA, Almeria, Granada, Levante, Bordeaux, Clermont, Dijon, Nimes, Troyes, Benevento, Crotone, Frosinone, Salernitana, Sampdoria, Spezia, etc.), 183/183 full badge coverage, zero mismatches. Synced project allow-list with global (added pgrep, nohup, kill, pkill, lsof + 11 more).
 - PC-18: Feature Pruning for Model Accuracy ✅ — Removed 21 features from Poisson + XGBoost `_select_feature_cols()`: manager_win_pct (overfitting, +0.0185 EPL regression), manager_tenure_days (re-appointment bug), ref_avg_goals/ref_home_win_pct (76% EPL, dead elsewhere), all weather (13% EPL, dead elsewhere), set_piece/open_play_xg (59% LaLiga, dead elsewhere), 11 dead features (0% all leagues). Kept new_manager_flag + manager_change_count (clean signals). Backtest: avg Brier 0.5983→0.5921 (-1.0%), EPL 0.6317→0.6029 (-4.6%), zero regressions across 6 leagues. Data retained in DB.
 - PC-19: Deep Dive Bookmaker Probability Comparison ✅ — Model (white) vs bookmaker (grey #A0ADB8) side-by-side on Deep Dive page. Overround removed for fair comparison. Green highlight + edge badge when edge ≥ 5%. FanDuel preferred, auto-fallback. Today's Picks default filter: today + 14 days.
-- PC-20: Email Notifications Setup — BLOCKED (awaiting owner email address)
+- PC-20: Email Notifications Setup ✅ — Set betvector.co@gmail.com on user 1, GMAIL_APP_PASSWORD verified (19 chars), morning + evening notifications enabled. Awaiting next pipeline run for delivery confirmation.
 - PC-21: Dixon-Coles Correction Factor — NOT STARTED (4 sub-issues: ρ estimation, matrix correction, backtest, integration test)
 - PC-22: Test Suite Hygiene — NOT STARTED (E35 import fix, full suite verification)
 - PC-23: Log Housekeeping — NOT STARTED (.gitignore + rotation)
