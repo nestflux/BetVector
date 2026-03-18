@@ -92,14 +92,14 @@ EXPECTED_LEAGUES = {
     },
 }
 
-# Edge thresholds per league (from leagues.yaml)
+# Edge thresholds per league (from leagues.yaml, updated PC-24-01)
 EXPECTED_EDGE_THRESHOLDS = {
-    "EPL": 0.05,         # Standard — well-served market
-    "Championship": 0.03,  # Lower — thinner market, less efficient
-    "LaLiga": 0.05,      # Standard — well-served market
-    "Ligue1": 0.05,      # Standard — well-served market
-    "Bundesliga": 0.05,  # Standard — well-served market
-    "SerieA": 0.05,      # Standard — well-served market
+    "EPL": 0.05,           # Standard — well-served market
+    "Championship": 0.10,  # PC-24-01: best ROI at 10% (+10.5%, 731 VBs)
+    "LaLiga": 0.08,        # PC-24-01: best ROI at 8% (+18.1%, 110 VBs)
+    "Ligue1": 0.07,        # PC-24-01: 7% is -21.8% vs 8% at -32.1%
+    "Bundesliga": 0.05,    # Standard — well-served market
+    "SerieA": 0.05,        # Standard — well-served market
 }
 
 # Minimum expected match counts per league (across all seasons in local DB)
@@ -828,18 +828,17 @@ class TestEdgeThresholds:
 
     @pytest.mark.parametrize("short_name,expected_threshold", [
         ("EPL", 0.05),
-        ("Championship", 0.03),
-        ("LaLiga", 0.05),
-        ("Ligue1", 0.05),
+        ("Championship", 0.10),  # PC-24-01: best ROI at 10% (+10.5%)
+        ("LaLiga", 0.08),        # PC-24-01: best ROI at 8% (+18.1%)
+        ("Ligue1", 0.07),        # PC-24-01: 7% is -21.8% vs 8% at -32.1%
         ("Bundesliga", 0.05),
         ("SerieA", 0.05),
     ])
     def test_edge_threshold_correct(self, short_name: str, expected_threshold: float):
-        """Each league's edge threshold must match the expected value.
+        """Each league's edge threshold must match the PC-24-01 optimised value.
 
-        Lower threshold (Championship 3%) captures more value in a less
-        efficient market.  Standard threshold (5%) for EPL, La Liga, Ligue 1,
-        Bundesliga, Serie A reflects well-served betting markets.
+        Per-league thresholds optimised via 42-backtest sweep in PC-24-01.
+        Championship 10%, LaLiga 8%, Ligue1 7% — rest at 5% default.
         """
         lg = _get_league_config(short_name)
         # Edge threshold comes from edge_threshold_override or defaults to 0.05

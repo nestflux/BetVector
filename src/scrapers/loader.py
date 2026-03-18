@@ -51,7 +51,7 @@ import pandas as pd
 from src.database.db import get_session
 from src.database.models import (
     BetLog, ClubElo, InjuryFlag, League, Match, MatchLineup, MatchStat,
-    Odds, PlayerValue, Team, TeamInjury, TeamMarketValue, Weather,
+    Odds, PlayerValue, Team, TeamInjury, TeamMarketValue, ValueBet, Weather,
 )
 
 logger = logging.getLogger(__name__)
@@ -2111,11 +2111,18 @@ def load_match_lineups(
 
 
 def backfill_closing_odds() -> Dict[str, int]:
-    """Populate BetLog.closing_odds and BetLog.clv from Pinnacle closing odds.
+    """Populate closing_odds and CLV on both BetLog and ValueBet records.
 
-    For each resolved BetLog entry that still has ``closing_odds IS NULL``,
-    looks up the corresponding Pinnacle closing odds from the ``odds`` table
-    (bookmaker='Pinnacle', is_opening=0) and computes CLV.
+    **Pass 1 — BetLog:** For each resolved BetLog entry (won/lost/void)
+    that still has ``closing_odds IS NULL``, looks up the corresponding
+    Pinnacle closing odds from the ``odds`` table (bookmaker='Pinnacle',
+    is_opening=0) and computes CLV.
+
+    **Pass 2 — ValueBet (PC-25-04):** For each ValueBet whose underlying
+    match is finished and ``closing_odds IS NULL``, performs the same
+    lookup and computes CLV against the detection-time odds.  This enables
+    per-league CLV tracking as an early edge-validation signal — CLV
+    reaches statistical significance at ~50 bets vs ~2,000 for ROI.
 
     This is idempotent — entries that already have closing_odds are skipped.
     Entries where no Pinnacle closing odds exist are also skipped (they'll
@@ -2124,7 +2131,9 @@ def backfill_closing_odds() -> Dict[str, int]:
     Returns
     -------
     dict
-        Summary with keys: "updated", "no_closing_odds", "total_checked".
+        Summary with keys: "updated", "no_closing_odds", "total_checked"
+        (BetLog) and "vb_updated", "vb_no_closing", "vb_total_checked"
+        (ValueBet).
     """
     updated = 0
     no_closing_odds = 0
@@ -2231,15 +2240,111 @@ def backfill_closing_odds() -> Dict[str, int]:
                 placement_odds, closing_decimal, clv,
             )
 
+    # ------------------------------------------------------------------
+    # PC-25-04: Also backfill ValueBet.closing_odds and ValueBet.clv.
+    # ValueBet records track odds at *detection* time (bookmaker_odds).
+    # CLV for value bets tells us whether the model's edge was genuine:
+    #   CLV = (1/closing_odds) - (1/bookmaker_odds)
+    # A negative CLV means you detected the bet at better odds than
+    # the market settled at — confirming the model spotted real value.
+    # ------------------------------------------------------------------
+    vb_updated = 0
+    vb_no_closing = 0
+
+    with get_session() as session:
+        # Find ValueBet entries that still need closing odds.
+        # Unlike BetLog, ValueBet doesn't have a status column —
+        # we check if the underlying match is finished (has a result).
+        pending_vbs = (
+            session.query(ValueBet)
+            .join(Match, ValueBet.match_id == Match.id)
+            .filter(
+                ValueBet.closing_odds.is_(None),
+                Match.status == "finished",
+            )
+            .all()
+        )
+
+        if pending_vbs:
+            logger.info(
+                "backfill_closing_odds: Checking %d value_bet entries",
+                len(pending_vbs),
+            )
+
+            for vb in pending_vbs:
+                # Look up Pinnacle closing odds for this match/market/selection
+                closing_odds_row = (
+                    session.query(Odds)
+                    .filter(
+                        Odds.match_id == vb.match_id,
+                        Odds.bookmaker == "Pinnacle",
+                        Odds.market_type == vb.market_type,
+                        Odds.selection == vb.selection,
+                        Odds.is_opening == 0,
+                    )
+                    .first()
+                )
+
+                # Fallback to market_avg closing odds
+                if closing_odds_row is None:
+                    closing_odds_row = (
+                        session.query(Odds)
+                        .filter(
+                            Odds.match_id == vb.match_id,
+                            Odds.bookmaker == "market_avg",
+                            Odds.market_type == vb.market_type,
+                            Odds.selection == vb.selection,
+                            Odds.is_opening == 0,
+                        )
+                        .first()
+                    )
+
+                if closing_odds_row is None or closing_odds_row.odds_decimal is None:
+                    vb_no_closing += 1
+                    continue
+
+                closing_decimal = closing_odds_row.odds_decimal
+                detection_odds = vb.bookmaker_odds
+
+                if detection_odds is None or detection_odds <= 1.0:
+                    vb_no_closing += 1
+                    continue
+
+                if closing_decimal <= 1.0:
+                    vb_no_closing += 1
+                    continue
+
+                # CLV = implied_prob(closing) - implied_prob(detection)
+                # Negative = you got better odds than the market closing line (good!)
+                clv = (1.0 / closing_decimal) - (1.0 / detection_odds)
+
+                vb.closing_odds = round(closing_decimal, 4)
+                vb.clv = round(clv, 6)
+                vb_updated += 1
+
+                logger.debug(
+                    "CLV backfilled for value_bet %d: match=%d %s/%s, "
+                    "detected=%.2f, closing=%.2f, clv=%.6f",
+                    vb.id, vb.match_id, vb.market_type, vb.selection,
+                    detection_odds, closing_decimal, clv,
+                )
+
+            session.commit()
+
+    logger.info(
+        "backfill_closing_odds: BetLog %d updated, %d missing; "
+        "ValueBet %d updated, %d missing",
+        updated, no_closing_odds, vb_updated, vb_no_closing,
+    )
+
     summary = {
         "updated": updated,
         "no_closing_odds": no_closing_odds,
         "total_checked": updated + no_closing_odds,
+        "vb_updated": vb_updated,
+        "vb_no_closing": vb_no_closing,
+        "vb_total_checked": vb_updated + vb_no_closing,
     }
-    logger.info(
-        "backfill_closing_odds: %d updated, %d missing closing odds, %d total",
-        updated, no_closing_odds, updated + no_closing_odds,
-    )
     return summary
 
 

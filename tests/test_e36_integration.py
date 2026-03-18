@@ -299,24 +299,27 @@ def _get_league_threshold(short_name: str) -> float:
 
 
 def test_championship_edge_threshold():
-    """Championship must use a 3% edge threshold (less efficient market).
+    """Championship must use a 10% edge threshold (PC-24-01: sweep-validated).
 
-    The Championship bookmaker market is thinner than EPL/La Liga, so a
-    lower threshold (3%) captures more value without over-filtering.  This
-    was implemented in E36-03.
+    The Championship market is less efficient than EPL.  PC-24-01 threshold
+    sweep showed best ROI at 10% (+10.5%, 731 VBs).  Originally 3% in E36-03,
+    raised to 10% in PC-24-01.
     """
     threshold = _get_league_threshold("Championship")
-    assert threshold == pytest.approx(0.03, abs=1e-6), (
-        f"Championship edge_threshold should be 0.03, got {threshold}"
+    assert threshold == pytest.approx(0.10, abs=1e-6), (
+        f"Championship edge_threshold should be 0.10 (PC-24-01), got {threshold}"
     )
 
 
-@pytest.mark.parametrize("short_name", ["EPL", "LaLiga"])
-def test_standard_edge_threshold(short_name: str):
-    """EPL and La Liga use the standard 5% edge threshold."""
+@pytest.mark.parametrize("short_name,expected", [
+    ("EPL", 0.05),
+    ("LaLiga", 0.08),  # PC-24-01: best ROI at 8% (+18.1%, 110 VBs)
+])
+def test_standard_edge_threshold(short_name: str, expected: float):
+    """EPL uses 5% (default), LaLiga uses 8% (PC-24-01 sweep-validated)."""
     threshold = _get_league_threshold(short_name)
-    assert threshold == pytest.approx(0.05, abs=1e-6), (
-        f"{short_name} edge_threshold should be 0.05, got {threshold}"
+    assert threshold == pytest.approx(expected, abs=1e-6), (
+        f"{short_name} edge_threshold should be {expected}, got {threshold}"
     )
 
 

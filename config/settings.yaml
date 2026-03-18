@@ -44,6 +44,12 @@ features:
 # Example: edge_threshold 0.05 means the model must see ≥5 % edge.
 value_betting:
   edge_threshold: 0.05
+  # PC-24-02: Sharp bookmaker for edge comparison.
+  # When sharp_only mode is enabled, value bets are only flagged when the
+  # model beats the sharp bookmaker's line (Pinnacle = sharpest in the world).
+  # This filters out "soft" edges against less accurate bookmakers.
+  # Fallback: if sharp bookmaker has no odds for a match, use market_avg.
+  sharp_bookmaker: "Pinnacle"
   # Confidence tiers used in the value_bets table and email templates
   confidence_thresholds:
     high: 0.10       # edge >= 10 %
@@ -71,6 +77,11 @@ safety:
   daily_loss_limit: 0.10                # Alert if daily losses exceed 10 % of bankroll
   drawdown_alert_threshold: 0.25        # Alert if drawdown from peak exceeds 25 %
   minimum_bankroll_percentage: 0.50     # Alert if bankroll drops below 50 % of starting
+  # Aggregate daily exposure caps — critical for professional bankroll management.
+  # Without these, 10 value bets at 5 % each = 50 % of bankroll at risk in one day.
+  # Professional betting operations cap total daily exposure at 15–20 % of bankroll.
+  max_daily_exposure: 0.15             # Never stake > 15 % of bankroll across all bets in one day
+  max_league_daily_exposure: 0.08      # Never stake > 8 % of bankroll on a single league per day
 
 # ---------------------------------------------------------------------------
 # Model Settings
@@ -158,11 +169,15 @@ self_improvement:
 
   # §11.4 — Odds Market Feedback Loop
   # Tracks ROI per league × market combination.  A market is "profitable"
-  # only when the 95 % CI lower bound is positive AND n >= 100.
+  # only when the 95 % CI lower bound is positive AND n >= 250.
   market_feedback:
     min_sample_size: 50                   # Min resolved bets before assessing a market
     confidence_interval: 0.95             # 95 % CI for ROI estimates
-    profitable_min_bets: 100              # Min bets for "profitable" classification
+    # PC-25-06: Raised from 100 to 250.  At n=100, there is a 37% chance of
+    # showing negative ROI even with a true +5% edge (pure variance).
+    # Academic research (Deschamps & Gergaud 2007, Kuypers 2000) supports
+    # 200-300 minimum for the "profitable" label to be statistically defensible.
+    profitable_min_bets: 250              # Min bets for "profitable" classification
     assessment_frequency: "weekly"
     assessment_day: "sunday"
     assessment_time: "20:00"              # UTC

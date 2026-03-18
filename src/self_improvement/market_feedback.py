@@ -11,10 +11,10 @@ league × market combination with enough resolved bets, computes:
   - A three-tier assessment: profitable / promising / insufficient / unprofitable
 
 Assessment tiers (MP §11.4):
-  profitable   — ROI > 0 AND CI lower bound > 0 AND n >= 100
-  promising    — ROI > 0 but CI includes zero, OR 50 <= n < 100
+  profitable   — ROI > 0 AND CI lower bound > 0 AND n >= 250
+  promising    — ROI > 0 but CI includes zero, OR 50 <= n < 250
   insufficient — n < 50 (not enough data to assess)
-  unprofitable — ROI < 0 AND CI upper bound < 0 AND n >= 100
+  unprofitable — ROI < 0 AND CI upper bound < 0 AND n >= 250
 
 This module only reports and warns — it NEVER auto-filters or suppresses
 value bets.  The decision to stop betting on a combination is always
@@ -65,7 +65,7 @@ def update_market_performance(
 
     mf_cfg = config.settings.self_improvement.market_feedback
     min_bets = mf_cfg.min_sample_size              # 50
-    profitable_min = mf_cfg.profitable_min_bets     # 100
+    profitable_min = mf_cfg.profitable_min_bets     # 250 (PC-25-06: raised from 100)
 
     # Gather all resolved system_pick bets grouped by league × market
     combos = _gather_resolved_bets()
@@ -328,10 +328,10 @@ def _assess(
     """Determine the assessment tier for a league × market combination.
 
     Tiers (MP §11.4):
-      profitable   — ROI > 0 AND CI lower > 0 AND n >= 100
-      promising    — ROI > 0 but CI includes 0, OR 50 <= n < 100
+      profitable   — ROI > 0 AND CI lower > 0 AND n >= 250
+      promising    — ROI > 0 but CI includes 0, OR 50 <= n < 250
       insufficient — n < 50
-      unprofitable — ROI < 0 AND CI upper < 0 AND n >= 100
+      unprofitable — ROI < 0 AND CI upper < 0 AND n >= 250
     """
     # Insufficient data
     if n < min_bets:

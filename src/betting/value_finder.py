@@ -164,12 +164,25 @@ class ValueFinder:
         match_id: int,
         edge_threshold: float = 0.05,
         model_name: Optional[str] = None,
+        sharp_only: bool = False,
+        sharp_bookmaker: str = "Pinnacle",
     ) -> List[ValueBetResult]:
         """Find value bets for a specific match.
 
-        Compares the model's predicted probabilities against all available
-        bookmaker odds for this match.  Returns value bets where the edge
-        (model_prob - implied_prob) meets or exceeds the threshold.
+        Compares the model's predicted probabilities against bookmaker odds
+        for this match.  Returns value bets where the edge (model_prob -
+        implied_prob) meets or exceeds the threshold.
+
+        Sharp-Only Mode (PC-24-02)
+        --------------------------
+        When ``sharp_only=True``, only compares against the sharp bookmaker
+        (default: Pinnacle — the sharpest bookmaker in the world, whose odds
+        are closest to true probabilities).  If the model finds edge against
+        Pinnacle, the edge is much more likely to be genuine vs finding edge
+        against a soft bookmaker like Bet365 or William Hill.
+
+        Fallback: if the sharp bookmaker has no odds for a match, falls back
+        to ``market_avg`` (overround-removed average across all bookmakers).
 
         Parameters
         ----------
@@ -181,6 +194,12 @@ class ValueFinder:
         model_name : str, optional
             If provided, only use predictions from this model.
             If None, use the most recent prediction for this match.
+        sharp_only : bool
+            If True, only compare edges against the sharp bookmaker
+            (PC-24-02).  Default False preserves existing behaviour.
+        sharp_bookmaker : str
+            Name of the sharp bookmaker to use when sharp_only=True.
+            Default "Pinnacle".  Configurable via config/settings.yaml.
 
         Returns
         -------
@@ -221,6 +240,34 @@ class ValueFinder:
                 "find_value_bets: No odds available for match %d", match_id,
             )
             return []
+
+        # PC-24-02: Sharp-only filtering
+        # When sharp_only is enabled, only compare against the sharp bookmaker
+        # (e.g., Pinnacle). This filters out "soft" edges where the model beats
+        # a less accurate bookmaker but not the market leader.
+        if sharp_only:
+            sharp_odds = [
+                o for o in odds_list
+                if o["bookmaker"] == sharp_bookmaker
+            ]
+            if sharp_odds:
+                odds_list = sharp_odds
+            else:
+                # Fallback: if sharp bookmaker has no odds for this match,
+                # use market_avg (overround-removed average) which is
+                # reasonably accurate and always available
+                market_avg_odds = [
+                    o for o in odds_list
+                    if o["bookmaker"] == "market_avg"
+                ]
+                if market_avg_odds:
+                    odds_list = market_avg_odds
+                    logger.debug(
+                        "find_value_bets: %s has no odds for match %d, "
+                        "falling back to market_avg",
+                        sharp_bookmaker, match_id,
+                    )
+                # else: keep all odds as final fallback (better than no bets)
 
         # Compare each odds entry against the model prediction
         value_bets: List[ValueBetResult] = []

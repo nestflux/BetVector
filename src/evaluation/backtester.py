@@ -104,6 +104,8 @@ def run_backtest(
     training_seasons: Optional[List[str]] = None,
     training_league_ids: Optional[List[int]] = None,
     model_kwargs: Optional[Dict[str, Any]] = None,
+    sharp_only: bool = False,
+    sharp_bookmaker: str = "Pinnacle",
 ) -> BacktestResult:
     """Run a walk-forward backtest on a full season of historical data.
 
@@ -174,6 +176,14 @@ def run_backtest(
     model_kwargs : dict or None
         Extra keyword arguments passed to ``model_class()`` constructor.
         Example: ``{"use_dixon_coles": False}`` for baseline A/B comparison.
+    sharp_only : bool
+        PC-24-02: If True, only compare edges against the sharp bookmaker
+        (default: Pinnacle).  Filters out "soft" edges where the model
+        beats less accurate bookmakers.  When the sharp bookmaker has no
+        odds for a match, falls back to ``market_avg``.
+    sharp_bookmaker : str
+        Name of the sharp bookmaker to use when sharp_only=True.
+        Default "Pinnacle".  Configurable via config/settings.yaml.
 
     Returns
     -------
@@ -322,6 +332,23 @@ def run_backtest(
             odds_list = finder._get_match_odds(pred.match_id)
             if not odds_list:
                 continue
+
+            # PC-24-02: Sharp-only filtering — only compare against the
+            # sharp bookmaker (e.g., Pinnacle) for higher-quality edges.
+            # If the sharp bookmaker has no odds for this match, fall back
+            # to market_avg (overround-removed average across all books).
+            if sharp_only:
+                sharp_odds = [
+                    o for o in odds_list if o["bookmaker"] == sharp_bookmaker
+                ]
+                if sharp_odds:
+                    odds_list = sharp_odds
+                else:
+                    market_avg_odds = [
+                        o for o in odds_list if o["bookmaker"] == "market_avg"
+                    ]
+                    if market_avg_odds:
+                        odds_list = market_avg_odds
 
             # Find value bets
             for odds_row in odds_list:

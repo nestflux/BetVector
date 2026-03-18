@@ -124,11 +124,28 @@ class BankrollManager:
         user_id: int,
         model_prob: float,
         odds: float,
+        league: Optional[str] = None,
     ) -> StakeResult:
         """Calculate the recommended stake for a value bet.
 
         Reads the user's staking method and bankroll from the database,
         applies the appropriate formula, then enforces all safety limits.
+
+        The method also enforces two aggregate daily exposure caps that
+        prevent over-committing capital on a single day:
+
+        - **max_daily_exposure** (15%): the total amount staked across ALL
+          leagues today must not exceed 15% of the current bankroll.  Without
+          this cap, 10 value bets at 5% each would put 50% of the bankroll
+          at risk simultaneously.
+
+        - **max_league_daily_exposure** (8%): the total staked on a single
+          league today must not exceed 8%.  This prevents concentration risk
+          (e.g. loading up on 5 Championship bets while the league is in form).
+
+        When a cap is hit the function returns stake=0 and logs a warning.
+        The pipeline still logs the value bet as a system_pick (with stake=0)
+        so that model performance tracking is unaffected.
 
         Parameters
         ----------
@@ -138,6 +155,9 @@ class BankrollManager:
             Model's estimated probability of the outcome (0.0–1.0).
         odds : float
             Decimal odds offered by the bookmaker (e.g. 2.10).
+        league : str, optional
+            Short name of the league (e.g. "EPL", "LaLiga").  Required for
+            per-league exposure checks; if None the league cap is skipped.
 
         Returns
         -------
@@ -165,6 +185,73 @@ class BankrollManager:
                 safety_warnings=safety,
                 message=safety["message"],
             )
+
+        # --- Aggregate daily exposure caps ---
+        # Professional betting operations limit total daily deployment to
+        # 15–20 % of bankroll.  Without this, many value bets on the same
+        # day can put 50 %+ at risk simultaneously.
+        #
+        # We read both caps from config with graceful fallback to None
+        # (None means "no cap") so that existing installs without these
+        # config keys continue to work.
+        safety_cfg = config.settings.safety
+        max_daily_exp = getattr(safety_cfg, "max_daily_exposure", None)
+        max_league_exp = getattr(safety_cfg, "max_league_daily_exposure", None)
+
+        bankroll_for_cap = user["current_bankroll"]
+
+        if max_daily_exp is not None:
+            today_staked_all = self._get_daily_staked(user_id, league=None)
+            daily_cap_amount = bankroll_for_cap * max_daily_exp
+            if today_staked_all >= daily_cap_amount:
+                logger.warning(
+                    "Daily exposure cap hit for user %d: "
+                    "$%.2f staked today >= $%.2f cap (%.0f%% of $%.2f bankroll). "
+                    "Returning stake=0.",
+                    user_id,
+                    today_staked_all,
+                    daily_cap_amount,
+                    max_daily_exp * 100,
+                    bankroll_for_cap,
+                )
+                return StakeResult(
+                    stake=0.0,
+                    method=user["staking_method"],
+                    safety_warnings={**safety, "daily_exposure_cap_hit": True},
+                    message=(
+                        f"Daily exposure cap hit: ${today_staked_all:.2f} already "
+                        f"staked today (limit: ${daily_cap_amount:.2f} = "
+                        f"{max_daily_exp:.0%} of bankroll). No more bets today."
+                    ),
+                )
+
+        if max_league_exp is not None and league is not None:
+            today_staked_league = self._get_daily_staked(user_id, league=league)
+            league_cap_amount = bankroll_for_cap * max_league_exp
+            if today_staked_league >= league_cap_amount:
+                logger.warning(
+                    "League daily exposure cap hit for user %d, league %s: "
+                    "$%.2f staked today >= $%.2f cap (%.0f%% of $%.2f bankroll). "
+                    "Returning stake=0.",
+                    user_id,
+                    league,
+                    today_staked_league,
+                    league_cap_amount,
+                    max_league_exp * 100,
+                    bankroll_for_cap,
+                )
+                return StakeResult(
+                    stake=0.0,
+                    method=user["staking_method"],
+                    safety_warnings={**safety, "league_exposure_cap_hit": True},
+                    message=(
+                        f"{league} exposure cap hit: ${today_staked_league:.2f} "
+                        f"already staked on {league} today "
+                        f"(limit: ${league_cap_amount:.2f} = "
+                        f"{max_league_exp:.0%} of bankroll). "
+                        f"No more {league} bets today."
+                    ),
+                )
 
         # Calculate raw stake based on the user's chosen method
         method = user["staking_method"]
@@ -396,6 +483,47 @@ class BankrollManager:
                 "kelly_fraction": user.kelly_fraction,
                 "edge_threshold": user.edge_threshold,
             }
+
+    @staticmethod
+    def _get_daily_staked(user_id: int, league: Optional[str] = None) -> float:
+        """Sum all stakes placed today for a user, optionally filtered by league.
+
+        **Aggregate daily exposure** is the total amount of real capital
+        committed today across all pending and resolved bets.  This is
+        distinct from daily losses: a stake is committed the moment it is
+        logged, regardless of whether the bet has settled yet.
+
+        We include all bet statuses (pending, won, lost, etc.) so that
+        even unsettled bets count towards the cap — they represent real
+        exposure until the result is known.
+
+        Parameters
+        ----------
+        user_id : int
+            Database ID of the user.
+        league : str or None
+            If provided, sum only bets on this league.  If None, sum all
+            leagues (used for the aggregate daily cap check).
+
+        Returns
+        -------
+        float
+            Total amount staked today, in currency units.
+        """
+        today = date.today().isoformat()
+
+        with get_session() as session:
+            query = session.query(BetLog).filter(
+                BetLog.user_id == user_id,
+                BetLog.date == today,
+            )
+            if league is not None:
+                query = query.filter(BetLog.league == league)
+            bets = query.all()
+
+            total_staked = sum(b.stake or 0.0 for b in bets)
+
+        return total_staked
 
     @staticmethod
     def _get_daily_losses(user_id: int) -> float:

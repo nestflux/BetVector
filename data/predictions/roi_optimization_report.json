@@ -1,0 +1,160 @@
+{
+  "per_league": {
+    "EPL": {
+      "league": "EPL",
+      "threshold_pct": 5,
+      "staking": "flat",
+      "brier": 0.603124,
+      "roi": -12.94,
+      "total_value_bets": 1229,
+      "total_pnl": -930.46,
+      "total_staked": 7190.5,
+      "total_predicted": 380,
+      "baseline_roi": -12.94,
+      "roi_delta": 0.0,
+      "ci_lower": -17.35,
+      "ci_upper": 1.49,
+      "tier": "promising",
+      "tier_emoji": "\ud83d\udfe1",
+      "auto_bet": false,
+      "elapsed": 23.9
+    },
+    "Championship": {
+      "league": "Championship",
+      "threshold_pct": 10,
+      "staking": "flat",
+      "brier": 0.63387,
+      "roi": 10.52,
+      "total_value_bets": 731,
+      "total_pnl": 4270.07,
+      "total_staked": 40601.69,
+      "total_predicted": 552,
+      "baseline_roi": 7.11,
+      "roi_delta": 3.41,
+      "ci_lower": 3.54,
+      "ci_upper": 23.01,
+      "tier": "profitable",
+      "tier_emoji": "\ud83d\udfe2",
+      "auto_bet": true,
+      "elapsed": 45.8
+    },
+    "LaLiga": {
+      "league": "LaLiga",
+      "threshold_pct": 8,
+      "staking": "flat",
+      "brier": 0.564934,
+      "roi": 18.05,
+      "total_value_bets": 110,
+      "total_pnl": 460.28,
+      "total_staked": 2549.74,
+      "total_predicted": 380,
+      "baseline_roi": 9.04,
+      "roi_delta": 9.01,
+      "ci_lower": -9.16,
+      "ci_upper": 50.3,
+      "tier": "promising",
+      "tier_emoji": "\ud83d\udfe1",
+      "auto_bet": false,
+      "elapsed": 39.0
+    },
+    "Ligue1": {
+      "league": "Ligue1",
+      "threshold_pct": 7,
+      "staking": "flat",
+      "brier": 0.580472,
+      "roi": -21.76,
+      "total_value_bets": 257,
+      "total_pnl": -571.75,
+      "total_staked": 2627.35,
+      "total_predicted": 306,
+      "baseline_roi": -27.59,
+      "roi_delta": 5.83,
+      "ci_lower": -28.91,
+      "ci_upper": -1.12,
+      "tier": "unprofitable",
+      "tier_emoji": "\ud83d\udd34",
+      "auto_bet": false,
+      "elapsed": 27.7
+    },
+    "Bundesliga": {
+      "league": "Bundesliga",
+      "threshold_pct": 5,
+      "staking": "flat",
+      "brier": 0.593401,
+      "roi": -21.15,
+      "total_value_bets": 245,
+      "total_pnl": -670.55,
+      "total_staked": 3169.81,
+      "total_predicted": 306,
+      "baseline_roi": -21.15,
+      "roi_delta": 0.0,
+      "ci_lower": -35.21,
+      "ci_upper": -7.41,
+      "tier": "unprofitable",
+      "tier_emoji": "\ud83d\udd34",
+      "auto_bet": false,
+      "elapsed": 25.5
+    },
+    "SerieA": {
+      "league": "SerieA",
+      "threshold_pct": 5,
+      "staking": "flat",
+      "brier": 0.574114,
+      "roi": -18.65,
+      "total_value_bets": 240,
+      "total_pnl": -617.31,
+      "total_staked": 3309.96,
+      "total_predicted": 380,
+      "baseline_roi": -18.65,
+      "roi_delta": 0.0,
+      "ci_lower": -32.36,
+      "ci_upper": -4.15,
+      "tier": "unprofitable",
+      "tier_emoji": "\ud83d\udd34",
+      "auto_bet": false,
+      "elapsed": 35.9
+    }
+  },
+  "aggregate": {
+    "baseline_pnl": 933.28,
+    "baseline_staked": 69603.31,
+    "baseline_roi": 1.34,
+    "optimised_pnl": 1940.28,
+    "optimised_staked": 59449.05,
+    "optimised_roi": 3.26,
+    "roi_delta": 1.92,
+    "any_regression_over_5pct": false
+  },
+  "layers": {
+    "PC-24-01_thresholds": "KEEP",
+    "PC-24-02_pinnacle": "ROLLBACK",
+    "PC-24-03_calibration": "ROLLBACK",
+    "PC-24-04_kelly": "ROLLBACK"
+  },
+  "accepted_config": {
+    "EPL": {
+      "edge_threshold": 0.05,
+      "staking": "flat"
+    },
+    "Championship": {
+      "edge_threshold": 0.1,
+      "staking": "flat"
+    },
+    "LaLiga": {
+      "edge_threshold": 0.08,
+      "staking": "flat"
+    },
+    "Ligue1": {
+      "edge_threshold": 0.07,
+      "staking": "flat"
+    },
+    "Bundesliga": {
+      "edge_threshold": 0.05,
+      "staking": "flat"
+    },
+    "SerieA": {
+      "edge_threshold": 0.05,
+      "staking": "flat"
+    }
+  }
+}

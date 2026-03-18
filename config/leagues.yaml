@@ -35,12 +35,21 @@ leagues:
       - "2024-25"
       - "2025-26"
     total_matchdays: 38
+    # PC-25-01: Per-league strategy profile.  Pipeline reads these values
+    # with global defaults as fallback (see settings.yaml value_betting).
+    # EPL is the most efficient market — no sharp filtering, standard stake.
+    strategy:
+      sharp_only: false        # All bookmakers (efficient market, Pinnacle hurts by -12pp)
+      stake_multiplier: 1.0    # 🟡 promising tier — standard stake
+      max_daily_bets: 10       # Per-league daily cap
+      auto_bet: false          # 🟡 tier — analysis only until CI confirms edge
+      clv_tracking: true       # Track closing line value for edge validation
 
   # -------------------------------------------------------------------------
   # English Championship (E36-01 — League Expansion)
   # Football-Data.co.uk code: E1 (same CSV format as EPL's E0 — zero code changes)
   # 24 teams × 46 matches per team = 552 matches per season
-  # Less efficient market than EPL → edge_threshold_override: 0.03 (3%)
+  # Less efficient market than EPL → edge_threshold_override: 0.10 (10%, PC-24-01)
   # NOTE: Championship is NOT covered by Understat — understat_league: null
   # so the xG step is skipped gracefully, model falls back to goals-only features
   # -------------------------------------------------------------------------
@@ -64,7 +73,16 @@ leagues:
       - "2024-25"
       - "2025-26"
     total_matchdays: 46
-    edge_threshold_override: 0.03  # Lower threshold — Championship market less efficient than EPL
+    edge_threshold_override: 0.10  # PC-24-01: Best ROI at 10% (+10.5%, 731 VBs) — sweep-validated
+    # PC-25-01: Championship is our only 🟢 profitable league (CI [3.5%, 23.0%]).
+    # Less efficient market (13% of EPL volume) → edges persist 1-3 seasons.
+    # No sharp filtering needed — market inefficiency is structural.
+    strategy:
+      sharp_only: false        # All bookmakers (market is inefficient enough without filtering)
+      stake_multiplier: 1.0    # 🟢 profitable tier — will increase to 1.5× in PC-25-09
+      max_daily_bets: 10       # Per-league daily cap
+      auto_bet: true           # 🟢 tier — system recommends betting
+      clv_tracking: true       # Track CLV to confirm edge persistence
 
   # -------------------------------------------------------------------------
   # La Liga (E36-02 — League Expansion)
@@ -95,7 +113,16 @@ leagues:
       - "2024-25"
       - "2025-26"
     total_matchdays: 38
-    edge_threshold_override: 0.05  # Same as EPL — well-served market
+    edge_threshold_override: 0.08  # PC-24-01: Best ROI at 8% (+18.1%, 110 VBs) — sweep-validated
+    # PC-25-01: LaLiga shows +21.49pp ROI with Pinnacle-only filtering (PC-24-02
+    # backtest). Sharp filtering works here because Pinnacle has excellent La Liga
+    # coverage and the model consistently beats Pinnacle's line on this league.
+    strategy:
+      sharp_only: true         # Pinnacle-only — +21.49pp improvement in backtest
+      stake_multiplier: 1.0    # 🟡 promising tier — standard stake
+      max_daily_bets: 8        # Per-league daily cap
+      auto_bet: false          # 🟡 tier — analysis only (CI [-9.2%, +50.3%] crosses zero)
+      clv_tracking: true       # Critical — LaLiga CLV validates the sharp-only edge
 
   # -------------------------------------------------------------------------
   # French Ligue 1 (PC-08-02 — replaces English League One)
@@ -128,7 +155,16 @@ leagues:
       - "2024-25"
       - "2025-26"
     total_matchdays: 38
-    edge_threshold_override: 0.05  # Same as EPL — well-served market
+    edge_threshold_override: 0.07  # PC-24-01: 7% is -21.8% vs 8% at -32.1% — minimises losses
+    # PC-25-01: Ligue1 shows +22.14pp ROI with Pinnacle-only filtering (PC-24-02
+    # backtest). Turned a 🔴 unprofitable league into ~break-even. Pinnacle has
+    # strong Ligue 1 coverage and the model finds genuine edge against sharp odds.
+    strategy:
+      sharp_only: true         # Pinnacle-only — +22.14pp improvement in backtest
+      stake_multiplier: 1.0    # 🔴 tier — will decrease to 0.5× in PC-25-09
+      max_daily_bets: 8        # Per-league daily cap
+      auto_bet: false          # 🔴 tier — analysis only
+      clv_tracking: true       # Track whether Pinnacle-only edge persists
 
   # -------------------------------------------------------------------------
   # Bundesliga (E38-03 — League Expansion Phase 2)
@@ -160,6 +196,14 @@ leagues:
       - "2025-26"
     total_matchdays: 34
     edge_threshold_override: 0.05  # Same as EPL — well-served market
+    # PC-25-01: Bundesliga is 🔴 unprofitable (CI [-35.2%, -7.4%]).
+    # Insufficient backtest data to justify sharp filtering change.
+    strategy:
+      sharp_only: false        # All bookmakers — no evidence sharp filtering helps
+      stake_multiplier: 1.0    # 🔴 tier — will decrease to 0.5× in PC-25-09
+      max_daily_bets: 8        # Per-league daily cap
+      auto_bet: false          # 🔴 tier — analysis only
+      clv_tracking: true       # Track CLV to detect if edge emerges
 
   # -------------------------------------------------------------------------
   # Serie A (E38-04 — League Expansion Phase 2)
@@ -191,3 +235,11 @@ leagues:
       - "2025-26"
     total_matchdays: 38
     edge_threshold_override: 0.05  # Same as EPL — well-served market
+    # PC-25-01: SerieA is 🔴 unprofitable (CI [-32.4%, -4.2%]).
+    # Insufficient backtest data to justify sharp filtering change.
+    strategy:
+      sharp_only: false        # All bookmakers — no evidence sharp filtering helps
+      stake_multiplier: 1.0    # 🔴 tier — will decrease to 0.5× in PC-25-09
+      max_daily_bets: 8        # Per-league daily cap
+      auto_bet: false          # 🔴 tier — analysis only
+      clv_tracking: true       # Track CLV to detect if edge emerges

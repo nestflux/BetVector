@@ -346,9 +346,9 @@ single-line expression.
 
 ## Current Status
 
-Last completed: PC-21 — Dixon-Coles Correction Factor ✅
-Currently working: PC-24 — ROI Optimization Pipeline
-Next up: PC-24-01 (per-league edge thresholds)
+Last completed: PC-25 Phase 1 — Multi-League Strategy System (6 issues) ✅
+Currently working: PC-25 Phase 2 — Stake Multipliers & Dashboard Integration
+Next up: PC-25-08 (Stake multiplier enforcement in BankrollManager)
 
 E40 complete: All 10 issues done ✅ (TM datasets download, lineup/formation/manager backfill, manager features, injury club fix, minutes impact, recomputation, weekly refresh, integration test — 14,187 matches, 9,829 TM-mapped, 393K lineups, 42 tests)
 
@@ -401,6 +401,8 @@ Post-critical-path (March 2026):
 - PC-21: Dixon-Coles Correction Factor ✅ — Dixon & Coles (1997) ρ correction for low-scoring matches. `_estimate_rho()` MLE via `minimize_scalar` [-0.15, 0.0], 200-match min, vectorized numpy (15x speedup). τ multipliers on (0,0), (1,0), (0,1), (1,1) cells. `use_dixon_coles` flag + `model_kwargs` in backtester. 6-league A/B backtest: DC wins Brier 3/6 (LaLiga -0.0003, Bundesliga -0.0018, SerieA -0.0021), ROI mixed. Adopted permanently. 33 tests, 473/473 suite passing.
 - PC-22: Test Suite Hygiene ✅ — E35 MagicMock import error was already resolved (mock setup in test_e35_v2_integration.py handles module-level Streamlit code correctly). Full suite verified: 464/464 tests passing, 0 failures, 1 warning (SQLAlchemy legacy API).
 - PC-23: Log Housekeeping ✅ — Added `data/logs/` to `.gitignore` (no longer clutters git status). Added Python-level `_rotate_logs()` to `run_pipeline.py` (belt-and-suspenders with shell-level rotation in `run_pipeline_local.sh` line 108). 30-day retention, catches all exceptions silently, never blocks pipeline.
+- PC-24: ROI Optimization Pipeline ✅ — 4-layer stacked optimisation (thresholds, Pinnacle filtering, λ calibration, Kelly staking). PC-24-01 KEEP: per-league thresholds (Championship 10%, LaLiga 8%, Ligue1 7%) — aggregate ROI 1.34%→3.26% (+1.92%). PC-24-02 ROLLBACK: Pinnacle-only collapsed sample sizes (-5.65%). PC-24-03 ROLLBACK: calibration unnecessary (GLM MLE self-calibrates). PC-24-04 ROLLBACK: Kelly staking catastrophic drawdown (99.8%). Final tiers: 🟢 Championship (CI [3.5%, 23.0%]), 🟡 EPL+LaLiga (CI crosses zero), 🔴 Ligue1+Bundesliga+SerieA. 30 integration tests, 517/517 suite.
+- PC-25 Phase 1: Multi-League Strategy System ✅ — Per-league strategy profiles (sharp_only, stake_multiplier, max_daily_bets, auto_bet, clv_tracking) in leagues.yaml. LaLiga+Ligue1 sharp_only=True (+21/+22pp). Championship auto_bet=True (only 🟢 league). Aggregate daily exposure caps (15% total, 8% per-league) in bankroll.py. CLV backfill extended to ValueBet records. profitable_min_bets raised 100→250. 50 integration tests, 540/540 suite.
 
 E34 — Multi-User Authentication: ALL 6 issues done ✅
 - E34-01: Password storage + session overhaul ✅

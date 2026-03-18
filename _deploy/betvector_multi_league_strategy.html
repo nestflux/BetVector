@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BetVector — Multi-League Strategy Plan</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #0D1117;
+      color: #E6EDF3;
+      line-height: 1.7;
+    }
+    .hero {
+      padding: 4rem 2rem 3rem;
+      text-align: center;
+      border-bottom: 1px solid #30363D;
+      background: linear-gradient(180deg, #0D1117 0%, #161B22 100%);
+    }
+    .hero h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #3FB950, #58a6ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.5rem;
+    }
+    .hero .subtitle {
+      color: #8B949E;
+      font-size: 1.15rem;
+      margin-bottom: 1rem;
+    }
+    .hero .version {
+      color: #484F58;
+      font-size: 0.85rem;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+    }
+    h2 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      margin: 3rem 0 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid #30363D;
+      color: #E6EDF3;
+    }
+    h3 {
+      font-size: 1.2rem;
+      font-weight: 600;
+      margin: 2rem 0 0.75rem;
+      color: #58a6ff;
+    }
+    h4 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin: 1.5rem 0 0.5rem;
+      color: #E6EDF3;
+    }
+    p {
+      margin-bottom: 1rem;
+      color: #C9D1D9;
+    }
+    strong { color: #E6EDF3; }
+
+    /* Summary cards */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem;
+      margin: 1.5rem 0;
+    }
+    .summary-card {
+      background: #161B22;
+      border: 1px solid #30363D;
+      border-radius: 12px;
+      padding: 1.25rem;
+    }
+    .summary-card .card-title {
+      font-size: 0.85rem;
+      color: #8B949E;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.5rem;
+    }
+    .summary-card .card-value {
+      font-size: 1.8rem;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .summary-card .card-detail {
+      font-size: 0.85rem;
+      color: #8B949E;
+      margin-top: 0.25rem;
+    }
+    .green { color: #3FB950; }
+    .red { color: #F85149; }
+    .yellow { color: #D29922; }
+    .blue { color: #58a6ff; }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0 1.5rem;
+      font-size: 0.9rem;
+    }
+    th, td {
+      padding: 0.6rem 0.8rem;
+      text-align: left;
+      border-bottom: 1px solid #21262D;
+    }
+    th {
+      background: #161B22;
+      color: #8B949E;
+      font-weight: 600;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    td {
+      color: #C9D1D9;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+    }
+    tr:hover td { background: #161B22; }
+
+    /* Code blocks */
+    pre {
+      background: #161B22;
+      border: 1px solid #30363D;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      overflow-x: auto;
+      margin: 1rem 0 1.5rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      line-height: 1.6;
+      color: #C9D1D9;
+    }
+    code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85em;
+      background: #21262D;
+      padding: 0.15em 0.4em;
+      border-radius: 4px;
+      color: #E6EDF3;
+    }
+    pre code {
+      background: none;
+      padding: 0;
+    }
+
+    /* Callout boxes */
+    .callout {
+      border-left: 3px solid;
+      padding: 1rem 1.25rem;
+      margin: 1.5rem 0;
+      border-radius: 0 8px 8px 0;
+      background: #161B22;
+    }
+    .callout.insight { border-color: #3FB950; }
+    .callout.warning { border-color: #D29922; }
+    .callout.danger { border-color: #F85149; }
+    .callout .callout-title {
+      font-weight: 600;
+      font-size: 0.9rem;
+      margin-bottom: 0.5rem;
+    }
+    .callout.insight .callout-title { color: #3FB950; }
+    .callout.warning .callout-title { color: #D29922; }
+    .callout.danger .callout-title { color: #F85149; }
+
+    /* Phase banners */
+    .phase-banner {
+      background: #161B22;
+      border: 1px solid #30363D;
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin: 2rem 0 1rem;
+    }
+    .phase-banner .phase-number {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      color: #8B949E;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .phase-banner .phase-title {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #E6EDF3;
+      margin: 0.25rem 0;
+    }
+    .phase-banner .phase-subtitle {
+      color: #8B949E;
+      font-size: 0.9rem;
+      font-style: italic;
+    }
+
+    /* Issue cards */
+    .issue {
+      background: #161B22;
+      border: 1px solid #30363D;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin: 0.75rem 0;
+    }
+    .issue .issue-id {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      color: #58a6ff;
+    }
+    .issue .issue-title {
+      font-weight: 600;
+      margin: 0.25rem 0;
+    }
+    .issue .issue-desc {
+      font-size: 0.88rem;
+      color: #8B949E;
+    }
+
+    /* Visual: tier pipeline */
+    .tier-pipeline {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin: 1rem 0;
+    }
+    .tier-box {
+      flex: 1;
+      min-width: 140px;
+      background: #161B22;
+      border: 2px solid #30363D;
+      border-radius: 10px;
+      padding: 1rem;
+      text-align: center;
+    }
+    .tier-box.profitable { border-color: #3FB950; }
+    .tier-box.promising { border-color: #D29922; }
+    .tier-box.unprofitable { border-color: #F85149; }
+    .tier-box.insufficient { border-color: #484F58; }
+    .tier-box .tier-emoji { font-size: 1.5rem; }
+    .tier-box .tier-label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-top: 0.25rem;
+    }
+    .tier-box .tier-rule {
+      font-size: 0.75rem;
+      color: #8B949E;
+      margin-top: 0.25rem;
+    }
+
+    /* Visual: flow diagram */
+    .flow {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin: 1rem 0;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+    }
+    .flow-step {
+      background: #161B22;
+      border: 1px solid #30363D;
+      border-radius: 6px;
+      padding: 0.5rem 0.75rem;
+    }
+    .flow-arrow { color: #3FB950; font-weight: 700; }
+
+    /* Heatmap illustration */
+    .heatmap {
+      display: grid;
+      grid-template-columns: 120px repeat(4, 1fr);
+      gap: 2px;
+      margin: 1rem 0 1.5rem;
+      font-size: 0.78rem;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .heatmap-header {
+      background: #161B22;
+      padding: 0.5rem;
+      text-align: center;
+      color: #8B949E;
+      font-weight: 600;
+    }
+    .heatmap-label {
+      background: #161B22;
+      padding: 0.5rem;
+      color: #C9D1D9;
+      display: flex;
+      align-items: center;
+    }
+    .heatmap-cell {
+      padding: 0.5rem;
+      text-align: center;
+      border-radius: 4px;
+    }
+    .heatmap-cell.hm-green { background: rgba(63, 185, 80, 0.2); color: #3FB950; }
+    .heatmap-cell.hm-yellow { background: rgba(210, 153, 34, 0.2); color: #D29922; }
+    .heatmap-cell.hm-red { background: rgba(248, 81, 73, 0.2); color: #F85149; }
+    .heatmap-cell.hm-grey { background: rgba(72, 79, 88, 0.2); color: #484F58; }
+
+    /* Back link */
+    .back-link {
+      display: inline-block;
+      padding: 0.6rem 1.2rem;
+      background: #161B22;
+      border: 1px solid #30363D;
+      border-radius: 8px;
+      color: #58a6ff;
+      text-decoration: none;
+      font-size: 0.9rem;
+      margin: 2rem 0;
+      transition: border-color 0.2s;
+    }
+    .back-link:hover { border-color: #58a6ff; }
+
+    /* Footer */
+    .footer {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: #484F58;
+      font-size: 0.8rem;
+      border-top: 1px solid #21262D;
+      margin-top: 3rem;
+    }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      .hero h1 { font-size: 1.8rem; }
+      .summary-grid { grid-template-columns: 1fr; }
+      .tier-pipeline { flex-direction: column; }
+      .heatmap { font-size: 0.7rem; }
+      .heatmap { grid-template-columns: 80px repeat(4, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>Multi-League Strategy Plan</h1>
+  <p class="subtitle">Per-league optimization for maximum edge extraction</p>
+  <span class="version">PC-25 · March 2026</span>
+</div>
+
+<div class="container">
+
+  <a href="index.html" class="back-link">← Back to BetVector</a>
+
+  <!-- ═══ Executive Summary ═══ -->
+  <h2>Executive Summary</h2>
+  <p>PC-24 proved that <strong>the same optimization lever can be poison for one league and gold for another</strong>. Pinnacle-only filtering improved LaLiga by +21pp and Ligue1 by +22pp, yet destroyed EPL and Championship performance. This plan introduces <strong>per-league strategy profiles</strong>: each league gets its own optimized combination of edge threshold, sharp filtering, stake weighting, and exposure limits — operating as independent units within one unified system.</p>
+
+  <div class="summary-grid">
+    <div class="summary-card">
+      <div class="card-title">Current Aggregate ROI</div>
+      <div class="card-value green">+3.26%</div>
+      <div class="card-detail">Up from +1.34% baseline</div>
+    </div>
+    <div class="summary-card">
+      <div class="card-title">Profitable Leagues</div>
+      <div class="card-value yellow">1 / 6</div>
+      <div class="card-detail">Championship only (🟢)</div>
+    </div>
+    <div class="summary-card">
+      <div class="card-title">Untapped LaLiga Edge</div>
+      <div class="card-value green">+21.5pp</div>
+      <div class="card-detail">With Pinnacle-only filtering</div>
+    </div>
+    <div class="summary-card">
+      <div class="card-title">CLV Significance</div>
+      <div class="card-value blue">50 bets</div>
+      <div class="card-detail">vs 2,000 for ROI (40× faster)</div>
+    </div>
+  </div>
+
+  <!-- ═══ Current State ═══ -->
+  <h2>Current State Assessment</h2>
+
+  <h3>Portfolio Performance</h3>
+  <table>
+    <thead>
+      <tr><th>League</th><th>ROI</th><th>95% CI</th><th>Tier</th><th>VBs</th><th>PnL</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>Championship</strong></td><td class="green">+10.52%</td><td>[+3.5%, +23.0%]</td><td>🟢</td><td>731</td><td class="green">+$4,270</td></tr>
+      <tr><td><strong>LaLiga</strong></td><td class="green">+18.05%</td><td>[-9.2%, +50.3%]</td><td>🟡</td><td>110</td><td class="green">+$460</td></tr>
+      <tr><td><strong>EPL</strong></td><td class="red">-12.94%</td><td>[-17.4%, +1.5%]</td><td>🟡</td><td>1,229</td><td class="red">-$930</td></tr>
+      <tr><td><strong>Ligue1</strong></td><td class="red">-21.76%</td><td>[-28.9%, -1.1%]</td><td>🔴</td><td>257</td><td class="red">-$572</td></tr>
+      <tr><td><strong>Bundesliga</strong></td><td class="red">-21.15%</td><td>[-35.2%, -7.4%]</td><td>🔴</td><td>245</td><td class="red">-$671</td></tr>
+      <tr><td><strong>SerieA</strong></td><td class="red">-18.65%</td><td>[-32.4%, -4.2%]</td><td>🔴</td><td>240</td><td class="red">-$617</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout danger">
+    <div class="callout-title">Concentration Risk</div>
+    <p style="margin:0;">Championship's +$4,270 carries the entire system. Without it, aggregate PnL would be <strong>-$2,330</strong>. One league's market inefficiency is subsidizing five leagues of losses.</p>
+  </div>
+
+  <h3>The Untapped Opportunity</h3>
+  <p>Pinnacle-only filtering was rolled back globally because it failed in aggregate. But per-league analysis reveals massive differences:</p>
+
+  <table>
+    <thead>
+      <tr><th>League</th><th>Standard ROI</th><th>With Pinnacle-Only</th><th>Delta</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>LaLiga</td><td class="green">+18.05%</td><td class="green">~+39.5%</td><td class="green"><strong>+21.49pp</strong></td></tr>
+      <tr><td>Ligue1</td><td class="red">-21.76%</td><td>~+0.4%</td><td class="green"><strong>+22.14pp</strong></td></tr>
+      <tr><td>EPL</td><td class="red">-12.94%</td><td class="red">-25.1%</td><td class="red">-12.2pp</td></tr>
+      <tr><td>Championship</td><td class="green">+10.52%</td><td class="green">+4.8%</td><td class="red">-5.7pp</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout insight">
+    <div class="callout-title">Key Insight</div>
+    <p style="margin:0;">Per-league sharp filtering could turn Ligue1 from confirmed unprofitable to break-even, and double LaLiga's already-strong ROI. The same lever that helps two leagues hurts two others — this is why per-league strategy matters.</p>
+  </div>
+
+  <!-- ═══ Research Foundations ═══ -->
+  <h2>Research Foundations</h2>
+
+  <h3>1. Market Efficiency Is Not Uniform</h3>
+  <p>Academic research (University of Reading, 16,000+ English football matches) quantifies the betting volume gap:</p>
+  <table>
+    <thead><tr><th>League</th><th>Avg Volume / Match</th><th>% of EPL</th><th>Edge Persistence</th></tr></thead>
+    <tbody>
+      <tr><td>EPL</td><td>£23,262</td><td>100%</td><td>Hours</td></tr>
+      <tr><td>Championship</td><td>£3,044</td><td>13%</td><td>1-3 seasons</td></tr>
+      <tr><td>League One</td><td>£1,030</td><td>4.5%</td><td>Multiple seasons</td></tr>
+    </tbody>
+  </table>
+  <p>Lower liquidity = fewer sharp bettors correcting mispricings = larger, more persistent edges. This explains why Championship is profitable.</p>
+
+  <h3>2. CLV Converges 40× Faster Than ROI</h3>
+  <div class="summary-grid">
+    <div class="summary-card">
+      <div class="card-title">ROI Significance</div>
+      <div class="card-value red">~2,000 bets</div>
+      <div class="card-detail">4-5 years at current volume</div>
+    </div>
+    <div class="summary-card">
+      <div class="card-title">CLV Significance</div>
+      <div class="card-value green">~50 bets</div>
+      <div class="card-detail">2-3 months at current volume</div>
+    </div>
+  </div>
+  <p>CLV (Closing Line Value) measures whether your bet beat the closing line. Professional operations use CLV as their primary edge metric because it converges 40× faster than ROI.</p>
+
+  <h3>3. Calibration-Based Triggers, Not ROI-Based</h3>
+  <p>A 2024 paper (Wilkens, <em>Machine Learning with Applications</em>) found that model selection by calibration produced <span class="green"><strong>+34.69% ROI</strong></span>, while selection by raw accuracy produced <span class="red"><strong>-35.17% ROI</strong></span>. All strategy adjustments must be driven by calibration metrics (Brier score, CLV), never short-term ROI.</p>
+
+  <h3>4. Daily Exposure Caps Are Non-Negotiable</h3>
+  <div class="callout warning">
+    <div class="callout-title">Current Gap</div>
+    <p style="margin:0;">BetVector has a 5% per-bet cap but <strong>no aggregate daily cap</strong>. With 10 value bets in one day, 50% of bankroll could be deployed simultaneously. Professional operations cap daily exposure at 15-20%.</p>
+  </div>
+
+  <!-- ═══ Assessment Tiers ═══ -->
+  <h2>Assessment Tier System (MP §11.4)</h2>
+  <div class="tier-pipeline">
+    <div class="tier-box profitable">
+      <div class="tier-emoji">🟢</div>
+      <div class="tier-label green">Profitable</div>
+      <div class="tier-rule">CI lower > 0<br>n ≥ 250 bets</div>
+    </div>
+    <div class="tier-box promising">
+      <div class="tier-emoji">🟡</div>
+      <div class="tier-label yellow">Promising</div>
+      <div class="tier-rule">ROI > 0 but CI crosses 0<br>or n < 250</div>
+    </div>
+    <div class="tier-box insufficient">
+      <div class="tier-emoji">⚪</div>
+      <div class="tier-label">Insufficient</div>
+      <div class="tier-rule">n < 50 bets<br>No assessment</div>
+    </div>
+    <div class="tier-box unprofitable">
+      <div class="tier-emoji">🔴</div>
+      <div class="tier-label red">Unprofitable</div>
+      <div class="tier-rule">CI upper < 0<br>n ≥ 250 bets</div>
+    </div>
+  </div>
+
+  <!-- ═══ League × Market Heatmap ═══ -->
+  <h3>Target: League × Market Assessment Heatmap</h3>
+  <p>Phase 2 will break assessment down to league × market granularity:</p>
+  <div class="heatmap">
+    <div class="heatmap-header"></div>
+    <div class="heatmap-header">1X2</div>
+    <div class="heatmap-header">OU2.5</div>
+    <div class="heatmap-header">BTTS</div>
+    <div class="heatmap-header">AH</div>
+
+    <div class="heatmap-label">Championship</div>
+    <div class="heatmap-cell hm-green">🟢 +10.5%</div>
+    <div class="heatmap-cell hm-yellow">🟡 +3.2%</div>
+    <div class="heatmap-cell hm-grey">⚪ n=12</div>
+    <div class="heatmap-cell hm-grey">⚪ n=8</div>
+
+    <div class="heatmap-label">LaLiga</div>
+    <div class="heatmap-cell hm-yellow">🟡 +18.1%</div>
+    <div class="heatmap-cell hm-grey">⚪ n=28</div>
+    <div class="heatmap-cell hm-grey">⚪ n=15</div>
+    <div class="heatmap-cell hm-grey">⚪ n=5</div>
+
+    <div class="heatmap-label">EPL</div>
+    <div class="heatmap-cell hm-yellow">🟡 -12.9%</div>
+    <div class="heatmap-cell hm-red">🔴 -8.5%</div>
+    <div class="heatmap-cell hm-yellow">🟡 +2.1%</div>
+    <div class="heatmap-cell hm-grey">⚪ n=30</div>
+
+    <div class="heatmap-label">Ligue1</div>
+    <div class="heatmap-cell hm-red">🔴 -21.8%</div>
+    <div class="heatmap-cell hm-grey">⚪ n=42</div>
+    <div class="heatmap-cell hm-grey">⚪ n=18</div>
+    <div class="heatmap-cell hm-grey">⚪ n=3</div>
+
+    <div class="heatmap-label">Bundesliga</div>
+    <div class="heatmap-cell hm-red">🔴 -21.2%</div>
+    <div class="heatmap-cell hm-grey">⚪ n=35</div>
+    <div class="heatmap-cell hm-grey">⚪ n=20</div>
+    <div class="heatmap-cell hm-grey">⚪ n=7</div>
+
+    <div class="heatmap-label">SerieA</div>
+    <div class="heatmap-cell hm-red">🔴 -18.7%</div>
+    <div class="heatmap-cell hm-grey">⚪ n=38</div>
+    <div class="heatmap-cell hm-grey">⚪ n=22</div>
+    <div class="heatmap-cell hm-grey">⚪ n=10</div>
+  </div>
+  <p style="font-size:0.8rem;color:#484F58;"><em>Illustrative — exact per-market breakdowns will be computed in Phase 2. Values shown are representative of current 1X2-dominant portfolio.</em></p>
+
+  <!-- ═══ Phase 1 ═══ -->
+  <div class="phase-banner">
+    <div class="phase-number">Phase 1 · Now → 2 weeks</div>
+    <div class="phase-title">Foundation</div>
+    <div class="phase-subtitle">Stop the bleeding, protect what works, instrument everything</div>
+  </div>
+
+  <div class="issue">
+    <div class="issue-id">PC-25-01</div>
+    <div class="issue-title">League Strategy Profiles in Config</div>
+    <div class="issue-desc">Add a <code>strategy</code> block to each league in <code>leagues.yaml</code> with keys for <code>sharp_only</code>, <code>stake_multiplier</code>, <code>max_daily_bets</code>, <code>auto_bet</code>, and <code>clv_tracking</code>. Pipeline reads per-league config with global defaults as fallback.</div>
+  </div>
+
+  <div class="issue">
+    <div class="issue-id">PC-25-02</div>
+    <div class="issue-title">Per-League Sharp-Only Filtering</div>
+    <div class="issue-desc">Highest-impact change. LaLiga and Ligue1 get <code>sharp_only: true</code> (Pinnacle comparison only). All others stay <code>false</code>. Modify <code>ValueFinder.find_value_bets()</code> to read per-league strategy config.</div>
+  </div>
+
+  <table>
+    <thead><tr><th>League</th><th>sharp_only</th><th>Expected Impact</th></tr></thead>
+    <tbody>
+      <tr><td>LaLiga</td><td class="green">true</td><td class="green">+21.49pp ROI improvement</td></tr>
+      <tr><td>Ligue1</td><td class="green">true</td><td class="green">+22.14pp ROI improvement</td></tr>
+      <tr><td>EPL</td><td>false</td><td>Keep current (Pinnacle hurt by -12pp)</td></tr>
+      <tr><td>Championship</td><td>false</td><td>Keep current (market inefficient enough)</td></tr>
+      <tr><td>Bundesliga</td><td>false</td><td>Insufficient data to justify</td></tr>
+      <tr><td>SerieA</td><td>false</td><td>Insufficient data to justify</td></tr>
+    </tbody>
+  </table>
+
+  <div class="issue">
+    <div class="issue-id">PC-25-03</div>
+    <div class="issue-title">Aggregate Daily Exposure Cap</div>
+    <div class="issue-desc">Add <code>max_daily_exposure: 0.15</code> (15% of bankroll) and <code>max_league_exposure: 0.08</code> (8% per league) to safety config. Enforced in <code>BankrollManager.calculate_stake()</code>.</div>
+  </div>
+
+  <div class="issue">
+    <div class="issue-id">PC-25-04</div>
+    <div class="issue-title">CLV Tracking Infrastructure</div>
+    <div class="issue-desc">Add <code>clv</code> column to <code>value_bets</code> table. Capture closing odds during evening pipeline. Compute CLV = (closing_implied / opening_implied) - 1. Track per-league CLV trend on dashboard.</div>
+  </div>
+
+  <div class="issue">
+    <div class="issue-id">PC-25-05</div>
+    <div class="issue-title">Backtest Validation</div>
+    <div class="issue-desc">6-league backtest with LaLiga + Ligue1 <code>sharp_only: true</code>. Compute CI on improvement. Verify no league regresses &gt;5pp. Gate for deploying PC-25-02 live.</div>
+  </div>
+
+  <div class="issue">
+    <div class="issue-id">PC-25-06</div>
+    <div class="issue-title">Raise profitable_min_bets to 250</div>
+    <div class="issue-desc">At n=100, there's a 37% chance of showing negative ROI with a true +5% edge. Update <code>settings.yaml</code> market feedback threshold to 250.</div>
+  </div>
+
+  <div class="issue">
+    <div class="issue-id">PC-25-07</div>
+    <div class="issue-title">Integration Tests</div>
+    <div class="issue-desc">Test config loading, exposure cap enforcement, CLV computation, strategy profile application. All Phase 1 components covered.</div>
+  </div>
+
+  <!-- ═══ Phase 2 ═══ -->
+  <div class="phase-banner">
+    <div class="phase-number">Phase 2 · Weeks 3-6</div>
+    <div class="phase-title">Intelligence</div>
+    <div class="phase-subtitle">Let the system learn which levers work for which leagues</div>
+  </div>
+
+  <div class="issue">
+    <div class="issue-id">PC-25-08</div>
+    <div class="issue-title">Per-League × Market Assessment</div>
+    <div class="issue-desc">Break league-level assessment to league × market granularity. Weekly recalculation. Heatmap on Model Health dashboard. Each cell gets its own tier.</div>
+  </div>
+
+  <div class="issue">
+    <div class="issue-id">PC-25-09</div>
+    <div class="issue-title">Stake Multiplier Calibration</div>
+    <div class="issue-desc">Weight flat stakes by tier: 🟢 1.5×, 🟡 1.0×, 🔴 0.5×, ⚪ 0.5×. Simple multipliers on flat stake — NOT Kelly. Championship at 1.5×, Bundesliga at 0.5×.</div>
+  </div>
+
+  <div class="issue">
+    <div class="issue-id">PC-25-10</div>
+    <div class="issue-title">Dashboard — League Strategy View</div>
+    <div class="issue-desc">New "League Strategy" section on Model Health page: strategy profiles, CLV trends, league × market heatmap, strategy suggestions (display only).</div>
+  </div>
+
+  <div class="issue">
+    <div class="issue-id">PC-25-11</div>
+    <div class="issue-title">Automated Weekly Strategy Review</div>
+    <div class="issue-desc">Extend Sunday pipeline: recompute tiers + CLV, flag tier transitions in weekly email, suggest strategy changes (never auto-apply).</div>
+  </div>
+
+  <!-- ═══ Phase 3 ═══ -->
+  <div class="phase-banner">
+    <div class="phase-number">Phase 3 · Months 2-4</div>
+    <div class="phase-title">Experimentation</div>
+    <div class="phase-subtitle">Systematic testing of new levers</div>
+  </div>
+
+  <div class="issue">
+    <div class="issue-id">PC-25-12</div>
+    <div class="issue-title">Shadow Mode for Strategy Changes</div>
+    <div class="issue-desc">4-week shadow mode before any live strategy change. Track shadow PnL alongside real PnL. Promote only if shadow outperforms by &gt;3pp ROI.</div>
+  </div>
+
+  <div class="issue">
+    <div class="issue-id">PC-25-13</div>
+    <div class="issue-title">Per-League Model Variants</div>
+    <div class="issue-desc">Per-league Dixon-Coles ρ, league-specific lambda clamps, training data weighting by league. Unified model foundation preserved.</div>
+  </div>
+
+  <div class="issue">
+    <div class="issue-id">PC-25-14</div>
+    <div class="issue-title">Expand to Value Leagues</div>
+    <div class="issue-desc">Eredivisie, Portuguese Liga, Belgian Pro League, Turkish Süper Lig. Lower liquidity = larger edges. Tier system handles variance naturally.</div>
+  </div>
+
+  <div class="issue">
+    <div class="issue-id">PC-25-15</div>
+    <div class="issue-title">Probabilistic Kelly with Guardrails</div>
+    <div class="issue-desc">Re-attempt Kelly on 🟢 leagues ONLY. Max 3% per bet. Championship first. Shadow mode required. Auto-rollback at 15% drawdown.</div>
+  </div>
+
+  <!-- ═══ Pipeline Flow ═══ -->
+  <h2>Strategy Pipeline Flow</h2>
+  <p>How per-league strategy integrates into the existing pipeline:</p>
+  <div class="flow">
+    <div class="flow-step">Load league config</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">Read strategy profile</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">Apply sharp_only filter</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">Check exposure cap</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">Apply stake multiplier</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">Track CLV</div>
+  </div>
+  <div class="flow" style="margin-top:0.5rem;">
+    <div class="flow-step">Sunday: Recompute tiers</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">Update heatmap</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">Flag transitions</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">Suggest changes</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">Human decides</div>
+  </div>
+
+  <!-- ═══ Guardrails ═══ -->
+  <h2>Risk Guardrails</h2>
+  <table>
+    <thead><tr><th>Guardrail</th><th>Value</th><th>Source</th></tr></thead>
+    <tbody>
+      <tr><td>Min bets for "profitable"</td><td class="blue">250</td><td>37% false negative at n=100</td></tr>
+      <tr><td>Max daily exposure</td><td class="blue">15%</td><td>Professional operations standard</td></tr>
+      <tr><td>Max per-league daily</td><td class="blue">8%</td><td>Prevents concentration risk</td></tr>
+      <tr><td>Strategy validation</td><td class="blue">4-week shadow</td><td>PC-25-12</td></tr>
+      <tr><td>Retrain cooldown</td><td class="blue">30 days</td><td>MP §11.5</td></tr>
+      <tr><td>Ensemble weight change</td><td class="blue">±10pp max</td><td>MP §11.3</td></tr>
+      <tr><td>Primary edge metric</td><td class="green">CLV</td><td>50 bets for significance</td></tr>
+      <tr><td>ROI for decisions</td><td class="yellow">Display only</td><td>Until n &gt; 2,000</td></tr>
+    </tbody>
+  </table>
+
+  <h3>What This Plan Does NOT Do</h3>
+  <table>
+    <thead><tr><th>Excluded</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>Separate bankroll pools per league</td><td>Too complex. Stake multipliers achieve 90% of the value.</td></tr>
+      <tr><td>Per-league XGBoost models</td><td>Insufficient data (&lt;5K matches/league). Unified model outperforms.</td></tr>
+      <tr><td>Automatic bet suppression</td><td>MP: "recommend, don't force." Warnings, not exclusion.</td></tr>
+      <tr><td>ROI-based strategy changes</td><td>Too noisy at current volumes. Use CLV and Brier instead.</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ═══ Expected Impact ═══ -->
+  <h2>Expected Impact</h2>
+
+  <h3>Phase 1 — Immediate</h3>
+  <table>
+    <thead><tr><th>Change</th><th>League</th><th>Expected Impact</th></tr></thead>
+    <tbody>
+      <tr><td>Per-league sharp_only</td><td>LaLiga</td><td class="green">ROI +18% → ~+39%</td></tr>
+      <tr><td>Per-league sharp_only</td><td>Ligue1</td><td class="green">ROI -22% → ~0% (break-even)</td></tr>
+      <tr><td>Daily exposure cap</td><td>All</td><td class="green">Prevents &gt;15% single-day risk</td></tr>
+      <tr><td>CLV tracking</td><td>All</td><td class="green">Edge validation in 2-3 months</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Phase 2 — Medium-term</h3>
+  <table>
+    <thead><tr><th>Change</th><th>Impact</th></tr></thead>
+    <tbody>
+      <tr><td>Stake multipliers</td><td>Capital tilts toward proven leagues</td></tr>
+      <tr><td>Market × league assessment</td><td>Know WHERE the edge is</td></tr>
+      <tr><td>Weekly strategy review</td><td>Tier transitions flagged automatically</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Phase 3 — Long-term</h3>
+  <table>
+    <thead><tr><th>Change</th><th>Impact</th></tr></thead>
+    <tbody>
+      <tr><td>Shadow mode</td><td>Every strategy change validated before deployment</td></tr>
+      <tr><td>Value leagues</td><td>More markets with larger inefficiency</td></tr>
+      <tr><td>Per-league Kelly</td><td>Higher returns on verified edges only</td></tr>
+    </tbody>
+  </table>
+
+  <div class="footer">
+    BetVector · Multi-League Strategy Plan · PC-25 · March 2026<br>
+    Based on master plan alignment, architecture review, academic research, and 6-league backtest analysis
+  </div>
+
+</div>
+</body>
+</html>

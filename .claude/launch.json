@@ -18,6 +18,12 @@
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "8503", "--directory", "docs"],
       "port": 8503
+    },
+    {
+      "name": "preview",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8504", "--directory", "/tmp"],
+      "port": 8504
     }
   ]
 }

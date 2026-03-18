@@ -812,13 +812,24 @@ class Pipeline:
                 if cleared:
                     print(f"  → Cleared {cleared} stale value bets")
 
-                # Per-league edge threshold (E36-03): Championship uses 3% (less
-                # efficient market), La Liga and EPL use 5% (well-served markets).
+                # Per-league edge threshold (PC-24-01): Each league has its own
+                # optimal threshold based on market efficiency and backtest sweep.
                 # Falls back to the global default if no league override is set.
                 global_threshold = config.settings.value_betting.edge_threshold
                 edge_threshold = getattr(
                     league_cfg, "edge_threshold_override", None,
                 ) or global_threshold
+
+                # PC-25-01: Per-league strategy profile.  Each league can have
+                # its own sharp_only setting (e.g., LaLiga/Ligue1 use Pinnacle-
+                # only filtering for +21-22pp ROI improvement).  Reads from the
+                # league's strategy block in leagues.yaml with safe fallback.
+                strategy = getattr(league_cfg, "strategy", None)
+                sharp_only = (
+                    getattr(strategy, "sharp_only", False)
+                    if strategy else False
+                )
+                sharp_bookmaker = config.settings.value_betting.sharp_bookmaker
 
                 all_value_bets = []
                 for pred in predictions:
@@ -826,13 +837,16 @@ class Pipeline:
                         match_id=pred.match_id,
                         edge_threshold=edge_threshold,
                         model_name=pred.model_name,
+                        sharp_only=sharp_only,
+                        sharp_bookmaker=sharp_bookmaker,
                     )
                     all_value_bets.extend(vbs)
 
                 if all_value_bets:
                     save_result = finder.save_value_bets(all_value_bets)
                     total_value_bets += save_result.get("new", 0)
-                    print(f"  → {len(all_value_bets)} value bets found, "
+                    sharp_str = " (Pinnacle-only)" if sharp_only else ""
+                    print(f"  → {len(all_value_bets)} value bets found{sharp_str}, "
                           f"{save_result.get('new', 0)} new")
                 else:
                     print("  → No value bets found above threshold")
@@ -1091,12 +1105,20 @@ class Pipeline:
                 if cleared:
                     print(f"  → Cleared {cleared} stale value bets")
 
-                # Per-league edge threshold (E36-03): Championship uses 3% (less
-                # efficient market), La Liga and EPL use 5% (well-served markets).
+                # Per-league edge threshold (PC-24-01): Each league has its own
+                # optimal threshold based on market efficiency and backtest sweep.
                 global_threshold = config.settings.value_betting.edge_threshold
                 edge_threshold = getattr(
                     league_cfg, "edge_threshold_override", None,
                 ) or global_threshold
+
+                # PC-25-01: Per-league sharp-only filtering from strategy profile.
+                strategy = getattr(league_cfg, "strategy", None)
+                sharp_only = (
+                    getattr(strategy, "sharp_only", False)
+                    if strategy else False
+                )
+                sharp_bookmaker = config.settings.value_betting.sharp_bookmaker
 
                 # Get existing predictions for upcoming matches
                 predictions = get_latest_predictions(league_id=league_id)
@@ -1107,13 +1129,16 @@ class Pipeline:
                         match_id=pred.match_id,
                         edge_threshold=edge_threshold,
                         model_name=pred.model_name,
+                        sharp_only=sharp_only,
+                        sharp_bookmaker=sharp_bookmaker,
                     )
                     all_value_bets.extend(vbs)
 
                 if all_value_bets:
                     save_result = finder.save_value_bets(all_value_bets)
                     total_value_bets += save_result.get("new", 0)
-                    print(f"  → {len(all_value_bets)} value bets, "
+                    sharp_str = " (Pinnacle-only)" if sharp_only else ""
+                    print(f"  → {len(all_value_bets)} value bets{sharp_str}, "
                           f"{save_result.get('new', 0)} new")
                 else:
                     print("  → No value bets above threshold")
@@ -1876,8 +1901,8 @@ class Pipeline:
 
             # Read staking config
             bankroll_cfg = config.settings.bankroll
-            # Per-league edge threshold (E36-03): Championship uses 3% (less
-            # efficient market), La Liga and EPL use 5% (well-served markets).
+            # Per-league edge threshold (PC-24-01): Each league has its own
+            # optimal threshold based on market efficiency and backtest sweep.
             global_threshold = config.settings.value_betting.edge_threshold
             bt_league_cfg = next(
                 (lg for lg in config.leagues if lg.short_name == league), None,
@@ -1886,6 +1911,18 @@ class Pipeline:
                 getattr(bt_league_cfg, "edge_threshold_override", None) or global_threshold
                 if bt_league_cfg else global_threshold
             )
+
+            # PC-25-01: Per-league sharp-only filtering from strategy profile.
+            # When enabled, backtester only compares model against Pinnacle odds.
+            bt_strategy = (
+                getattr(bt_league_cfg, "strategy", None)
+                if bt_league_cfg else None
+            )
+            bt_sharp_only = (
+                getattr(bt_strategy, "sharp_only", False)
+                if bt_strategy else False
+            )
+            bt_sharp_bookmaker = config.settings.value_betting.sharp_bookmaker
 
             # For XGBoost, train on ALL active leagues to mirror production.
             # EPL's local SQLite only has 2024-25 data; Championship and La
@@ -1906,6 +1943,8 @@ class Pipeline:
                 starting_bankroll=bankroll_cfg.starting_amount,
                 training_seasons=training_seasons,
                 training_league_ids=training_league_ids,
+                sharp_only=bt_sharp_only,
+                sharp_bookmaker=bt_sharp_bookmaker,
             )
 
             # Print and save the report.

@@ -897,6 +897,15 @@ class ValueBet(Base):
     detected_at = Column(
         String, nullable=False, server_default=func.now(),
     )
+    # PC-25-04: Closing odds and CLV (Closing Line Value) tracking.
+    # CLV measures whether the bet got better odds than the market settled at.
+    # Positive CLV = genuine edge (the line moved against you after your bet).
+    # CLV needs only ~50 bets for statistical significance vs ~2,000 for ROI.
+    # Populated by the evening pipeline when closing odds are captured.
+    closing_odds = Column(Float, nullable=True)
+    # CLV = (closing_implied_prob / detection_implied_prob) - 1
+    # Positive = you beat the closing line = real edge signal
+    clv = Column(Float, nullable=True)
 
     # Relationships
     match = relationship("Match")
