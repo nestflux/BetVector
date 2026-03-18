@@ -65,7 +65,14 @@ This document breaks the BetVector masterplan into sequenced epics and issues th
 | E39 | Injury Data Pipeline + Lineup Features | 12 | Fix broken injury pipeline (Soccerdata API), automate player importance (Transfermarkt market values), historical backfill (salimt CSV), lineup storage, squad rotation index, formation change, bench strength features |
 | E40 | Transfermarkt-Datasets Deep Integration | 10 | One-time backfill from dcaribou/transfermarkt-datasets: historical lineups (400K+ rows), formations, manager names + 4 new manager features, injury club mapping fix, minutes-based impact rating, feature recomputation, weekly refresh pipeline step |
 
-**Total: 49 epics, 231 issues** (45 original + 20 post-launch + 12 odds/model + 7 backfill + 16 dashboard UX + 5 clarity + 16 badges/polish + 6 cloud migration + 6 post-critical-path + 6 multi-user auth + 7 bet tracker + 4 league expansion + 4 model improvement + 6 league backfill phase 2 + 5 dashboard fixes + 6 data gap fix + 6 model stability fix + 4 pipeline performance + 6 pipeline integrity + 5 local rebuild + 16 data gap closure + 6 local pipeline setup)
+| PC-18 | Feature Pruning for Model Accuracy | 1 | ✅ DONE — Removed 21 features, avg Brier 0.5983→0.5921 (-1.0%), EPL -4.6%, zero regressions |
+| PC-19 | Deep Dive Bookmaker Probability Comparison | 1 | ✅ DONE — Overround-removed bookmaker probs on Deep Dive, model white / bookie grey / edge green |
+| PC-20 | Email Notifications Setup | 1 | ✅ DONE — betvector.co@gmail.com set, GMAIL_APP_PASSWORD verified |
+| PC-21 | Dixon-Coles Correction Factor | 4 | ρ estimation via MLE, scoreline matrix correction, 6-league walk-forward backtest, integration test (12+ new tests) |
+| PC-22 | Test Suite Hygiene | 2 | Fix E35 MagicMock import error, verify full test suite (190+ tests, zero failures) |
+| PC-23 | Log Housekeeping | 2 | Add data/logs/ to .gitignore, Python-level log rotation in run_pipeline.py |
+
+**Total: 49 epics, 242 issues** (45 original + 20 post-launch + 12 odds/model + 7 backfill + 16 dashboard UX + 5 clarity + 16 badges/polish + 6 cloud migration + 6 post-critical-path + 6 multi-user auth + 7 bet tracker + 4 league expansion + 4 model improvement + 6 league backfill phase 2 + 5 dashboard fixes + 6 data gap fix + 6 model stability fix + 4 pipeline performance + 6 pipeline integrity + 5 local rebuild + 16 data gap closure + 6 local pipeline setup + 3 feature pruning/bookmaker/email + 4 Dixon-Coles + 2 test hygiene + 2 log housekeeping)
 
 ---
 
@@ -8036,85 +8043,240 @@ recipient address.
 **Type:** Model Improvement
 **Date:** March 2026
 **Priority:** High — next meaningful Brier improvement
-**MP ref:** §3 Post-Launch Roadmap, §5 Key Architectural Decisions
+**Master Plan:** MP §3 Post-Launch Roadmap (line 249), MP §5 Key Architectural Decisions (line 382—383), MP §7 Model Interface (scoreline matrix contract), MP §11 Self-Improvement Engine (guardrails)
 
 ### Problem
 
-The Poisson model assumes home goals and away goals are independent. In reality,
-goals are slightly correlated — low-scoring games (0-0, 1-0) happen more often
-than independent Poisson predicts, and 1-1 draws happen less often. This is a
-well-documented limitation that Dixon & Coles (1997) corrected with a single
-parameter ρ (rho).
+The Poisson model assumes home and away goals are independent (MP §5). In reality,
+low-scoring outcomes (0-0, 1-0, 0-1) are slightly more frequent than independent
+Poisson predicts, and mutual-scoring draws (1-1) are slightly less frequent. This
+correlation arises from tactical game-state dynamics — cagey matches suppress both
+teams' scoring rates. Dixon & Coles (1997) corrected this with a single parameter
+ρ (rho) that adjusts four cells in the 7×7 scoreline matrix.
+
+The two Poisson GLMs (home goals model + away goals model, per league) remain
+completely unchanged. ρ is applied only when building the scoreline matrix from
+λ_home and λ_away. This aligns with the MP §5 principle: "the universal model
+interface is the scoreline probability matrix" — Dixon-Coles improves the matrix
+without changing the model training process.
 
 ### Background
 
-The Dixon-Coles correction applies a multiplier τ to four cells in the scoreline
-matrix:
+The Dixon-Coles correction applies a multiplier τ(h, a, λ_home, λ_away, ρ) to
+four cells in the scoreline matrix. ρ is a small negative number (typically
+-0.05 to -0.13):
 
-| Scoreline | Multiplier τ | Effect |
-|-----------|-------------|--------|
-| 0-0 | 1 + λ_home × λ_away × ρ | Probability ↑ |
-| 1-0 | 1 - λ_away × ρ | Probability ↑ |
-| 0-1 | 1 - λ_home × ρ | Probability ↑ |
-| 1-1 | 1 + ρ | Probability ↓ |
+| Scoreline | Multiplier τ | Effect when ρ < 0 |
+|-----------|-------------|-------------------|
+| 0-0 | 1 + λ_home × λ_away × ρ | Probability ↑ (0-0 more likely) |
+| 1-0 | 1 - λ_away × ρ | Probability ↑ (1-0 more likely) |
+| 0-1 | 1 - λ_home × ρ | Probability ↑ (0-1 more likely) |
+| 1-1 | 1 + ρ | Probability ↓ (1-1 less likely) |
 | All others | 1 (unchanged) | No correction |
 
-ρ is typically a small negative number (around -0.05 to -0.13), estimated from
-historical match data via maximum likelihood estimation (MLE).
+After applying τ, the full 7×7 matrix is re-normalised so all 49 cells sum to
+exactly 1.0 — preserving the MP §5 contract that `derive_market_probabilities()`
+depends on.
 
 ### Implementation
 
 **PC-21-01 — Estimate ρ from historical data**
-- Write `estimate_dixon_coles_rho()` function in `src/models/poisson.py`
-- Use MLE: for each historical match, compute the log-likelihood of the actual
-  scoreline given λ_home, λ_away, and ρ. Optimise ρ to maximise total log-likelihood.
-- Use `scipy.optimize.minimize_scalar` to find optimal ρ in range [-0.15, 0.0]
-- Estimate per-league (each league may have different correlation structure)
-- Store estimated ρ values in config or model pickle for reuse
-- Minimum sample size: 200 matches per league before ρ is applied (below this,
-  use ρ=0 which is equivalent to standard independent Poisson)
+
+**Type:** Backend
+**Files:** `src/models/poisson.py`
+**MP ref:** MP §5 (scoreline matrix), MP §11.1 (minimum sample sizes)
+
+Write `estimate_dixon_coles_rho()` function in `src/models/poisson.py`:
+
+1. **Input:** DataFrame of historical matches with columns `home_goals`, `away_goals`,
+   `predicted_home_goals` (λ_home), `predicted_away_goals` (λ_away) — all from the
+   training set only (temporal integrity: MP §5 constraint #1)
+2. **Method:** Maximum Likelihood Estimation — for each match, compute the
+   log-likelihood of the observed scoreline given λ_home, λ_away, and ρ. For
+   scorelines (0,0), (1,0), (0,1), (1,1), multiply the independent Poisson
+   probability by τ. For all other scorelines, likelihood is unchanged.
+   Optimise ρ to maximise total log-likelihood using `scipy.optimize.minimize_scalar`
+   (bounded method, range [-0.15, 0.0])
+3. **Per-league estimation:** Each league trains its own home+away Poisson GLMs
+   (2 models per league). ρ is estimated per-league too, because correlation
+   structure varies (e.g., Serie A historically has more 0-0 draws than EPL).
+   This produces one ρ per league, stored alongside the fitted GLMs.
+4. **Storage:** ρ is saved in the model's pickle file (alongside the fitted GLM
+   coefficients), not in config. This keeps the model self-contained and ensures
+   temporal integrity when loading historical models for backtesting.
+5. **Minimum sample size:** 200 finished matches with non-null predictions per
+   league before ρ is applied (aligns with MP §11.1 recalibration minimum).
+   Below 200, use ρ = 0.0, which is mathematically equivalent to the current
+   independent Poisson (all τ multipliers become 1.0).
+
+**Acceptance Criteria (PC-21-01):**
+- [ ] `estimate_dixon_coles_rho()` returns a float in [-0.15, 0.0]
+- [ ] Uses `scipy.optimize.minimize_scalar` with bounded method
+- [ ] Only uses training data (never future matches)
+- [ ] Returns ρ = 0.0 when sample size < 200
+- [ ] Estimated per-league (called once per league during training)
+- [ ] ρ stored in model pickle, not in config
+- [ ] Generous comments explaining the MLE objective and the τ function
+
+---
 
 **PC-21-02 — Apply correction to scoreline matrix**
-- Modify `_build_scoreline_matrix()` in both `poisson.py` and `xgboost_model.py`
-- Add optional `rho` parameter (default 0.0 for backward compatibility)
-- Apply τ multipliers to the four low-scoring cells
-- Re-normalise the full matrix so probabilities sum to 1.0 after correction
-- Add thorough comments explaining the correction factor
+
+**Type:** Backend
+**Files:** `src/models/poisson.py` (line 517), `src/models/xgboost_model.py` (line 539)
+**MP ref:** MP §5 Key Architectural Decisions, MP §7 Model Interface
+
+Modify `_build_scoreline_matrix()` in both model files:
+
+1. **Signature change:** Add optional `rho: float = 0.0` parameter to
+   `_build_scoreline_matrix(lambda_home, lambda_away, rho=0.0)`.
+   Default `rho=0.0` preserves backward compatibility — existing calls
+   without ρ produce identical output to today's model.
+2. **τ multiplier logic:** After computing independent Poisson probabilities
+   for all 49 cells, apply the τ multiplier to the four low-scoring cells:
+   ```
+   matrix[0][0] *= 1 + lambda_home * lambda_away * rho   # 0-0
+   matrix[1][0] *= 1 - lambda_away * rho                  # 1-0
+   matrix[0][1] *= 1 - lambda_home * rho                  # 0-1
+   matrix[1][1] *= 1 + rho                                # 1-1
+   ```
+3. **Re-normalisation:** After correction, re-normalise the full matrix so
+   all 49 cells sum to exactly 1.0. The τ multipliers change the raw
+   probabilities, so the total will drift slightly from 1.0 — re-normalisation
+   restores the MP §5 contract.
+4. **Validation guard:** If any τ multiplier produces a negative probability
+   (theoretically possible with extreme ρ or λ values), clamp to 0.0 before
+   re-normalisation. Log a warning if this happens — it indicates ρ is too
+   aggressive for the given λ values.
+5. **Comments:** Add thorough inline comments explaining Dixon-Coles for the
+   owner's learning (MP §12 Glossary should be referenced). Explain why only
+   4 cells are corrected and why ρ is negative.
+6. **Caller changes:** In `poisson.py`, the `predict()` method calls
+   `_build_scoreline_matrix(lambda_home, lambda_away)`. Update this to pass
+   `rho=self._rho` where `self._rho` is set during training. In
+   `xgboost_model.py`, same pattern — pass stored ρ.
+7. **Shared logic:** Both `poisson.py` and `xgboost_model.py` have identical
+   `_build_scoreline_matrix()` implementations. The Dixon-Coles τ logic must
+   be identical in both. Consider extracting to a shared helper in
+   `src/models/base_model.py` to avoid drift, but only if it doesn't break
+   the existing inheritance structure.
+
+**Acceptance Criteria (PC-21-02):**
+- [ ] `_build_scoreline_matrix()` accepts optional `rho` parameter
+- [ ] τ multipliers applied correctly to cells (0,0), (1,0), (0,1), (1,1)
+- [ ] Matrix sums to 1.0 after correction (within floating-point tolerance)
+- [ ] `rho=0.0` produces byte-identical output to current model
+- [ ] Negative probability guard implemented with warning log
+- [ ] Both `poisson.py` and `xgboost_model.py` updated consistently
+- [ ] `predict()` in both models passes stored ρ to matrix builder
+- [ ] Comments explain Dixon-Coles for a reader who hasn't seen the paper
+
+---
 
 **PC-21-03 — Walk-forward backtest with Dixon-Coles**
-- Run 6-league walk-forward backtest comparing:
-  (a) Current model (ρ=0, independent Poisson)
-  (b) Dixon-Coles corrected model (ρ estimated from training data only)
-- Report Brier scores, with focus on draw and under markets
-- ρ must be re-estimated at each walk-forward step using only past data
-  (temporal integrity — never use future matches to estimate ρ)
-- Expected improvement: 0.005–0.015 Brier, biggest in draw/U1.5/U2.5
+
+**Type:** Evaluation
+**Files:** `src/evaluation/backtester.py`, `data/predictions/backtest_report_*.json`
+**MP ref:** MP §7 Walk-forward backtesting, MP §5 (temporal integrity)
+
+Run 6-league walk-forward backtest comparing:
+
+1. **(a) Baseline:** Current model (ρ = 0, independent Poisson)
+2. **(b) Dixon-Coles:** Corrected model (ρ estimated from training data only)
+
+**Critical temporal integrity requirement:** ρ must be re-estimated at each
+walk-forward step using only matches before the prediction date. The backtest
+trains on all prior data, estimates ρ from that same data, applies the
+correction, predicts the next matchday, then advances. ρ must never be
+estimated from the full dataset and then applied retroactively — that would
+be future data leakage (MP §5 constraint #1, Rule 6).
+
+**Metrics to report:**
+- Overall Brier score per league (primary metric)
+- Draw market calibration (draw predictions should improve most)
+- Under 1.5 and Under 2.5 market calibration
+- ROI comparison (if value bet detection produces different edges)
+- ρ trajectory over time (how ρ evolves as training data grows)
+- Summary table: league × (baseline Brier, DC Brier, delta, winner)
+
+**Decision criteria:**
+- If Dixon-Coles improves or ties in all 6 leagues: adopt permanently
+- If it improves in some but regresses in others: adopt only for leagues
+  where it helps, keep ρ = 0 for others
+- If it regresses across the board: do not adopt, keep independent Poisson
+- Expected improvement: 0.005–0.015 Brier, biggest gains in draw and U2.5
+
+**Acceptance Criteria (PC-21-03):**
+- [ ] 6-league walk-forward backtest completed with temporal integrity
+- [ ] ρ re-estimated at every walk-forward step (not once globally)
+- [ ] Brier score comparison table produced for all 6 leagues
+- [ ] Draw and under market calibration reported
+- [ ] ρ trajectory logged (should stabilise as sample grows)
+- [ ] Decision made: adopt / partial adopt / reject
+- [ ] Backtest reports saved to `data/predictions/`
+
+---
 
 **PC-21-04 — Integration test**
-- Test ρ estimation produces reasonable values (-0.15 < ρ < 0)
-- Test τ multipliers are applied correctly to (0,0), (1,0), (0,1), (1,1)
-- Test matrix still sums to 1.0 after correction
-- Test ρ=0 produces identical output to current model (backward compat)
-- Test temporal integrity: ρ estimation only uses training data
+
+**Type:** Testing
+**Files:** `tests/test_pc21_dixon_coles.py` (new)
+
+Comprehensive tests covering all PC-21 components:
+
+1. **ρ estimation tests:**
+   - Synthetic data with known correlation → verify ρ is in correct range
+   - Sample size < 200 → verify ρ = 0.0 returned
+   - Temporal integrity: verify no future data used in estimation
+   - Boundary: ρ = 0.0 exactly when no correlation exists in data
+
+2. **τ multiplier tests:**
+   - Known ρ and λ values → verify τ is applied to correct cells
+   - Cell (0,0): probability increases when ρ < 0
+   - Cell (1,1): probability decreases when ρ < 0
+   - Cells (2,0), (0,2), etc.: unchanged by correction
+   - All 49 cells sum to 1.0 after correction
+
+3. **Backward compatibility:**
+   - `_build_scoreline_matrix(λ_h, λ_a)` without ρ produces identical output
+   - `_build_scoreline_matrix(λ_h, λ_a, rho=0.0)` produces identical output
+   - Market probabilities derived from corrected matrix are valid (0 < p < 1)
+
+4. **Edge cases:**
+   - Very large λ (e.g., λ_home = 4.0): τ may produce negative probs → clamped
+   - ρ at boundary (-0.15): verify matrix is still valid
+   - ρ = 0: verify all τ multipliers are exactly 1.0
+   - Single-match training data: verify ρ = 0.0 (below min sample)
+
+5. **Integration:**
+   - Full predict pipeline with Dixon-Coles → verify `Prediction` record has
+     valid scoreline_matrix JSON and all `prob_*` fields are in (0, 1)
+   - Market probabilities (`prob_home_win + prob_draw + prob_away_win ≈ 1.0`)
+
+**Acceptance Criteria (PC-21-04):**
+- [ ] All ρ estimation tests pass
+- [ ] All τ multiplier tests pass
+- [ ] Backward compatibility tests confirm identical output with ρ = 0
+- [ ] Edge case tests pass (no crashes, no invalid probabilities)
+- [ ] Integration test verifies full prediction pipeline works
+- [ ] Total test count: at least 12 new tests
+- [ ] Full test suite: zero regressions
 
 ### Files Modified
 
-- `src/models/poisson.py` — ρ estimation + matrix correction
-- `src/models/xgboost_model.py` — matrix correction (same logic)
-- `src/models/base_model.py` — if shared matrix builder exists
-- `config/settings.yaml` — minimum sample size for ρ estimation
-- `tests/test_dixon_coles.py` — new test file
+| File | Change |
+|------|--------|
+| `src/models/poisson.py` | `estimate_dixon_coles_rho()` + `_build_scoreline_matrix()` ρ param + `predict()` passes ρ |
+| `src/models/xgboost_model.py` | `_build_scoreline_matrix()` ρ param + `predict()` passes ρ |
+| `src/models/base_model.py` | Optional: shared `_apply_dixon_coles_correction()` helper |
+| `tests/test_pc21_dixon_coles.py` | New test file (12+ tests) |
 
-### Acceptance Criteria
+**No new tables required** — ρ is stored in the model's pickle file, not in the
+database. No schema changes needed (MP §6 unchanged).
 
-- [ ] ρ estimated per league via MLE with temporal integrity
-- [ ] Scoreline matrix corrected for (0,0), (1,0), (0,1), (1,1) cells
-- [ ] Matrix still sums to 1.0 after correction
-- [ ] ρ=0 produces identical output to current model
-- [ ] Minimum sample size enforced (200 matches)
-- [ ] Walk-forward backtest: Brier improves or holds (no regression)
-- [ ] Draw and under market calibration improves
-- [ ] All tests pass
+**No config changes required** — the minimum sample size (200) is hardcoded as a
+constant in the estimation function, matching the §11.1 recalibration minimum.
+If it needs to be tuneable later, it moves to `config/settings.yaml`.
 
 ### Implementation Sequence
 
@@ -8132,48 +8294,108 @@ PC-21-03 (backtest) → PC-21-04 (integration test)
 **Type:** Technical Debt
 **Date:** March 2026
 **Priority:** Medium
+**Master Plan:** MP §5 Architecture (production quality), Rule 5 (no TODOs, no shortcuts)
 
 ### Problem
 
-1. **E38 backtest tests** — Were failing due to stale backtest report JSON format.
-   Now passing after PC-18 backtest regeneration. Need to verify they stay stable.
+Two test infrastructure issues remain after the PC-18 feature pruning:
 
-2. **E35 bet tracker test** — `test_e35_v2_integration.py` fails at import time
-   because `my_bets.py` line 1365 uses an f-string with `COLOURS["green"]` that
-   gets evaluated during module import. When pytest collects the test file, it
-   imports `my_bets` which triggers Streamlit widget calls outside a running
-   Streamlit app context, causing `MagicMock.__format__` error.
+**1. E35 bet tracker test import failure**
 
-3. **Test count regression** — Should verify total passing test count after fixes.
+`test_e35_v2_integration.py` fails at pytest collection time with:
+```
+TypeError: unsupported format string passed to MagicMock.__format__
+```
+
+**Root cause chain:**
+- `my_bets.py` defines `COLOURS` dict at module level (line 44)
+- Line 1365 uses `COLOURS["green"]` inside an f-string within the bet slip
+  rendering function. The f-string itself is fine — `COLOURS` is a plain dict,
+  not a Streamlit widget.
+- However, during pytest collection, `my_bets.py` gets imported, which triggers
+  Streamlit widget calls (`st.columns()`, `st.button()`, etc.) in the same
+  function. These return `MagicMock` objects (from the test's `@patch` of `st`).
+  When Python evaluates a `MagicMock` in an f-string context, it calls
+  `__format__` on it — which `MagicMock` doesn't support, causing the error.
+- The fix is NOT about the `COLOURS` dict. It's about the Streamlit widget calls
+  that produce MagicMock objects being formatted in f-strings.
+
+**2. E38 backtest test stability**
+
+The 10 E38 tests (`test_e38_integration.py`) now pass after PC-18 regenerated
+backtest reports with the correct `{"summary": {...}}` JSON format. These need
+to be verified as stable — they should not break again.
+
+**3. Full suite regression check**
+
+After fixes, verify the total passing test count and report it. The last
+confirmed count was 182/182 (excluding xgboost import-related skips).
 
 ### Implementation
 
 **PC-22-01 — Fix E35 test import error**
-- Root cause: `my_bets.py` has a module-level f-string referencing `COLOURS`
-  that gets evaluated during import, but the surrounding Streamlit code creates
-  widget objects that become MagicMock during test collection
-- Fix: wrap the bet slip rendering in a function that's only called at runtime,
-  or guard the module-level code with `if not _is_testing()` check
-- Alternative: defer the COLOURS dict lookup to function scope rather than
-  module-level f-string evaluation
+
+**Type:** Bug Fix
+**Files:** `src/delivery/views/my_bets.py` (line 1365 area)
+
+**Approach:** The f-string at line 1365-1369 formats `est_return` (a float) and
+`COLOURS["green"]` (a string). The `COLOURS` dict is a plain Python dict, so it
+works fine. The problem is that `st.markdown()` on line 1364 returns a MagicMock
+during testing. The fix is to ensure the f-string formatting doesn't interact with
+any MagicMock-producing Streamlit call.
+
+Options (in order of preference):
+1. **Move COLOURS into a standalone constants module** that doesn't import
+   Streamlit — e.g., `src/delivery/constants.py`. This way, importing the
+   constants never triggers Streamlit widget evaluation.
+2. **Wrap the bet slip rendering block** (lines ~1340-1379) in a function that
+   is only called from `render_bet_slip()`, not at module import time. Ensure
+   no top-level code executes Streamlit calls during import.
+3. **Guard the specific f-string** with a type check: if the value is a
+   MagicMock, use a fallback string instead.
+
+Option 1 is cleanest — it separates design tokens from rendering logic and
+prevents future import-time failures from any view module.
+
+**Acceptance Criteria (PC-22-01):**
+- [ ] `import src.delivery.views.my_bets` succeeds during pytest collection
+- [ ] `test_e35_v2_integration.py` runs without `MagicMock.__format__` error
+- [ ] All 10 E35-v2 test scenarios pass
+- [ ] `COLOURS` dict still accessible from `my_bets.py` at runtime
+- [ ] No visual changes to the dashboard bet slip rendering
+
+---
 
 **PC-22-02 — Verify full test suite**
-- Run full test suite after E35 fix
-- Confirm all E38 tests still pass (they do now, but verify stability)
-- Report total passing count
-- Fix any remaining failures
+
+**Type:** Verification
+**Files:** None (test run only)
+
+1. Run `pytest tests/ -v --tb=short` and report results
+2. Confirm all E38 backtest tests pass (10 tests in `test_e38_integration.py`)
+3. Confirm all E35 tests pass (both v1 and v2)
+4. Fix any remaining failures found during the run
+5. Report final passing count: `X/X tests passing, 0 failures`
+
+**Acceptance Criteria (PC-22-02):**
+- [ ] `test_e35_v2_integration.py`: all scenarios pass
+- [ ] `test_e38_integration.py`: all 10 tests pass
+- [ ] Full test suite: zero failures
+- [ ] Total passing test count reported (expected: 190+)
 
 ### Files Modified
 
-- `src/delivery/views/my_bets.py` — fix module-level f-string
-- `tests/test_e35_v2_integration.py` — verify import works
+| File | Change |
+|------|--------|
+| `src/delivery/views/my_bets.py` | Fix f-string/MagicMock interaction (line 1365 area) |
+| `src/delivery/constants.py` | New file if extracting COLOURS (option 1) |
+| `tests/test_e35_v2_integration.py` | Verify import works, possibly update mock setup |
 
-### Acceptance Criteria
+### Implementation Sequence
 
-- [ ] `test_e35_v2_integration.py` imports and runs without error
-- [ ] All E38 backtest tests pass
-- [ ] Full test suite: zero failures
-- [ ] Total passing test count reported
+```
+PC-22-01 (E35 import fix) → PC-22-02 (full suite verification)
+```
 
 **Status: NOT STARTED**
 
@@ -8184,39 +8406,79 @@ PC-21-03 (backtest) → PC-21-04 (integration test)
 **Type:** Infrastructure
 **Date:** March 2026
 **Priority:** Low
+**Master Plan:** Rule 5 (production quality), Rule 6 (config-driven)
 
 ### Problem
 
-`data/logs/` contains runtime pipeline logs that accumulate daily. They are
-untracked by git (not in `.gitignore`) and have no rotation. Over time they'll
-consume unnecessary disk space and clutter `git status`.
+`data/logs/` contains daily pipeline logs from launchd automation (PC-15-04).
+Two issues:
+
+1. **Not in `.gitignore`** — `data/logs/` shows as untracked in `git status`,
+   cluttering the output. The directory currently contains `morning_*.log`,
+   `midday_*.log`, and `evening_*.log` files.
+
+2. **Log rotation partially implemented** — `scripts/run_pipeline_local.sh`
+   already has a `find` command at line 108 that deletes `.log` files older
+   than `$LOG_RETENTION_DAYS` (default 30 days). This is the shell-level
+   rotation. However, `run_pipeline.py` (the Python entry point) has no
+   Python-level log rotation — if the pipeline is ever run directly via
+   `python run_pipeline.py morning` (bypassing the shell wrapper), logs
+   would accumulate without cleanup.
 
 ### Implementation
 
-1. Add `data/logs/` to `.gitignore`
-2. Add a simple log rotation: keep last 30 days of logs, delete older ones
-3. Add rotation to the morning pipeline startup (clean old logs before running)
-4. Optionally compress logs older than 7 days
+**PC-23-01 — Add `data/logs/` to `.gitignore`**
+
+1. Add `data/logs/` entry to `.gitignore` (after the existing `data/raw/` line)
+2. Remove `data/logs/` from git tracking if any files were committed:
+   `git rm -r --cached data/logs/ 2>/dev/null || true`
+3. Verify `git status` no longer shows log files as untracked
+
+**PC-23-02 — Add Python-level log rotation to `run_pipeline.py`**
+
+1. At the top of `run_pipeline.py`'s `main()` function (before pipeline
+   dispatch), add a `_rotate_logs()` call that:
+   - Scans `data/logs/*.log` for files older than 30 days
+   - Deletes them with a log message: "Rotated N old log files"
+   - Uses `pathlib` and file `stat().st_mtime` for portability
+   - Retention period comes from `config/settings.yaml` (add
+     `log_retention_days: 30` if not already present)
+   - Catches all exceptions silently — log rotation failure must never
+     prevent the pipeline from running
+2. This is a belt-and-suspenders approach — the shell script handles rotation
+   when launched via launchd, and Python handles it when run directly.
 
 ### Files Modified
 
-- `.gitignore` — add `data/logs/`
-- `run_pipeline.py` — add log rotation at startup
+| File | Change |
+|------|--------|
+| `.gitignore` | Add `data/logs/` entry |
+| `run_pipeline.py` | Add `_rotate_logs()` function called at startup |
+| `config/settings.yaml` | Add `log_retention_days: 30` (if not present) |
 
 ### Acceptance Criteria
 
 - [ ] `data/logs/` is in `.gitignore`
 - [ ] `git status` no longer shows `data/logs/` as untracked
-- [ ] Logs older than 30 days are automatically deleted on pipeline startup
-- [ ] Current logs are not affected
+- [ ] `_rotate_logs()` deletes `.log` files older than 30 days from `data/logs/`
+- [ ] Rotation failure does not prevent pipeline from running
+- [ ] Current logs (< 30 days old) are not affected
+- [ ] Shell-level rotation in `run_pipeline_local.sh` still works (not removed)
 
 **Status: NOT STARTED**
 
-### Implementation Sequence (All PC-20 through PC-23)
+---
+
+### Implementation Sequence (PC-21 through PC-23)
 
 ```
-PC-20 (email — blocked on owner) →
-PC-21-01 → PC-21-02 → PC-21-03 → PC-21-04 (Dixon-Coles) →
-PC-22-01 → PC-22-02 (test hygiene) →
-PC-23 (log housekeeping)
+PC-21-01 (ρ estimation) → PC-21-02 (matrix correction) →
+PC-21-03 (backtest comparison) → PC-21-04 (integration test) →
+PC-22-01 (E35 import fix) → PC-22-02 (full suite verification) →
+PC-23-01 (.gitignore) → PC-23-02 (Python log rotation)
 ```
+
+**Note:** PC-22 and PC-23 are independent of PC-21 and could be done in
+parallel or in any order. The sequence above is prioritised by impact:
+Dixon-Coles (model improvement) first, then test hygiene (code quality),
+then log housekeeping (infrastructure).
