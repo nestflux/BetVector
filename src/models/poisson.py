@@ -112,7 +112,7 @@ class PoissonModel(BaseModel):
       3. Deriving all market probabilities from the matrix
     """
 
-    def __init__(self) -> None:
+    def __init__(self, use_dixon_coles: bool = True) -> None:
         self._home_model: Optional[Any] = None  # Fitted GLM for home goals
         self._away_model: Optional[Any] = None  # Fitted GLM for away goals
         self._feature_cols: List[str] = []  # Column names used in training
@@ -121,6 +121,9 @@ class PoissonModel(BaseModel):
         # ρ < 0 means low-scoring outcomes (0-0, 1-0, 0-1) are more likely than
         # independent Poisson predicts.  ρ = 0.0 is the standard independent model.
         self._rho: float = 0.0
+        # When False, skips ρ estimation and uses ρ=0.0 (standard independent
+        # Poisson).  Used by PC-21-03 A/B backtest to compare with/without DC.
+        self._use_dixon_coles: bool = use_dixon_coles
 
     @property
     def name(self) -> str:
@@ -240,7 +243,12 @@ class PoissonModel(BaseModel):
         # --- Dixon-Coles ρ estimation (PC-21-01) ---
         # Estimate the goal correlation parameter from the training data.
         # ρ corrects the independence assumption in the scoreline matrix.
-        self._rho = self._estimate_rho(df, X_home, X_away)
+        # When _use_dixon_coles is False (baseline mode), skip estimation
+        # and keep ρ = 0.0 for A/B comparison backtests.
+        if self._use_dixon_coles:
+            self._rho = self._estimate_rho(df, X_home, X_away)
+        else:
+            self._rho = 0.0
 
     # --- Prediction -------------------------------------------------------------
 
@@ -724,42 +732,36 @@ class PoissonModel(BaseModel):
         home_goals = df["home_goals"].values.astype(int)
         away_goals = df["away_goals"].values.astype(int)
 
+        # Pre-compute base Poisson log-likelihoods (independent of ρ)
+        base_ll = poisson.logpmf(home_goals, lambda_home_arr) + poisson.logpmf(away_goals, lambda_away_arr)
+
+        # Pre-compute boolean masks for the four low-scoring outcomes.
+        # Only these cells get a τ correction; all others have τ = 1.0.
+        mask_00 = (home_goals == 0) & (away_goals == 0)
+        mask_10 = (home_goals == 1) & (away_goals == 0)
+        mask_01 = (home_goals == 0) & (away_goals == 1)
+        mask_11 = (home_goals == 1) & (away_goals == 1)
+
         def neg_log_likelihood(rho: float) -> float:
             """Negative log-likelihood of ρ given all training matches.
 
+            Vectorised over all matches using numpy boolean masks.
             We minimise the negative because scipy.optimize.minimize_scalar
             finds minima, and we want the maximum likelihood.
             """
-            total_ll = 0.0
-            for i in range(n_matches):
-                lh = lambda_home_arr[i]
-                la = lambda_away_arr[i]
-                h = home_goals[i]
-                a = away_goals[i]
+            # Start with τ = 1.0 for all matches (no correction)
+            tau = np.ones(n_matches)
 
-                # Base independent Poisson log-likelihood
-                log_p = poisson.logpmf(h, lh) + poisson.logpmf(a, la)
+            # Dixon-Coles equation (4) — apply τ to the four DC cells
+            tau[mask_00] = 1.0 - lambda_home_arr[mask_00] * lambda_away_arr[mask_00] * rho
+            tau[mask_10] = 1.0 + lambda_away_arr[mask_10] * rho
+            tau[mask_01] = 1.0 + lambda_home_arr[mask_01] * rho
+            tau[mask_11] = 1.0 - rho
 
-                # Dixon-Coles τ correction — equation (4)
-                if h == 0 and a == 0:
-                    tau = 1.0 - lh * la * rho
-                elif h == 1 and a == 0:
-                    tau = 1.0 + la * rho
-                elif h == 0 and a == 1:
-                    tau = 1.0 + lh * rho
-                elif h == 1 and a == 1:
-                    tau = 1.0 - rho
-                else:
-                    tau = 1.0  # No correction for other scorelines
+            # Guard against log(0) — clamp τ to a small positive value
+            tau = np.maximum(tau, 1e-10)
 
-                # Guard against log(0) — clamp τ to a small positive value
-                if tau <= 0:
-                    tau = 1e-10
-
-                log_p += np.log(tau)
-                total_ll += log_p
-
-            return -total_ll  # Negative for minimisation
+            return -(base_ll + np.log(tau)).sum()
 
         # Optimise ρ over [-0.15, 0.0] using Brent's bounded method
         try:

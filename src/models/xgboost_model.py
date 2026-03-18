@@ -374,7 +374,13 @@ class XGBoostModel(BaseModel):
             lambda_home = max(0.1, min(5.0, lambda_home))
             lambda_away = max(0.1, min(5.0, lambda_away))
 
-            # Build the 7×7 scoreline probability matrix
+            # Build the 7×7 scoreline probability matrix.
+            # Note: Dixon-Coles ρ is currently Poisson-only (MP §4).
+            # The _build_scoreline_matrix method accepts a rho parameter for
+            # forward compatibility, but XGBoost uses rho=0.0 (standard
+            # independent Poisson matrix generation).  If future backtests
+            # show XGBoost benefits from ρ correction, add _rho estimation
+            # here (same MLE approach as PoissonModel._estimate_rho).
             matrix = self._build_scoreline_matrix(lambda_home, lambda_away)
 
             # Derive all market probabilities from the matrix

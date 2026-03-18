@@ -103,6 +103,7 @@ def run_backtest(
     starting_bankroll: float = 1000.0,
     training_seasons: Optional[List[str]] = None,
     training_league_ids: Optional[List[int]] = None,
+    model_kwargs: Optional[Dict[str, Any]] = None,
 ) -> BacktestResult:
     """Run a walk-forward backtest on a full season of historical data.
 
@@ -170,6 +171,9 @@ def run_backtest(
         If None, only the target ``league_id`` is used for training (backward
         compatible with Poisson backtest).
         Pass all active league IDs for XGBoost to mirror production training.
+    model_kwargs : dict or None
+        Extra keyword arguments passed to ``model_class()`` constructor.
+        Example: ``{"use_dixon_coles": False}`` for baseline A/B comparison.
 
     Returns
     -------
@@ -271,7 +275,9 @@ def run_backtest(
             continue
 
         # --- Step 3: Train model (only on data before this date) ---
-        model = model_class()
+        # model_kwargs allows callers to pass constructor arguments (e.g.,
+        # use_dixon_coles=False for baseline A/B comparison in PC-21-03).
+        model = model_class(**(model_kwargs or {}))
         try:
             model.train(train_features, results_df)
         except Exception as e:
