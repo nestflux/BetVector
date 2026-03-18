@@ -347,8 +347,8 @@ single-line expression.
 ## Current Status
 
 Last completed: PC-21 — Dixon-Coles Correction Factor ✅
-Currently working: PC-19 — Deep Dive Bookmaker Probability Comparison
-Next up: TBD
+Currently working: PC-24 — ROI Optimization Pipeline
+Next up: PC-24-01 (per-league edge thresholds)
 
 E40 complete: All 10 issues done ✅ (TM datasets download, lineup/formation/manager backfill, manager features, injury club fix, minutes impact, recomputation, weekly refresh, integration test — 14,187 matches, 9,829 TM-mapped, 393K lineups, 42 tests)
 

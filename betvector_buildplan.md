@@ -8507,4 +8507,310 @@ PC-21-03 (backtest comparison) → PC-21-04 (integration test)
 ```
 
 PC-22 and PC-23 completed first (clean house before model changes).
-PC-21 is next — Dixon-Coles correction factor.
+PC-21 done — Dixon-Coles correction factor adopted permanently.
+
+---
+
+## PC-24 — ROI Optimization Pipeline
+
+**Type:** Model Improvement / Betting Strategy
+**Date:** March 2026
+**Priority:** High
+**Master Plan:** MP §4 (value betting, edge thresholds), MP §5 (betting pipeline),
+  MP §6 (odds/value_bets/bet_log schema), MP §11.1 (recalibration guardrails),
+  MP §11.4 (odds market feedback loop)
+
+### Problem
+
+The 2024-25 walk-forward backtest (PC-21-03) showed the model is profitable in
+only 2 of 6 leagues (Championship +10.5%, LaLiga +9.0%) and loses money in
+the other 4 (EPL -12.9%, Ligue1 -27.6%, Bundesliga -21.1%, SerieA -18.6%).
+
+The threshold sweep (42 backtests, 6 leagues × 7 thresholds) identified that:
+- The model detects too many weak "value" bets (EPL: 3.2 VBs/match at 5%)
+- Championship is profitable at ALL thresholds (3-15%), best at 10%
+- LaLiga sweet spot is 7-8% (ROI +17.9% to +18.1%)
+- EPL, Ligue1 are unprofitable at every threshold tested
+- Bundesliga, SerieA show noise-level profit at extreme thresholds (too few bets)
+
+Root causes are layered:
+1. **Edge threshold too low** — 5% default lets noise through
+2. **Comparing against all bookmakers** — soft bookmakers inflate apparent edges
+3. **Flat staking** — equal-sizes strong and weak bets
+4. **No post-calibration** — model overconfidence inflates all edge calculations
+
+### Architecture: Layered Optimisation
+
+Each fix operates at a different stage of the betting pipeline. They stack —
+each layer makes the next one more effective:
+
+```
+Predict → Calibrate → Compare vs Pinnacle → Apply threshold → Size with Kelly
+ (model)    (PC-24-03)     (PC-24-02)          (PC-24-01)       (PC-24-04)
+```
+
+Each sub-issue includes its own backtest to prove/disprove the improvement.
+If a layer doesn't improve ROI, it gets rolled back before the next layer
+is tested. This ensures we never compound a bad change.
+
+---
+
+**PC-24-01 — Per-league edge thresholds**
+
+**Type:** Config + Backend
+**Files:** `config/leagues.yaml`, `src/betting/value_finder.py`, `src/pipeline.py`
+**MP ref:** MP §4 (edge threshold per user/league), Rule 6 (config-driven)
+
+Update `edge_threshold_override` in `config/leagues.yaml` based on the
+threshold sweep results:
+
+| League | Current | New | Evidence |
+|--------|---------|-----|----------|
+| EPL | 0.05 | 0.05 | Negative at all thresholds; keep default, rely on later layers |
+| Championship | 0.03 | 0.10 | Best ROI at 10% (+10.5%, 731 VBs), profitable at all thresholds |
+| LaLiga | 0.05 | 0.08 | Best ROI at 8% (+18.1%, 110 VBs), collapses above 10% |
+| Ligue1 | 0.05 | 0.08 | Negative everywhere, but 7-8% minimises losses (-21.8% to -32.0%) |
+| Bundesliga | 0.05 | 0.07 | Negative everywhere, 7% minimises losses with decent sample (126 VBs) |
+| SerieA | 0.05 | 0.07 | Negative everywhere, 3% is least-bad with 577 VBs, 7% has 124 VBs |
+
+**Verification backtest:** Run full 6-league backtest with new thresholds.
+Compare aggregate ROI and per-league ROI against the PC-21-03 baseline.
+
+**Acceptance Criteria (PC-24-01):**
+- [ ] `config/leagues.yaml` updated with new `edge_threshold_override` per league
+- [ ] Pipeline reads the per-league override correctly (existing `getattr` path)
+- [ ] 6-league walk-forward backtest shows improvement in aggregate ROI
+- [ ] Championship ROI ≥ +8% (was +7.1% at 5%, should be ~+10.5% at 10%)
+- [ ] LaLiga ROI ≥ +15% (was +9.0% at 5%, should be ~+18.1% at 8%)
+- [ ] No league regresses more than 5% ROI vs baseline
+- [ ] Backtest results saved to `data/predictions/`
+- [ ] Decision: keep or rollback
+
+---
+
+**PC-24-02 — Pinnacle-only edge comparison**
+
+**Type:** Backend
+**Files:** `src/betting/value_finder.py`, `src/evaluation/backtester.py`
+**MP ref:** MP §4 (value betting), MP §6 (odds table schema, bookmaker field),
+  MP §11.4 (odds market feedback loop)
+
+Currently `ValueFinder.find_value_bets()` compares model probabilities against
+ALL bookmaker odds (Pinnacle, Bet365, William Hill, market_avg). This means the
+model can find "value" against soft bookmakers whose odds are less accurate.
+
+**The fix:** Add a `sharp_bookmaker_only` mode where value bets are only
+flagged when the model beats Pinnacle's line. Pinnacle is the sharpest
+bookmaker in the world — their odds are the closest to the true probability.
+If the model finds edge against Pinnacle, the edge is much more likely to be
+genuine.
+
+**Implementation:**
+1. Add `sharp_bookmaker: str = "Pinnacle"` to `config/settings.yaml`
+2. Add `sharp_only: bool = False` parameter to `find_value_bets()`
+3. When `sharp_only=True`, filter odds to only the sharp bookmaker before
+   comparing edges
+4. Fallback: if the sharp bookmaker has no odds for a match, fall back to
+   `market_avg` (which is overround-removed and reasonably accurate)
+5. Update backtester to pass `sharp_only` via `model_kwargs` or a new param
+
+**Verification backtest:** Run 6-league backtest with PC-24-01 thresholds
+PLUS Pinnacle-only filtering. Compare against PC-24-01 results.
+
+**Acceptance Criteria (PC-24-02):**
+- [ ] `find_value_bets()` supports `sharp_only` parameter
+- [ ] Sharp bookmaker name configurable in `config/settings.yaml`
+- [ ] Fallback to `market_avg` when sharp bookmaker odds unavailable
+- [ ] Backtester passes `sharp_only` through correctly
+- [ ] 6-league backtest with Pinnacle-only shows ROI improvement vs PC-24-01
+- [ ] Value bet count drops (fewer but higher-quality bets)
+- [ ] Brier score unchanged (predictions not affected)
+- [ ] Decision: keep or rollback
+
+---
+
+**PC-24-03 — Probability calibration correction (Platt scaling)**
+
+**Type:** Model Enhancement
+**Files:** `src/models/poisson.py`, `src/models/calibration.py` (new)
+**MP ref:** MP §11.1 (recalibration: Platt or isotonic, min 200 samples,
+  calibration error threshold 0.03)
+
+If the model is overconfident (predicts 65% when reality is 60%), all edge
+calculations are inflated by 5 percentage points. Platt scaling applies a
+logistic correction to the raw probabilities after prediction, using
+held-out calibration data.
+
+**How it works:**
+1. During walk-forward backtesting, after training but before prediction,
+   split the training data into train (90%) and calibration (10%)
+2. Train the Poisson model on the 90% training split
+3. Generate predictions on the 10% calibration split
+4. Fit a `sklearn.calibration.CalibratedClassifierCV` (or manual Platt)
+   on the calibration predictions vs actual outcomes
+5. Apply the calibration transform to all future predictions in that
+   walk-forward step
+6. The calibration function is re-fit at each walk-forward step (temporal
+   integrity — never calibrate on future data)
+
+**MP §11.1 guardrails:**
+- Minimum 200 resolved predictions before calibration is applied
+- Calibration error threshold: 0.03 (only correct if miscalibrated by ≥3pp)
+- Rollback window: 100 predictions post-calibration (if Brier worsens, undo)
+
+**Verification backtest:** Run 6-league backtest with PC-24-01 + PC-24-02
+PLUS Platt calibration. Compare Brier score AND ROI.
+
+**Acceptance Criteria (PC-24-03):**
+- [ ] Calibration module created (`src/models/calibration.py`)
+- [ ] Platt scaling applied after Poisson prediction, before edge calculation
+- [ ] Calibration uses only historical data (temporal integrity)
+- [ ] MP §11.1 guardrails enforced (200 min, 0.03 threshold, rollback)
+- [ ] 6-league backtest shows Brier improvement (calibrated model more accurate)
+- [ ] ROI impact measured — should improve if overconfidence was the cause
+- [ ] Calibration parameters saved/loaded with model pickle
+- [ ] Decision: keep or rollback
+
+---
+
+**PC-24-04 — Kelly staking**
+
+**Type:** Backend
+**Files:** `config/settings.yaml`, `src/pipeline.py`, `src/evaluation/backtester.py`
+**MP ref:** MP §4 (staking methods: flat/percentage/kelly),
+  MP §6 (bet_log.stake_method field)
+
+The backtester already supports Kelly staking (`staking_method="kelly"`,
+`kelly_fraction=0.25` for quarter-Kelly). The current default is `"flat"`
+(2% of bankroll per bet). Kelly sizes bets proportionally to edge strength:
+
+```
+kelly_stake = kelly_fraction × (model_prob × odds - 1) / (odds - 1)
+```
+
+With a 0.25 fraction (quarter-Kelly), a 5% edge gets ~1.25% of bankroll
+while a 15% edge gets ~3.75% — naturally amplifying strong bets and
+dampening weak ones.
+
+**Implementation:**
+1. Change `staking_method` default from `"flat"` to `"kelly"` in
+   `config/settings.yaml`
+2. Verify `kelly_fraction: 0.25` is set (quarter-Kelly, conservative)
+3. Keep `max_bet_percentage: 0.05` safety cap (MP safety limits)
+4. No code changes needed — Kelly is already implemented in
+   `BankrollManager._kelly_stake()` and the backtester
+
+**Verification backtest:** Run 6-league backtest with all prior layers
+(thresholds + Pinnacle + calibration) PLUS Kelly staking. Compare ROI
+against the same with flat staking.
+
+**Acceptance Criteria (PC-24-04):**
+- [ ] `config/settings.yaml` updated: `staking_method: "kelly"`
+- [ ] `kelly_fraction: 0.25` confirmed (quarter-Kelly)
+- [ ] Safety cap `max_bet_percentage: 0.05` still enforced
+- [ ] 6-league backtest with Kelly shows ROI improvement vs flat staking
+- [ ] Bankroll drawdown not worse than flat (Kelly should reduce variance)
+- [ ] Decision: keep or rollback
+
+---
+
+**PC-24-05 — Combined validation and final threshold tuning**
+
+**Type:** Evaluation
+**Files:** `data/predictions/roi_optimization_report.json`
+**MP ref:** MP §11.4 (odds market feedback loop — assessment tiers)
+
+After all layers are tested individually, run a final combined backtest
+with all accepted layers active simultaneously. Compare against the
+PC-21-03 baseline to measure total improvement.
+
+**Deliverables:**
+- Summary table: baseline ROI vs optimised ROI per league
+- Per-league decision: auto-bet (profitable) or analysis-only (unprofitable)
+- Apply MP §11.4 assessment tiers to each league:
+  - 🟢 Profitable: CI lower bound > 0 AND n ≥ 100 bets
+  - 🟡 Promising: positive ROI but n < 100 or CI crosses zero
+  - ⚪ Insufficient: fewer than 50 bets
+  - 🔴 Unprofitable: negative ROI with n ≥ 100
+- Final `config/leagues.yaml` values locked in
+- Update masterplan §13 with ROI optimization results
+
+**Acceptance Criteria (PC-24-05):**
+- [ ] Final combined backtest completed across all 6 leagues
+- [ ] Per-league assessment tier assigned (🟢/🟡/⚪/🔴)
+- [ ] Championship and LaLiga are 🟢 Profitable (CI lower bound > 0)
+- [ ] No league worse than baseline by > 5% ROI
+- [ ] Final config committed with optimised thresholds + staking
+- [ ] Report saved to `data/predictions/roi_optimization_report.json`
+- [ ] Build plan and CLAUDE.md updated
+
+---
+
+**PC-24-06 — Integration test**
+
+**Type:** Testing
+**Files:** `tests/test_pc24_roi_optimization.py` (new)
+**MP ref:** Rule 4 (three-gate review)
+
+Tests covering all PC-24 components:
+
+1. **Per-league threshold tests:**
+   - Config loads correct `edge_threshold_override` per league
+   - Pipeline uses league override (not global default) when available
+   - Value finder respects threshold parameter
+
+2. **Pinnacle-only tests:**
+   - `find_value_bets(sharp_only=True)` filters to sharp bookmaker
+   - Fallback to `market_avg` when Pinnacle odds missing
+   - Value bet count is lower with `sharp_only=True`
+
+3. **Calibration tests (if PC-24-03 accepted):**
+   - Platt scaling reduces calibration error on synthetic data
+   - Calibration not applied below 200-sample minimum
+   - Calibration parameters survive save/load
+
+4. **Kelly staking tests (if PC-24-04 accepted):**
+   - Kelly stake proportional to edge strength
+   - Quarter-Kelly fraction applied correctly
+   - Safety cap enforced (never > 5% of bankroll)
+
+5. **Rollback verification:**
+   - Each layer can be disabled independently
+   - Disabling a layer produces identical output to pre-layer baseline
+
+**Acceptance Criteria (PC-24-06):**
+- [ ] All tests pass
+- [ ] Tests cover only accepted layers (skipped layers not tested)
+- [ ] At least 15 new tests
+- [ ] Full test suite: zero regressions
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `config/leagues.yaml` | Updated `edge_threshold_override` per league |
+| `config/settings.yaml` | `sharp_bookmaker`, `staking_method` updates |
+| `src/betting/value_finder.py` | `sharp_only` parameter for Pinnacle filtering |
+| `src/models/calibration.py` | New: Platt scaling calibration module |
+| `src/models/poisson.py` | Optional calibration post-processing in `predict()` |
+| `src/evaluation/backtester.py` | Pass-through for `sharp_only`, calibration |
+| `src/pipeline.py` | Wire up new config values |
+| `tests/test_pc24_roi_optimization.py` | New: integration tests |
+| `data/predictions/roi_optimization_report.json` | Final combined results |
+
+### Implementation Sequence
+
+```
+PC-24-01 (per-league thresholds) → backtest → keep/rollback →
+PC-24-02 (Pinnacle-only) → backtest → keep/rollback →
+PC-24-03 (Platt calibration) → backtest → keep/rollback →
+PC-24-04 (Kelly staking) → backtest → keep/rollback →
+PC-24-05 (combined validation) → final assessment →
+PC-24-06 (integration test)
+```
+
+Each step is independently reversible. A layer that doesn't improve ROI
+gets rolled back before the next layer is tested. The final combined
+backtest uses only the accepted layers.
+
+**Status: NOT STARTED**
