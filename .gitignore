@@ -11,6 +11,9 @@ data/backups/
 # --- Raw scraped data (re-downloadable, don't bloat repo) ---
 data/raw/
 
+# --- Pipeline logs (generated daily by launchd, rotated at 30 days) ---
+data/logs/
+
 # --- Team badge images (tracked for Streamlit Cloud deployment) ---
 # data/badges/
 

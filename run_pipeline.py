@@ -51,6 +51,47 @@ except ImportError:
     pass  # python-dotenv not installed — env vars must be set externally
 
 
+# ============================================================================
+# Log rotation — belt-and-suspenders with run_pipeline_local.sh (PC-23)
+# ============================================================================
+
+# Default retention period (days).  The shell wrapper also rotates logs at
+# this interval (scripts/run_pipeline_local.sh line 108), but this Python-
+# level rotation ensures cleanup even when the pipeline is run directly
+# via `python run_pipeline.py morning` instead of through the launchd wrapper.
+_LOG_RETENTION_DAYS = 30
+_LOG_DIR = Path(__file__).resolve().parent / "data" / "logs"
+
+
+def _rotate_logs() -> None:
+    """Delete pipeline log files older than _LOG_RETENTION_DAYS.
+
+    Called at the very start of every pipeline run.  Catches all
+    exceptions silently — log rotation must never block the pipeline.
+    """
+    import time
+
+    try:
+        if not _LOG_DIR.is_dir():
+            return
+
+        cutoff = time.time() - (_LOG_RETENTION_DAYS * 86_400)
+        removed = 0
+
+        for log_file in _LOG_DIR.glob("*.log"):
+            try:
+                if log_file.stat().st_mtime < cutoff:
+                    log_file.unlink()
+                    removed += 1
+            except OSError:
+                pass  # file in use or already deleted — skip
+
+        if removed:
+            print(f"[log-rotation] Removed {removed} log file(s) older than {_LOG_RETENTION_DAYS} days")
+    except Exception:
+        pass  # never block the pipeline
+
+
 def main() -> int:
     """Parse arguments and dispatch to the appropriate pipeline command."""
     parser = argparse.ArgumentParser(
@@ -161,6 +202,10 @@ def main() -> int:
     )
 
     args = parser.parse_args()
+
+    # Rotate old pipeline logs before doing anything else (PC-23).
+    # This is a no-op if data/logs/ doesn't exist or has no old files.
+    _rotate_logs()
 
     # Default to morning if no command given
     if args.command is None:

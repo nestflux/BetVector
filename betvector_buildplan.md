@@ -8378,26 +8378,32 @@ prevents future import-time failures from any view module.
 5. Report final passing count: `X/X tests passing, 0 failures`
 
 **Acceptance Criteria (PC-22-02):**
-- [ ] `test_e35_v2_integration.py`: all scenarios pass
-- [ ] `test_e38_integration.py`: all 10 tests pass
-- [ ] Full test suite: zero failures
-- [ ] Total passing test count reported (expected: 190+)
+- [x] `test_e35_v2_integration.py`: all 10 scenarios pass ✅
+- [x] `test_e38_integration.py`: all 10 tests pass ✅
+- [x] Full test suite: zero failures ✅
+- [x] Total passing test count reported: **464/464 passed, 0 failures, 1 warning** ✅
+
+### Results
+
+Upon investigation, the E35 MagicMock import error was already resolved. The test
+file's mock setup (`_make_st_mock()` at line 39) correctly handles module-level
+Streamlit code:
+- `st.session_state` is a real dict (not MagicMock), so `.get("pending_slip", {})`
+  returns `{}` (falsy), preventing the slip builder rendering code from executing
+- `st.columns.side_effect` returns proper list of MagicMocks
+- `st.radio.side_effect` returns the first option
+- The `if not pending_slip:` guard at line 1210 prevents the arithmetic-heavy
+  else branch (lines 1217+) from running during import
+
+No code changes needed — the mock was always sufficient. The error reported in the
+prior conversation may have been from an older version of the mock or a different
+test execution context.
 
 ### Files Modified
 
-| File | Change |
-|------|--------|
-| `src/delivery/views/my_bets.py` | Fix f-string/MagicMock interaction (line 1365 area) |
-| `src/delivery/constants.py` | New file if extracting COLOURS (option 1) |
-| `tests/test_e35_v2_integration.py` | Verify import works, possibly update mock setup |
+None — no changes required. Verification only.
 
-### Implementation Sequence
-
-```
-PC-22-01 (E35 import fix) → PC-22-02 (full suite verification)
-```
-
-**Status: NOT STARTED**
+**Status: DONE** ✅
 
 ---
 
@@ -8458,27 +8464,35 @@ Two issues:
 
 ### Acceptance Criteria
 
-- [ ] `data/logs/` is in `.gitignore`
-- [ ] `git status` no longer shows `data/logs/` as untracked
-- [ ] `_rotate_logs()` deletes `.log` files older than 30 days from `data/logs/`
-- [ ] Rotation failure does not prevent pipeline from running
-- [ ] Current logs (< 30 days old) are not affected
-- [ ] Shell-level rotation in `run_pipeline_local.sh` still works (not removed)
+- [x] `data/logs/` is in `.gitignore` ✅
+- [x] `git status` no longer shows `data/logs/` as untracked ✅
+- [x] `_rotate_logs()` deletes `.log` files older than 30 days from `data/logs/` ✅
+- [x] Rotation failure does not prevent pipeline from running ✅ (all exceptions caught silently)
+- [x] Current logs (< 30 days old) are not affected ✅ (verified: 21 log files untouched)
+- [x] Shell-level rotation in `run_pipeline_local.sh` still works (not removed) ✅
 
-**Status: NOT STARTED**
+### Implementation Notes
+
+- `.gitignore`: Added `data/logs/` after `data/raw/` with comment explaining purpose
+- `run_pipeline.py`: Added `_rotate_logs()` function (lines 57-92) + call in `main()` (line 207)
+  after `parse_args()` but before command dispatch
+- Retention period hardcoded as `_LOG_RETENTION_DAYS = 30` constant (matching the shell
+  wrapper's `LOG_RETENTION_DAYS=30`). Did not add to `config/settings.yaml` since the
+  shell wrapper can't read YAML — keeping both in sync is simpler with matching constants.
+- `time.time()` used for portability instead of `datetime`
+
+**Status: DONE** ✅
 
 ---
 
 ### Implementation Sequence (PC-21 through PC-23)
 
 ```
+PC-22 (test hygiene — DONE ✅, 464/464 tests) →
+PC-23 (.gitignore + log rotation — DONE ✅) →
 PC-21-01 (ρ estimation) → PC-21-02 (matrix correction) →
-PC-21-03 (backtest comparison) → PC-21-04 (integration test) →
-PC-22-01 (E35 import fix) → PC-22-02 (full suite verification) →
-PC-23-01 (.gitignore) → PC-23-02 (Python log rotation)
+PC-21-03 (backtest comparison) → PC-21-04 (integration test)
 ```
 
-**Note:** PC-22 and PC-23 are independent of PC-21 and could be done in
-parallel or in any order. The sequence above is prioritised by impact:
-Dixon-Coles (model improvement) first, then test hygiene (code quality),
-then log housekeeping (infrastructure).
+PC-22 and PC-23 completed first (clean house before model changes).
+PC-21 is next — Dixon-Coles correction factor.
