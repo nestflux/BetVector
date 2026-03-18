@@ -7983,12 +7983,240 @@ makes edges instantly visible.
 
 ### Acceptance Criteria
 
-- [ ] Bookmaker probability shown next to every model probability on the Deep Dive page
-- [ ] Overround removed from bookmaker implied probs (fair comparison)
-- [ ] Model probability in white, bookmaker in `#A0ADB8` grey
-- [ ] Model probability turns green when edge exceeds threshold
-- [ ] Edge badge shows `+X.X%` for highlighted edges
-- [ ] Graceful fallback when no odds available (show model only, no bookmaker)
-- [ ] Preferred bookmaker (FanDuel) used when available, fallback to best available
+- [x] Bookmaker probability shown next to every model probability on the Deep Dive page ✅
+- [x] Overround removed from bookmaker implied probs (fair comparison) ✅
+- [x] Model probability in white, bookmaker in `#A0ADB8` grey ✅
+- [x] Model probability turns green when edge exceeds threshold ✅
+- [x] Edge badge shows `+X.X%` for highlighted edges ✅
+- [x] Graceful fallback when no odds available (show model only, no bookmaker) ✅
+- [x] Preferred bookmaker (FanDuel) used when available, fallback to best available ✅
+- [x] Today's Picks default date filter: today → today + 14 days ✅
 
-**Status: IN PROGRESS**
+**Status: DONE** ✅
+
+---
+
+## PC-20 — Email Notifications Setup
+
+**Type:** Configuration
+**Date:** March 2026
+**Priority:** Immediate (30 seconds)
+
+### Problem
+
+Morning and evening pipelines run successfully via launchd, and email notifications
+are enabled (`notify_morning=1`, `notify_evening=1`), but the user's email address
+is NULL in the `users` table. The pipeline skips email sending because there's no
+recipient address.
+
+### Implementation
+
+1. Set email address on user ID 1 in the `users` table
+2. Verify Gmail App Password is configured in `.env` (`GMAIL_APP_PASSWORD`)
+3. Send a test email to confirm delivery
+4. Verify next morning pipeline sends the picks email
+
+### Files Modified
+
+- Database: `users` table (email column update)
+
+### Acceptance Criteria
+
+- [ ] User 1 has a valid email address set
+- [ ] GMAIL_APP_PASSWORD is present in `.env`
+- [ ] Test email sends and is received
+- [ ] Next morning pipeline log shows "Emails sent: 1" (not 0)
+
+**Status: BLOCKED** — Awaiting owner's email address
+
+---
+
+## PC-21 — Dixon-Coles Correction Factor
+
+**Type:** Model Improvement
+**Date:** March 2026
+**Priority:** High — next meaningful Brier improvement
+**MP ref:** §3 Post-Launch Roadmap, §5 Key Architectural Decisions
+
+### Problem
+
+The Poisson model assumes home goals and away goals are independent. In reality,
+goals are slightly correlated — low-scoring games (0-0, 1-0) happen more often
+than independent Poisson predicts, and 1-1 draws happen less often. This is a
+well-documented limitation that Dixon & Coles (1997) corrected with a single
+parameter ρ (rho).
+
+### Background
+
+The Dixon-Coles correction applies a multiplier τ to four cells in the scoreline
+matrix:
+
+| Scoreline | Multiplier τ | Effect |
+|-----------|-------------|--------|
+| 0-0 | 1 + λ_home × λ_away × ρ | Probability ↑ |
+| 1-0 | 1 - λ_away × ρ | Probability ↑ |
+| 0-1 | 1 - λ_home × ρ | Probability ↑ |
+| 1-1 | 1 + ρ | Probability ↓ |
+| All others | 1 (unchanged) | No correction |
+
+ρ is typically a small negative number (around -0.05 to -0.13), estimated from
+historical match data via maximum likelihood estimation (MLE).
+
+### Implementation
+
+**PC-21-01 — Estimate ρ from historical data**
+- Write `estimate_dixon_coles_rho()` function in `src/models/poisson.py`
+- Use MLE: for each historical match, compute the log-likelihood of the actual
+  scoreline given λ_home, λ_away, and ρ. Optimise ρ to maximise total log-likelihood.
+- Use `scipy.optimize.minimize_scalar` to find optimal ρ in range [-0.15, 0.0]
+- Estimate per-league (each league may have different correlation structure)
+- Store estimated ρ values in config or model pickle for reuse
+- Minimum sample size: 200 matches per league before ρ is applied (below this,
+  use ρ=0 which is equivalent to standard independent Poisson)
+
+**PC-21-02 — Apply correction to scoreline matrix**
+- Modify `_build_scoreline_matrix()` in both `poisson.py` and `xgboost_model.py`
+- Add optional `rho` parameter (default 0.0 for backward compatibility)
+- Apply τ multipliers to the four low-scoring cells
+- Re-normalise the full matrix so probabilities sum to 1.0 after correction
+- Add thorough comments explaining the correction factor
+
+**PC-21-03 — Walk-forward backtest with Dixon-Coles**
+- Run 6-league walk-forward backtest comparing:
+  (a) Current model (ρ=0, independent Poisson)
+  (b) Dixon-Coles corrected model (ρ estimated from training data only)
+- Report Brier scores, with focus on draw and under markets
+- ρ must be re-estimated at each walk-forward step using only past data
+  (temporal integrity — never use future matches to estimate ρ)
+- Expected improvement: 0.005–0.015 Brier, biggest in draw/U1.5/U2.5
+
+**PC-21-04 — Integration test**
+- Test ρ estimation produces reasonable values (-0.15 < ρ < 0)
+- Test τ multipliers are applied correctly to (0,0), (1,0), (0,1), (1,1)
+- Test matrix still sums to 1.0 after correction
+- Test ρ=0 produces identical output to current model (backward compat)
+- Test temporal integrity: ρ estimation only uses training data
+
+### Files Modified
+
+- `src/models/poisson.py` — ρ estimation + matrix correction
+- `src/models/xgboost_model.py` — matrix correction (same logic)
+- `src/models/base_model.py` — if shared matrix builder exists
+- `config/settings.yaml` — minimum sample size for ρ estimation
+- `tests/test_dixon_coles.py` — new test file
+
+### Acceptance Criteria
+
+- [ ] ρ estimated per league via MLE with temporal integrity
+- [ ] Scoreline matrix corrected for (0,0), (1,0), (0,1), (1,1) cells
+- [ ] Matrix still sums to 1.0 after correction
+- [ ] ρ=0 produces identical output to current model
+- [ ] Minimum sample size enforced (200 matches)
+- [ ] Walk-forward backtest: Brier improves or holds (no regression)
+- [ ] Draw and under market calibration improves
+- [ ] All tests pass
+
+### Implementation Sequence
+
+```
+PC-21-01 (ρ estimation) → PC-21-02 (matrix correction) →
+PC-21-03 (backtest) → PC-21-04 (integration test)
+```
+
+**Status: NOT STARTED**
+
+---
+
+## PC-22 — Test Suite Hygiene
+
+**Type:** Technical Debt
+**Date:** March 2026
+**Priority:** Medium
+
+### Problem
+
+1. **E38 backtest tests** — Were failing due to stale backtest report JSON format.
+   Now passing after PC-18 backtest regeneration. Need to verify they stay stable.
+
+2. **E35 bet tracker test** — `test_e35_v2_integration.py` fails at import time
+   because `my_bets.py` line 1365 uses an f-string with `COLOURS["green"]` that
+   gets evaluated during module import. When pytest collects the test file, it
+   imports `my_bets` which triggers Streamlit widget calls outside a running
+   Streamlit app context, causing `MagicMock.__format__` error.
+
+3. **Test count regression** — Should verify total passing test count after fixes.
+
+### Implementation
+
+**PC-22-01 — Fix E35 test import error**
+- Root cause: `my_bets.py` has a module-level f-string referencing `COLOURS`
+  that gets evaluated during import, but the surrounding Streamlit code creates
+  widget objects that become MagicMock during test collection
+- Fix: wrap the bet slip rendering in a function that's only called at runtime,
+  or guard the module-level code with `if not _is_testing()` check
+- Alternative: defer the COLOURS dict lookup to function scope rather than
+  module-level f-string evaluation
+
+**PC-22-02 — Verify full test suite**
+- Run full test suite after E35 fix
+- Confirm all E38 tests still pass (they do now, but verify stability)
+- Report total passing count
+- Fix any remaining failures
+
+### Files Modified
+
+- `src/delivery/views/my_bets.py` — fix module-level f-string
+- `tests/test_e35_v2_integration.py` — verify import works
+
+### Acceptance Criteria
+
+- [ ] `test_e35_v2_integration.py` imports and runs without error
+- [ ] All E38 backtest tests pass
+- [ ] Full test suite: zero failures
+- [ ] Total passing test count reported
+
+**Status: NOT STARTED**
+
+---
+
+## PC-23 — Log Housekeeping
+
+**Type:** Infrastructure
+**Date:** March 2026
+**Priority:** Low
+
+### Problem
+
+`data/logs/` contains runtime pipeline logs that accumulate daily. They are
+untracked by git (not in `.gitignore`) and have no rotation. Over time they'll
+consume unnecessary disk space and clutter `git status`.
+
+### Implementation
+
+1. Add `data/logs/` to `.gitignore`
+2. Add a simple log rotation: keep last 30 days of logs, delete older ones
+3. Add rotation to the morning pipeline startup (clean old logs before running)
+4. Optionally compress logs older than 7 days
+
+### Files Modified
+
+- `.gitignore` — add `data/logs/`
+- `run_pipeline.py` — add log rotation at startup
+
+### Acceptance Criteria
+
+- [ ] `data/logs/` is in `.gitignore`
+- [ ] `git status` no longer shows `data/logs/` as untracked
+- [ ] Logs older than 30 days are automatically deleted on pipeline startup
+- [ ] Current logs are not affected
+
+**Status: NOT STARTED**
+
+### Implementation Sequence (All PC-20 through PC-23)
+
+```
+PC-20 (email — blocked on owner) →
+PC-21-01 → PC-21-02 → PC-21-03 → PC-21-04 (Dixon-Coles) →
+PC-22-01 → PC-22-02 (test hygiene) →
+PC-23 (log housekeeping)
+```
