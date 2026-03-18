@@ -539,16 +539,24 @@ class XGBoostModel(BaseModel):
     def _build_scoreline_matrix(
         lambda_home: float,
         lambda_away: float,
+        rho: float = 0.0,
     ) -> List[List[float]]:
         """Build a 7×7 scoreline probability matrix from Poisson lambdas.
 
         For each cell (h, a) in the matrix:
-            P(home=h, away=a) = poisson.pmf(h, lambda_home) × poisson.pmf(a, lambda_away)
+            P(home=h, away=a) = poisson.pmf(h, λ_h) × poisson.pmf(a, λ_a) × τ(h,a,ρ)
 
-        This assumes independence between home and away goals — the standard
-        simplification used by both the Poisson GLM and XGBoost models.
-        The XGBoost improvement comes from better λ estimates, not from
-        changing the scoreline generation mechanism.
+        When ``rho=0.0``, this is equivalent to independent Poisson (all τ = 1).
+
+        Dixon-Coles Correction (PC-21)
+        --------------------------------
+        Applies the same τ correction as the Poisson model — see the
+        ``PoissonModel._build_scoreline_matrix()`` docstring for the full
+        explanation of the four τ multipliers and the ρ parameter.
+
+        The XGBoost improvement comes from better λ estimates (via gradient
+        boosting instead of GLM), not from the scoreline generation mechanism.
+        Both models share the same Dixon-Coles correction logic.
 
         Parameters
         ----------
@@ -556,6 +564,8 @@ class XGBoostModel(BaseModel):
             Expected home goals (Poisson rate parameter).
         lambda_away : float
             Expected away goals (Poisson rate parameter).
+        rho : float, default 0.0
+            Dixon-Coles correlation parameter.  Must be in [-0.15, 0.0].
 
         Returns
         -------
@@ -574,13 +584,38 @@ class XGBoostModel(BaseModel):
                 total += p
             matrix.append(row)
 
-        # Renormalise so the matrix sums to exactly 1.0
-        # (truncation at 6 goals removes a small amount of probability mass)
+        # Renormalise for truncation (removes mass beyond 6 goals per side)
         if total > 0:
             matrix = [
                 [p / total for p in row]
                 for row in matrix
             ]
+
+        # --- Dixon-Coles τ correction (PC-21-02) ---
+        if rho != 0.0:
+            # Dixon & Coles (1997) equation (4)
+            tau_00 = 1.0 - lambda_home * lambda_away * rho  # 0-0: ↑ with ρ < 0
+            tau_10 = 1.0 + lambda_away * rho                # 1-0: ↓ with ρ < 0
+            tau_01 = 1.0 + lambda_home * rho                # 0-1: ↓ with ρ < 0
+            tau_11 = 1.0 - rho                              # 1-1: ↑ with ρ < 0
+
+            # Clamp τ to avoid negative probabilities
+            matrix[0][0] *= max(0.0, tau_00)
+            matrix[1][0] *= max(0.0, tau_10)
+            matrix[0][1] *= max(0.0, tau_01)
+            matrix[1][1] *= max(0.0, tau_11)
+
+            # Renormalise so all 49 cells sum to 1.0
+            total_after = sum(
+                matrix[h][a]
+                for h in range(MAX_GOALS)
+                for a in range(MAX_GOALS)
+            )
+            if total_after > 0:
+                matrix = [
+                    [p / total_after for p in row]
+                    for row in matrix
+                ]
 
         return matrix
 

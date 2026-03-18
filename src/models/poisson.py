@@ -50,8 +50,15 @@ The independence assumption means we treat "Arsenal scoring 2" and
 correlation (e.g., a team chasing a deficit may score more but also
 concede more).  However, this correlation is small enough that the
 independent Poisson model remains competitive with more complex models.
-The ensemble system (future) can combine Poisson with correlation-aware
-models for better accuracy.
+
+Dixon-Coles Correction (PC-21)
+-------------------------------
+Dixon & Coles (1997) fix the known weakness of independent Poisson in
+low-scoring matches.  A single parameter ρ (rho) adjusts the (0,0),
+(1,0), (0,1), and (1,1) cells of the scoreline matrix.  ρ is estimated
+per-league via maximum likelihood from training data (temporal integrity
+preserved).  When ρ = 0.0, the correction is a no-op and produces
+identical output to standard independent Poisson.
 
 Master Plan refs: MP §4 Prediction Models, MP §5 Scoreline Matrix, MP §7 Model Interface
 """
@@ -66,6 +73,7 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
+from scipy.optimize import minimize_scalar
 from scipy.stats import poisson
 from statsmodels.genmod.families import Poisson as PoissonFamily
 from statsmodels.genmod.generalized_linear_model import GLM
@@ -80,6 +88,12 @@ logger = logging.getLogger(__name__)
 
 # Maximum goals per team in the scoreline matrix (0 through MAX_GOALS)
 MAX_GOALS = 7  # From config: scoreline_matrix.max_goals
+
+# Dixon-Coles correction factor (PC-21)
+# Minimum number of finished matches required before ρ estimation is applied.
+# Below this threshold, ρ = 0.0 (equivalent to standard independent Poisson).
+# Aligns with MP §11.1 recalibration minimum sample size of 200.
+DIXON_COLES_MIN_MATCHES = 200
 
 
 class PoissonModel(BaseModel):
@@ -103,6 +117,10 @@ class PoissonModel(BaseModel):
         self._away_model: Optional[Any] = None  # Fitted GLM for away goals
         self._feature_cols: List[str] = []  # Column names used in training
         self._is_trained = False
+        # Dixon-Coles ρ parameter (PC-21).  Estimated per-league during training.
+        # ρ < 0 means low-scoring outcomes (0-0, 1-0, 0-1) are more likely than
+        # independent Poisson predicts.  ρ = 0.0 is the standard independent model.
+        self._rho: float = 0.0
 
     @property
     def name(self) -> str:
@@ -219,6 +237,11 @@ class PoissonModel(BaseModel):
             self._home_model.aic, self._away_model.aic,
         )
 
+        # --- Dixon-Coles ρ estimation (PC-21-01) ---
+        # Estimate the goal correlation parameter from the training data.
+        # ρ corrects the independence assumption in the scoreline matrix.
+        self._rho = self._estimate_rho(df, X_home, X_away)
+
     # --- Prediction -------------------------------------------------------------
 
     def predict(
@@ -289,8 +312,12 @@ class PoissonModel(BaseModel):
                     match_id, raw_home, raw_away, lambda_home, lambda_away,
                 )
 
-            # Build the 7×7 scoreline probability matrix
-            matrix = self._build_scoreline_matrix(lambda_home, lambda_away)
+            # Build the 7×7 scoreline probability matrix.
+            # Dixon-Coles correction (PC-21): pass ρ to adjust low-scoring cells.
+            # When ρ = 0.0, this produces identical output to independent Poisson.
+            matrix = self._build_scoreline_matrix(
+                lambda_home, lambda_away, rho=self._rho,
+            )
 
             # Derive all market probabilities from the matrix
             market_probs = derive_market_probabilities(matrix)
@@ -330,6 +357,7 @@ class PoissonModel(BaseModel):
             "home_feature_cols": self._home_feature_cols,
             "away_feature_cols": self._away_feature_cols,
             "feature_cols": self._feature_cols,
+            "rho": self._rho,  # Dixon-Coles ρ (PC-21)
         }
         with open(path, "wb") as f:
             pickle.dump(state, f)
@@ -350,6 +378,8 @@ class PoissonModel(BaseModel):
         self._home_feature_cols = state["home_feature_cols"]
         self._away_feature_cols = state["away_feature_cols"]
         self._feature_cols = state["feature_cols"]
+        # Dixon-Coles ρ — default 0.0 for backward compat with pre-PC-21 pickles
+        self._rho = state.get("rho", 0.0)
         self._is_trained = True
 
         logger.info("Loaded Poisson model from %s", path)
@@ -517,17 +547,43 @@ class PoissonModel(BaseModel):
     def _build_scoreline_matrix(
         lambda_home: float,
         lambda_away: float,
+        rho: float = 0.0,
     ) -> List[List[float]]:
         """Build a 7×7 scoreline probability matrix from Poisson lambdas.
 
         For each cell (h, a) in the matrix:
-            P(home=h, away=a) = poisson.pmf(h, lambda_home) × poisson.pmf(a, lambda_away)
+            P(home=h, away=a) = poisson.pmf(h, λ_h) × poisson.pmf(a, λ_a) × τ(h,a,λ_h,λ_a,ρ)
 
-        This assumes independence between home and away goals — a standard
-        simplification in football modelling.
+        When ``rho=0.0``, this is equivalent to independent Poisson (all τ = 1).
 
-        The matrix is truncated at 6 goals per team (7 values: 0,1,2,3,4,5,6)
-        and renormalised so all 49 cells sum to exactly 1.0.
+        Dixon-Coles Correction (PC-21)
+        --------------------------------
+        Dixon & Coles (1997) showed that the independent Poisson model
+        underestimates the probability of 0-0 and 1-0/0-1 results, and
+        overestimates 1-1 draws.  This happens because goals in football
+        are weakly correlated — when one team adopts a defensive strategy,
+        both teams' scoring rates drop together.
+
+        The correction applies a multiplier τ to four low-scoring cells:
+        From Dixon & Coles (1997) equation (4):
+
+          - (0,0): τ = 1 - λ_h × λ_a × ρ   → probability ↑ when ρ < 0
+          - (1,0): τ = 1 + λ_a × ρ          → probability ↓ when ρ < 0
+          - (0,1): τ = 1 + λ_h × ρ          → probability ↓ when ρ < 0
+          - (1,1): τ = 1 - ρ                 → probability ↑ when ρ < 0
+
+        The net effect with ρ < 0: probability mass moves from single-goal
+        wins (1-0, 0-1) into goalless and mutual-scoring draws (0-0, 1-1).
+        The 0-0 correction is largest because its multiplier scales with
+        λ_h × λ_a.
+
+        ρ is a small negative number (typically -0.05 to -0.13), estimated
+        per-league from historical data via maximum likelihood.  When ρ = 0,
+        all τ values equal 1.0 and the matrix is identical to standard Poisson.
+
+        After applying τ, the full matrix is renormalised so all 49 cells
+        sum to exactly 1.0 — preserving the MP §5 contract that
+        ``derive_market_probabilities()`` depends on.
 
         Parameters
         ----------
@@ -535,11 +591,14 @@ class PoissonModel(BaseModel):
             Expected home goals (Poisson rate parameter).
         lambda_away : float
             Expected away goals (Poisson rate parameter).
+        rho : float, default 0.0
+            Dixon-Coles correlation parameter.  Must be in [-0.15, 0.0].
+            Negative values increase 0-0/1-1 and decrease 1-0/0-1.
 
         Returns
         -------
         list[list[float]]
-            7×7 matrix of scoreline probabilities.
+            7×7 matrix of scoreline probabilities, renormalised to sum to 1.0.
         """
         matrix = []
         total = 0.0
@@ -553,11 +612,171 @@ class PoissonModel(BaseModel):
                 total += p
             matrix.append(row)
 
-        # Renormalise so the matrix sums to exactly 1.0
-        # (truncation at 6 goals removes a small amount of probability mass)
+        # Renormalise for truncation (removes mass beyond 6 goals per side)
         if total > 0:
             for h in range(MAX_GOALS):
                 for a in range(MAX_GOALS):
                     matrix[h][a] /= total
 
+        # --- Dixon-Coles τ correction (PC-21-02) ---
+        # Only apply when ρ ≠ 0.  When ρ = 0 all τ = 1 (no-op).
+        if rho != 0.0:
+            # τ multipliers — Dixon & Coles (1997) equation (4)
+            tau_00 = 1.0 - lambda_home * lambda_away * rho  # 0-0: ↑ with ρ < 0
+            tau_10 = 1.0 + lambda_away * rho                # 1-0: ↓ with ρ < 0
+            tau_01 = 1.0 + lambda_home * rho                # 0-1: ↓ with ρ < 0
+            tau_11 = 1.0 - rho                              # 1-1: ↑ with ρ < 0
+
+            # Guard: clamp τ to avoid negative probabilities.
+            # This can happen with extreme λ values (e.g., λ > 3 and ρ = -0.15).
+            # If clamping activates, log a warning — it indicates ρ may be too
+            # aggressive for the given λ values.
+            for tau_val, cell_name in [
+                (tau_00, "0-0"), (tau_10, "1-0"),
+                (tau_01, "0-1"), (tau_11, "1-1"),
+            ]:
+                if tau_val < 0:
+                    logger.warning(
+                        "Dixon-Coles τ < 0 for cell %s (τ=%.4f, ρ=%.4f, "
+                        "λ_h=%.3f, λ_a=%.3f). Clamping to 0.",
+                        cell_name, tau_val, rho, lambda_home, lambda_away,
+                    )
+
+            # Apply τ, clamping at 0 to prevent negative probabilities
+            matrix[0][0] *= max(0.0, tau_00)
+            matrix[1][0] *= max(0.0, tau_10)
+            matrix[0][1] *= max(0.0, tau_01)
+            matrix[1][1] *= max(0.0, tau_11)
+
+            # Renormalise again so all 49 cells sum to 1.0
+            total_after = sum(
+                matrix[h][a] for h in range(MAX_GOALS) for a in range(MAX_GOALS)
+            )
+            if total_after > 0:
+                for h in range(MAX_GOALS):
+                    for a in range(MAX_GOALS):
+                        matrix[h][a] /= total_after
+
         return matrix
+
+    def _estimate_rho(
+        self,
+        df: pd.DataFrame,
+        X_home: pd.DataFrame,
+        X_away: pd.DataFrame,
+    ) -> float:
+        """Estimate the Dixon-Coles ρ parameter via maximum likelihood (PC-21-01).
+
+        Dixon & Coles (1997) correct the independent Poisson assumption by
+        estimating a correlation parameter ρ from historical match data.
+
+        **How it works:**
+        For each historical match, we have the predicted λ_home and λ_away
+        (from the Poisson GLMs) and the actual scoreline.  The Dixon-Coles
+        log-likelihood adjusts the standard Poisson log-likelihood for the
+        four low-scoring outcomes (0-0, 1-0, 0-1, 1-1):
+
+            L(ρ) = Σ [ log(poisson(h,λ_h)) + log(poisson(a,λ_a)) + log(τ(h,a,ρ)) ]
+
+        where τ is the correction multiplier (see ``_build_scoreline_matrix``).
+
+        We find the ρ that maximises L(ρ) using bounded scalar optimisation
+        (``scipy.optimize.minimize_scalar``) over the range [-0.15, 0.0].
+
+        **Temporal integrity:** This function uses only the training data
+        that was passed to ``train()`` — never future matches.
+
+        **Minimum sample size:** If fewer than DIXON_COLES_MIN_MATCHES (200)
+        are available, returns ρ = 0.0 (standard independent Poisson).
+        This prevents noisy estimates from small datasets.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Training data with ``home_goals`` and ``away_goals`` columns.
+        X_home : pd.DataFrame
+            Home feature matrix (with constant column) used for prediction.
+        X_away : pd.DataFrame
+            Away feature matrix (with constant column) used for prediction.
+
+        Returns
+        -------
+        float
+            Estimated ρ, typically in [-0.13, -0.03]. Returns 0.0 if the
+            sample is too small or estimation fails.
+        """
+        n_matches = len(df)
+        if n_matches < DIXON_COLES_MIN_MATCHES:
+            logger.info(
+                "Dixon-Coles: only %d matches (need %d) — using ρ=0.0",
+                n_matches, DIXON_COLES_MIN_MATCHES,
+            )
+            return 0.0
+
+        # Get predicted λ values for all training matches
+        try:
+            lambda_home_arr = self._home_model.predict(X_home).values
+            lambda_away_arr = self._away_model.predict(X_away).values
+        except Exception as e:
+            logger.warning("Dixon-Coles: failed to predict lambdas — %s", e)
+            return 0.0
+
+        home_goals = df["home_goals"].values.astype(int)
+        away_goals = df["away_goals"].values.astype(int)
+
+        def neg_log_likelihood(rho: float) -> float:
+            """Negative log-likelihood of ρ given all training matches.
+
+            We minimise the negative because scipy.optimize.minimize_scalar
+            finds minima, and we want the maximum likelihood.
+            """
+            total_ll = 0.0
+            for i in range(n_matches):
+                lh = lambda_home_arr[i]
+                la = lambda_away_arr[i]
+                h = home_goals[i]
+                a = away_goals[i]
+
+                # Base independent Poisson log-likelihood
+                log_p = poisson.logpmf(h, lh) + poisson.logpmf(a, la)
+
+                # Dixon-Coles τ correction — equation (4)
+                if h == 0 and a == 0:
+                    tau = 1.0 - lh * la * rho
+                elif h == 1 and a == 0:
+                    tau = 1.0 + la * rho
+                elif h == 0 and a == 1:
+                    tau = 1.0 + lh * rho
+                elif h == 1 and a == 1:
+                    tau = 1.0 - rho
+                else:
+                    tau = 1.0  # No correction for other scorelines
+
+                # Guard against log(0) — clamp τ to a small positive value
+                if tau <= 0:
+                    tau = 1e-10
+
+                log_p += np.log(tau)
+                total_ll += log_p
+
+            return -total_ll  # Negative for minimisation
+
+        # Optimise ρ over [-0.15, 0.0] using Brent's bounded method
+        try:
+            result = minimize_scalar(
+                neg_log_likelihood,
+                bounds=(-0.15, 0.0),
+                method="bounded",
+            )
+            rho = float(result.x)
+
+            logger.info(
+                "Dixon-Coles: estimated ρ = %.4f from %d matches "
+                "(neg_log_lik = %.2f, converged = %s)",
+                rho, n_matches, result.fun, result.success,
+            )
+            return rho
+
+        except Exception as e:
+            logger.warning("Dixon-Coles: optimisation failed — %s", e)
+            return 0.0
