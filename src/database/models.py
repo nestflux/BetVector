@@ -1756,3 +1756,62 @@ class MatchLineup(Base):
             f"player='{self.player_name}', "
             f"{starter})"
         )
+
+
+# ============================================================================
+# SHADOW_VALUE_BETS  (PC-25-12 — Shadow Mode for Strategy Changes)
+# ============================================================================
+# Before applying any strategy change live, the system runs it in "shadow mode"
+# for 4 weeks.  Shadow bets are computed with the PROPOSED strategy change and
+# stored here — completely separate from the main value_bets table.  The system
+# tracks what WOULD have happened (shadow P&L) alongside real P&L.  Only if
+# shadow outperforms live by >3pp ROI is the change promoted.
+#
+# Shadow mode ensures we never make a strategy worse by rushing a change.
+# The human operator reviews the shadow comparison report and decides manually.
+
+class ShadowValueBet(Base):
+    __tablename__ = "shadow_value_bets"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    match_id = Column(
+        Integer, ForeignKey("matches.id"), nullable=False,
+    )
+    league = Column(String, nullable=False)
+    market_type = Column(String, nullable=False)
+    selection = Column(String, nullable=False)
+    # What strategy change is being tested
+    strategy_change = Column(String, nullable=False)
+    # Model's estimated probability under the proposed strategy
+    model_prob = Column(Float, nullable=False)
+    bookmaker_odds = Column(Float, nullable=False)
+    edge = Column(Float, nullable=False)
+    # What the shadow stake WOULD have been under the proposed config
+    shadow_stake = Column(Float, nullable=False)
+    # Actual result after the match: "won" / "lost" / "pending"
+    result = Column(String, nullable=True)
+    # Shadow P&L (computed after match settles)
+    shadow_pnl = Column(Float, nullable=True)
+    # When the shadow bet was computed
+    created_at = Column(
+        String, nullable=False, server_default=func.now(),
+    )
+
+    # Relationships
+    match = relationship("Match")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "match_id", "market_type", "selection", "strategy_change",
+            name="uq_shadow_vb_match_market_sel_strat",
+        ),
+        Index("idx_shadow_vb_league", "league"),
+        Index("idx_shadow_vb_strategy", "strategy_change"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"ShadowValueBet(match={self.match_id}, {self.league}, "
+            f"{self.market_type}/{self.selection}, "
+            f"edge={self.edge:.3f}, strategy='{self.strategy_change}')"
+        )

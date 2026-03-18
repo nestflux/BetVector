@@ -28,6 +28,9 @@ leagues:
     soccerdata_league_id: 228
     is_active: true
     seasons:
+      - "2017-18"
+      - "2018-19"
+      - "2019-20"
       - "2020-21"
       - "2021-22"
       - "2022-23"
@@ -44,6 +47,13 @@ leagues:
       max_daily_bets: 10       # Per-league daily cap
       auto_bet: false          # 🟡 tier — analysis only until CI confirms edge
       clv_tracking: true       # Track closing line value for edge validation
+      shadow_mode: false       # PC-25-12: shadow mode off by default (manual opt-in)
+      staking_method: flat     # PC-25-15: flat staking (🟡 tier)
+    # PC-25-13: Per-league model parameters for Poisson prediction
+    model_params:
+      lambda_min: 0.2          # Floor for expected goals (prevents near-zero probs)
+      lambda_max: 3.5          # Ceiling for expected goals (EPL avg ~2.7 goals/match)
+      training_weight: 1.0     # Same-league training data weight (1.0 = no boost)
 
   # -------------------------------------------------------------------------
   # English Championship (E36-01 — League Expansion)
@@ -66,6 +76,9 @@ leagues:
     soccerdata_league_id: 229
     is_active: true
     seasons:
+      - "2017-18"
+      - "2018-19"
+      - "2019-20"
       - "2020-21"
       - "2021-22"
       - "2022-23"
@@ -79,10 +92,21 @@ leagues:
     # No sharp filtering needed — market inefficiency is structural.
     strategy:
       sharp_only: false        # All bookmakers (market is inefficient enough without filtering)
-      stake_multiplier: 1.0    # 🟢 profitable tier — will increase to 1.5× in PC-25-09
+      stake_multiplier: 1.5    # 🟢 profitable tier — lean into verified edge (PC-25-09)
       max_daily_bets: 10       # Per-league daily cap
       auto_bet: true           # 🟢 tier — system recommends betting
       clv_tracking: true       # Track CLV to confirm edge persistence
+      shadow_mode: false       # PC-25-12: shadow mode off by default
+      # PC-25-15: Quarter-Kelly for the only 🟢 profitable league.
+      # Max 3% per bet (not 5%) and auto-rollback if drawdown exceeds 15%.
+      staking_method: kelly    # Kelly staking (verified profitable, CI [3.5%, 23.0%])
+      kelly_max_bet_pct: 0.03  # Max 3% per bet under Kelly (stricter than global 5%)
+      drawdown_rollback_pct: 0.15  # Auto-revert to flat if drawdown > 15%
+    # PC-25-13: Per-league model parameters for Poisson prediction
+    model_params:
+      lambda_min: 0.2          # Floor for expected goals
+      lambda_max: 3.5          # Ceiling — Championship has lower xG than top tier
+      training_weight: 2.0     # 2× weight for same-league data (market inefficiency)
 
   # -------------------------------------------------------------------------
   # La Liga (E36-02 — League Expansion)
@@ -106,6 +130,9 @@ leagues:
     soccerdata_league_id: 297
     is_active: true
     seasons:
+      - "2017-18"
+      - "2018-19"
+      - "2019-20"
       - "2020-21"
       - "2021-22"
       - "2022-23"
@@ -123,6 +150,13 @@ leagues:
       max_daily_bets: 8        # Per-league daily cap
       auto_bet: false          # 🟡 tier — analysis only (CI [-9.2%, +50.3%] crosses zero)
       clv_tracking: true       # Critical — LaLiga CLV validates the sharp-only edge
+      shadow_mode: false       # PC-25-12: shadow mode off by default
+      staking_method: flat     # PC-25-15: flat staking (🟡 tier)
+    # PC-25-13: Per-league model parameters for Poisson prediction
+    model_params:
+      lambda_min: 0.2          # Floor for expected goals
+      lambda_max: 3.5          # Ceiling — La Liga avg ~2.5 goals/match
+      training_weight: 1.5     # 1.5× weight (sharp-only filtering creates smaller sample)
 
   # -------------------------------------------------------------------------
   # French Ligue 1 (PC-08-02 — replaces English League One)
@@ -148,6 +182,9 @@ leagues:
     soccerdata_league_id: 235
     is_active: true
     seasons:
+      - "2017-18"
+      - "2018-19"
+      - "2019-20"
       - "2020-21"
       - "2021-22"
       - "2022-23"
@@ -161,10 +198,17 @@ leagues:
     # strong Ligue 1 coverage and the model finds genuine edge against sharp odds.
     strategy:
       sharp_only: true         # Pinnacle-only — +22.14pp improvement in backtest
-      stake_multiplier: 1.0    # 🔴 tier — will decrease to 0.5× in PC-25-09
+      stake_multiplier: 0.5    # 🔴 tier — reduce exposure, keep learning (PC-25-09)
       max_daily_bets: 8        # Per-league daily cap
       auto_bet: false          # 🔴 tier — analysis only
       clv_tracking: true       # Track whether Pinnacle-only edge persists
+      shadow_mode: false       # PC-25-12: shadow mode off by default
+      staking_method: flat     # PC-25-15: flat staking (🔴 tier)
+    # PC-25-13: Per-league model parameters for Poisson prediction
+    model_params:
+      lambda_min: 0.2          # Floor for expected goals
+      lambda_max: 3.5          # Ceiling — Ligue 1 avg ~2.5 goals/match
+      training_weight: 1.0     # Standard weight
 
   # -------------------------------------------------------------------------
   # Bundesliga (E38-03 — League Expansion Phase 2)
@@ -188,6 +232,9 @@ leagues:
     soccerdata_league_id: 241
     is_active: true
     seasons:
+      - "2017-18"
+      - "2018-19"
+      - "2019-20"
       - "2020-21"
       - "2021-22"
       - "2022-23"
@@ -200,10 +247,18 @@ leagues:
     # Insufficient backtest data to justify sharp filtering change.
     strategy:
       sharp_only: false        # All bookmakers — no evidence sharp filtering helps
-      stake_multiplier: 1.0    # 🔴 tier — will decrease to 0.5× in PC-25-09
+      stake_multiplier: 0.5    # 🔴 tier — reduce exposure, keep learning (PC-25-09)
       max_daily_bets: 8        # Per-league daily cap
       auto_bet: false          # 🔴 tier — analysis only
       clv_tracking: true       # Track CLV to detect if edge emerges
+      shadow_mode: false       # PC-25-12: shadow mode off by default
+      staking_method: flat     # PC-25-15: flat staking (🔴 tier)
+    # PC-25-13: Per-league model parameters for Poisson prediction
+    # Bundesliga is the highest-scoring top league (avg ~3.0 goals/match)
+    model_params:
+      lambda_min: 0.3          # Slightly higher floor (Bundesliga is more attacking)
+      lambda_max: 4.0          # Higher ceiling (Bundesliga avg ~3.0 goals/match)
+      training_weight: 1.0     # Standard weight
 
   # -------------------------------------------------------------------------
   # Serie A (E38-04 — League Expansion Phase 2)
@@ -227,6 +282,9 @@ leagues:
     soccerdata_league_id: 253
     is_active: true
     seasons:
+      - "2017-18"
+      - "2018-19"
+      - "2019-20"
       - "2020-21"
       - "2021-22"
       - "2022-23"
@@ -239,7 +297,15 @@ leagues:
     # Insufficient backtest data to justify sharp filtering change.
     strategy:
       sharp_only: false        # All bookmakers — no evidence sharp filtering helps
-      stake_multiplier: 1.0    # 🔴 tier — will decrease to 0.5× in PC-25-09
+      stake_multiplier: 0.5    # 🔴 tier — reduce exposure, keep learning (PC-25-09)
       max_daily_bets: 8        # Per-league daily cap
       auto_bet: false          # 🔴 tier — analysis only
       clv_tracking: true       # Track CLV to detect if edge emerges
+      shadow_mode: false       # PC-25-12: shadow mode off by default
+      staking_method: flat     # PC-25-15: flat staking (🔴 tier)
+    # PC-25-13: Per-league model parameters for Poisson prediction
+    # Serie A is a low-scoring league (avg ~2.4 goals/match, defensive style)
+    model_params:
+      lambda_min: 0.2          # Standard floor
+      lambda_max: 3.0          # Lower ceiling (defensive league, fewer goals)
+      training_weight: 1.0     # Standard weight

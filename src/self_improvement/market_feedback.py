@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -179,6 +179,372 @@ def get_warnings() -> List[Dict[str, str]]:
         })
 
     return warnings
+
+
+def detect_tier_transitions(
+    current_period: Optional[str] = None,
+) -> List[Dict[str, str]]:
+    """Detect league-level tier transitions from the two most recent assessments.
+
+    Compares the current period's market performance assessments with the
+    previous period's for each league.  A "transition" is any league whose
+    overall assessment tier changed (e.g., 🟡 promising → 🟢 profitable).
+
+    League-level tier is the BEST (most optimistic) tier across all market
+    types for that league — because if ANY market is profitable, the league
+    is worth tracking.
+
+    Parameters
+    ----------
+    current_period : str, optional
+        ISO date for the current period (default: latest in DB).
+
+    Returns
+    -------
+    list of dict
+        Each dict has: league, old_tier, new_tier, direction, detail.
+        ``direction`` is "upgrade", "downgrade", or "lateral".
+    """
+    TIER_RANK = {
+        "profitable": 4,
+        "promising": 3,
+        "insufficient": 2,
+        "unprofitable": 1,
+    }
+
+    with get_session() as session:
+        # Find the two most recent distinct period_end dates
+        periods = (
+            session.query(MarketPerformance.period_end)
+            .distinct()
+            .order_by(MarketPerformance.period_end.desc())
+            .limit(2)
+            .all()
+        )
+        if len(periods) < 2:
+            # Need at least two periods to detect transitions
+            return []
+
+        current = periods[0][0] if current_period is None else current_period
+        previous = periods[1][0] if current_period is None else periods[0][0]
+
+        # If caller specified current_period, find the one before it
+        if current_period is not None:
+            prev_result = (
+                session.query(MarketPerformance.period_end)
+                .filter(MarketPerformance.period_end < current_period)
+                .distinct()
+                .order_by(MarketPerformance.period_end.desc())
+                .first()
+            )
+            if not prev_result:
+                return []
+            previous = prev_result[0]
+
+        # Get all records for current and previous periods
+        current_records = (
+            session.query(MarketPerformance)
+            .filter(MarketPerformance.period_end == current)
+            .all()
+        )
+        previous_records = (
+            session.query(MarketPerformance)
+            .filter(MarketPerformance.period_end == previous)
+            .all()
+        )
+
+    # Aggregate to league-level tier (best tier across all markets)
+    def _league_tier(records: list) -> Dict[str, str]:
+        league_tiers: Dict[str, str] = {}
+        for r in records:
+            existing = league_tiers.get(r.league, "insufficient")
+            if TIER_RANK.get(r.assessment, 0) > TIER_RANK.get(existing, 0):
+                league_tiers[r.league] = r.assessment
+        return league_tiers
+
+    curr_tiers = _league_tier(current_records)
+    prev_tiers = _league_tier(previous_records)
+
+    # Detect transitions
+    transitions: List[Dict[str, str]] = []
+    all_leagues = set(curr_tiers.keys()) | set(prev_tiers.keys())
+
+    tier_emoji = {
+        "profitable": "🟢",
+        "promising": "🟡",
+        "insufficient": "⚪",
+        "unprofitable": "🔴",
+    }
+
+    for league in sorted(all_leagues):
+        old_tier = prev_tiers.get(league, "insufficient")
+        new_tier = curr_tiers.get(league, "insufficient")
+
+        if old_tier == new_tier:
+            continue
+
+        old_rank = TIER_RANK.get(old_tier, 0)
+        new_rank = TIER_RANK.get(new_tier, 0)
+        direction = "upgrade" if new_rank > old_rank else "downgrade"
+
+        transitions.append({
+            "league": league,
+            "old_tier": old_tier,
+            "new_tier": new_tier,
+            "direction": direction,
+            "detail": (
+                f"{tier_emoji.get(old_tier, '')} {old_tier} → "
+                f"{tier_emoji.get(new_tier, '')} {new_tier}"
+            ),
+        })
+
+    if transitions:
+        logger.info(
+            "Detected %d tier transition(s): %s",
+            len(transitions),
+            ", ".join(f"{t['league']} {t['detail']}" for t in transitions),
+        )
+
+    return transitions
+
+
+def generate_strategy_suggestions(
+    transitions: List[Dict[str, str]],
+) -> List[Dict[str, str]]:
+    """Generate strategy change suggestions based on tier transitions.
+
+    These are SUGGESTIONS ONLY — they are never auto-applied.  The human
+    operator reviews each suggestion in the weekly email and decides whether
+    to update ``config/leagues.yaml`` manually.
+
+    Parameters
+    ----------
+    transitions : list of dict
+        Output from ``detect_tier_transitions()``.
+
+    Returns
+    -------
+    list of dict
+        Each dict has: league, suggestion, reason, action.
+    """
+    suggestions: List[Dict[str, str]] = []
+
+    for t in transitions:
+        league = t["league"]
+        new_tier = t["new_tier"]
+        old_tier = t["old_tier"]
+        direction = t["direction"]
+
+        if direction == "upgrade" and new_tier == "profitable":
+            # Upgrade to profitable — suggest increasing exposure
+            suggestions.append({
+                "league": league,
+                "suggestion": f"Consider increasing {league} stake_multiplier to 1.5",
+                "reason": (
+                    f"{league} upgraded from {old_tier} to profitable. "
+                    f"CI lower bound is above zero with sufficient sample size. "
+                    f"Edge appears statistically significant."
+                ),
+                "action": "increase_exposure",
+            })
+        elif direction == "upgrade" and new_tier == "promising":
+            # Upgrade to promising — suggest standard exposure
+            suggestions.append({
+                "league": league,
+                "suggestion": f"Consider setting {league} stake_multiplier to 1.0",
+                "reason": (
+                    f"{league} upgraded from {old_tier} to promising. "
+                    f"ROI is positive but CI still crosses zero. "
+                    f"Keep monitoring — may confirm edge with more data."
+                ),
+                "action": "maintain_exposure",
+            })
+        elif direction == "downgrade" and new_tier == "unprofitable":
+            # Downgrade to unprofitable — suggest reducing exposure
+            suggestions.append({
+                "league": league,
+                "suggestion": (
+                    f"Consider reducing {league} stake_multiplier to 0.5 "
+                    f"and setting auto_bet to false"
+                ),
+                "reason": (
+                    f"{league} downgraded to unprofitable. "
+                    f"CI upper bound is below zero with sufficient sample size. "
+                    f"Reduce exposure but continue tracking for potential recovery."
+                ),
+                "action": "reduce_exposure",
+            })
+        elif direction == "downgrade":
+            # Any other downgrade — suggest caution
+            suggestions.append({
+                "league": league,
+                "suggestion": f"Review {league} — tier dropped from {old_tier} to {new_tier}",
+                "reason": (
+                    f"{league} downgraded from {old_tier} to {new_tier}. "
+                    f"Performance may be declining. Review recent bet results "
+                    f"and CLV trends before making changes."
+                ),
+                "action": "review",
+            })
+
+    return suggestions
+
+
+def compute_shadow_pnl(league: Optional[str] = None) -> Dict[str, Any]:
+    """Compute shadow P&L for leagues currently in shadow mode.
+
+    Shadow bets are stored in ``shadow_value_bets`` (PC-25-12).  This function
+    computes the hypothetical P&L for each active shadow strategy, comparing
+    it against the corresponding live strategy.
+
+    Parameters
+    ----------
+    league : str, optional
+        If provided, compute only for this league.  Otherwise, compute for
+        all leagues with resolved shadow bets.
+
+    Returns
+    -------
+    dict
+        Per-league shadow P&L summary:
+        ``{league: {shadow_roi, live_roi, n_bets, pnl, strategy_change}}``.
+    """
+    from src.database.models import ShadowValueBet
+
+    results: Dict[str, Any] = {}
+
+    with get_session() as session:
+        query = (
+            session.query(ShadowValueBet)
+            .filter(ShadowValueBet.result.in_(["won", "lost"]))
+        )
+        if league:
+            query = query.filter(ShadowValueBet.league == league)
+
+        shadow_bets = query.all()
+
+    # Group by league
+    by_league: Dict[str, list] = {}
+    for sb in shadow_bets:
+        by_league.setdefault(sb.league, []).append(sb)
+
+    for lg, bets in by_league.items():
+        total_stake = sum(b.shadow_stake for b in bets)
+        total_pnl = sum(b.shadow_pnl or 0.0 for b in bets)
+        shadow_roi = total_pnl / total_stake if total_stake > 0 else 0.0
+
+        results[lg] = {
+            "shadow_roi": round(shadow_roi, 6),
+            "n_bets": len(bets),
+            "pnl": round(total_pnl, 2),
+            "total_staked": round(total_stake, 2),
+            "strategy_change": bets[0].strategy_change if bets else "",
+        }
+
+    return results
+
+
+def generate_shadow_comparison(min_weeks: int = 4) -> List[Dict[str, Any]]:
+    """Generate comparison report: shadow vs live strategy performance.
+
+    After ``min_weeks`` of shadow data, compares shadow P&L against live P&L
+    for the same period.  Only promotes to live if shadow outperforms by >3pp ROI.
+
+    Parameters
+    ----------
+    min_weeks : int
+        Minimum weeks of shadow data required before generating a report.
+        Default: 4 (one full month of Sunday-to-Sunday data).
+
+    Returns
+    -------
+    list of dict
+        Each dict has: league, shadow_roi, live_roi, roi_diff,
+        recommendation ("promote" / "keep_shadow" / "abandon").
+    """
+    from datetime import timedelta
+    from src.database.models import ShadowValueBet
+
+    reports: List[Dict[str, Any]] = []
+
+    with get_session() as session:
+        # Find the earliest shadow bet per league
+        from sqlalchemy import func as sqla_func
+        earliest_by_league = (
+            session.query(
+                ShadowValueBet.league,
+                sqla_func.min(ShadowValueBet.created_at).label("first_shadow"),
+                sqla_func.count(ShadowValueBet.id).label("total_bets"),
+            )
+            .filter(ShadowValueBet.result.in_(["won", "lost"]))
+            .group_by(ShadowValueBet.league)
+            .all()
+        )
+
+    now_str = datetime.utcnow().strftime("%Y-%m-%d")
+
+    for row in earliest_by_league:
+        lg = row.league
+        first_date = row.first_shadow
+        n_bets = row.total_bets
+
+        # Check if enough time has elapsed (min_weeks)
+        try:
+            first_dt = datetime.strptime(first_date[:10], "%Y-%m-%d")
+            weeks_elapsed = (datetime.utcnow() - first_dt).days / 7
+        except (ValueError, TypeError):
+            continue
+
+        if weeks_elapsed < min_weeks:
+            continue
+
+        # Get shadow P&L
+        shadow = compute_shadow_pnl(league=lg)
+        if lg not in shadow or shadow[lg]["n_bets"] < 10:
+            continue
+
+        shadow_roi = shadow[lg]["shadow_roi"]
+
+        # Get live P&L for the same period from BetLog
+        with get_session() as session:
+            live_bets = (
+                session.query(BetLog)
+                .filter(
+                    BetLog.league == lg,
+                    BetLog.bet_type == "system_pick",
+                    BetLog.status.in_(["won", "lost"]),
+                    BetLog.date >= first_date[:10],
+                )
+                .all()
+            )
+
+        live_staked = sum(b.stake for b in live_bets) if live_bets else 0.0
+        live_pnl = sum(b.pnl or 0.0 for b in live_bets) if live_bets else 0.0
+        live_roi = live_pnl / live_staked if live_staked > 0 else 0.0
+
+        roi_diff = shadow_roi - live_roi
+
+        # Recommendation: promote only if shadow outperforms by >3pp (0.03)
+        if roi_diff > 0.03:
+            recommendation = "promote"
+        elif roi_diff < -0.03:
+            recommendation = "abandon"
+        else:
+            recommendation = "keep_shadow"
+
+        reports.append({
+            "league": lg,
+            "shadow_roi": round(shadow_roi, 4),
+            "live_roi": round(live_roi, 4),
+            "roi_diff": round(roi_diff, 4),
+            "n_shadow_bets": shadow[lg]["n_bets"],
+            "n_live_bets": len(live_bets) if live_bets else 0,
+            "weeks_elapsed": round(weeks_elapsed, 1),
+            "recommendation": recommendation,
+            "strategy_change": shadow[lg]["strategy_change"],
+        })
+
+    return reports
 
 
 def get_market_summary() -> List[Dict]:

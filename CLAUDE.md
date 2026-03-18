@@ -346,9 +346,9 @@ single-line expression.
 
 ## Current Status
 
-Last completed: PC-25 Phase 1 — Multi-League Strategy System (6 issues) ✅
-Currently working: PC-25 Phase 2 — Stake Multipliers & Dashboard Integration
-Next up: PC-25-08 (Stake multiplier enforcement in BankrollManager)
+Last completed: PC-25 — Multi-League Strategy System (15 issues, 3 phases) ✅
+Currently working: Historical backfill (2017-20 seasons, 6 leagues) — running in background
+Next up: Owner review — shadow mode activation, Kelly staking go-live for Championship
 
 E40 complete: All 10 issues done ✅ (TM datasets download, lineup/formation/manager backfill, manager features, injury club fix, minutes impact, recomputation, weekly refresh, integration test — 14,187 matches, 9,829 TM-mapped, 393K lineups, 42 tests)
 
@@ -402,7 +402,15 @@ Post-critical-path (March 2026):
 - PC-22: Test Suite Hygiene ✅ — E35 MagicMock import error was already resolved (mock setup in test_e35_v2_integration.py handles module-level Streamlit code correctly). Full suite verified: 464/464 tests passing, 0 failures, 1 warning (SQLAlchemy legacy API).
 - PC-23: Log Housekeeping ✅ — Added `data/logs/` to `.gitignore` (no longer clutters git status). Added Python-level `_rotate_logs()` to `run_pipeline.py` (belt-and-suspenders with shell-level rotation in `run_pipeline_local.sh` line 108). 30-day retention, catches all exceptions silently, never blocks pipeline.
 - PC-24: ROI Optimization Pipeline ✅ — 4-layer stacked optimisation (thresholds, Pinnacle filtering, λ calibration, Kelly staking). PC-24-01 KEEP: per-league thresholds (Championship 10%, LaLiga 8%, Ligue1 7%) — aggregate ROI 1.34%→3.26% (+1.92%). PC-24-02 ROLLBACK: Pinnacle-only collapsed sample sizes (-5.65%). PC-24-03 ROLLBACK: calibration unnecessary (GLM MLE self-calibrates). PC-24-04 ROLLBACK: Kelly staking catastrophic drawdown (99.8%). Final tiers: 🟢 Championship (CI [3.5%, 23.0%]), 🟡 EPL+LaLiga (CI crosses zero), 🔴 Ligue1+Bundesliga+SerieA. 30 integration tests, 517/517 suite.
-- PC-25 Phase 1: Multi-League Strategy System ✅ — Per-league strategy profiles (sharp_only, stake_multiplier, max_daily_bets, auto_bet, clv_tracking) in leagues.yaml. LaLiga+Ligue1 sharp_only=True (+21/+22pp). Championship auto_bet=True (only 🟢 league). Aggregate daily exposure caps (15% total, 8% per-league) in bankroll.py. CLV backfill extended to ValueBet records. profitable_min_bets raised 100→250. 50 integration tests, 540/540 suite.
+- PC-25: Multi-League Strategy System ✅ — ALL 15 ISSUES across 3 phases:
+  Phase 1 (PC-25-01 to PC-25-07): Per-league strategy profiles (sharp_only, stake_multiplier, max_daily_bets, auto_bet, clv_tracking) in leagues.yaml. LaLiga+Ligue1 sharp_only=True (+21/+22pp). Championship auto_bet=True (only 🟢 league). Aggregate daily exposure caps (15% total, 8% per-league). CLV backfill extended to ValueBet. profitable_min_bets raised 100→250.
+  Phase 2 (PC-25-08 to PC-25-10): Stake multiplier enforcement in BankrollManager (🟢=1.5×, 🟡=1.0×, 🔴=0.5×). Dashboard League Strategy Profiles section on Model Health page with CLV summary.
+  PC-25-11: Automated weekly strategy review — Sunday pipeline detects tier transitions, generates strategy suggestions (never auto-applied), includes them in weekly email.
+  PC-25-12: Shadow mode infrastructure — ShadowValueBet table, compute_shadow_pnl(), generate_shadow_comparison() (4-week minimum, >3pp ROI to promote). All leagues start shadow_mode=False.
+  PC-25-13: Per-league model variants — lambda clamps per league in leagues.yaml (Bundesliga [0.3, 4.0], SerieA [0.2, 3.0]), training_weight per league (Championship 2.0×, LaLiga 1.5×). PoissonModel.predict() accepts league param.
+  PC-25-14: Expand to value leagues — DEFERRED (framework ready, awaiting 3+ months live data on current 6 leagues before adding noise).
+  PC-25-15: Probabilistic Kelly with per-league guardrails — Championship uses Kelly (staking_method: kelly, kelly_max_bet_pct: 0.03, drawdown_rollback_pct: 0.15). All other leagues remain flat. BankrollManager reads per-league staking method.
+  94 integration tests, 569/569 full suite passing.
 
 E34 — Multi-User Authentication: ALL 6 issues done ✅
 - E34-01: Password storage + session overhaul ✅

@@ -94,15 +94,9 @@ def log_system_picks(
     skipped_count = 0
 
     for vb in value_bets:
-        # Calculate stake using the bankroll manager
-        stake_result = _bankroll_manager.calculate_stake(
-            user_id=user_id,
-            model_prob=vb.model_prob,
-            odds=vb.bookmaker_odds,
-        )
-
         with get_session() as session:
-            # Get match details for the bet_log entry
+            # Get match details for the bet_log entry (needed before stake calc
+            # so we can pass league short_name for PC-25-09 stake multiplier)
             match_info = _get_match_info(session, vb.match_id)
             if match_info is None:
                 logger.warning(
@@ -111,6 +105,14 @@ def log_system_picks(
                 )
                 skipped_count += 1
                 continue
+
+            # PC-25-09: Calculate stake with league for multiplier lookup
+            stake_result = _bankroll_manager.calculate_stake(
+                user_id=user_id,
+                model_prob=vb.model_prob,
+                odds=vb.bookmaker_odds,
+                league=match_info.get("league_short_name"),
+            )
 
             # Get user's current bankroll for bankroll_before
             user = session.query(User).filter_by(id=user_id).first()
@@ -497,6 +499,8 @@ def _get_match_info(session, match_id: int) -> Optional[Dict]:
     return {
         "date": match.date,
         "league": league.name if league else "Unknown",
+        # PC-25-09: short_name used for stake multiplier lookup in config
+        "league_short_name": league.short_name if league else None,
         "home_team": home.name if home else "Unknown",
         "away_team": away.name if away else "Unknown",
     }

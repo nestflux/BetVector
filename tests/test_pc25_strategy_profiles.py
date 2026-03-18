@@ -607,3 +607,454 @@ class TestProfitableMinBets:
     def test_confidence_interval_is_95pct(self):
         """Confidence interval is 0.95 (95%) for ROI estimates."""
         assert self.market_fb.get("confidence_interval") == pytest.approx(0.95)
+
+
+# ============================================================================
+# Stake Multiplier Calibration — PC-25-09
+# ============================================================================
+
+class TestStakeMultiplierConfig:
+    """Verify stake_multiplier values match assessment tiers."""
+
+    @pytest.fixture(autouse=True)
+    def load_config(self):
+        config_path = Path(__file__).parent.parent / "config" / "leagues.yaml"
+        with open(config_path, "r") as f:
+            self.config = yaml.safe_load(f)
+        self.league_map = {lg["short_name"]: lg for lg in self.config["leagues"]}
+
+    def test_championship_multiplier_is_1_5(self):
+        """Championship (🟢 profitable) gets 1.5× stake multiplier."""
+        assert self.league_map["Championship"]["strategy"]["stake_multiplier"] == 1.5
+
+    def test_epl_multiplier_is_1_0(self):
+        """EPL (🟡 promising) gets 1.0× stake multiplier."""
+        assert self.league_map["EPL"]["strategy"]["stake_multiplier"] == 1.0
+
+    def test_laliga_multiplier_is_1_0(self):
+        """LaLiga (🟡 promising) gets 1.0× stake multiplier."""
+        assert self.league_map["LaLiga"]["strategy"]["stake_multiplier"] == 1.0
+
+    def test_ligue1_multiplier_is_0_5(self):
+        """Ligue1 (🔴 unprofitable) gets 0.5× stake multiplier."""
+        assert self.league_map["Ligue1"]["strategy"]["stake_multiplier"] == 0.5
+
+    def test_bundesliga_multiplier_is_0_5(self):
+        """Bundesliga (🔴 unprofitable) gets 0.5× stake multiplier."""
+        assert self.league_map["Bundesliga"]["strategy"]["stake_multiplier"] == 0.5
+
+    def test_seriea_multiplier_is_0_5(self):
+        """SerieA (🔴 unprofitable) gets 0.5× stake multiplier."""
+        assert self.league_map["SerieA"]["strategy"]["stake_multiplier"] == 0.5
+
+
+class TestStakeMultiplierEnforcement:
+    """Verify BankrollManager.calculate_stake() applies the multiplier."""
+
+    def _run_with_multiplier(self, league: str, bankroll: float = 1000.0):
+        """
+        Run calculate_stake() with a mocked league and return the result.
+        Uses the real config to look up the league's stake_multiplier.
+        """
+        from src.betting.bankroll import BankrollManager
+
+        manager = BankrollManager()
+        user = _make_mock_user(bankroll=bankroll)
+        safety = _make_mock_safety()
+
+        with (
+            patch.object(BankrollManager, "_get_user", return_value=user),
+            patch.object(BankrollManager, "check_safety_limits", return_value=safety),
+            patch.object(BankrollManager, "_get_daily_staked", return_value=0.0),
+        ):
+            return manager.calculate_stake(
+                user_id=1,
+                model_prob=0.55,
+                odds=2.10,
+                league=league,
+            )
+
+    def test_championship_stake_is_1_5x_base(self):
+        """Championship (1.5×) should produce 1.5× the EPL (1.0×) stake."""
+        epl_result = self._run_with_multiplier("EPL")
+        champ_result = self._run_with_multiplier("Championship")
+        # Championship stake should be 1.5× EPL stake
+        assert champ_result.stake == pytest.approx(epl_result.stake * 1.5, rel=0.01), (
+            f"Championship ${champ_result.stake} should be 1.5× EPL ${epl_result.stake}"
+        )
+
+    def test_ligue1_stake_is_0_5x_base(self):
+        """Ligue1 (0.5×) should produce half the EPL (1.0×) stake."""
+        epl_result = self._run_with_multiplier("EPL")
+        ligue1_result = self._run_with_multiplier("Ligue1")
+        assert ligue1_result.stake == pytest.approx(epl_result.stake * 0.5, rel=0.01), (
+            f"Ligue1 ${ligue1_result.stake} should be 0.5× EPL ${epl_result.stake}"
+        )
+
+    def test_unknown_league_defaults_to_1x(self):
+        """Unknown league name defaults to 1.0× (no multiplier)."""
+        epl_result = self._run_with_multiplier("EPL")
+        unknown_result = self._run_with_multiplier("FakeLeague")
+        assert unknown_result.stake == pytest.approx(epl_result.stake, rel=0.01), (
+            "Unknown league should use 1.0× multiplier (same as EPL)"
+        )
+
+    def test_none_league_defaults_to_1x(self):
+        """league=None skips multiplier (same as 1.0×)."""
+        from src.betting.bankroll import BankrollManager
+
+        manager = BankrollManager()
+        user = _make_mock_user(bankroll=1000.0)
+        safety = _make_mock_safety()
+
+        with (
+            patch.object(BankrollManager, "_get_user", return_value=user),
+            patch.object(BankrollManager, "check_safety_limits", return_value=safety),
+            patch.object(BankrollManager, "_get_daily_staked", return_value=0.0),
+        ):
+            result = manager.calculate_stake(
+                user_id=1, model_prob=0.55, odds=2.10, league=None,
+            )
+        # Default flat stake: $1000 × 2% = $20
+        assert result.stake == pytest.approx(20.0, rel=0.01)
+
+    def test_multiplier_applied_before_cap(self):
+        """Multiplier is applied before the max bet cap, so cap still protects."""
+        # Championship at 1.5× on a $200 bankroll:
+        # Base stake = $200 × 2% = $4, multiplied = $4 × 1.5 = $6
+        # Max cap = $200 × 5% = $10 → $6 < $10, so not capped
+        result = self._run_with_multiplier("Championship", bankroll=200.0)
+        assert result.stake == pytest.approx(6.0, rel=0.01)
+
+    def test_multiplier_message_includes_league(self):
+        """Stake message includes the multiplier info when != 1.0."""
+        result = self._run_with_multiplier("Championship")
+        assert "1.5" in result.message, (
+            f"Message should mention 1.5× multiplier: {result.message}"
+        )
+
+    def test_tracker_match_info_has_league_short_name(self):
+        """_get_match_info() returns league_short_name for multiplier lookup."""
+        from src.betting.tracker import _get_match_info
+        sig_source = inspect.getsource(_get_match_info)
+        assert "league_short_name" in sig_source, (
+            "_get_match_info() must return league_short_name for PC-25-09"
+        )
+
+
+# ============================================================================
+# Weekly Strategy Review — PC-25-11
+# ============================================================================
+
+class TestWeeklyStrategyReview:
+    """Verify automated weekly strategy review components (PC-25-11).
+
+    PC-25-11 extends the Sunday pipeline to detect tier transitions,
+    generate strategy suggestions (never auto-applied), and include
+    them in the weekly summary email.
+    """
+
+    def test_detect_tier_transitions_exists(self):
+        """detect_tier_transitions() is importable from market_feedback."""
+        from src.self_improvement.market_feedback import detect_tier_transitions
+        assert callable(detect_tier_transitions)
+
+    def test_detect_tier_transitions_returns_list(self):
+        """detect_tier_transitions() returns a list."""
+        from src.self_improvement.market_feedback import detect_tier_transitions
+        result = detect_tier_transitions()
+        assert isinstance(result, list)
+
+    def test_generate_strategy_suggestions_exists(self):
+        """generate_strategy_suggestions() is importable from market_feedback."""
+        from src.self_improvement.market_feedback import generate_strategy_suggestions
+        assert callable(generate_strategy_suggestions)
+
+    def test_generate_strategy_suggestions_returns_list(self):
+        """generate_strategy_suggestions() returns a list for empty input."""
+        from src.self_improvement.market_feedback import generate_strategy_suggestions
+        result = generate_strategy_suggestions([])
+        assert isinstance(result, list)
+        assert len(result) == 0
+
+    def test_suggestions_never_auto_applied(self):
+        """Strategy suggestions have action keys but are never auto-applied.
+
+        The code SUGGESTS changes — the human operator decides whether
+        to update leagues.yaml manually.
+        """
+        from src.self_improvement.market_feedback import generate_strategy_suggestions
+        # Simulate an upgrade transition
+        transitions = [{
+            "league": "TestLeague",
+            "old_tier": "promising",
+            "new_tier": "profitable",
+            "direction": "upgrade",
+            "detail": "🟡 promising → 🟢 profitable",
+        }]
+        suggestions = generate_strategy_suggestions(transitions)
+        assert len(suggestions) == 1
+        s = suggestions[0]
+        assert "suggestion" in s
+        assert "reason" in s
+        assert "action" in s
+        assert s["action"] == "increase_exposure"
+
+    def test_downgrade_suggestion(self):
+        """Downgrade to unprofitable generates reduce_exposure suggestion."""
+        from src.self_improvement.market_feedback import generate_strategy_suggestions
+        transitions = [{
+            "league": "TestLeague",
+            "old_tier": "promising",
+            "new_tier": "unprofitable",
+            "direction": "downgrade",
+            "detail": "🟡 promising → 🔴 unprofitable",
+        }]
+        suggestions = generate_strategy_suggestions(transitions)
+        assert len(suggestions) == 1
+        assert suggestions[0]["action"] == "reduce_exposure"
+
+    def test_pipeline_calls_weekly_review(self):
+        """Pipeline has weekly market performance & strategy review section."""
+        source_path = Path(__file__).parent.parent / "src" / "pipeline.py"
+        source = source_path.read_text()
+        assert "detect_tier_transitions" in source
+        assert "generate_strategy_suggestions" in source
+        assert "update_market_performance" in source
+
+    def test_weekly_email_template_has_tier_section(self):
+        """Weekly summary email template includes tier transitions section."""
+        template_path = Path(__file__).parent.parent / "templates" / "weekly_summary.html"
+        template = template_path.read_text()
+        assert "tier_transitions" in template
+        assert "strategy_suggestions" in template
+        assert "League Tier Changes" in template
+
+    def test_weekly_email_loader_passes_transitions(self):
+        """_load_weekly_data() passes tier_transitions to template."""
+        source_path = Path(__file__).parent.parent / "src" / "delivery" / "email_alerts.py"
+        source = source_path.read_text()
+        assert "tier_transitions" in source
+        assert "strategy_suggestions" in source
+
+    def test_tier_rank_ordering(self):
+        """Tier ranking: profitable > promising > insufficient > unprofitable."""
+        from src.self_improvement.market_feedback import detect_tier_transitions
+        # Verify the function exists and can be inspected
+        source = inspect.getsource(detect_tier_transitions)
+        assert "TIER_RANK" in source
+        # The rank dict should have 4 tiers
+        assert '"profitable": 4' in source or "'profitable': 4" in source
+
+
+# ============================================================================
+# Shadow Mode — PC-25-12
+# ============================================================================
+
+class TestShadowModeConfig:
+    """Verify shadow mode configuration exists in leagues.yaml."""
+
+    @pytest.fixture(autouse=True)
+    def load_config(self):
+        config_path = Path(__file__).parent.parent / "config" / "leagues.yaml"
+        with open(config_path, "r") as f:
+            self.config = yaml.safe_load(f)
+        self.league_map = {lg["short_name"]: lg for lg in self.config["leagues"]}
+
+    def test_every_league_has_shadow_mode(self):
+        """All leagues have shadow_mode key in strategy block."""
+        for lg in self.config["leagues"]:
+            strategy = lg.get("strategy", {})
+            assert "shadow_mode" in strategy, (
+                f"{lg['short_name']} missing shadow_mode in strategy"
+            )
+
+    def test_shadow_mode_is_boolean(self):
+        """shadow_mode is boolean in every league."""
+        for lg in self.config["leagues"]:
+            sm = lg["strategy"]["shadow_mode"]
+            assert isinstance(sm, bool), (
+                f"{lg['short_name']} shadow_mode should be bool, got {type(sm)}"
+            )
+
+    def test_all_leagues_start_with_shadow_off(self):
+        """All leagues start with shadow_mode=False (manual opt-in only)."""
+        for lg in self.config["leagues"]:
+            assert lg["strategy"]["shadow_mode"] is False, (
+                f"{lg['short_name']} should start with shadow_mode=False"
+            )
+
+
+class TestShadowBetStorage:
+    """Verify shadow bets are stored separately from real value bets."""
+
+    def test_shadow_value_bet_model_exists(self):
+        """ShadowValueBet ORM model is importable."""
+        from src.database.models import ShadowValueBet
+        assert ShadowValueBet is not None
+
+    def test_shadow_value_bet_has_required_columns(self):
+        """ShadowValueBet has all required columns."""
+        from src.database.models import ShadowValueBet
+        required = [
+            "id", "match_id", "league", "market_type", "selection",
+            "model_prob", "bookmaker_odds", "edge", "shadow_stake",
+            "strategy_change", "created_at",
+        ]
+        for col in required:
+            assert hasattr(ShadowValueBet, col), (
+                f"ShadowValueBet missing column: {col}"
+            )
+
+    def test_shadow_bet_not_in_main_value_bets(self):
+        """Shadow bets use a separate table, not the main value_bets table."""
+        from src.database.models import ShadowValueBet, ValueBet
+        assert ShadowValueBet.__tablename__ != ValueBet.__tablename__
+
+
+class TestShadowPnLTracking:
+    """Verify shadow P&L tracking per league."""
+
+    def test_shadow_pnl_function_exists(self):
+        """compute_shadow_pnl() exists in market_feedback."""
+        from src.self_improvement.market_feedback import compute_shadow_pnl
+        assert callable(compute_shadow_pnl)
+
+    def test_shadow_comparison_report_function_exists(self):
+        """generate_shadow_comparison() exists in market_feedback."""
+        from src.self_improvement.market_feedback import generate_shadow_comparison
+        assert callable(generate_shadow_comparison)
+
+
+# ============================================================================
+# Per-League Model Variants — PC-25-13
+# ============================================================================
+
+class TestPerLeagueModelConfig:
+    """Verify per-league model variant configuration."""
+
+    @pytest.fixture(autouse=True)
+    def load_config(self):
+        config_path = Path(__file__).parent.parent / "config" / "leagues.yaml"
+        with open(config_path, "r") as f:
+            self.config = yaml.safe_load(f)
+        self.league_map = {lg["short_name"]: lg for lg in self.config["leagues"]}
+
+    def test_every_league_has_model_params(self):
+        """All leagues have model_params block in config."""
+        for lg in self.config["leagues"]:
+            assert "model_params" in lg, (
+                f"{lg['short_name']} missing model_params block"
+            )
+
+    def test_lambda_clamps_per_league(self):
+        """Each league has lambda_min and lambda_max."""
+        for lg in self.config["leagues"]:
+            mp = lg.get("model_params", {})
+            assert "lambda_min" in mp, f"{lg['short_name']} missing lambda_min"
+            assert "lambda_max" in mp, f"{lg['short_name']} missing lambda_max"
+            assert mp["lambda_min"] > 0
+            assert mp["lambda_max"] > mp["lambda_min"]
+
+    def test_bundesliga_scores_more(self):
+        """Bundesliga has higher lambda_max than Serie A (scores more goals)."""
+        bund = self.league_map["Bundesliga"]["model_params"]
+        seriea = self.league_map["SerieA"]["model_params"]
+        assert bund["lambda_max"] >= seriea["lambda_max"]
+
+    def test_training_weight_exists(self):
+        """Each league has training_weight in model_params."""
+        for lg in self.config["leagues"]:
+            mp = lg.get("model_params", {})
+            assert "training_weight" in mp, (
+                f"{lg['short_name']} missing training_weight"
+            )
+            assert mp["training_weight"] > 0
+
+
+class TestPoissonUsesPerLeagueLambda:
+    """Verify Poisson model can read per-league lambda clamps."""
+
+    def test_poisson_predict_accepts_league_param(self):
+        """PoissonModel.predict() accepts a league parameter."""
+        from src.models.poisson import PoissonModel
+        sig = inspect.signature(PoissonModel.predict)
+        assert "league" in sig.parameters
+
+    def test_poisson_model_has_lambda_clamp_config(self):
+        """PoissonModel reads lambda clamps from league config."""
+        from src.models.poisson import PoissonModel
+        source = inspect.getsource(PoissonModel.predict)
+        assert "lambda_min" in source or "model_params" in source
+
+
+# ============================================================================
+# Probabilistic Kelly — PC-25-15
+# ============================================================================
+
+class TestProbabilisticKellyConfig:
+    """Verify per-league Kelly staking configuration."""
+
+    @pytest.fixture(autouse=True)
+    def load_config(self):
+        config_path = Path(__file__).parent.parent / "config" / "leagues.yaml"
+        with open(config_path, "r") as f:
+            self.config = yaml.safe_load(f)
+        self.league_map = {lg["short_name"]: lg for lg in self.config["leagues"]}
+
+    def test_every_league_has_staking_method(self):
+        """All leagues have staking_method in strategy."""
+        for lg in self.config["leagues"]:
+            strategy = lg.get("strategy", {})
+            assert "staking_method" in strategy, (
+                f"{lg['short_name']} missing staking_method in strategy"
+            )
+
+    def test_staking_method_values(self):
+        """staking_method is 'flat' or 'kelly'."""
+        for lg in self.config["leagues"]:
+            method = lg["strategy"]["staking_method"]
+            assert method in ("flat", "kelly"), (
+                f"{lg['short_name']} has invalid staking_method: {method}"
+            )
+
+    def test_championship_uses_kelly(self):
+        """Championship (only 🟢 profitable) uses Kelly staking."""
+        assert self.league_map["Championship"]["strategy"]["staking_method"] == "kelly"
+
+    def test_unprofitable_leagues_use_flat(self):
+        """🔴 unprofitable leagues use flat staking (conservative)."""
+        for name in ["Ligue1", "Bundesliga", "SerieA"]:
+            assert self.league_map[name]["strategy"]["staking_method"] == "flat", (
+                f"{name} should use flat staking (🔴 tier)"
+            )
+
+    def test_kelly_max_bet_3_pct(self):
+        """Kelly leagues have max_bet_percentage of 3% (not 5%)."""
+        for lg in self.config["leagues"]:
+            if lg["strategy"]["staking_method"] == "kelly":
+                mp = lg.get("strategy", {})
+                assert "kelly_max_bet_pct" in mp, (
+                    f"{lg['short_name']} Kelly league missing kelly_max_bet_pct"
+                )
+                assert mp["kelly_max_bet_pct"] == 0.03
+
+    def test_kelly_drawdown_rollback(self):
+        """Kelly leagues have drawdown_rollback_pct for auto-rollback."""
+        for lg in self.config["leagues"]:
+            if lg["strategy"]["staking_method"] == "kelly":
+                strategy = lg.get("strategy", {})
+                assert "drawdown_rollback_pct" in strategy, (
+                    f"{lg['short_name']} Kelly league missing drawdown_rollback_pct"
+                )
+                assert strategy["drawdown_rollback_pct"] == 0.15
+
+
+class TestBankrollManagerKellyPerLeague:
+    """Verify BankrollManager uses per-league Kelly when configured."""
+
+    def test_calculate_stake_reads_league_staking_method(self):
+        """calculate_stake() checks league's staking_method config."""
+        from src.betting.bankroll import BankrollManager
+        source = inspect.getsource(BankrollManager.calculate_stake)
+        assert "staking_method" in source

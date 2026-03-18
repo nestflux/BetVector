@@ -32,6 +32,8 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from sqlalchemy import func as st_funcs
+
 from src.database.db import get_session
 from src.database.models import (
     BetLog,
@@ -43,6 +45,7 @@ from src.database.models import (
     ModelPerformance,
     Prediction,
     RetrainHistory,
+    ValueBet,
 )
 
 
@@ -1061,6 +1064,128 @@ else:
         "Market edge analysis requires 50+ resolved value bets per league/market combination. "
         "This populates automatically as part of the weekly summary pipeline."
         "</div>",
+        unsafe_allow_html=True,
+    )
+
+st.divider()
+
+
+# --- Section 8b: League Strategy Profiles (PC-25-10) ---
+# Shows per-league strategy configuration, tier assignment, and CLV stats.
+# Reads directly from leagues.yaml config and live value_bet CLV data.
+st.markdown(
+    '<div class="bv-section-header">League Strategy Profiles</div>',
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    f'<p style="font-family: Inter, sans-serif; font-size: 13px; color: {COLOURS["text_secondary"]};">'
+    "Per-league strategy settings from config. Tier determines stake sizing: "
+    "🟢 = 1.5×, 🟡 = 1.0×, 🔴 = 0.5× of base stake.</p>",
+    unsafe_allow_html=True,
+)
+
+try:
+    from src.config import config as bv_config
+    from src.database.models import ValueBet
+
+    # Build strategy table from live config
+    strategy_rows = []
+    for lg_cfg in bv_config.leagues:
+        if not getattr(lg_cfg, "is_active", True):
+            continue
+        strategy = getattr(lg_cfg, "strategy", None)
+        if strategy is None:
+            continue
+
+        sharp = getattr(strategy, "sharp_only", False)
+        mult = getattr(strategy, "stake_multiplier", 1.0)
+        auto = getattr(strategy, "auto_bet", False)
+        clv_on = getattr(strategy, "clv_tracking", True)
+        max_bets = getattr(strategy, "max_daily_bets", "—")
+        threshold = getattr(lg_cfg, "edge_threshold_override", 0.05)
+
+        # Determine tier from multiplier
+        if mult >= 1.5:
+            tier = "🟢 Profitable"
+        elif mult >= 1.0:
+            tier = "🟡 Promising"
+        else:
+            tier = "🔴 Unprofitable"
+
+        strategy_rows.append({
+            "League": lg_cfg.short_name,
+            "Tier": tier,
+            "Edge Threshold": f"{threshold:.0%}",
+            "Sharp Only": "Pinnacle" if sharp else "All Books",
+            "Multiplier": f"{mult:.1f}×",
+            "Max Daily": max_bets,
+            "Auto-Bet": "✅" if auto else "—",
+            "CLV Tracking": "✅" if clv_on else "—",
+        })
+
+    if strategy_rows:
+        strategy_df = pd.DataFrame(strategy_rows)
+        st.dataframe(strategy_df, use_container_width=True, hide_index=True)
+
+    # --- Per-league CLV summary ---
+    # Query CLV stats from value_bets for each league
+    with get_session() as session:
+        clv_query = (
+            session.query(
+                Match.league_id,
+                st_funcs.count(ValueBet.id).label("n_clv"),
+                st_funcs.avg(ValueBet.clv).label("mean_clv"),
+            )
+            .join(Match, ValueBet.match_id == Match.id)
+            .filter(ValueBet.clv.isnot(None))
+            .group_by(Match.league_id)
+            .all()
+        )
+
+    if clv_query:
+        from src.database.models import League as LeagueModel
+
+        clv_rows = []
+        with get_session() as session:
+            for league_id, n_clv, mean_clv in clv_query:
+                league = session.query(LeagueModel).filter_by(id=league_id).first()
+                league_name = league.short_name if league else f"ID {league_id}"
+                clv_rows.append({
+                    "League": league_name,
+                    "CLV Bets": n_clv,
+                    "Mean CLV": f"{mean_clv:+.4f}" if mean_clv else "—",
+                    "Signal": (
+                        "🟢 Beating line" if mean_clv and mean_clv > 0
+                        else "🔴 Behind line" if mean_clv and mean_clv < 0
+                        else "—"
+                    ),
+                })
+
+        if clv_rows:
+            st.markdown(
+                f'<p style="font-family: Inter, sans-serif; font-size: 13px; '
+                f'color: {COLOURS["text_secondary"]}; margin-top: 12px;">'
+                "CLV summary per league. Positive mean CLV = model consistently "
+                "beats the closing line (genuine edge signal).</p>",
+                unsafe_allow_html=True,
+            )
+            clv_df = pd.DataFrame(clv_rows)
+            st.dataframe(clv_df, use_container_width=True, hide_index=True)
+    else:
+        st.markdown(
+            '<div class="bv-empty-state">'
+            "CLV data populates after the evening pipeline resolves value bets "
+            "with Pinnacle closing odds. Typically needs 2-3 days of resolved matches."
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+except Exception as e:
+    st.markdown(
+        f'<div class="bv-empty-state">'
+        f"Could not load league strategy data: {e}"
+        f"</div>",
         unsafe_allow_html=True,
     )
 

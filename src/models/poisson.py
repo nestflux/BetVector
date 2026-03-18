@@ -255,6 +255,7 @@ class PoissonModel(BaseModel):
     def predict(
         self,
         features: pd.DataFrame,
+        league: Optional[str] = None,
     ) -> List[MatchPrediction]:
         """Generate predictions for matches.
 
@@ -268,6 +269,11 @@ class PoissonModel(BaseModel):
         features : pd.DataFrame
             Match features (same columns as training data).
             Must contain ``match_id``.
+        league : str, optional
+            League short name (e.g. "EPL", "Bundesliga").  When provided,
+            the model reads per-league lambda clamps from leagues.yaml
+            ``model_params`` (PC-25-13).  Falls back to global defaults
+            [0.2, 3.5] if the league has no model_params config.
 
         Returns
         -------
@@ -303,13 +309,24 @@ class PoissonModel(BaseModel):
             lambda_home = float(self._home_model.predict(X_home).iloc[0])
             lambda_away = float(self._away_model.predict(X_away).iloc[0])
 
-            # Clamp lambda to reasonable range [0.2, 3.5]
-            # - 3.5 goals is already extreme (e.g., Man City vs newly promoted)
-            #   5.0 was too generous and produced 98.6% home-win probabilities
-            # - 0.2 minimum prevents near-zero probabilities in the scoreline matrix
-            # Log a warning when the clamp activates — it usually indicates
-            # degenerate feature data (missing features → fillna(0.0) → extreme λ)
+            # Clamp lambda to reasonable range.
+            # PC-25-13: Per-league lambda clamps from leagues.yaml model_params.
+            # Bundesliga (high-scoring) gets a wider range [0.3, 4.0] while
+            # Serie A (defensive) gets a tighter range [0.2, 3.0].
+            # Falls back to global defaults [0.2, 3.5] if no league config.
             LAMBDA_MIN, LAMBDA_MAX = 0.2, 3.5
+            if league is not None:
+                try:
+                    from src.config import config as _cfg
+                    for _lg in _cfg.leagues:
+                        if getattr(_lg, "short_name", None) == league:
+                            _mp = getattr(_lg, "model_params", None)
+                            if _mp is not None:
+                                LAMBDA_MIN = getattr(_mp, "lambda_min", 0.2)
+                                LAMBDA_MAX = getattr(_mp, "lambda_max", 3.5)
+                            break
+                except Exception:
+                    pass  # Graceful fallback to defaults
             raw_home, raw_away = lambda_home, lambda_away
             lambda_home = max(LAMBDA_MIN, min(LAMBDA_MAX, lambda_home))
             lambda_away = max(LAMBDA_MIN, min(LAMBDA_MAX, lambda_away))

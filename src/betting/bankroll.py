@@ -253,9 +253,34 @@ class BankrollManager:
                     ),
                 )
 
-        # Calculate raw stake based on the user's chosen method
+        # Calculate raw stake based on the user's chosen method.
+        # PC-25-15: Per-league staking method override.  If the league has
+        # staking_method=kelly in its strategy config AND the user has Kelly
+        # configured, use Kelly for that league.  Otherwise use the user's
+        # default method.  This allows Championship (🟢 profitable) to use
+        # Kelly while all other leagues stay on flat staking.
         method = user["staking_method"]
         bankroll = user["current_bankroll"]
+        kelly_max_bet_override = None
+        drawdown_rollback_pct = None
+
+        if league is not None:
+            for lg_cfg in config.leagues:
+                if getattr(lg_cfg, "short_name", None) == league:
+                    lg_strategy = getattr(lg_cfg, "strategy", None)
+                    if lg_strategy is not None:
+                        lg_staking = getattr(lg_strategy, "staking_method", None)
+                        if lg_staking == "kelly":
+                            method = "kelly"
+                            kelly_max_bet_override = getattr(
+                                lg_strategy, "kelly_max_bet_pct", None
+                            )
+                            drawdown_rollback_pct = getattr(
+                                lg_strategy, "drawdown_rollback_pct", None
+                            )
+                        elif lg_staking == "flat":
+                            method = "flat"
+                    break
 
         if method == "kelly":
             raw_stake = self._kelly_stake(
@@ -271,31 +296,63 @@ class BankrollManager:
             # (which happens naturally since we always read current_bankroll)
             raw_stake = bankroll * user["stake_percentage"]
 
-        # Apply max bet cap: no single bet exceeds max_bet_percentage of bankroll
-        # This is a hard safety limit — even Kelly can't exceed it
+        # --- PC-25-09: Per-league stake multiplier ---
+        # Each league has a stake_multiplier in its strategy config that scales
+        # the base stake up or down based on the league's assessment tier:
+        #   🟢 Profitable  → 1.5× (lean into verified edge)
+        #   🟡 Promising   → 1.0× (standard stake)
+        #   🔴 Unprofitable → 0.5× (reduce exposure, keep learning)
+        #   ⚪ Insufficient → 0.5× (small stakes to gather data)
+        #
+        # Applied BEFORE the max bet cap so the safety ceiling still protects.
+        # The multiplier is read from leagues.yaml strategy block — if the league
+        # has no strategy block or no multiplier, we default to 1.0 (no change).
+        stake_multiplier = 1.0
+        if league is not None:
+            for lg_cfg in config.leagues:
+                if getattr(lg_cfg, "short_name", None) == league:
+                    lg_strategy = getattr(lg_cfg, "strategy", None)
+                    if lg_strategy is not None:
+                        stake_multiplier = getattr(
+                            lg_strategy, "stake_multiplier", 1.0
+                        )
+                    break
+
+        multiplied_stake = raw_stake * stake_multiplier
+
+        # Apply max bet cap: no single bet exceeds max_bet_percentage of bankroll.
+        # PC-25-15: Kelly leagues use a stricter cap (3% vs global 5%).
+        # This is a hard safety limit — even Kelly can't exceed it.
         max_bet_pct = config.settings.safety.max_bet_percentage
+        if kelly_max_bet_override is not None:
+            max_bet_pct = min(max_bet_pct, kelly_max_bet_override)
         max_stake = bankroll * max_bet_pct
-        capped_stake = min(raw_stake, max_stake)
+        capped_stake = min(multiplied_stake, max_stake)
 
         # Round to 2 decimal places (currency)
         final_stake = round(max(0.0, capped_stake), 2)
 
         # Build message
+        multiplier_note = ""
+        if stake_multiplier != 1.0:
+            multiplier_note = f" (×{stake_multiplier:.1f} {league} multiplier)"
+
         if final_stake == 0.0 and method == "kelly":
             msg = (
                 f"Kelly stake is $0 — negative expected value "
                 f"(model_prob × odds = {model_prob * odds:.3f} < 1.0)"
             )
-        elif capped_stake < raw_stake:
+        elif capped_stake < multiplied_stake:
             msg = (
                 f"Stake capped at {max_bet_pct:.0%} of bankroll "
                 f"(${max_stake:.2f}). "
-                f"Raw {method} stake was ${raw_stake:.2f}."
+                f"Raw {method} stake was ${raw_stake:.2f}{multiplier_note}."
             )
         else:
             msg = (
                 f"{method.capitalize()} stake: "
-                f"${final_stake:.2f} ({final_stake/bankroll:.1%} of bankroll)"
+                f"${final_stake:.2f} "
+                f"({final_stake/bankroll:.1%} of bankroll){multiplier_note}"
             )
 
         # Include drawdown warning if applicable

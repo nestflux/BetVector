@@ -650,6 +650,24 @@ def _load_weekly_data(user_id: int) -> dict:
             sorted({lg.short_name for _, lg in next_week_matches})
         )
 
+        # --- PC-25-11: Tier transitions & strategy suggestions ---
+        # Pull the latest tier transitions and suggestions from the market
+        # feedback module.  These are computed during the Sunday pipeline
+        # run (update_market_performance → detect_tier_transitions).
+        # If no transitions exist yet, the email simply omits the section.
+        tier_transitions = []
+        strategy_suggestions = []
+        try:
+            from src.self_improvement.market_feedback import (
+                detect_tier_transitions,
+                generate_strategy_suggestions,
+            )
+            tier_transitions = detect_tier_transitions()
+            strategy_suggestions = generate_strategy_suggestions(tier_transitions)
+        except Exception:
+            # Graceful degradation — email sends without tier section
+            pass
+
         return {
             "total_bets": total_bets,
             "wins": wins,
@@ -672,6 +690,8 @@ def _load_weekly_data(user_id: int) -> dict:
             "clv_trend": clv_trend,
             "next_week_fixtures": next_week_fixtures,
             "next_week_leagues": next_week_leagues,
+            "tier_transitions": tier_transitions,
+            "strategy_suggestions": strategy_suggestions,
         }
 
 

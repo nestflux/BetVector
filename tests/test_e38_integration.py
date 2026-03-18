@@ -52,42 +52,42 @@ EXPECTED_LEAGUES = {
         "football_data_code": "E0",
         "country": "England",
         "understat_league": "EPL",
-        "season_count": 6,
+        "season_count": 9,
         "total_matchdays": 38,
     },
     "Championship": {
         "football_data_code": "E1",
         "country": "England",
         "understat_league": None,
-        "season_count": 6,
+        "season_count": 9,
         "total_matchdays": 46,
     },
     "LaLiga": {
         "football_data_code": "SP1",
         "country": "Spain",
         "understat_league": "La_Liga",
-        "season_count": 6,
+        "season_count": 9,
         "total_matchdays": 38,
     },
     "Ligue1": {
         "football_data_code": "F1",
         "country": "France",
         "understat_league": "Ligue_1",
-        "season_count": 6,
+        "season_count": 9,
         "total_matchdays": 38,
     },
     "Bundesliga": {
         "football_data_code": "D1",
         "country": "Germany",
         "understat_league": "Bundesliga",
-        "season_count": 6,
+        "season_count": 9,
         "total_matchdays": 34,
     },
     "SerieA": {
         "football_data_code": "I1",
         "country": "Italy",
         "understat_league": "Serie_A",
-        "season_count": 6,
+        "season_count": 9,
         "total_matchdays": 38,
     },
 }
@@ -249,12 +249,12 @@ class TestSeasonCounts:
         )
 
     @pytest.mark.parametrize("short_name", list(EXPECTED_LEAGUES.keys()))
-    def test_seasons_start_2020(self, short_name: str):
-        """Every league must include 2020-21 as the earliest season."""
+    def test_seasons_start_2017(self, short_name: str):
+        """Every league must include 2017-18 as the earliest season (extended backfill)."""
         lg = _get_league_config(short_name)
         seasons = lg.get("seasons", [])
-        assert "2020-21" in seasons, (
-            f"{short_name}: 2020-21 not in configured seasons ({seasons})"
+        assert "2017-18" in seasons, (
+            f"{short_name}: 2017-18 not in configured seasons ({seasons})"
         )
 
     @pytest.mark.parametrize("short_name", list(EXPECTED_LEAGUES.keys()))
@@ -588,9 +588,10 @@ class TestSeedAllLeagues:
         )
 
     def test_seed_seasons_creates_correct_count(self):
-        """seed_seasons() should create 6 seasons per league = 36 total.
+        """seed_seasons() should create 9 seasons per league = 54 total.
 
         We verify by counting the total seasons across all active leagues.
+        Extended from 6 to 9 seasons (2017-18 through 2025-26) for historical backfill.
         """
         from src.config import BetVectorConfig
 
@@ -598,8 +599,8 @@ class TestSeedAllLeagues:
         active = config.get_active_leagues()
 
         total_seasons = sum(len(lc.seasons) for lc in active)
-        assert total_seasons == 36, (
-            f"Total configured seasons across 6 leagues = {total_seasons}, expected 36"
+        assert total_seasons == 54, (
+            f"Total configured seasons across 6 leagues = {total_seasons}, expected 54"
         )
 
     def test_all_leagues_exist_in_database(self):

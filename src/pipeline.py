@@ -1506,6 +1506,49 @@ class Pipeline:
         # --- Weekly tasks (Sundays only) ---
         if datetime.utcnow().weekday() == 6:  # 6 = Sunday
 
+            # --- Weekly: Market Performance & Strategy Review (PC-25-11) ---
+            # Recomputes league × market tiers using all resolved bets,
+            # detects tier transitions from the previous period, and
+            # generates strategy suggestions.  These are stored for the
+            # weekly summary email — NEVER auto-applied.
+            print("\n  Weekly: Market performance & strategy review")
+            try:
+                from src.self_improvement.market_feedback import (
+                    update_market_performance,
+                    detect_tier_transitions,
+                    generate_strategy_suggestions,
+                )
+
+                # 1. Recompute all league × market tiers
+                mp_records = update_market_performance()
+                print(f"    → {len(mp_records)} league×market combos assessed")
+
+                # 2. Detect tier transitions (compares to previous period)
+                transitions = detect_tier_transitions()
+                if transitions:
+                    for t in transitions:
+                        print(f"    → TIER CHANGE: {t['league']} {t['detail']}")
+                else:
+                    print("    → No tier transitions detected")
+
+                # 3. Generate strategy suggestions (never auto-applied)
+                suggestions = generate_strategy_suggestions(transitions)
+                if suggestions:
+                    for s in suggestions:
+                        print(f"    → SUGGESTION: {s['suggestion']}")
+                else:
+                    print("    → No strategy suggestions")
+
+                # Store transitions + suggestions for weekly email pickup
+                self._weekly_tier_transitions = transitions
+                self._weekly_strategy_suggestions = suggestions
+
+            except Exception as e:
+                err = f"Weekly strategy review failed: {e}"
+                logger.error(err)
+                errors.append(err)
+                print(f"    → FAILED ({e})")
+
             # --- Weekly: Refresh Transfermarkt squad market values ---
             # Market values change slowly (weekly updates from Transfermarkt).
             # Running on Sunday evening aligns with the self-improvement cycle.
