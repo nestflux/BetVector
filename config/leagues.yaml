@@ -243,16 +243,17 @@ leagues:
       - "2025-26"
     total_matchdays: 34
     edge_threshold_override: 0.05  # Same as EPL — well-served market
-    # PC-25-01: Bundesliga is 🔴 unprofitable (CI [-35.2%, -7.4%]).
-    # Insufficient backtest data to justify sharp filtering change.
+    # PC-26-09: Bundesliga upgraded 🔴→🟡 (Poisson ROI +9.6% on 205 bets,
+    # CI [-4.1%, +23.3%]).  With expanded 2017-20 data, Bundesliga shows
+    # promising but unproven edge.  XGBoost Brier 0.5887 also competitive.
     strategy:
       sharp_only: false        # All bookmakers — no evidence sharp filtering helps
-      stake_multiplier: 0.5    # 🔴 tier — reduce exposure, keep learning (PC-25-09)
+      stake_multiplier: 1.0    # 🟡 tier — standard stake (upgraded from 0.5×, PC-26-09)
       max_daily_bets: 8        # Per-league daily cap
-      auto_bet: false          # 🔴 tier — analysis only
+      auto_bet: false          # 🟡 tier — analysis only until proven
       clv_tracking: true       # Track CLV to detect if edge emerges
       shadow_mode: false       # PC-25-12: shadow mode off by default
-      staking_method: flat     # PC-25-15: flat staking (🔴 tier)
+      staking_method: flat     # PC-25-15: flat staking (🟡 tier — not proven enough for Kelly)
     # PC-25-13: Per-league model parameters for Poisson prediction
     # Bundesliga is the highest-scoring top league (avg ~3.0 goals/match)
     model_params:
