@@ -121,6 +121,10 @@ def _enable_sqlite_wal(dbapi_conn, connection_record) -> None:
     cursor = dbapi_conn.cursor()
     cursor.execute("PRAGMA journal_mode=WAL")
     cursor.execute("PRAGMA foreign_keys=ON")
+    # PC-26-01: Wait up to 30 seconds for a write lock to release instead of
+    # immediately raising "database is locked".  Critical when the pipeline
+    # and dashboard (or backfill scripts) access the DB concurrently.
+    cursor.execute("PRAGMA busy_timeout=30000")
     cursor.close()
 
 
@@ -365,6 +369,19 @@ def init_db() -> None:
                 conn.commit()
             else:
                 logger.info("SQLite WAL mode confirmed.")
+
+            # PC-26-01: Verify busy_timeout is set (prevents "database is locked"
+            # when concurrent processes access the DB).
+            timeout = conn.execute(text("PRAGMA busy_timeout")).scalar()
+            if timeout and int(timeout) >= 30000:
+                logger.info("SQLite busy_timeout confirmed: %sms", timeout)
+            else:
+                logger.warning(
+                    "busy_timeout is %s — expected ≥30000ms. Setting now...",
+                    timeout,
+                )
+                conn.execute(text("PRAGMA busy_timeout=30000"))
+                conn.commit()
 
     logger.info(
         "Database initialised at %s (%d tables)",

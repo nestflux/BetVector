@@ -103,7 +103,11 @@ E36-01 → E36-02 → E36-03 → E36-04 →
 E37-01 → E37-02 → E37-03 → E37-04 →
 E38-01 → E38-02 → E38-03 → E38-04 → E38-05 → E38-06 →
 E40-01 → E40-02 → E40-03 → E40-04 → E40-05 →
-E40-06 → E40-07 → E40-08 → E40-09 → E40-10
+E40-06 → E40-07 → E40-08 → E40-09 → E40-10 →
+PC-26-01 → PC-26-02 → PC-26-03 → PC-26-04 → PC-26-05 →
+PC-26-06 → PC-26-07 → PC-26-08 → PC-26-09 →
+PC-26-10 → PC-26-11 → PC-26-12 → PC-26-13 →
+PC-26-14 → PC-26-15 → PC-26-16 → PC-26-17
 ```
 
 The sequence is the law. Auto-advance after gates pass. Only stop for
@@ -346,9 +350,9 @@ single-line expression.
 
 ## Current Status
 
-Last completed: PC-25 — Multi-League Strategy System (15 issues, 3 phases) ✅
-Currently working: Historical backfill (2017-20 seasons, 6 leagues) — running in background
-Next up: Owner review — shadow mode activation, Kelly staking go-live for Championship
+Last completed: Historical Backfill (2017-20 seasons, 6 leagues) ✅ — 21,231 matches, 281,769 odds, 41,560 features
+Currently working: PC-26 — Operational Activation (17 issues, 5 phases)
+Next up: PC-26-01 — Fix SQLite Database Lock + Add Busy Timeout
 
 E40 complete: All 10 issues done ✅ (TM datasets download, lineup/formation/manager backfill, manager features, injury club fix, minutes impact, recomputation, weekly refresh, integration test — 14,187 matches, 9,829 TM-mapped, 393K lineups, 42 tests)
 

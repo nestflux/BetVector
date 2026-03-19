@@ -786,6 +786,7 @@ class Pipeline:
             try:
                 predictions = self._generate_predictions(
                     league_id, current_season, features_df,
+                    league_short_name=league_name,
                 )
                 total_predictions += len(predictions)
                 print(f"  → {len(predictions)} predictions generated")
@@ -2048,6 +2049,7 @@ class Pipeline:
         league_id: int,
         season: str,
         features_df: Any,
+        league_short_name: Optional[str] = None,
     ) -> list:
         """Train active models and generate predictions.
 
@@ -2298,7 +2300,12 @@ class Pipeline:
                 )
 
             # Generate predictions
+            # PC-26-03: Pass league short name so per-league lambda clamps
+            # from leagues.yaml are applied (Bundesliga [0.3, 4.0], etc.)
             try:
+                preds = model.predict(predict_features, league=league_short_name)
+            except TypeError:
+                # Model doesn't accept league kwarg (e.g., older XGBoost pkl)
                 preds = model.predict(predict_features)
             except Exception as e:
                 logger.error("Failed to predict with %s: %s", model.name, e)
@@ -2672,16 +2679,32 @@ class Pipeline:
         """Create a pipeline_runs record with status='running'.
 
         Returns the new run's database ID for updating later.
+        Retries once on OperationalError (PC-26-01: handles transient DB locks
+        from concurrent processes like backfill scripts or the dashboard).
         """
-        with get_session() as session:
-            run = PipelineRun(
-                run_type=run_type,
-                status="running",
-            )
-            session.add(run)
-            session.flush()
-            run_id = run.id
-        return run_id
+        import time as _time
+        from sqlalchemy.exc import OperationalError as _OpErr
+
+        for attempt in range(2):
+            try:
+                with get_session() as session:
+                    run = PipelineRun(
+                        run_type=run_type,
+                        status="running",
+                    )
+                    session.add(run)
+                    session.flush()
+                    run_id = run.id
+                return run_id
+            except _OpErr as exc:
+                if attempt == 0:
+                    logger.warning(
+                        "Database locked creating pipeline run — "
+                        "retrying in 5s (attempt 1/2): %s", exc,
+                    )
+                    _time.sleep(5)
+                else:
+                    raise
 
     @staticmethod
     def _complete_run(

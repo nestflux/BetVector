@@ -323,6 +323,7 @@ class XGBoostModel(BaseModel):
     def predict(
         self,
         features: pd.DataFrame,
+        league: Optional[str] = None,
     ) -> List[MatchPrediction]:
         """Generate predictions for matches.
 
@@ -336,6 +337,9 @@ class XGBoostModel(BaseModel):
         features : pd.DataFrame
             Match features (same columns as training data).
             Must contain ``match_id``.
+        league : str, optional
+            League short name (PC-26-03). Accepted for interface
+            compatibility with PoissonModel.predict(); currently unused.
 
         Returns
         -------

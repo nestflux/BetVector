@@ -65,7 +65,8 @@ This document breaks the BetVector masterplan into sequenced epics and issues th
 | E39 | Injury Data Pipeline + Lineup Features | 12 | Fix broken injury pipeline (Soccerdata API), automate player importance (Transfermarkt market values), historical backfill (salimt CSV), lineup storage, squad rotation index, formation change, bench strength features |
 | E40 | Transfermarkt-Datasets Deep Integration | 10 | One-time backfill from dcaribou/transfermarkt-datasets: historical lineups (400K+ rows), formations, manager names + 4 new manager features, injury club mapping fix, minutes-based impact rating, feature recomputation, weekly refresh pipeline step |
 
-| PC-25 | Multi-League Strategy System | 15 | Per-league optimization: sharp-only filtering, CLV tracking, exposure caps, stake multipliers, shadow mode |
+| PC-25 | Multi-League Strategy System | 15 | ✅ DONE — Per-league optimization: sharp-only filtering, CLV tracking, exposure caps, stake multipliers, shadow mode |
+| PC-26 | Operational Activation | 17 | **IN PROGRESS** — Stabilize pipeline, retrain on 21K matches, fresh 6-league backtest, shadow mode activation, CLV monitoring |
 
 | PC-18 | Feature Pruning for Model Accuracy | 1 | ✅ DONE — Removed 21 features, avg Brier 0.5983→0.5921 (-1.0%), EPL -4.6%, zero regressions |
 | PC-19 | Deep Dive Bookmaker Probability Comparison | 1 | ✅ DONE — Overround-removed bookmaker probs on Deep Dive, model white / bookie grey / edge green |
@@ -9227,3 +9228,331 @@ Re-attempt Kelly staking on 🟢 profitable leagues ONLY:
 - [x] 7 new tests (5 config + 2 enforcement), 94/94 PC-25 suite passing
 - Note: Shadow mode (PC-25-12) required for 4 weeks before going live. Currently
   Championship Kelly is configured but shadow_mode=False (operator enables when ready).
+
+---
+
+## PC-26 — Operational Activation: From Build-Complete to Live
+
+**Status:** IN PROGRESS (17 issues across 5 phases)
+**Context:** All build plan issues (E1–E40, PC-01 through PC-25) and the historical backfill
+(21,231 matches, 6 leagues, 9 seasons 2017–2026) are complete. This epic transitions the
+system from "built" to "actively running, validated, and improving" on the expanded dataset.
+
+**Key findings during planning audit:**
+- Database lock bug: no `busy_timeout` pragma → pipeline crashes on concurrent access
+- Lambda clamp bug: per-league clamps (Bundesliga [0.3, 4.0], Serie A [0.2, 3.0]) not passed to predict()
+- `training_weight` dead code: config exists but no Python code reads it
+- CLV not captured: closing odds never stored → all CLV values null
+- Shadow mode pipeline gap: ShadowValueBet model exists but pipeline doesn't create shadow records
+- Stale backtest report: `backtest_report.json` contains corrupt Championship data
+
+---
+
+### Phase 1: Stabilize & Fix
+
+---
+
+**PC-26-01 — Fix SQLite Database Lock + Add Busy Timeout**
+
+The March 18 morning pipeline crashed with `sqlite3.OperationalError: database is locked`
+because no `busy_timeout` is set. Without it, any concurrent DB access (backfill, dashboard,
+CLI query) immediately crashes the pipeline instead of waiting.
+
+MP refs: §5 Architecture, §6 Database
+
+**Acceptance Criteria (PC-26-01):**
+- [ ] `PRAGMA busy_timeout = 30000` set on every SQLite connection via `_enable_sqlite_wal` listener in `src/database/db.py`
+- [ ] `_create_pipeline_run()` in `src/pipeline.py` retries once on OperationalError with 5s backoff
+- [ ] `init_db()` verifies busy_timeout is set (belt-and-suspenders with WAL verification)
+- [ ] Morning pipeline runs successfully end-to-end
+- [ ] Integration test: concurrent read + write does not raise "database is locked"
+
+---
+
+**PC-26-02 — Verify Pipeline Health After Backfill**
+
+The morning pipeline has not run successfully since the backfill completed (March 18 failed
+due to DB lock). Once PC-26-01 is fixed, verify the full pipeline runs cleanly with the
+expanded 21K-match dataset and that the Poisson model automatically trains on the new
+2017-20 data.
+
+MP refs: §5 Architecture
+
+**Acceptance Criteria (PC-26-02):**
+- [ ] `python run_pipeline.py morning` completes with `status=completed`
+- [ ] Each league shows increased training match count in log (confirming 2017-20 data is picked up)
+- [ ] Value bets found across at least 3 leagues (EPL, Championship, LaLiga)
+- [ ] `python run_pipeline.py evening` completes (resolving any pending bets)
+- [ ] Pipeline run record created in `pipeline_runs` table with `status=completed`
+
+---
+
+**PC-26-03 — Fix Per-League Lambda Clamp Not Passed to Predict**
+
+`_generate_predictions()` in `pipeline.py` calls `model.predict()` WITHOUT passing the
+`league` parameter. The per-league lambda clamps from PC-25-13 (Bundesliga [0.3, 4.0],
+Serie A [0.2, 3.0]) are effectively dead code in the live pipeline.
+
+MP refs: §4 Prediction Models, PC-25-13
+
+**Acceptance Criteria (PC-26-03):**
+- [ ] `_generate_predictions()` passes `league` short name to `model.predict()`
+- [ ] Bundesliga predictions use lambda clamps `[0.3, 4.0]`
+- [ ] Serie A predictions use lambda clamps `[0.2, 3.0]`
+- [ ] `XGBoostModel.predict()` accepts the `league` parameter for forward compatibility
+- [ ] Unit test verifies per-league lambda clamping
+
+---
+
+### Phase 2: Retrain on Expanded Dataset
+
+---
+
+**PC-26-04 — Verify Poisson Picks Up 2017-20 Data Automatically**
+
+The daily pipeline trains Poisson fresh each morning per-league. With the backfill adding
+2017-20 seasons, each league should now train on ~2,000-4,000+ matches (was ~1,000-1,500).
+This is primarily a verification issue — the data pickup should be automatic since Poisson
+queries all `Match.status == "finished"` rows.
+
+MP refs: §4 Prediction Models
+
+**Acceptance Criteria (PC-26-04):**
+- [ ] Each league's Poisson model trains on at least 2,000 matches (was ~1,000-1,500)
+- [ ] No training failures or NaN coefficients from the expanded dataset
+- [ ] Feature coverage for 2017-20 seasons confirmed (≥90% of matches have features)
+
+---
+
+**PC-26-05 — Retrain XGBoost on 21K Matches**
+
+The current XGBoost pkl was trained on ~9K matches. With 21K matches now available,
+retraining should improve generalization. The `run_train` pipeline method already loads
+all active leagues and all seasons — it will automatically pick up the expanded data.
+
+MP refs: §4 Prediction Models, E37-01
+
+**Acceptance Criteria (PC-26-05):**
+- [ ] Old pkl preserved as `data/models/xgboost_v1_pre_backfill.pkl`
+- [ ] `python run_pipeline.py train --model xgboost_v1` completes successfully
+- [ ] Training dataset contains 18,000+ matches (confirmed in log)
+- [ ] New pkl saved to `data/models/xgboost_v1.pkl`
+- [ ] Feature importance top-5 are sensible (Pinnacle probs, Elo, form should dominate)
+
+---
+
+**PC-26-06 — Wire Up training_weight from leagues.yaml**
+
+The `training_weight` field exists in `leagues.yaml` (Championship 2.0×, LaLiga 1.5×,
+others 1.0×) but NO Python code reads it. The config was defined in PC-25-13 but the
+actual sample weighting was never implemented in the training code.
+
+MP refs: §4 Prediction Models, PC-25-13
+
+**Acceptance Criteria (PC-26-06):**
+- [ ] `PoissonModel.train()` accepts optional `sample_weights` parameter, passes `freq_weights` to `GLM()`
+- [ ] `XGBoostModel.train()` accepts optional `sample_weights` parameter, passes `sample_weight` to `fit()`
+- [ ] Pipeline constructs weight arrays from `leagues.yaml` `training_weight` values
+- [ ] Championship data receives 2.0× weight, LaLiga 1.5×, others 1.0×
+- [ ] Test verifies weights are applied (different coefficients with 2.0× vs 1.0×)
+
+---
+
+### Phase 3: Fresh Backtest
+
+---
+
+**PC-26-07 — Run Full 6-League Backtest with Expanded Data**
+
+Run walk-forward backtests for all 6 leagues on the 2024-25 season with 7+ seasons of
+training data. Compare Brier/ROI to previous baselines.
+
+Previous baselines (from E38-05):
+| League | Brier | ROI |
+|--------|-------|-----|
+| EPL | 0.603 | -12.68% |
+| Championship | 0.634 | +3.88% |
+| LaLiga | 0.565 | +5.60% |
+| Ligue 1 | 0.579 | -27.24% |
+| Bundesliga | 0.595 | -17.39% |
+| Serie A | 0.576 | -20.78% |
+
+MP refs: §4 Evaluation, §7 Backtesting, E38-05
+
+**Acceptance Criteria (PC-26-07):**
+- [ ] 6 per-league backtest reports generated and saved to `data/predictions/`
+- [ ] Brier scores for all 6 leagues documented and compared to baseline
+- [ ] ROI for all 6 leagues documented and compared to baseline
+- [ ] Results saved to `model_performance` table for dashboard display
+- [ ] No temporal integrity violations (walk-forward structure enforced)
+
+---
+
+**PC-26-08 — Run XGBoost Backtest for Comparison**
+
+The previous XGBoost backtest (E37-02) showed Poisson winning all 3 leagues tested.
+With 21K training matches (was 9K), XGBoost has more data to learn from. Re-evaluate
+whether the Poisson dominance still holds.
+
+MP refs: §4 Prediction Models, E37-02
+
+**Acceptance Criteria (PC-26-08):**
+- [ ] 6 per-league XGBoost backtest reports generated
+- [ ] Head-to-head comparison: Poisson vs XGBoost Brier scores per league
+- [ ] If XGBoost improves, update ensemble initial weights
+- [ ] If Poisson still dominates, document finding and keep current 50/50 split
+
+---
+
+**PC-26-09 — Validate Tier Classifications with Deeper Data**
+
+The current tier classifications (Championship=🟢, EPL/LaLiga=🟡, Ligue1/Bundesliga/SerieA=🔴)
+were based on backtests with ~2,000-3,000 matches. With ~21K matches, confidence intervals
+will be tighter and tiers may shift.
+
+MP refs: §11.4 Market Feedback, PC-24-01, PC-25-01
+
+**Acceptance Criteria (PC-26-09):**
+- [ ] All 6 leagues have ROI + 95% CI calculated from expanded backtest
+- [ ] Tier classifications validated or updated based on new data
+- [ ] `leagues.yaml` strategy blocks match validated tiers (stake_multiplier, auto_bet, staking_method)
+- [ ] If Championship is no longer 🟢, revert to flat staking and auto_bet=false
+- [ ] Build plan and master plan updated with new metrics
+
+---
+
+### Phase 4: Shadow Mode Activation
+
+---
+
+**PC-26-10 — Verify Shadow Mode Pipeline Integration**
+
+The `ShadowValueBet` model and comparison functions exist in `market_feedback.py`, but
+the pipeline doesn't create shadow bet records during value bet detection or resolve them
+when matches finish. Wire the infrastructure into the morning and evening pipelines.
+
+MP refs: PC-25-12
+
+**Acceptance Criteria (PC-26-10):**
+- [ ] `shadow_value_bets` table verified to exist in SQLite
+- [ ] Morning pipeline creates ShadowValueBet records when `shadow_mode: true` for a league
+- [ ] Evening pipeline resolves pending shadow bets (sets `result` and `shadow_pnl`)
+- [ ] Test: set `shadow_mode: true` temporarily, run morning + evening, verify shadow records created and resolved
+
+---
+
+**PC-26-11 — Enable Shadow Mode for Championship Kelly Staking**
+
+Championship is the only 🟢 league with Kelly staking configured. Shadow mode compares
+Kelly staking outcomes against a flat staking baseline to validate that Kelly actually
+outperforms over a 4-week observation period.
+
+MP refs: PC-25-12, PC-25-15
+
+**Acceptance Criteria (PC-26-11):**
+- [ ] Championship `shadow_mode: true` in `leagues.yaml`
+- [ ] Shadow bets created with flat staking for comparison (live uses Kelly)
+- [ ] `generate_shadow_comparison()` scheduled in Sunday evening pipeline
+- [ ] Dashboard shows shadow mode status on Model Health page
+
+---
+
+**PC-26-12 — Shadow Mode for LaLiga Sharp-Only Strategy**
+
+LaLiga uses `sharp_only: true` (Pinnacle-only filtering), which improved ROI by +21pp in
+backtest. Shadow mode validates this in live data: shadow bets use all-bookmakers edge
+while live bets use Pinnacle-only.
+
+MP refs: PC-25-12, PC-25-01
+
+**Acceptance Criteria (PC-26-12):**
+- [ ] LaLiga `shadow_mode: true` in `leagues.yaml`
+- [ ] Shadow bets compute edge against all bookmakers (not just Pinnacle)
+- [ ] After 4 weeks, comparison report generated
+
+---
+
+**PC-26-13 — Shadow Mode Dashboard Widget**
+
+Add a Shadow Mode section to the Model Health dashboard page showing shadow vs live
+performance for leagues running A/B tests.
+
+MP refs: PC-25-12, §8 Dashboard
+
+**Acceptance Criteria (PC-26-13):**
+- [ ] Model Health page shows Shadow Mode section with per-league status
+- [ ] Metrics displayed: shadow ROI, live ROI, diff, n_bets, weeks elapsed
+- [ ] Recommendation shown when 4+ weeks of data available (promote/keep/abandon)
+- [ ] Empty state displayed when no leagues are in shadow mode
+- [ ] Design system compliant (background #0D1117, surface #161B22, text #E6EDF3)
+
+---
+
+### Phase 5: CLV Monitoring
+
+---
+
+**PC-26-14 — Verify CLV Tracking End-to-End**
+
+CLV tracking infrastructure exists but all backtest CLV values are null, suggesting closing
+odds are never captured. Trace the data flow and identify the root cause.
+
+MP refs: §3 Flow 5, E19
+
+**Acceptance Criteria (PC-26-14):**
+- [ ] CLV data flow traced: odds_at_placement → closing_odds → CLV calculation
+- [ ] Root cause of null CLV values documented
+- [ ] Fix path identified (likely PC-26-15)
+
+---
+
+**PC-26-15 — Closing Odds Capture in Evening Pipeline**
+
+Implement closing odds capture so CLV can be calculated. Before resolving bets in the
+evening pipeline, capture the latest available odds as `closing_odds` on pending BetLog
+entries.
+
+MP refs: §3 Flow 5, E19-03
+
+**Acceptance Criteria (PC-26-15):**
+- [ ] Pending bets get `closing_odds` updated with latest available odds before resolution
+- [ ] CLV calculated: `(1/closing_odds) - (1/odds_at_placement)`
+- [ ] After 1 week of operation, ≥50% of resolved bets have non-null CLV
+- [ ] Dashboard shows per-league CLV averages
+
+---
+
+**PC-26-16 — CLV Statistical Significance Tracking**
+
+CLV becomes statistically significant at ~50+ bets per league. Add significance indicators
+to the Model Health dashboard.
+
+MP refs: §11.4
+
+**Acceptance Criteria (PC-26-16):**
+- [ ] Model Health page shows per-league CLV with sample size and significance level
+- [ ] Significance levels: insufficient (<30), emerging (30-50), significant (50+)
+- [ ] Positive CLV highlighted in green, negative in red
+- [ ] Tooltip explaining what CLV means and why it matters
+
+---
+
+**PC-26-17 — Stale Backtest Report Cleanup**
+
+The file `data/predictions/backtest_report.json` contains a stale Championship report
+with Brier 1.164 and ROI -23.94%. Replace with fresh PC-26-07 results or remove entirely.
+
+**Acceptance Criteria (PC-26-17):**
+- [ ] Stale `backtest_report.json` removed or replaced with valid data
+- [ ] Orphan League One report removed
+- [ ] No code references the generic `backtest_report.json` filename
+
+---
+
+### PC-26 Critical Path
+
+```
+PC-26-01 → PC-26-02 → PC-26-03 → PC-26-04 → PC-26-05 → PC-26-07 → PC-26-09 → PC-26-10 → PC-26-11
+                                                    └── PC-26-06 ──┘
+CLV track (parallel): PC-26-02 → PC-26-14 → PC-26-15 → PC-26-16
+```
