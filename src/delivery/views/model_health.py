@@ -1192,6 +1192,99 @@ except Exception as e:
 st.divider()
 
 
+# --- Section 8c: Shadow Mode A/B Tests (PC-26-13) ---
+# Shows shadow vs live performance for leagues running strategy experiments.
+# Championship tests Kelly vs flat staking. LaLiga tests sharp-only vs all-bookmakers.
+st.markdown(
+    '<div class="bv-section-header">Shadow Mode A/B Tests</div>',
+    unsafe_allow_html=True,
+)
+
+try:
+    from src.self_improvement.market_feedback import (
+        compute_shadow_pnl,
+        generate_shadow_comparison,
+    )
+    from src.config import config as _shadow_cfg
+
+    # Find which leagues have shadow_mode enabled
+    shadow_leagues = []
+    for _lg in _shadow_cfg.leagues:
+        _strat = getattr(_lg, "strategy", None)
+        if _strat and getattr(_strat, "shadow_mode", False):
+            shadow_leagues.append(_lg.short_name)
+
+    if shadow_leagues:
+        shadow_pnl = compute_shadow_pnl()
+        shadow_comparison = generate_shadow_comparison(min_weeks=0)  # Show even early data
+
+        if shadow_pnl or shadow_comparison:
+            shadow_rows = []
+            for league in shadow_leagues:
+                league_data = shadow_pnl.get(league, {})
+                # Find comparison recommendation
+                rec = "—"
+                for comp in shadow_comparison:
+                    if comp.get("league") == league:
+                        rec = comp.get("recommendation", "—")
+                        break
+
+                n_bets = league_data.get("n_bets", 0)
+                shadow_roi = league_data.get("shadow_roi")
+                total_pnl = league_data.get("pnl")
+                strategy = league_data.get("strategy_change", "—")
+
+                shadow_rows.append({
+                    "League": league,
+                    "Strategy Test": strategy.replace("_", " ").title(),
+                    "Shadow Bets": n_bets,
+                    "Shadow ROI": f"{shadow_roi:+.1f}%" if shadow_roi is not None else "—",
+                    "Shadow P&L": f"${total_pnl:+.2f}" if total_pnl is not None else "—",
+                    "Recommendation": rec.replace("_", " ").title(),
+                })
+
+            if shadow_rows:
+                st.dataframe(
+                    pd.DataFrame(shadow_rows),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            else:
+                st.markdown(
+                    '<div class="bv-empty-state">'
+                    f"Shadow mode active for {', '.join(shadow_leagues)}. "
+                    "Bets will appear after the next pipeline run."
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
+        else:
+            st.markdown(
+                '<div class="bv-empty-state">'
+                f"Shadow mode active for {', '.join(shadow_leagues)}. "
+                "No shadow bets resolved yet — data will appear after matches finish."
+                "</div>",
+                unsafe_allow_html=True,
+            )
+    else:
+        st.markdown(
+            '<div class="bv-empty-state">'
+            "No leagues are currently in shadow mode. Enable shadow_mode: true in "
+            "leagues.yaml to A/B test strategy changes before going live."
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+except Exception as _shadow_err:
+    st.markdown(
+        f'<div class="bv-empty-state">'
+        f"Could not load shadow mode data: {_shadow_err}"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+st.divider()
+
+
 # --- Section 9: Recalibration History ---
 st.markdown(
     '<div class="bv-section-header">Recalibration History</div>',
