@@ -117,7 +117,8 @@ LEAGUE_ID_LALIGA = 3
 
 def test_championship_report_exists():
     """Backtest report JSON must exist for Championship 2024-25."""
-    path = Path("data/predictions/backtest_report_Championship_2024-25.json")
+    # PC-26-17: Reports now use model-prefixed names (poisson_ or xgb_)
+    path = Path("data/predictions/backtest_report_poisson_Championship_2024-25.json")
     assert path.exists(), (
         f"Championship backtest report not found at {path}. "
         "Run: python run_pipeline.py backtest --league Championship --season 2024-25"
@@ -130,7 +131,8 @@ def test_championship_report_exists():
 
 def test_laliga_report_exists():
     """Backtest report JSON must exist for La Liga 2024-25."""
-    path = Path("data/predictions/backtest_report_LaLiga_2024-25.json")
+    # PC-26-17: Reports now use model-prefixed names
+    path = Path("data/predictions/backtest_report_poisson_LaLiga_2024-25.json")
     assert path.exists(), (
         f"La Liga backtest report not found at {path}. "
         "Run: python run_pipeline.py backtest --league LaLiga --season 2024-25"
@@ -143,7 +145,7 @@ def test_laliga_report_exists():
 
 def test_championship_match_count():
     """Championship 2024-25 backtest should have predicted exactly 552 matches."""
-    report = _load_report("backtest_report_Championship_2024-25.json")
+    report = _load_report("backtest_report_poisson_Championship_2024-25.json")
     summary = report["summary"]
     assert summary["total_matches"] == 552, (
         f"Expected 552 Championship matches, got {summary['total_matches']}"
@@ -159,7 +161,7 @@ def test_championship_match_count():
 
 def test_laliga_match_count():
     """La Liga 2024-25 backtest should have predicted exactly 380 matches."""
-    report = _load_report("backtest_report_LaLiga_2024-25.json")
+    report = _load_report("backtest_report_poisson_LaLiga_2024-25.json")
     summary = report["summary"]
     assert summary["total_matches"] == 380, (
         f"Expected 380 La Liga matches, got {summary['total_matches']}"
@@ -179,7 +181,7 @@ def test_laliga_brier_within_tolerance():
     This validates that the multi-league feature set generalises to La Liga.
     The build plan target is ±0.05 (5 percentage points).
     """
-    report = _load_report("backtest_report_LaLiga_2024-25.json")
+    report = _load_report("backtest_report_poisson_LaLiga_2024-25.json")
     brier = report["summary"]["brier_score"]
     diff = abs(brier - EPL_BRIER_BASELINE)
     assert diff <= BRIER_TOLERANCE, (
@@ -194,7 +196,7 @@ def test_laliga_brier_within_tolerance():
 
 def test_laliga_roi_positive():
     """La Liga backtest ROI must be positive (profitable model)."""
-    report = _load_report("backtest_report_LaLiga_2024-25.json")
+    report = _load_report("backtest_report_poisson_LaLiga_2024-25.json")
     roi = report["summary"]["roi"]
     assert roi > 0, (
         f"La Liga ROI is {roi:.2f}% — model is not profitable on La Liga 2024-25"

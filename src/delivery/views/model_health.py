@@ -1151,15 +1151,31 @@ try:
             for league_id, n_clv, mean_clv in clv_query:
                 league = session.query(LeagueModel).filter_by(id=league_id).first()
                 league_name = league.short_name if league else f"ID {league_id}"
+
+                # PC-26-16: CLV significance levels based on sample size.
+                # CLV becomes statistically reliable much faster than ROI
+                # (~50 bets vs ~2,000) because it directly measures line-beating.
+                if n_clv >= 50:
+                    sig = "✅ Significant"
+                elif n_clv >= 30:
+                    sig = "🟡 Emerging"
+                else:
+                    sig = "⚪ Insufficient"
+
+                # Signal: positive CLV = genuine edge
+                if mean_clv and mean_clv > 0:
+                    signal = "🟢 Beating line"
+                elif mean_clv and mean_clv < 0:
+                    signal = "🔴 Behind line"
+                else:
+                    signal = "—"
+
                 clv_rows.append({
                     "League": league_name,
                     "CLV Bets": n_clv,
                     "Mean CLV": f"{mean_clv:+.4f}" if mean_clv else "—",
-                    "Signal": (
-                        "🟢 Beating line" if mean_clv and mean_clv > 0
-                        else "🔴 Behind line" if mean_clv and mean_clv < 0
-                        else "—"
-                    ),
+                    "Signal": signal,
+                    "Significance": sig,
                 })
 
         if clv_rows:
