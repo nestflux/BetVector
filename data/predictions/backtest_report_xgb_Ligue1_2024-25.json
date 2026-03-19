@@ -1,0 +1,961 @@
+{
+  "summary": {
+    "total_matches": 306,
+    "total_predicted": 306,
+    "total_value_bets": 21,
+    "total_staked": 388.72,
+    "total_pnl": -69.52,
+    "roi": -17.88,
+    "brier_score": 0.571339,
+    "clv_avg": null
+  },
+  "calibration": {
+    "0.0-0.1": {
+      "predicted_avg": 0.0866,
+      "actual_rate": 0.0833,
+      "count": 12
+    },
+    "0.1-0.2": {
+      "predicted_avg": 0.1592,
+      "actual_rate": 0.1304,
+      "count": 161
+    },
+    "0.2-0.3": {
+      "predicted_avg": 0.2461,
+      "actual_rate": 0.2534,
+      "count": 367
+    },
+    "0.3-0.4": {
+      "predicted_avg": 0.3519,
+      "actual_rate": 0.3495,
+      "count": 103
+    },
+    "0.4-0.5": {
+      "predicted_avg": 0.4518,
+      "actual_rate": 0.419,
+      "count": 105
+    },
+    "0.5-0.6": {
+      "predicted_avg": 0.5455,
+      "actual_rate": 0.6026,
+      "count": 78
+    },
+    "0.6-0.7": {
+      "predicted_avg": 0.6504,
+      "actual_rate": 0.6379,
+      "count": 58
+    },
+    "0.7-0.8": {
+      "predicted_avg": 0.7296,
+      "actual_rate": 0.7742,
+      "count": 31
+    },
+    "0.8-0.9": {
+      "predicted_avg": 0.8183,
+      "actual_rate": 1.0,
+      "count": 3
+    }
+  },
+  "daily_pnl": [
+    {
+      "date": "2024-08-16",
+      "matchday": 1,
+      "pnl": 0.0,
+      "cumulative_pnl": 0.0,
+      "bankroll": 1000.0,
+      "value_bets": 0,
+      "matches": 1
+    },
+    {
+      "date": "2024-08-17",
+      "matchday": 2,
+      "pnl": 0.0,
+      "cumulative_pnl": 0.0,
+      "bankroll": 1000.0,
+      "value_bets": 0,
+      "matches": 3
+    },
+    {
+      "date": "2024-08-18",
+      "matchday": 3,
+      "pnl": -20.0,
+      "cumulative_pnl": -20.0,
+      "bankroll": 980.0,
+      "value_bets": 1,
+      "matches": 5
+    },
+    {
+      "date": "2024-08-23",
+      "matchday": 4,
+      "pnl": 0.0,
+      "cumulative_pnl": -20.0,
+      "bankroll": 980.0,
+      "value_bets": 0,
+      "matches": 1
+    },
+    {
+      "date": "2024-08-24",
+      "matchday": 5,
+      "pnl": 0.0,
+      "cumulative_pnl": -20.0,
+      "bankroll": 980.0,
+      "value_bets": 0,
+      "matches": 3
+    },
+    {
+      "date": "2024-08-25",
+      "matchday": 6,
+      "pnl": -19.6,
+      "cumulative_pnl": -39.6,
+      "bankroll": 960.4,
+      "value_bets": 1,
+      "matches": 5
+    },
+    {
+      "date": "2024-08-30",
+      "matchday": 7,
+      "pnl": 0.0,
+      "cumulative_pnl": -39.6,
+      "bankroll": 960.4,
+      "value_bets": 0,
+      "matches": 1
+    },
+    {
+      "date": "2024-08-31",
+      "matchday": 8,
+      "pnl": 0.0,
+      "cumulative_pnl": -39.6,
+      "bankroll": 960.4,
+      "value_bets": 0,
+      "matches": 3
+    },
+    {
+      "date": "2024-09-01",
+      "matchday": 9,
+      "pnl": 0.0,
+      "cumulative_pnl": -39.6,
+      "bankroll": 960.4,
+      "value_bets": 0,
+      "matches": 5
+    },
+    {
+      "date": "2024-09-13",
+      "matchday": 10,
+      "pnl": 0.0,
+      "cumulative_pnl": -39.6,
+      "bankroll": 960.4,
+      "value_bets": 0,
+      "matches": 1
+    },
+    {
+      "date": "2024-09-14",
+      "matchday": 11,
+      "pnl": 0.0,
+      "cumulative_pnl": -39.6,
+      "bankroll": 960.4,
+      "value_bets": 0,
+      "matches": 3
+    },
+    {
+      "date": "2024-09-15",
+      "matchday": 12,
+      "pnl": 0.0,
+      "cumulative_pnl": -39.6,
+      "bankroll": 960.4,
+      "value_bets": 0,
+      "matches": 5
+    },
+    {
+      "date": "2024-09-20",
+      "matchday": 13,
+      "pnl": 0.0,
+      "cumulative_pnl": -39.6,
+      "bankroll": 960.4,
+      "value_bets": 0,
+      "matches": 1
+    },
+    {
+      "date": "2024-09-21",
+      "matchday": 14,
+      "pnl": 0.0,
+      "cumulative_pnl": -39.6,
+      "bankroll": 960.4,
+      "value_bets": 0,
+      "matches": 3
+    },
+    {
+      "date": "2024-09-22",
+      "matchday": 15,
+      "pnl": 0.0,
+      "cumulative_pnl": -39.6,
+      "bankroll": 960.4,
+      "value_bets": 0,
+      "matches": 5
+    },
+    {
+      "date": "2024-09-27",
+      "matchday": 16,
+      "pnl": 0.0,
+      "cumulative_pnl": -39.6,
+      "bankroll": 960.4,
+      "value_bets": 0,
+      "matches": 2
+    },
+    {
+      "date": "2024-09-28",
+      "matchday": 17,
+      "pnl": -19.21,
+      "cumulative_pnl": -58.81,
+      "bankroll": 941.19,
+      "value_bets": 1,
+      "matches": 3
+    },
+    {
+      "date": "2024-09-29",
+      "matchday": 18,
+      "pnl": 0.0,
+      "cumulative_pnl": -58.81,
+      "bankroll": 941.19,
+      "value_bets": 0,
+      "matches": 4
+    },
+    {
+      "date": "2024-10-04",
+      "matchday": 19,
+      "pnl": 0.0,
+      "cumulative_pnl": -58.81,
+      "bankroll": 941.19,
+      "value_bets": 0,
+      "matches": 1
+    },
+    {
+      "date": "2024-10-05",
+      "matchday": 20,
+      "pnl": 0.0,
+      "cumulative_pnl": -58.81,
+      "bankroll": 941.19,
+      "value_bets": 0,
+      "matches": 3
+    },
+    {
+      "date": "2024-10-06",
+      "matchday": 21,
+      "pnl": -18.82,
+      "cumulative_pnl": -77.63,
+      "bankroll": 922.37,
+      "value_bets": 1,
+      "matches": 5
+    },
+    {
+      "date": "2024-10-18",
+      "matchday": 22,
+      "pnl": 0.0,
+      "cumulative_pnl": -77.63,
+      "bankroll": 922.37,
+      "value_bets": 0,
+      "matches": 1
+    },
+    {
+      "date": "2024-10-19",
+      "matchday": 23,
+      "pnl": 0.0,
+      "cumulative_pnl": -77.63,
+      "bankroll": 922.37,
+      "value_bets": 0,
+      "matches": 3
+    },
+    {
+      "date": "2024-10-20",
+      "matchday": 24,
+      "pnl": 0.0,
+      "cumulative_pnl": -77.63,
+      "bankroll": 922.37,
+      "value_bets": 0,
+      "matches": 5
+    },
+    {
+      "date": "2024-10-25",
+      "matchday": 25,
+      "pnl": 0.0,
+      "cumulative_pnl": -77.63,
+      "bankroll": 922.37,
+      "value_bets": 0,
+      "matches": 1
+    },
+    {
+      "date": "2024-10-26",
+      "matchday": 26,
+      "pnl": 0.0,
+      "cumulative_pnl": -77.63,
+      "bankroll": 922.37,
+      "value_bets": 0,
+      "matches": 3
+    },
+    {
+      "date": "2024-10-27",
+      "matchday": 27,
+      "pnl": 0.0,
+      "cumulative_pnl": -77.63,
+      "bankroll": 922.37,
+      "value_bets": 0,
+      "matches": 5
+    },
+    {
+      "date": "2024-11-01",
+      "matchday": 28,
+      "pnl": 0.0,
+      "cumulative_pnl": -77.63,
+      "bankroll": 922.37,
+      "value_bets": 0,
+      "matches": 2
+    },
+    {
+      "date": "2024-11-02",
+      "matchday": 29,
+      "pnl": -18.45,
+      "cumulative_pnl": -96.08,
+      "bankroll": 903.92,
+      "value_bets": 1,
+      "matches": 3
+    },
+    {
+      "date": "2024-11-03",
+      "matchday": 30,
+      "pnl": 0.0,
+      "cumulative_pnl": -96.08,
+      "bankroll": 903.92,
+      "value_bets": 0,
+      "matches": 4
+    },
+    {
+      "date": "2024-11-08",
+      "matchday": 31,
+      "pnl": 0.0,
+      "cumulative_pnl": -96.08,
+      "bankroll": 903.92,
+      "value_bets": 0,
+      "matches": 1
+    },
+    {
+      "date": "2024-11-09",
+      "matchday": 32,
+      "pnl": 0.0,
+      "cumulative_pnl": -96.08,
+      "bankroll": 903.92,
+      "value_bets": 0,
+      "matches": 3
+    },
+    {
+      "date": "2024-11-10",
+      "matchday": 33,
+      "pnl": 0.0,
+      "cumulative_pnl": -96.08,
+      "bankroll": 903.92,
+      "value_bets": 0,
+      "matches": 5
+    },
+    {
+      "date": "2024-11-22",
+      "matchday": 34,
+      "pnl": 0.0,
+      "cumulative_pnl": -96.08,
+      "bankroll": 903.92,
+      "value_bets": 0,
+      "matches": 2
+    },
+    {
+      "date": "2024-11-23",
+      "matchday": 35,
+      "pnl": 0.0,
+      "cumulative_pnl": -96.08,
+      "bankroll": 903.92,
+      "value_bets": 0,
+      "matches": 3
+    },
+    {
+      "date": "2024-11-24",
+      "matchday": 36,
+      "pnl": 0.0,
+      "cumulative_pnl": -96.08,
+      "bankroll": 903.92,
+      "value_bets": 0,
+      "matches": 4
+    },
+    {
+      "date": "2024-11-29",
+      "matchday": 37,
+      "pnl": 0.0,
+      "cumulative_pnl": -96.08,
+      "bankroll": 903.92,
+      "value_bets": 0,
+      "matches": 1
+    },
+    {
+      "date": "2024-11-30",
+      "matchday": 38,
+      "pnl": 0.0,
+      "cumulative_pnl": -96.08,
+      "bankroll": 903.92,
+      "value_bets": 0,
+      "matches": 3
+    },
+    {
+      "date": "2024-12-01",
+      "matchday": 39,
+      "pnl": 0.0,
+      "cumulative_pnl": -96.08,
+      "bankroll": 903.92,
+      "value_bets": 0,
+      "matches": 5
+    },
+    {
+      "date": "2024-12-06",
+      "matchday": 40,
+      "pnl": 0.0,
+      "cumulative_pnl": -96.08,
+      "bankroll": 903.92,
+      "value_bets": 0,
+      "matches": 2
+    },
+    {
+      "date": "2024-12-07",
+      "matchday": 41,
+      "pnl": 0.0,
+      "cumulative_pnl": -96.08,
+      "bankroll": 903.92,
+      "value_bets": 0,
+      "matches": 3
+    },
+    {
+      "date": "2024-12-08",
+      "matchday": 42,
+      "pnl": 0.0,
+      "cumulative_pnl": -96.08,
+      "bankroll": 903.92,
+      "value_bets": 0,
+      "matches": 4
+    },
+    {
+      "date": "2024-12-13",
+      "matchday": 43,
+      "pnl": 0.0,
+      "cumulative_pnl": -96.08,
+      "bankroll": 903.92,
+      "value_bets": 0,
+      "matches": 1
+    },
+    {
+      "date": "2024-12-14",
+      "matchday": 44,
+      "pnl": 0.0,
+      "cumulative_pnl": -96.08,
+      "bankroll": 903.92,
+      "value_bets": 0,
+      "matches": 3
+    },
+    {
+      "date": "2024-12-15",
+      "matchday": 45,
+      "pnl": 0.0,
+      "cumulative_pnl": -96.08,
+      "bankroll": 903.92,
+      "value_bets": 0,
+      "matches": 5
+    },
+    {
+      "date": "2024-12-18",
+      "matchday": 46,
+      "pnl": 0.0,
+      "cumulative_pnl": -96.08,
+      "bankroll": 903.92,
+      "value_bets": 0,
+      "matches": 1
+    },
+    {
+      "date": "2025-01-03",
+      "matchday": 47,
+      "pnl": 0.0,
+      "cumulative_pnl": -96.08,
+      "bankroll": 903.92,
+      "value_bets": 0,
+      "matches": 1
+    },
+    {
+      "date": "2025-01-04",
+      "matchday": 48,
+      "pnl": -18.08,
+      "cumulative_pnl": -114.16,
+      "bankroll": 885.84,
+      "value_bets": 1,
+      "matches": 3
+    },
+    {
+      "date": "2025-01-05",
+      "matchday": 49,
+      "pnl": 0.0,
+      "cumulative_pnl": -114.16,
+      "bankroll": 885.84,
+      "value_bets": 0,
+      "matches": 4
+    },
+    {
+      "date": "2025-01-10",
+      "matchday": 50,
+      "pnl": 0.0,
+      "cumulative_pnl": -114.16,
+      "bankroll": 885.84,
+      "value_bets": 0,
+      "matches": 2
+    },
+    {
+      "date": "2025-01-11",
+      "matchday": 51,
+      "pnl": 0.0,
+      "cumulative_pnl": -114.16,
+      "bankroll": 885.84,
+      "value_bets": 0,
+      "matches": 3
+    },
+    {
+      "date": "2025-01-12",
+      "matchday": 52,
+      "pnl": 0.0,
+      "cumulative_pnl": -114.16,
+      "bankroll": 885.84,
+      "value_bets": 0,
+      "matches": 4
+    },
+    {
+      "date": "2025-01-17",
+      "matchday": 53,
+      "pnl": 0.0,
+      "cumulative_pnl": -114.16,
+      "bankroll": 885.84,
+      "value_bets": 0,
+      "matches": 2
+    },
+    {
+      "date": "2025-01-18",
+      "matchday": 54,
+      "pnl": 0.0,
+      "cumulative_pnl": -114.16,
+      "bankroll": 885.84,
+      "value_bets": 0,
+      "matches": 3
+    },
+    {
+      "date": "2025-01-19",
+      "matchday": 55,
+      "pnl": 0.0,
+      "cumulative_pnl": -114.16,
+      "bankroll": 885.84,
+      "value_bets": 0,
+      "matches": 4
+    },
+    {
+      "date": "2025-01-24",
+      "matchday": 56,
+      "pnl": 0.0,
+      "cumulative_pnl": -114.16,
+      "bankroll": 885.84,
+      "value_bets": 0,
+      "matches": 1
+    },
+    {
+      "date": "2025-01-25",
+      "matchday": 57,
+      "pnl": 13.29,
+      "cumulative_pnl": -100.87,
+      "bankroll": 899.13,
+      "value_bets": 1,
+      "matches": 3
+    },
+    {
+      "date": "2025-01-26",
+      "matchday": 58,
+      "pnl": 0.0,
+      "cumulative_pnl": -100.87,
+      "bankroll": 899.13,
+      "value_bets": 0,
+      "matches": 5
+    },
+    {
+      "date": "2025-01-31",
+      "matchday": 59,
+      "pnl": 0.0,
+      "cumulative_pnl": -100.87,
+      "bankroll": 899.13,
+      "value_bets": 0,
+      "matches": 1
+    },
+    {
+      "date": "2025-02-01",
+      "matchday": 60,
+      "pnl": 0.0,
+      "cumulative_pnl": -100.87,
+      "bankroll": 899.13,
+      "value_bets": 0,
+      "matches": 3
+    },
+    {
+      "date": "2025-02-02",
+      "matchday": 61,
+      "pnl": 26.25,
+      "cumulative_pnl": -74.62,
+      "bankroll": 925.38,
+      "value_bets": 2,
+      "matches": 5
+    },
+    {
+      "date": "2025-02-07",
+      "matchday": 62,
+      "pnl": 0.0,
+      "cumulative_pnl": -74.62,
+      "bankroll": 925.38,
+      "value_bets": 0,
+      "matches": 2
+    },
+    {
+      "date": "2025-02-08",
+      "matchday": 63,
+      "pnl": 0.0,
+      "cumulative_pnl": -74.62,
+      "bankroll": 925.38,
+      "value_bets": 0,
+      "matches": 3
+    },
+    {
+      "date": "2025-02-09",
+      "matchday": 64,
+      "pnl": 0.0,
+      "cumulative_pnl": -74.62,
+      "bankroll": 925.38,
+      "value_bets": 0,
+      "matches": 4
+    },
+    {
+      "date": "2025-02-14",
+      "matchday": 65,
+      "pnl": 0.0,
+      "cumulative_pnl": -74.62,
+      "bankroll": 925.38,
+      "value_bets": 0,
+      "matches": 1
+    },
+    {
+      "date": "2025-02-15",
+      "matchday": 66,
+      "pnl": 0.0,
+      "cumulative_pnl": -74.62,
+      "bankroll": 925.38,
+      "value_bets": 0,
+      "matches": 3
+    },
+    {
+      "date": "2025-02-16",
+      "matchday": 67,
+      "pnl": 11.66,
+      "cumulative_pnl": -62.96,
+      "bankroll": 937.04,
+      "value_bets": 1,
+      "matches": 5
+    },
+    {
+      "date": "2025-02-21",
+      "matchday": 68,
+      "pnl": 0.0,
+      "cumulative_pnl": -62.96,
+      "bankroll": 937.04,
+      "value_bets": 0,
+      "matches": 1
+    },
+    {
+      "date": "2025-02-22",
+      "matchday": 69,
+      "pnl": -18.74,
+      "cumulative_pnl": -81.7,
+      "bankroll": 918.3,
+      "value_bets": 1,
+      "matches": 3
+    },
+    {
+      "date": "2025-02-23",
+      "matchday": 70,
+      "pnl": -18.37,
+      "cumulative_pnl": -100.07,
+      "bankroll": 899.93,
+      "value_bets": 1,
+      "matches": 5
+    },
+    {
+      "date": "2025-02-28",
+      "matchday": 71,
+      "pnl": 0.0,
+      "cumulative_pnl": -100.07,
+      "bankroll": 899.93,
+      "value_bets": 0,
+      "matches": 1
+    },
+    {
+      "date": "2025-03-01",
+      "matchday": 72,
+      "pnl": 0.0,
+      "cumulative_pnl": -100.07,
+      "bankroll": 899.93,
+      "value_bets": 0,
+      "matches": 3
+    },
+    {
+      "date": "2025-03-02",
+      "matchday": 73,
+      "pnl": 0.0,
+      "cumulative_pnl": -100.07,
+      "bankroll": 899.93,
+      "value_bets": 0,
+      "matches": 5
+    },
+    {
+      "date": "2025-03-07",
+      "matchday": 74,
+      "pnl": 0.0,
+      "cumulative_pnl": -100.07,
+      "bankroll": 899.93,
+      "value_bets": 0,
+      "matches": 1
+    },
+    {
+      "date": "2025-03-08",
+      "matchday": 75,
+      "pnl": 0.0,
+      "cumulative_pnl": -100.07,
+      "bankroll": 899.93,
+      "value_bets": 0,
+      "matches": 3
+    },
+    {
+      "date": "2025-03-09",
+      "matchday": 76,
+      "pnl": 32.76,
+      "cumulative_pnl": -67.31,
+      "bankroll": 932.69,
+      "value_bets": 1,
+      "matches": 5
+    },
+    {
+      "date": "2025-03-14",
+      "matchday": 77,
+      "pnl": 0.0,
+      "cumulative_pnl": -67.31,
+      "bankroll": 932.69,
+      "value_bets": 0,
+      "matches": 1
+    },
+    {
+      "date": "2025-03-15",
+      "matchday": 78,
+      "pnl": -18.65,
+      "cumulative_pnl": -85.96,
+      "bankroll": 914.04,
+      "value_bets": 1,
+      "matches": 3
+    },
+    {
+      "date": "2025-03-16",
+      "matchday": 79,
+      "pnl": 0.0,
+      "cumulative_pnl": -85.96,
+      "bankroll": 914.04,
+      "value_bets": 0,
+      "matches": 5
+    },
+    {
+      "date": "2025-03-28",
+      "matchday": 80,
+      "pnl": 0.0,
+      "cumulative_pnl": -85.96,
+      "bankroll": 914.04,
+      "value_bets": 0,
+      "matches": 1
+    },
+    {
+      "date": "2025-03-29",
+      "matchday": 81,
+      "pnl": 0.0,
+      "cumulative_pnl": -85.96,
+      "bankroll": 914.04,
+      "value_bets": 0,
+      "matches": 3
+    },
+    {
+      "date": "2025-03-30",
+      "matchday": 82,
+      "pnl": 17.0,
+      "cumulative_pnl": -68.96,
+      "bankroll": 931.04,
+      "value_bets": 1,
+      "matches": 5
+    },
+    {
+      "date": "2025-04-04",
+      "matchday": 83,
+      "pnl": 0.0,
+      "cumulative_pnl": -68.96,
+      "bankroll": 931.04,
+      "value_bets": 0,
+      "matches": 1
+    },
+    {
+      "date": "2025-04-05",
+      "matchday": 84,
+      "pnl": 0.0,
+      "cumulative_pnl": -68.96,
+      "bankroll": 931.04,
+      "value_bets": 0,
+      "matches": 3
+    },
+    {
+      "date": "2025-04-06",
+      "matchday": 85,
+      "pnl": 0.0,
+      "cumulative_pnl": -68.96,
+      "bankroll": 931.04,
+      "value_bets": 0,
+      "matches": 5
+    },
+    {
+      "date": "2025-04-11",
+      "matchday": 86,
+      "pnl": 0.0,
+      "cumulative_pnl": -68.96,
+      "bankroll": 931.04,
+      "value_bets": 0,
+      "matches": 1
+    },
+    {
+      "date": "2025-04-12",
+      "matchday": 87,
+      "pnl": 19.18,
+      "cumulative_pnl": -49.78,
+      "bankroll": 950.22,
+      "value_bets": 1,
+      "matches": 3
+    },
+    {
+      "date": "2025-04-13",
+      "matchday": 88,
+      "pnl": -37.62,
+      "cumulative_pnl": -87.4,
+      "bankroll": 912.6,
+      "value_bets": 2,
+      "matches": 4
+    },
+    {
+      "date": "2025-04-18",
+      "matchday": 89,
+      "pnl": 0.0,
+      "cumulative_pnl": -87.4,
+      "bankroll": 912.6,
+      "value_bets": 0,
+      "matches": 1
+    },
+    {
+      "date": "2025-04-19",
+      "matchday": 90,
+      "pnl": 0.0,
+      "cumulative_pnl": -87.4,
+      "bankroll": 912.6,
+      "value_bets": 0,
+      "matches": 3
+    },
+    {
+      "date": "2025-04-20",
+      "matchday": 91,
+      "pnl": 0.0,
+      "cumulative_pnl": -87.4,
+      "bankroll": 912.6,
+      "value_bets": 0,
+      "matches": 5
+    },
+    {
+      "date": "2025-04-22",
+      "matchday": 92,
+      "pnl": 0.0,
+      "cumulative_pnl": -87.4,
+      "bankroll": 912.6,
+      "value_bets": 0,
+      "matches": 1
+    },
+    {
+      "date": "2025-04-25",
+      "matchday": 93,
+      "pnl": 0.0,
+      "cumulative_pnl": -87.4,
+      "bankroll": 912.6,
+      "value_bets": 0,
+      "matches": 1
+    },
+    {
+      "date": "2025-04-26",
+      "matchday": 94,
+      "pnl": -18.25,
+      "cumulative_pnl": -105.65,
+      "bankroll": 894.35,
+      "value_bets": 1,
+      "matches": 3
+    },
+    {
+      "date": "2025-04-27",
+      "matchday": 95,
+      "pnl": 0.0,
+      "cumulative_pnl": -105.65,
+      "bankroll": 894.35,
+      "value_bets": 0,
+      "matches": 5
+    },
+    {
+      "date": "2025-05-02",
+      "matchday": 96,
+      "pnl": 0.0,
+      "cumulative_pnl": -105.65,
+      "bankroll": 894.35,
+      "value_bets": 0,
+      "matches": 1
+    },
+    {
+      "date": "2025-05-03",
+      "matchday": 97,
+      "pnl": 20.93,
+      "cumulative_pnl": -84.72,
+      "bankroll": 915.28,
+      "value_bets": 1,
+      "matches": 3
+    },
+    {
+      "date": "2025-05-04",
+      "matchday": 98,
+      "pnl": 0.0,
+      "cumulative_pnl": -84.72,
+      "bankroll": 915.28,
+      "value_bets": 0,
+      "matches": 5
+    },
+    {
+      "date": "2025-05-10",
+      "matchday": 99,
+      "pnl": 15.2,
+      "cumulative_pnl": -69.52,
+      "bankroll": 930.48,
+      "value_bets": 1,
+      "matches": 9
+    },
+    {
+      "date": "2025-05-17",
+      "matchday": 100,
+      "pnl": 0.0,
+      "cumulative_pnl": -69.52,
+      "bankroll": 930.48,
+      "value_bets": 0,
+      "matches": 9
+    }
+  ]
+}
