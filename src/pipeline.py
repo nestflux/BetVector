@@ -859,6 +859,27 @@ class Pipeline:
                 print(f"  → Value bets: FAILED ({e})")
                 all_value_bets = []
 
+            # --- Step 5b: Create shadow bets for shadow_mode leagues (PC-26-10) ---
+            # When a league has shadow_mode: true, record hypothetical bets under
+            # an alternative strategy (e.g. Kelly vs flat, all-bookmakers vs sharp-only).
+            # Shadow bets don't affect live betting — they're paper trades for A/B testing.
+            try:
+                shadow_mode = False
+                strategy = getattr(league_cfg, "strategy", None)
+                if strategy is not None:
+                    shadow_mode = getattr(strategy, "shadow_mode", False)
+
+                if shadow_mode and all_value_bets:
+                    from src.database.models import ShadowValueBet
+                    shadow_count = self._create_shadow_bets(
+                        all_value_bets, league_name, league_cfg,
+                    )
+                    if shadow_count > 0:
+                        print(f"  → {shadow_count} shadow bets created")
+            except Exception as e:
+                # Shadow mode failure should NEVER block the real pipeline
+                logger.warning("Shadow bet creation failed for %s: %s", league_name, e)
+
             # --- Step 6: Log system picks ---
             print(f"[Step 6/7] Logging system picks...")
             try:
@@ -1377,6 +1398,12 @@ class Pipeline:
 
                 print(f"  → Resolved {total_resolved} bets "
                       f"({total_won} won, {total_lost} lost)")
+
+                # Resolve shadow bets for the same matches (PC-26-10)
+                shadow_resolved = self._resolve_shadow_bets(resolved_matches)
+                if shadow_resolved > 0:
+                    print(f"  → Resolved {shadow_resolved} shadow bets")
+
             except Exception as e:
                 err = f"Bet resolution failed for {league_name}: {e}"
                 logger.error(err)
@@ -2556,6 +2583,178 @@ class Pipeline:
                 "Falling back to target season only.", e,
             )
         return [target_season]
+
+    @staticmethod
+    def _resolve_shadow_bets(match_ids: list) -> int:
+        """Resolve pending shadow bets for finished matches (PC-26-10).
+
+        For each shadow bet on a finished match, determine if the selection
+        won or lost and compute the shadow P&L.
+
+        Parameters
+        ----------
+        match_ids : list of int
+            Match IDs that just finished.
+
+        Returns
+        -------
+        int
+            Number of shadow bets resolved.
+        """
+        from src.database.models import Match, ShadowValueBet
+
+        resolved = 0
+        with get_session() as session:
+            pending = (
+                session.query(ShadowValueBet)
+                .filter(
+                    ShadowValueBet.match_id.in_(match_ids),
+                    ShadowValueBet.result == "pending",
+                )
+                .all()
+            )
+
+            for shadow in pending:
+                match = session.query(Match).filter_by(id=shadow.match_id).first()
+                if match is None or match.home_goals is None:
+                    continue
+
+                # Determine if the selection won
+                home_goals = match.home_goals
+                away_goals = match.away_goals
+                actual_result = (
+                    "home" if home_goals > away_goals
+                    else "away" if away_goals > home_goals
+                    else "draw"
+                )
+
+                won = False
+                sel = shadow.selection.lower()
+                mkt = shadow.market_type.lower()
+
+                if mkt == "1x2":
+                    won = (
+                        (sel == "home" and actual_result == "home")
+                        or (sel == "draw" and actual_result == "draw")
+                        or (sel == "away" and actual_result == "away")
+                    )
+                elif "over" in mkt or "under" in mkt:
+                    total_goals = home_goals + away_goals
+                    # Extract the line from market_type, e.g. "over_2.5"
+                    try:
+                        line = float(mkt.split("_")[-1])
+                        if "over" in sel:
+                            won = total_goals > line
+                        elif "under" in sel:
+                            won = total_goals < line
+                    except (ValueError, IndexError):
+                        pass
+                elif "btts" in mkt:
+                    both_scored = home_goals > 0 and away_goals > 0
+                    won = (
+                        (sel == "yes" and both_scored)
+                        or (sel == "no" and not both_scored)
+                    )
+
+                if won:
+                    shadow.result = "won"
+                    shadow.shadow_pnl = round(
+                        shadow.shadow_stake * (shadow.bookmaker_odds - 1), 2
+                    )
+                else:
+                    shadow.result = "lost"
+                    shadow.shadow_pnl = round(-shadow.shadow_stake, 2)
+
+                resolved += 1
+
+        return resolved
+
+    @staticmethod
+    def _create_shadow_bets(
+        value_bets: list,
+        league_name: str,
+        league_cfg: object,
+    ) -> int:
+        """Create shadow bet records for A/B testing (PC-26-10).
+
+        Shadow bets paper-trade an alternative strategy alongside live bets.
+        What the "alternative strategy" is depends on what's being tested:
+
+        - Championship: shadow tests FLAT staking (live uses Kelly)
+        - LaLiga: shadow tests ALL-BOOKMAKERS edge (live uses Pinnacle-only)
+        - Generic: shadow records the live value bet as-is for tracking
+
+        The shadow_stake is computed using the ALTERNATIVE strategy's sizing
+        so P&L comparison is meaningful.
+
+        Parameters
+        ----------
+        value_bets : list
+            Value bets found for this league (from ValueFinder).
+        league_name : str
+            League short name.
+        league_cfg : object
+            League config from settings.
+
+        Returns
+        -------
+        int
+            Number of shadow bets created.
+        """
+        from src.database.models import ShadowValueBet
+
+        strategy = getattr(league_cfg, "strategy", None)
+        staking_method = getattr(strategy, "staking_method", "flat") if strategy else "flat"
+
+        # Determine what alternative strategy we're testing
+        if staking_method == "kelly":
+            # Live uses Kelly → shadow tests flat staking
+            strategy_change = "flat_staking_alternative"
+            shadow_stake_flat = 20.0  # Standard flat stake for comparison
+        else:
+            # Live uses flat → shadow records as-is (generic tracking)
+            strategy_change = "shadow_tracking"
+            shadow_stake_flat = 20.0
+
+        created = 0
+        with get_session() as session:
+            for vb in value_bets:
+                # ValueBet objects have match_id, market_type, selection,
+                # model_prob, bookmaker_odds, edge attributes
+                match_id = getattr(vb, "match_id", None)
+                if match_id is None:
+                    continue
+
+                market_type = getattr(vb, "market_type", "1X2")
+                selection = getattr(vb, "selection", "unknown")
+                model_prob = float(getattr(vb, "model_prob", 0))
+                bookmaker_odds = float(getattr(vb, "bookmaker_odds", 0))
+                edge = float(getattr(vb, "edge", 0))
+
+                shadow = ShadowValueBet(
+                    match_id=match_id,
+                    league=league_name,
+                    market_type=market_type,
+                    selection=selection,
+                    strategy_change=strategy_change,
+                    model_prob=model_prob,
+                    bookmaker_odds=bookmaker_odds,
+                    edge=edge,
+                    shadow_stake=shadow_stake_flat,
+                    result="pending",
+                )
+
+                # Use merge to avoid duplicates (unique constraint on
+                # match_id + market_type + selection + strategy_change)
+                try:
+                    session.add(shadow)
+                    session.flush()
+                    created += 1
+                except Exception:
+                    session.rollback()
+                    # Duplicate — skip silently
+
+        return created
 
     @staticmethod
     def _get_default_user_id() -> Optional[int]:

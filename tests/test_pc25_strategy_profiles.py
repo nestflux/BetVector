@@ -639,9 +639,9 @@ class TestStakeMultiplierConfig:
         """Ligue1 (🔴 unprofitable) gets 0.5× stake multiplier."""
         assert self.league_map["Ligue1"]["strategy"]["stake_multiplier"] == 0.5
 
-    def test_bundesliga_multiplier_is_0_5(self):
-        """Bundesliga (🔴 unprofitable) gets 0.5× stake multiplier."""
-        assert self.league_map["Bundesliga"]["strategy"]["stake_multiplier"] == 0.5
+    def test_bundesliga_multiplier_is_1_0(self):
+        """Bundesliga (🟡 promising, PC-26-09 upgrade) gets 1.0× stake multiplier."""
+        assert self.league_map["Bundesliga"]["strategy"]["stake_multiplier"] == 1.0
 
     def test_seriea_multiplier_is_0_5(self):
         """SerieA (🔴 unprofitable) gets 0.5× stake multiplier."""
