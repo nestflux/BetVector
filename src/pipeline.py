@@ -1739,12 +1739,15 @@ class Pipeline:
                 logger.warning("League not found in DB: %s", league_cfg.short_name)
                 continue
 
-            # Load all historical seasons for this league
+            # Load all historical seasons for this league.
+            # Tag each row with league short name so we can apply
+            # per-league training_weight later (PC-26-06).
             for season in getattr(league_cfg, "seasons", []):
                 try:
                     feat_df = compute_all_features(league_id, season)
                     if feat_df.empty:
                         continue
+                    feat_df["_league"] = league_cfg.short_name
                     all_feature_dfs.append(feat_df)
                     logger.debug(
                         "Loaded %d feature rows for %s %s",
@@ -1792,9 +1795,33 @@ class Pipeline:
             len(combined_features), len(results_df), len(active_leagues),
         )
 
+        # --- Build per-league sample weights (PC-26-06) ---
+        # Each league's model_params.training_weight controls how much
+        # emphasis its data gets during XGBoost training.  Championship
+        # gets 2.0× (market inefficiency → richer signal), La Liga 1.5×
+        # (sharp-only filtering shrinks sample), others 1.0× (standard).
+        # The _league column was added during feature loading above.
+        league_weight_map: Dict[str, float] = {}
+        for league_cfg in active_leagues:
+            tw = 1.0
+            mp = getattr(league_cfg, "model_params", None)
+            if mp is not None:
+                tw = float(getattr(mp, "training_weight", 1.0))
+            league_weight_map[league_cfg.short_name] = tw
+
+        sample_weight = None
+        if "_league" in combined_features.columns:
+            sample_weight = combined_features["_league"].map(league_weight_map).fillna(1.0)
+            non_default = {k: v for k, v in league_weight_map.items() if v != 1.0}
+            if non_default:
+                logger.info(
+                    "Per-league training weights: %s (others 1.0×)",
+                    ", ".join(f"{k}={v}×" for k, v in non_default.items()),
+                )
+
         # --- Train the model ---
         try:
-            model.train(combined_features, results_df)
+            model.train(combined_features, results_df, sample_weight=sample_weight)
         except ValueError as exc:
             msg = f"Training failed: {exc}"
             logger.error(msg)

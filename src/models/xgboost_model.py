@@ -155,6 +155,7 @@ class XGBoostModel(BaseModel):
         self,
         features: pd.DataFrame,
         results: pd.DataFrame,
+        sample_weight: Optional[pd.Series] = None,
     ) -> None:
         """Train XGBoost regressors for home and away expected goals.
 
@@ -168,10 +169,22 @@ class XGBoostModel(BaseModel):
         features : pd.DataFrame
             Training features from ``compute_all_features()``.
             Must contain ``match_id`` and home_*/away_* feature columns.
+            May contain a ``_league`` column (dropped before training).
         results : pd.DataFrame
             Match results with columns: ``match_id``, ``home_goals``, ``away_goals``.
+        sample_weight : pd.Series, optional
+            Per-row training weight (PC-26-06).  Rows from leagues with higher
+            ``training_weight`` (e.g. Championship 2.0×) contribute more to
+            gradient updates.  If None, all rows weighted equally.
         """
         logger.info("Training XGBoost model on %d matches", len(features))
+
+        # Preserve sample_weight alignment before merge — weights are indexed
+        # to the original features DataFrame, so we need to carry them through
+        # the merge and dropna steps.
+        if sample_weight is not None:
+            features = features.copy()
+            features["_sample_weight"] = sample_weight.values
 
         # Merge features with results
         df = features.merge(results, on="match_id", how="inner")
@@ -202,6 +215,18 @@ class XGBoostModel(BaseModel):
         self._feature_cols = sorted(
             set(home_feature_cols) | set(away_feature_cols)
         )
+
+        # Extract per-row sample weights (PC-26-06) before selecting features.
+        # These survived the merge + dropna because they were added as a column.
+        w = None
+        if "_sample_weight" in df.columns:
+            w = df["_sample_weight"].astype(float).values
+            unique_w = set(w)
+            if len(unique_w) > 1:
+                logger.info(
+                    "Per-league sample weights active: %d unique values (min=%.1f, max=%.1f)",
+                    len(unique_w), min(w), max(w),
+                )
 
         # Prepare feature matrices.
         # XGBoost handles NaN natively (routes to the optimal split direction),
@@ -242,6 +267,11 @@ class XGBoostModel(BaseModel):
             y_away_train = y_away.iloc[:-n_val]
             eval_set_away = [(X_away.iloc[-n_val:], y_away.iloc[-n_val:])]
 
+            # Split sample weights to match train/val split (PC-26-06)
+            w_train = w[:-n_val] if w is not None else None
+            # Validation set is unweighted — we want to measure true
+            # predictive accuracy, not reweight the loss function.
+
             logger.info(
                 "Early stopping enabled: %d val matches held out (temporal split)",
                 n_val,
@@ -249,6 +279,7 @@ class XGBoostModel(BaseModel):
         else:
             X_home_train, y_home_train = X_home, y_home
             X_away_train, y_away_train = X_away, y_away
+            w_train = w  # Full weights when no val split
 
         # --- Fit home goals model ---
         # objective="count:poisson" uses a Poisson regression loss, which is
@@ -278,6 +309,8 @@ class XGBoostModel(BaseModel):
         fit_kwargs_home: Dict = {"verbose": False}
         if eval_set_home is not None:
             fit_kwargs_home["eval_set"] = eval_set_home
+        if w_train is not None:
+            fit_kwargs_home["sample_weight"] = w_train
         self._home_model.fit(X_home_train, y_home_train, **fit_kwargs_home)
 
         # --- Fit away goals model ---
@@ -303,6 +336,8 @@ class XGBoostModel(BaseModel):
         fit_kwargs_away: Dict = {"verbose": False}
         if eval_set_away is not None:
             fit_kwargs_away["eval_set"] = eval_set_away
+        if w_train is not None:
+            fit_kwargs_away["sample_weight"] = w_train
         self._away_model.fit(X_away_train, y_away_train, **fit_kwargs_away)
 
         self._home_feature_cols = home_feature_cols

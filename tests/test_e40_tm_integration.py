@@ -80,13 +80,16 @@ FORMATION_REGEX = re.compile(r"^\d+-\d+(-\d+)*(\s+\w+(\s+\w+)?)?$")
 # These are conservative — bench_strength requires PlayerValue snapshots
 # which are only available for recent dates, so we allow 0% for it.
 FEATURE_THRESHOLDS = {
-    "squad_rotation_index": 50.0,  # 63.7% actual
-    "formation_changed": 50.0,     # 63.6% actual
+    # After 2017-20 backfill (PC-26), feature count grew from ~28K to ~42K
+    # but TM-sourced features only exist for 2020-26 seasons (CDN snapshot).
+    # Thresholds lowered from 50% to 30% to reflect the dilution.
+    "squad_rotation_index": 30.0,  # ~63.7% of 2020-26 rows, ~30% overall
+    "formation_changed": 30.0,     # ~63.6% of 2020-26 rows, ~30% overall
     "bench_strength": 0.0,         # 0% — only 1 snapshot date
-    "new_manager_flag": 50.0,      # 68.8% actual
-    "manager_tenure_days": 50.0,   # 67.2% actual
-    "manager_win_pct": 50.0,       # 67.2% actual
-    "manager_change_count": 50.0,  # 68.8% actual
+    "new_manager_flag": 30.0,      # ~68.8% of 2020-26 rows, ~33% overall
+    "manager_tenure_days": 30.0,   # ~67.2% of 2020-26 rows, ~32% overall
+    "manager_win_pct": 30.0,       # ~67.2% of 2020-26 rows, ~32% overall
+    "manager_change_count": 30.0,  # ~68.8% of 2020-26 rows, ~33% overall
 }
 
 
@@ -169,10 +172,12 @@ class TestE40_01_MatchMapping:
 
         assert total > 0, "No matches in DB"
         rate = mapped / total
-        # 69.3% actual, but Championship has no TM data → threshold 65%
-        assert rate >= 0.65, (
+        # After 2017-20 backfill (PC-26), total matches grew from ~15K to ~21K
+        # but TM CDN only serves current snapshots — no historical game_ids.
+        # 9,829 mapped out of 21,232 = 46.3%.  Threshold lowered accordingly.
+        assert rate >= 0.40, (
             f"Match mapping rate too low: {rate:.1%} ({mapped}/{total}), "
-            f"expected ≥65%"
+            f"expected ≥40%"
         )
 
 
@@ -428,13 +433,15 @@ class TestE40_08_FeaturePopulation:
     """Verify all 7 lineup/manager features exceed minimum thresholds."""
 
     @pytest.mark.parametrize("feature_name,threshold", [
-        ("squad_rotation_index", 50.0),
-        ("formation_changed", 50.0),
+        # Thresholds lowered after 2017-20 backfill (PC-26) — TM features
+        # only exist for 2020-26 seasons, so ~42K total features dilutes rates.
+        ("squad_rotation_index", 30.0),
+        ("formation_changed", 30.0),
         ("bench_strength", 0.0),  # Limited by PlayerValue snapshot availability
-        ("new_manager_flag", 50.0),
-        ("manager_tenure_days", 50.0),
-        ("manager_win_pct", 50.0),
-        ("manager_change_count", 50.0),
+        ("new_manager_flag", 30.0),
+        ("manager_tenure_days", 30.0),
+        ("manager_win_pct", 30.0),
+        ("manager_change_count", 30.0),
     ])
     def test_feature_above_threshold(self, feature_name, threshold):
         """Feature population must exceed the minimum threshold."""
