@@ -877,12 +877,20 @@ class TestShadowModeConfig:
                 f"{lg['short_name']} shadow_mode should be bool, got {type(sm)}"
             )
 
-    def test_all_leagues_start_with_shadow_off(self):
-        """All leagues start with shadow_mode=False (manual opt-in only)."""
+    def test_shadow_mode_activation(self):
+        """PC-26-11/12: Championship + LaLiga have shadow_mode=True, others False."""
+        shadow_leagues = {"Championship", "LaLiga"}
         for lg in self.config["leagues"]:
-            assert lg["strategy"]["shadow_mode"] is False, (
-                f"{lg['short_name']} should start with shadow_mode=False"
-            )
+            name = lg["short_name"]
+            sm = lg["strategy"]["shadow_mode"]
+            if name in shadow_leagues:
+                assert sm is True, (
+                    f"{name} should have shadow_mode=True (PC-26-11/12)"
+                )
+            else:
+                assert sm is False, (
+                    f"{name} should have shadow_mode=False"
+                )
 
 
 class TestShadowBetStorage:

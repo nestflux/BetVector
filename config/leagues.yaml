@@ -96,7 +96,10 @@ leagues:
       max_daily_bets: 10       # Per-league daily cap
       auto_bet: true           # 🟢 tier — system recommends betting
       clv_tracking: true       # Track CLV to confirm edge persistence
-      shadow_mode: false       # PC-25-12: shadow mode off by default
+      shadow_mode: true        # PC-26-11: Shadow tests FLAT staking vs live Kelly.
+      #   Live bets use Kelly (below). Shadow bets paper-trade flat staking.
+      #   After 4 weeks, generate_shadow_comparison() evaluates if Kelly
+      #   actually outperforms flat. If not, revert to flat.
       # PC-25-15: Quarter-Kelly for the only 🟢 profitable league.
       # Max 3% per bet (not 5%) and auto-rollback if drawdown exceeds 15%.
       staking_method: kelly    # Kelly staking (verified profitable, CI [3.5%, 23.0%])
@@ -150,7 +153,9 @@ leagues:
       max_daily_bets: 8        # Per-league daily cap
       auto_bet: false          # 🟡 tier — analysis only (CI [-9.2%, +50.3%] crosses zero)
       clv_tracking: true       # Critical — LaLiga CLV validates the sharp-only edge
-      shadow_mode: false       # PC-25-12: shadow mode off by default
+      shadow_mode: true        # PC-26-12: Shadow tests ALL-BOOKMAKERS edge vs live Pinnacle-only.
+      #   Live bets use sharp_only: true (Pinnacle). Shadow bets compute edge
+      #   against all bookmakers to validate the +21pp sharp-only advantage.
       staking_method: flat     # PC-25-15: flat staking (🟡 tier)
     # PC-25-13: Per-league model parameters for Poisson prediction
     model_params:
