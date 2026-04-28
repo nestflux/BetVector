@@ -9556,3 +9556,178 @@ PC-26-01 → PC-26-02 → PC-26-03 → PC-26-04 → PC-26-05 → PC-26-07 → PC
                                                     └── PC-26-06 ──┘
 CLV track (parallel): PC-26-02 → PC-26-14 → PC-26-15 → PC-26-16
 ```
+
+---
+
+## PC-27 — Cloud Re-migration: Hybrid Cloud Dashboard + Local Pipeline
+
+**Status:** IN PROGRESS (5 issues)
+**Context:** Post-PC-13, the database was pulled back to local SQLite when the
+old Neon free-tier project hit its 0.5 GB cap during a backfill burst. Six
+weeks of operational data (Mar 9 → Apr 28) now lives only on the owner's
+laptop, and the Streamlit Community Cloud app remains deployed but cannot
+reach a SQLite file on a local machine. This epic restores the cloud-side
+dashboard while keeping the morning pipeline on launchd to stay inside
+GitHub Actions' 2,000 min/mo private-repo free tier (morning pipeline
+alone is ~85 min/day → 2,550 min/mo, exceeding the cap).
+
+**Architecture target:**
+```
+Local laptop (launchd)  ──writes──▶  Neon Postgres  ◀──reads──  Streamlit Cloud
+                                          ▲
+                                          └──reads──  Local dashboard (optional)
+```
+
+**Pre-conditions verified during planning:**
+- Old Neon project `ep-wispy-frog-ai2uzg15` is still active (24 tables, 11.6K
+  matches, 172.6K odds — all stale, last result Mar 9)
+- One historical `user_placed` bet exists on Neon (id=1330, Man Utd v Aston
+  Villa, +£52.90 PnL) that must be preserved across the wipe
+- `src/database/db.py` already implements 3-priority connection resolution
+  (DATABASE_URL env → Streamlit secrets → SQLite config) from E33 — no code
+  changes needed in dashboard or pipeline to switch backends
+- Local SQLite is 181 MB; Postgres equivalent estimated at 270–360 MB,
+  fitting Neon free tier (500 MB) with ~12 months headroom at current
+  growth rate
+- Existing Streamlit Community Cloud app is already deployed; only its
+  secrets need updating
+
+**Out of scope (deferred):**
+- Moving any pipeline to GitHub Actions (Phase 2 — separate epic when
+  morning pipeline is profiled and trimmed under ~55 min, or when budget
+  permits a paid Neon plan)
+- Migrating the 793 MB raw cache (`data/raw/`) — reproducible from APIs
+- Migrating model pickles (`data/models/`) — committed to repo separately
+
+---
+
+### Phase 1: Database Migration
+
+---
+
+**PC-27-01 — SQLite → Neon Postgres Migration**
+
+Wipe the stale Neon project and bulk-copy the local SQLite database, in
+FK-safe order, with sequence resync and user_placed bet preservation.
+
+MP refs: §5 Architecture (DB is single source of truth), §6 Database Schema
+
+**Acceptance Criteria (PC-27-01):**
+- [ ] Migration script `scripts/migrate_sqlite_to_neon.py` exists, idempotent,
+      reads `NEON_DSN` from env (never hardcoded)
+- [ ] All `user_placed` bets on Neon (currently 1) are backed up to JSON
+      before any destructive operation
+- [ ] Neon `public` schema dropped + recreated cleanly
+- [ ] All 24 tables created via `Base.metadata.create_all()` (no manual DDL)
+- [ ] Every table from local SQLite copied to Neon in FK-safe order
+      (`Base.metadata.sorted_tables`)
+- [ ] Postgres sequences re-synced via `setval()` so future INSERTs do not
+      collide with imported IDs
+- [ ] User-placed bets restored after migration
+- [ ] Row counts verified table-by-table; bet_log counted as match if
+      `neon_count == sqlite_count + restored_user_placed_count`
+- [ ] Total runtime < 30 minutes
+- [ ] Script is rerunnable end-to-end on a partial failure
+
+---
+
+### Phase 2: Dashboard Cutover
+
+---
+
+**PC-27-02 — Verify Dashboard Against Neon Locally**
+
+Before changing any cloud config, confirm the Streamlit dashboard renders
+correctly against Neon by running it locally with `DATABASE_URL` set.
+
+MP refs: §13 Delivery Layer
+
+**Acceptance Criteria (PC-27-02):**
+- [ ] `DATABASE_URL=<neon> streamlit run src/delivery/dashboard.py` starts
+      without errors
+- [ ] Login gate accepts a known credential
+- [ ] Today's Picks page renders with the same row count as the local
+      SQLite version (smoke test for parity)
+- [ ] Deep Dive page loads at least one fixture without errors
+- [ ] Model Health page shows non-empty Brier scores
+- [ ] No N+1 / connection-storm issues — total page render time under 8s on
+      a warm Neon connection
+
+---
+
+**PC-27-03 — Update Streamlit Cloud Secrets + Reboot**
+
+Point the existing Streamlit Community Cloud app at the freshly migrated
+Neon database by updating its secrets, then trigger a redeploy.
+
+MP refs: §13 Delivery Layer
+
+**Acceptance Criteria (PC-27-03):**
+- [ ] `DATABASE_URL` set in the Streamlit Cloud app's secrets panel
+- [ ] All other required secrets present (GMAIL_APP_PASSWORD,
+      DASHBOARD_PASSWORD if used, any API keys read by the dashboard)
+- [ ] App redeployed via Streamlit Cloud "Reboot" button
+- [ ] Public URL loads successfully (login gate visible)
+- [ ] After login, Today's Picks renders with current data
+- [ ] No `OperationalError` or connection errors in the Streamlit Cloud logs
+      in the first 5 minutes after redeploy
+
+---
+
+### Phase 3: Pipeline Cutover
+
+---
+
+**PC-27-04 — Point Local Pipeline at Neon**
+
+Add `DATABASE_URL` to the local `.env` so the launchd-driven morning,
+midday, and evening pipelines write to Neon instead of local SQLite. Keep
+local SQLite intact as a backup until 7 clean days of cloud writes verified.
+
+MP refs: §5 Architecture, §11 Self-Improvement
+
+**Acceptance Criteria (PC-27-04):**
+- [ ] `DATABASE_URL` added to `/Users/kyng/Projects/BetVector/.env`
+      (never committed)
+- [ ] `python run_pipeline.py midday` runs successfully against Neon
+      (smallest pipeline first, lowest blast radius)
+- [ ] Row counts on Neon increase as expected after the run
+- [ ] Local SQLite untouched (still 181 MB, no new writes) — verified via
+      mtime check
+- [ ] Morning pipeline runs successfully against Neon the next day
+- [ ] Evening pipeline runs successfully against Neon the next evening
+- [ ] No `database is locked` or `connection refused` errors in 24 h
+
+---
+
+### Phase 4: Verification
+
+---
+
+**PC-27-05 — Cloud Dashboard Reads Live Pipeline Output**
+
+Close the loop: confirm that data written by the local pipeline to Neon
+appears in the Streamlit Cloud dashboard within a single pipeline cycle.
+
+MP refs: §13 Delivery Layer
+
+**Acceptance Criteria (PC-27-05):**
+- [ ] After a morning pipeline run, today's value bets visible on the
+      Streamlit Cloud dashboard within 10 minutes
+- [ ] Email digest still arrives (smtplib path unaffected by DB host)
+- [ ] After an evening pipeline run, resolved bet PnL visible on the cloud
+      dashboard
+- [ ] 7 consecutive days of cloud-dashboard verification without a
+      regression (manual log entry suffices)
+- [ ] PROJECT primer.md updated: "BetVector now runs on hybrid cloud
+      (Neon + Streamlit Cloud, local pipeline)"
+
+---
+
+### PC-27 Critical Path
+
+```
+PC-27-01 (migrate)  →  PC-27-02 (local verify)  →  PC-27-03 (cloud redeploy)
+                                                   →  PC-27-04 (pipeline cutover)
+                                                   →  PC-27-05 (E2E verify, 7 days)
+```
