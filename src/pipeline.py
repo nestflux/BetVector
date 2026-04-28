@@ -574,6 +574,17 @@ class Pipeline:
                         f"  → The Odds API: {len(the_odds_api_df)} odds records "
                         f"from {the_odds_api_df['bookmaker'].nunique()} bookmakers"
                     )
+                elif getattr(odds_api_scraper, "_auth_failed", False):
+                    # 401/403 from the provider — surface as a real error so
+                    # it appears in the pipeline summary and email digest.
+                    err = (
+                        f"The Odds API AUTH FAILURE for {league_name}: "
+                        "THE_ODDS_API_KEY rejected (401/403). "
+                        "Rotate the key in .env or check plan status."
+                    )
+                    logger.error(err)
+                    errors.append(err)
+                    print(f"  → The Odds API: AUTH FAILURE — key rejected (401/403)")
                 else:
                     print("  → The Odds API: No odds data (budget may be exhausted)")
             except Exception as e:

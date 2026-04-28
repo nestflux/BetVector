@@ -48,6 +48,25 @@ from src.scrapers.base_scraper import BaseScraper, ScraperError
 
 logger = logging.getLogger(__name__)
 
+
+def _http_status_from_exc(exc: BaseException) -> Optional[int]:
+    """Walk the exception chain and return the HTTP status code, if any.
+
+    ``ScraperError`` wraps the underlying ``requests.HTTPError`` via ``raise
+    ... from exc``; the original status lives on ``HTTPError.response``.
+    Returns None when no HTTP status can be recovered (e.g. timeouts).
+    """
+    cur: Optional[BaseException] = exc
+    while cur is not None:
+        response = getattr(cur, "response", None)
+        if response is not None:
+            status = getattr(response, "status_code", None)
+            if isinstance(status, int):
+                return status
+        cur = cur.__cause__
+    return None
+
+
 # ============================================================================
 # Constants
 # ============================================================================
@@ -509,6 +528,12 @@ class TheOddsAPIScraper(BaseScraper):
         self._requests_remaining: Optional[int] = None
         self._requests_used: Optional[int] = None
 
+        # Auth-failure flag — set to True when the API returns 401/403 so the
+        # pipeline can distinguish a key/quota problem from an empty response.
+        # A silent "no data" used to be misreported as "budget exhausted" even
+        # when the real cause was a revoked/expired key.
+        self._auth_failed: bool = False
+
         # Warning threshold: log a warning when remaining requests drop below this
         self._warning_threshold: int = int(getattr(
             getattr(config.settings.scraping, "the_odds_api", None),
@@ -698,7 +723,21 @@ class TheOddsAPIScraper(BaseScraper):
             return data
 
         except ScraperError as exc:
-            logger.error("[the_odds_api] Failed to fetch odds: %s", exc)
+            # Distinguish auth failures (401/403) from generic scrape errors.
+            # 401 = key invalid/revoked, 403 = key valid but plan/quota denied.
+            # Either way, this is NOT a transient "budget exhausted" condition —
+            # it requires owner intervention (rotate key or check plan).
+            status = _http_status_from_exc(exc)
+            if status in (401, 403):
+                self._auth_failed = True
+                logger.error(
+                    "[the_odds_api] AUTH FAILURE (HTTP %s) for sport_key=%s — "
+                    "THE_ODDS_API_KEY is invalid, revoked, or out of quota. "
+                    "Check the-odds-api.com dashboard and rotate the key in .env.",
+                    status, key,
+                )
+            else:
+                logger.error("[the_odds_api] Failed to fetch odds: %s", exc)
             return None
         except (json.JSONDecodeError, ValueError) as exc:
             logger.error(
