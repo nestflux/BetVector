@@ -959,6 +959,68 @@ def update_match_results(
     return summary
 
 
+def cleanup_stale_stubs() -> Dict[str, int]:
+    """Mark past scheduled matches as 'postponed' when a finished duplicate exists.
+
+    When a fixture is rescheduled (e.g. from Saturday to Sunday), the original
+    stub stays as 'scheduled' forever because ``update_match_results`` matches
+    by exact date.  This function finds those orphaned stubs and marks them
+    'postponed' so they stop polluting dashboards and reports.
+
+    Also marks very old stubs (>30 days past) with no duplicate as 'postponed'
+    — these are abandoned fixtures that were cancelled or indefinitely delayed.
+    """
+    from datetime import datetime, timedelta
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    cutoff_old = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+    rescheduled = 0
+    abandoned = 0
+
+    with get_session() as session:
+        stale = (
+            session.query(Match)
+            .filter(Match.status == "scheduled", Match.date < today)
+            .all()
+        )
+
+        for stub in stale:
+            dup = (
+                session.query(Match.id)
+                .filter(
+                    Match.home_team_id == stub.home_team_id,
+                    Match.away_team_id == stub.away_team_id,
+                    Match.league_id == stub.league_id,
+                    Match.status == "finished",
+                    Match.id != stub.id,
+                    Match.date >= (
+                        datetime.strptime(stub.date, "%Y-%m-%d")
+                        - timedelta(days=14)
+                    ).strftime("%Y-%m-%d"),
+                    Match.date <= (
+                        datetime.strptime(stub.date, "%Y-%m-%d")
+                        + timedelta(days=14)
+                    ).strftime("%Y-%m-%d"),
+                )
+                .first()
+            )
+
+            if dup:
+                stub.status = "postponed"
+                rescheduled += 1
+            elif stub.date < cutoff_old:
+                stub.status = "postponed"
+                abandoned += 1
+
+    summary = {"rescheduled": rescheduled, "abandoned": abandoned}
+    logger.info(
+        "cleanup_stale_stubs: %d rescheduled stubs → postponed, "
+        "%d abandoned stubs → postponed",
+        rescheduled, abandoned,
+    )
+    return summary
+
+
 # ============================================================================
 # Understat Stats Loader
 # ============================================================================

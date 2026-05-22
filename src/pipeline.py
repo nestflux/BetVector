@@ -910,6 +910,15 @@ class Pipeline:
                 errors.append(err)
                 print(f"  → System picks: FAILED ({e})")
 
+        # --- Cleanup: Mark stale fixture stubs as postponed ---
+        try:
+            from src.scrapers.loader import cleanup_stale_stubs
+            stub_result = cleanup_stale_stubs()
+            if stub_result["rescheduled"] or stub_result["abandoned"]:
+                print(f"  → Stale stubs cleaned: {stub_result}")
+        except Exception as e:
+            logger.warning("Stale stub cleanup failed: %s", e)
+
         # --- Step 7: Send morning picks emails ---
         emails_sent = self._send_emails("morning", run_id, errors)
         result.emails_sent = emails_sent
@@ -1390,6 +1399,15 @@ class Pipeline:
                 logger.error(err)
                 errors.append(err)
                 print(f"  → Soccerdata lineups: FAILED ({e})")
+
+            # Cleanup stale fixture stubs before resolving bets
+            try:
+                from src.scrapers.loader import cleanup_stale_stubs
+                stub_result = cleanup_stale_stubs()
+                if stub_result["rescheduled"] or stub_result["abandoned"]:
+                    print(f"  → Stale stubs cleaned: {stub_result}")
+            except Exception as e:
+                logger.warning("Stale stub cleanup failed: %s", e)
 
             # --- Step 2: Resolve pending bets ---
             print(f"[Step 2/3] Resolving pending bets...")

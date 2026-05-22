@@ -27,6 +27,9 @@ VENV_DIR="$PROJECT_DIR/venv"
 ENV_FILE="$PROJECT_DIR/.env"
 LOG_DIR="$PROJECT_DIR/data/logs"
 LOG_RETENTION_DAYS=30
+# Maximum runtime before the pipeline is killed (prevents zombie processes
+# when the laptop sleeps mid-run and launchd can't re-fire).
+TIMEOUT_SECONDS=3600  # 1 hour
 
 # ---------------------------------------------------------------------------
 # Validate arguments
@@ -89,12 +92,34 @@ echo "========================================" >> "$LOG_FILE"
 
 cd "$PROJECT_DIR"
 
-# Run pipeline, capturing both stdout and stderr to the log file.
-# Temporarily disable set -e so a pipeline failure doesn't skip the
-# end-of-run log entry and log rotation below.
+# Kill any leftover pipeline process from a previous run (zombie from laptop
+# sleep).  Only kills processes matching this exact mode to avoid stomping
+# on a concurrent morning/midday/evening run.
+pkill -f "python run_pipeline.py $MODE" 2>/dev/null || true
+sleep 1
+
+# Run pipeline with a timeout to prevent zombie processes.
+# If the pipeline exceeds TIMEOUT_SECONDS (e.g. laptop slept mid-run),
+# it is killed so launchd can re-fire on the next calendar interval.
 set +e
-python run_pipeline.py "$MODE" >> "$LOG_FILE" 2>&1
-EXIT_CODE=$?
+python run_pipeline.py "$MODE" >> "$LOG_FILE" 2>&1 &
+PID=$!
+ELAPSED=0
+while kill -0 "$PID" 2>/dev/null; do
+    if (( ELAPSED >= TIMEOUT_SECONDS )); then
+        echo "[$TIME_STAMP] Pipeline $MODE TIMED OUT after ${TIMEOUT_SECONDS}s — killing PID $PID" >> "$LOG_FILE"
+        kill "$PID" 2>/dev/null
+        wait "$PID" 2>/dev/null
+        EXIT_CODE=124
+        break
+    fi
+    sleep 10
+    (( ELAPSED += 10 ))
+done
+if (( ELAPSED < TIMEOUT_SECONDS )); then
+    wait "$PID"
+    EXIT_CODE=$?
+fi
 set -e
 
 END_TIME="$(date +%H:%M:%S)"
