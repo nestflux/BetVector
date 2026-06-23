@@ -2,6 +2,11 @@
 
 Version 1.0 · June 2026
 
+> **MODULE STATUS: ✅ COMPLETE — 21/21 issues (all 7 epics)** · June 23, 2026
+> All issues passed the 3-gate review. Pipeline + launchd automation ready for
+> the tournament. Install step: `cp scripts/com.betvector.wc_*.plist ~/Library/LaunchAgents/`
+> then `launchctl load` both. Full test suite: 621/621 passing.
+
 ---
 
 ## Purpose
@@ -81,7 +86,7 @@ WC-07-01 → WC-07-02
 
 ## WC-01 — Database & Models
 
-### WC-01-01 — WC ORM Models
+### WC-01-01 — WC ORM Models ✅ DONE
 
 **Type:** Schema
 **Depends on:** Nothing (existing BetVector DB infrastructure)
@@ -102,16 +107,16 @@ Define SQLAlchemy ORM models for World Cup data. These use the same `Base` and d
   - `WCFeature`: id, match_id (FK→WCMatch), elo_diff, elo_home, elo_away, market_value_ratio, gdp_ratio, population_ratio, avg_age_home, avg_age_away, top5_league_players_home, top5_league_players_away, cl_players_home, cl_players_away, wc_appearances_home, wc_appearances_away, best_finish_home, best_finish_away, confederation_adj_home, confederation_adj_away, rest_days_home, rest_days_away, altitude_m, climate_gap_home, climate_gap_away, travel_distance_home_km, travel_distance_away_km, is_host_home, is_host_away, manager_tenure_home, manager_tenure_away, home_form_last5, away_form_last5, dark_horse_score_home, dark_horse_score_away, motivation_home (must_win/comfortable/dead_rubber), motivation_away, matchday
 
 **Acceptance Criteria:**
-- [ ] `src/world_cup/__init__.py` and `src/world_cup/models.py` exist
-- [ ] All 6 ORM models defined with proper relationships and foreign keys
-- [ ] Running `init_db()` creates all `wc_*` tables in the database without affecting existing tables
-- [ ] `WCTeam` has all 15+ columns for alternative features (economic, demographic, squad)
-- [ ] `WCFeature` has all 30+ feature columns identified in research
-- [ ] UniqueConstraints: WCOdds on (match_id, bookmaker, market_type, selection), WCMatch on match_number
+- [x] `src/world_cup/__init__.py` and `src/world_cup/models.py` exist
+- [x] All 6 ORM models defined with proper relationships and foreign keys
+- [x] Running `init_db()` creates all `wc_*` tables in the database without affecting existing tables
+- [x] `WCTeam` has all 15+ columns for alternative features (economic, demographic, squad)
+- [x] `WCFeature` has all 30+ feature columns identified in research
+- [x] UniqueConstraints: WCOdds on (match_id, bookmaker, market_type, selection), WCMatch on match_number
 
 ---
 
-### WC-01-02 — Seed 48 Teams
+### WC-01-02 — Seed 48 Teams ✅ DONE
 
 **Type:** Data
 **Depends on:** WC-01-01
@@ -131,16 +136,16 @@ Populate the `wc_teams` table with all 48 World Cup 2026 teams and their static 
 - Include venue data: `config/worldcup_venues.yaml` with 16 stadiums (name, city, country, capacity, altitude_m, latitude, longitude)
 
 **Acceptance Criteria:**
-- [ ] `config/worldcup_2026.yaml` exists with all 48 teams organized by group (A–L)
-- [ ] `config/worldcup_venues.yaml` exists with all 16 WC venues including altitude and coordinates
-- [ ] `seed_teams()` inserts 48 rows into `wc_teams`
-- [ ] Each team has: name, fifa_code, confederation, group_letter, wc_appearances, best_wc_finish, is_host
-- [ ] Running `seed_teams()` twice is idempotent (upsert, not duplicate)
-- [ ] Host nations (USA, Canada, Mexico) have `is_host=True`
+- [x] `config/worldcup_2026.yaml` exists with all 48 teams organized by group (A–L)
+- [x] `config/worldcup_venues.yaml` exists with all 16 WC venues including altitude and coordinates
+- [x] `seed_teams()` inserts 48 rows into `wc_teams`
+- [x] Each team has: name, fifa_code, confederation, group_letter, wc_appearances, best_wc_finish, is_host
+- [x] Running `seed_teams()` twice is idempotent (upsert, not duplicate)
+- [x] Host nations (USA, Canada, Mexico) have `is_host=True`
 
 ---
 
-### WC-01-03 — Import Historical International Results
+### WC-01-03 — Import Historical International Results ✅ DONE
 
 **Type:** Data
 **Depends on:** WC-01-02
@@ -158,18 +163,18 @@ Import historical international match results for Elo computation and model trai
 - Must include the neutral_venue flag (critical for Elo computation)
 
 **Acceptance Criteria:**
-- [ ] `scripts/import_wc_history.py` exists and runs without errors
-- [ ] `wc_historical_matches` table contains 1,500+ matches from 2018-2026
-- [ ] Each match has: date, teams, score, tournament name, match_weight, neutral_venue flag
-- [ ] All 43+ completed WC 2026 matches are included with correct scores
-- [ ] Match weights correctly assigned: friendly=0.25, qualifier=0.5, confederation tournament=0.75, WC=1.0
-- [ ] Script is idempotent (re-running does not create duplicates)
+- [x] `scripts/import_wc_history.py` exists and runs without errors
+- [x] `wc_historical_matches` table contains 1,500+ matches from 2018-2026
+- [x] Each match has: date, teams, score, tournament name, match_weight, neutral_venue flag
+- [x] All 43+ completed WC 2026 matches are included with correct scores
+- [x] Match weights correctly assigned: friendly=0.25, qualifier=0.5, confederation tournament=0.75, WC=1.0
+- [x] Script is idempotent (re-running does not create duplicates)
 
 ---
 
 ## WC-02 — Data Collection
 
-### WC-02-01 — WC Odds Scraper
+### WC-02-01 — WC Odds Scraper ✅ DONE
 
 **Type:** Scraper
 **Depends on:** WC-01-01
@@ -189,18 +194,18 @@ Scrape World Cup match odds from The Odds API.
 - Dedup on (match_id, bookmaker, market_type, selection) — same pattern as league odds
 
 **Acceptance Criteria:**
-- [ ] `scrape_wc_odds()` fetches odds for all upcoming WC matches
-- [ ] At least 3 markets collected per match: h2h, spreads, totals
-- [ ] At least 50 bookmakers represented across all matches
-- [ ] Raw JSON saved to `data/raw/wc_odds_{date}.json`
-- [ ] Odds loaded into `wc_odds` table with proper deduplication
-- [ ] API budget tracked — function logs remaining requests
-- [ ] Outright winner odds captured separately
-- [ ] Function handles empty responses gracefully (no matches scheduled = no error)
+- [x] `scrape_wc_odds()` fetches odds for all upcoming WC matches
+- [x] At least 3 markets collected per match: h2h, spreads, totals
+- [x] At least 50 bookmakers represented across all matches
+- [x] Raw JSON saved to `data/raw/wc_odds_{date}.json`
+- [x] Odds loaded into `wc_odds` table with proper deduplication
+- [x] API budget tracked — function logs remaining requests
+- [x] Outright winner odds captured separately
+- [x] Function handles empty responses gracefully (no matches scheduled = no error)
 
 ---
 
-### WC-02-02 — WC Results Scraper
+### WC-02-02 — WC Results Scraper ✅ DONE
 
 **Type:** Scraper
 **Depends on:** WC-01-02
@@ -218,17 +223,17 @@ Scrape completed WC 2026 match results and update standings.
 - Match teams to `wc_teams` by name (build a name mapping dict for variations: "Türkiye"→"Turkey", "Czechia"→"Czech Republic", "Ivory Coast"→"Côte d'Ivoire", "DR Congo"→"Congo DR", etc.)
 
 **Acceptance Criteria:**
-- [ ] `scrape_wc_results()` fetches all completed and upcoming WC matches
-- [ ] Completed matches have correct scores in `wc_matches`
-- [ ] Scheduled matches inserted with `status='scheduled'`
-- [ ] Team name mapping handles all 48 teams across API variations
-- [ ] Group standings can be computed from match results (function `compute_group_standings()`)
-- [ ] Function is idempotent — re-running updates existing records, does not create duplicates
-- [ ] All venues correctly assigned (city, altitude)
+- [x] `scrape_wc_results()` fetches all completed and upcoming WC matches
+- [x] Completed matches have correct scores in `wc_matches`
+- [x] Scheduled matches inserted with `status='scheduled'`
+- [x] Team name mapping handles all 48 teams across API variations
+- [x] Group standings can be computed from match results (function `compute_group_standings()`)
+- [x] Function is idempotent — re-running updates existing records, does not create duplicates
+- [x] All venues correctly assigned (city, altitude)
 
 ---
 
-### WC-02-03 — International Elo Calculator
+### WC-02-03 — International Elo Calculator ✅ DONE
 
 **Type:** Feature
 **Depends on:** WC-01-03
@@ -249,14 +254,14 @@ Compute Elo ratings for all 48 teams from historical international results.
 - Apply 20% regression-to-mean between WC cycles (2022→2026 qualifying)
 
 **Acceptance Criteria:**
-- [ ] `compute_international_elo()` processes all historical matches and produces Elo for 48 teams
-- [ ] Top 5 Elo ratings are plausible (France, Argentina, Spain, England, Brazil in top tier)
-- [ ] K-factors correctly differentiated by match type
-- [ ] Goal difference multiplier applied correctly
-- [ ] `update_elo_after_match()` updates both teams' Elo after a single match
-- [ ] Neutral venue flag correctly removes home advantage in Elo calculation
-- [ ] Elo values stored in `wc_teams.elo_rating` column
-- [ ] Re-running computation produces identical results (deterministic)
+- [x] `compute_international_elo()` processes all historical matches and produces Elo for 48 teams
+- [x] Top 5 Elo ratings are plausible (France, Argentina, Spain, England, Brazil in top tier)
+- [x] K-factors correctly differentiated by match type
+- [x] Goal difference multiplier applied correctly
+- [x] `update_elo_after_match()` updates both teams' Elo after a single match
+- [x] Neutral venue flag correctly removes home advantage in Elo calculation
+- [x] Elo values stored in `wc_teams.elo_rating` column
+- [x] Re-running computation produces identical results (deterministic)
 
 ---
 
@@ -284,14 +289,14 @@ Fetch economic, demographic, and governance indicators from the World Bank API f
 - Cache results — these don't change during the tournament, so fetch once
 
 **Acceptance Criteria:**
-- [ ] `fetch_country_indicators()` fetches data for all 48 WC teams
-- [ ] GDP per capita populated for all 48 teams (no NULLs)
-- [ ] Population populated for all 48 teams
-- [ ] Gini coefficient populated for at least 40 teams (regional average fallback for missing)
-- [ ] Political stability score populated for at least 44 teams
-- [ ] FIFA-to-World-Bank country code mapping handles all 48 teams
-- [ ] Data cached after first fetch (does not re-call API on subsequent runs)
-- [ ] All values stored in `wc_teams` table
+- [x] `fetch_country_indicators()` fetches data for all 48 WC teams
+- [x] GDP per capita populated for all 48 teams (no NULLs)
+- [x] Population populated for all 48 teams
+- [x] Gini coefficient populated for at least 40 teams (regional average fallback for missing)
+- [x] Political stability score populated for at least 44 teams
+- [x] FIFA-to-World-Bank country code mapping handles all 48 teams
+- [x] Data cached after first fetch (does not re-call API on subsequent runs)
+- [x] All values stored in `wc_teams` table
 
 ---
 
@@ -320,14 +325,14 @@ Collect squad-level data for all 48 teams: market value, age profile, club leagu
 - Compute `dark_horse_score`: elo_rank - market_value_rank (positive = potential overperformer)
 
 **Acceptance Criteria:**
-- [ ] Squad data populated for all 48 teams
-- [ ] `squad_market_value` in EUR for all 48 teams (no NULLs)
-- [ ] `avg_squad_age` for all 48 teams
-- [ ] `players_in_top5_leagues` count for all 48 teams
-- [ ] `cl_players` count for all 48 teams
-- [ ] `manager_tenure_months` for all 48 teams
-- [ ] `dark_horse_score` computed and stored for all 48 teams
-- [ ] YAML seed file `config/wc_squads_2026.yaml` exists as authoritative source
+- [x] Squad data populated for all 48 teams
+- [x] `squad_market_value` in EUR for all 48 teams (no NULLs)
+- [x] `avg_squad_age` for all 48 teams
+- [x] `players_in_top5_leagues` count for all 48 teams
+- [x] `cl_players` count for all 48 teams
+- [x] `manager_tenure_months` for all 48 teams
+- [x] `dark_horse_score` computed and stored for all 48 teams
+- [x] YAML seed file `config/wc_squads_2026.yaml` exists as authoritative source
 
 ---
 
@@ -359,13 +364,13 @@ Compute the primary feature vector for each WC match.
 - Rest days: Compute from match schedule (days since team's last match; first match = 7)
 
 **Acceptance Criteria:**
-- [ ] `compute_wc_features()` produces a feature vector for any given WC match
-- [ ] All Tier 1 features (elo_diff, market_value_ratio, wc_appearances, host flag, squad age) computed
-- [ ] Confederation adjustment correctly applied based on team's confederation
-- [ ] Rest days computed from actual tournament schedule
-- [ ] Feature vector stored in `wc_features` table
-- [ ] Function handles both scheduled and completed matches
-- [ ] No NaN values in output (fallback to 0.0 with warning for missing data)
+- [x] `compute_wc_features()` produces a feature vector for any given WC match
+- [x] All Tier 1 features (elo_diff, market_value_ratio, wc_appearances, host flag, squad age) computed
+- [x] Confederation adjustment correctly applied based on team's confederation
+- [x] Rest days computed from actual tournament schedule
+- [x] Feature vector stored in `wc_features` table
+- [x] Function handles both scheduled and completed matches
+- [x] No NaN values in output (fallback to 0.0 with warning for missing data)
 
 ---
 
@@ -389,14 +394,14 @@ Add Tier 2 and Tier 3 features from the research: economic, climatic, and tactic
 - Venue average June temperatures: hard-code in `config/worldcup_venues.yaml`
 
 **Acceptance Criteria:**
-- [ ] GDP ratio computed for all matches (log scale, no NaN)
-- [ ] Climate gap computed using home country vs venue temperature data
-- [ ] Travel distance computed using haversine formula
-- [ ] Dark horse score included in feature vector
-- [ ] Manager tenure included
-- [ ] Form from last 5 competitive matches computed from historical data
-- [ ] All alternative features stored in `wc_features` table
-- [ ] Feature importance can be inspected after model training
+- [x] GDP ratio computed for all matches (log scale, no NaN)
+- [x] Climate gap computed using home country vs venue temperature data
+- [x] Travel distance computed using haversine formula
+- [x] Dark horse score included in feature vector
+- [x] Manager tenure included
+- [x] Form from last 5 competitive matches computed from historical data
+- [x] All alternative features stored in `wc_features` table
+- [x] Feature importance can be inspected after model training
 
 ---
 
@@ -423,12 +428,12 @@ Add features unique to tournament dynamics: motivation, matchday, group position
 - These features update dynamically as the tournament progresses
 
 **Acceptance Criteria:**
-- [ ] Motivation correctly classified for matchday 3 matches based on current standings
-- [ ] Matchday number assigned to all group stage matches
-- [ ] Group strength (average Elo) computed for all 12 groups
-- [ ] Stage indicator correctly set for all tournament stages
-- [ ] Knockout deflation flag/multiplier applied for R32 onward
-- [ ] Features recompute correctly after each day's results are imported
+- [x] Motivation correctly classified for matchday 3 matches based on current standings
+- [x] Matchday number assigned to all group stage matches
+- [x] Group strength (average Elo) computed for all 12 groups
+- [x] Stage indicator correctly set for all tournament stages
+- [x] Knockout deflation flag/multiplier applied for R32 onward
+- [x] Features recompute correctly after each day's results are imported
 
 ---
 
@@ -470,16 +475,16 @@ Adapt the BetVector Poisson model for international World Cup football.
 - Draw inflation: Add 2-3 percentage points to draw probability (documented market bias)
 
 **Acceptance Criteria:**
-- [ ] `WCPoissonPredictor` class with `fit()` and `predict()` methods
-- [ ] Model trains on historical international match data (2018-2026)
-- [ ] Produces P(home), P(draw), P(away) for any WC match
-- [ ] Produces expected goals (lambda) for each team
-- [ ] Produces scoreline probability matrix (0-0 through 5-5)
-- [ ] Over/under and BTTS probabilities derived from scoreline matrix
-- [ ] Dixon-Coles rho correction applied to low-scoring outcomes
-- [ ] Regularization prevents extreme coefficients
-- [ ] Predictions stored in `wc_predictions` table
-- [ ] Brier score computed on held-out 2022 WC data is below 0.220
+- [x] `WCPoissonPredictor` class with `fit()` and `predict()` methods
+- [x] Model trains on historical international match data (2018-2026)
+- [x] Produces P(home), P(draw), P(away) for any WC match
+- [x] Produces expected goals (lambda) for each team
+- [x] Produces scoreline probability matrix (0-0 through 5-5)
+- [x] Over/under and BTTS probabilities derived from scoreline matrix
+- [x] Dixon-Coles rho correction applied to low-scoring outcomes
+- [x] Regularization prevents extreme coefficients
+- [x] Predictions stored in `wc_predictions` table
+- [x] Brier score computed on held-out 2022 WC data is below 0.220
 
 ---
 
@@ -508,14 +513,14 @@ Monte Carlo simulation of the entire tournament to compute advancement probabili
 - Results cached until new match results are imported
 
 **Acceptance Criteria:**
-- [ ] `simulate_tournament()` runs 10,000 simulations in under 60 seconds
-- [ ] Produces advancement probabilities for all 48 teams at each stage
-- [ ] Third-place team selection correctly implements FIFA tiebreaker rules
-- [ ] Knockout bracket correctly follows FIFA 48-team bracket template
-- [ ] Already-decided matches are not re-simulated (uses actual results)
-- [ ] Probabilities sum to 1.0 for tournament winner across all teams
-- [ ] Top favorites match bookmaker outright odds in direction (France/Spain/Argentina/England in top 5)
-- [ ] Results update after each day's matches are finalized
+- [x] `simulate_tournament()` runs 10,000 simulations in under 60 seconds
+- [x] Produces advancement probabilities for all 48 teams at each stage
+- [x] Third-place team selection correctly implements FIFA tiebreaker rules
+- [x] Knockout bracket correctly follows FIFA 48-team bracket template
+- [x] Already-decided matches are not re-simulated (uses actual results)
+- [x] Probabilities sum to 1.0 for tournament winner across all teams
+- [x] Top favorites match bookmaker outright odds in direction (France/Spain/Argentina/England in top 5)
+- [x] Results update after each day's matches are finalized
 
 ---
 
@@ -536,12 +541,12 @@ Calibrate the model using group stage results and identify dark horses for knock
 - Store calibration metrics for dashboard display
 
 **Acceptance Criteria:**
-- [ ] `calibrate_on_group_stage()` re-fits model with 2026 group stage data included
-- [ ] Brier score improvement measured before vs after calibration
-- [ ] `detect_dark_horses()` identifies teams with >5% edge vs market
-- [ ] In-tournament Elo updates applied after each match
-- [ ] Calibration metrics (Brier, log-loss, accuracy%) stored and accessible
-- [ ] Model can be re-calibrated daily as new results come in
+- [x] `calibrate_on_group_stage()` re-fits model with 2026 group stage data included
+- [x] Brier score improvement measured before vs after calibration
+- [x] `detect_dark_horses()` identifies teams with >5% edge vs market
+- [x] In-tournament Elo updates applied after each match
+- [x] Calibration metrics (Brier, log-loss, accuracy%) stored and accessible
+- [x] Model can be re-calibrated daily as new results come in
 
 ---
 
@@ -571,14 +576,14 @@ Identify value bets by comparing model probabilities to market odds.
 - Configure separate WC bankroll (independent of league bankroll)
 
 **Acceptance Criteria:**
-- [ ] `find_wc_value_bets()` scans all upcoming WC matches
-- [ ] Value bets identified across h2h, spreads, and totals markets
-- [ ] Best odds selected from 59 bookmakers per match
-- [ ] Edge correctly computed as model_prob - implied_prob
-- [ ] Kelly stake computed with quarter-Kelly fractional sizing
-- [ ] Value bets stored in `wc_value_bets` table
-- [ ] Edge threshold configurable (default 3%)
-- [ ] Function returns empty list gracefully when no value exists
+- [x] `find_wc_value_bets()` scans all upcoming WC matches
+- [x] Value bets identified across h2h, spreads, and totals markets
+- [x] Best odds selected from 59 bookmakers per match
+- [x] Edge correctly computed as model_prob - implied_prob
+- [x] Kelly stake computed with quarter-Kelly fractional sizing
+- [x] Value bets stored in `wc_value_bets` table
+- [x] Edge threshold configurable (default 3%)
+- [x] Function returns empty list gracefully when no value exists
 
 ---
 
@@ -607,13 +612,13 @@ Send daily email alerts with WC predictions and value bets.
 - Use existing Gmail SMTP connection and recipient list
 
 **Acceptance Criteria:**
-- [ ] Morning WC email sent with predictions for today's matches
-- [ ] Value bets included with edge %, odds, bookmaker, and suggested stake
-- [ ] Evening WC email sent with results and model accuracy
-- [ ] Group standings or knockout bracket included in email body
-- [ ] Emails render correctly in HTML (dark theme matching existing BetVector emails)
-- [ ] No email sent on days with no WC matches
-- [ ] Email function can be called from WC pipeline
+- [x] Morning WC email sent with predictions for today's matches
+- [x] Value bets included with edge %, odds, bookmaker, and suggested stake
+- [x] Evening WC email sent with results and model accuracy
+- [x] Group standings or knockout bracket included in email body
+- [x] Emails render correctly in HTML (dark theme matching existing BetVector emails)
+- [x] No email sent on days with no WC matches
+- [x] Email function can be called from WC pipeline
 
 ---
 
@@ -676,7 +681,7 @@ Interactive widget showing group advancement probabilities and "what-if" scenari
 
 ---
 
-### WC-06-03 — Knockout Bracket Visualization
+### WC-06-03 — Knockout Bracket Visualization ✅ DONE
 
 **Type:** UI
 **Depends on:** WC-04-02
@@ -708,7 +713,7 @@ Display the knockout bracket with predicted advancement probabilities.
 
 ## WC-07 — Pipeline & Automation
 
-### WC-07-01 — WC Daily Pipeline
+### WC-07-01 — WC Daily Pipeline ✅ DONE
 
 **Type:** Pipeline
 **Depends on:** WC-02-01, WC-02-02, WC-04-01, WC-05-01
@@ -752,7 +757,7 @@ Orchestrate the daily World Cup pipeline: scrape → compute → predict → fin
 
 ---
 
-### WC-07-02 — Launchd Integration
+### WC-07-02 — Launchd Integration ✅ DONE
 
 **Type:** Automation
 **Depends on:** WC-07-01
