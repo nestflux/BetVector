@@ -66,7 +66,7 @@ This document breaks the BetVector masterplan into sequenced epics and issues th
 | E40 | Transfermarkt-Datasets Deep Integration | 10 | One-time backfill from dcaribou/transfermarkt-datasets: historical lineups (400K+ rows), formations, manager names + 4 new manager features, injury club mapping fix, minutes-based impact rating, feature recomputation, weekly refresh pipeline step |
 
 | PC-25 | Multi-League Strategy System | 15 | ✅ DONE — Per-league optimization: sharp-only filtering, CLV tracking, exposure caps, stake multipliers, shadow mode |
-| PC-26 | Operational Activation | 17 | **IN PROGRESS** — Stabilize pipeline, retrain on 21K matches, fresh 6-league backtest, shadow mode activation, CLV monitoring |
+| PC-26 | Operational Activation | 17 | **DONE** ✅ — Stabilize pipeline, retrain on 21K matches, fresh 6-league backtest, shadow mode activation, CLV monitoring (commits 834af8e → 3ec65c9). XGBoost now wins 4/6 leagues; Bundesliga 🔴→🟡 |
 
 | PC-18 | Feature Pruning for Model Accuracy | 1 | ✅ DONE — Removed 21 features, avg Brier 0.5983→0.5921 (-1.0%), EPL -4.6%, zero regressions |
 | PC-19 | Deep Dive Bookmaker Probability Comparison | 1 | ✅ DONE — Overround-removed bookmaker probs on Deep Dive, model white / bookie grey / edge green |
@@ -9233,7 +9233,7 @@ Re-attempt Kelly staking on 🟢 profitable leagues ONLY:
 
 ## PC-26 — Operational Activation: From Build-Complete to Live
 
-**Status:** IN PROGRESS (17 issues across 5 phases)
+**Status:** DONE ✅ (17 issues across 5 phases — commits 834af8e → 3ec65c9)
 **Context:** All build plan issues (E1–E40, PC-01 through PC-25) and the historical backfill
 (21,231 matches, 6 leagues, 9 seasons 2017–2026) are complete. This epic transitions the
 system from "built" to "actively running, validated, and improving" on the expanded dataset.

@@ -350,9 +350,9 @@ single-line expression.
 
 ## Current Status
 
-Last completed: Historical Backfill (2017-20 seasons, 6 leagues) ✅ — 21,231 matches, 281,769 odds, 41,560 features
-Currently working: PC-26 — Operational Activation (17 issues, 5 phases)
-Next up: PC-26-01 — Fix SQLite Database Lock + Add Busy Timeout
+Last completed: World Cup 2026 add-on module ✅ — all 21 issues (WC-01-01 → WC-07-02), 3-gate reviewed, 621/621 tests
+Currently working: Nothing — league system + WC module both feature-complete
+Next up: None on the critical path. Owner action pending: install WC launchd plists (`cp scripts/com.betvector.wc_*.plist ~/Library/LaunchAgents/` then `launchctl load` both) to activate the WC pipeline before the tournament.
 
 E40 complete: All 10 issues done ✅ (TM datasets download, lineup/formation/manager backfill, manager features, injury club fix, minutes impact, recomputation, weekly refresh, integration test — 14,187 matches, 9,829 TM-mapped, 393K lineups, 42 tests)
 
