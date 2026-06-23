@@ -582,10 +582,11 @@ Identify value bets by comparing model probabilities to market odds.
 
 ---
 
-### WC-05-02 — WC Email Alerts
+### WC-05-02 — WC Email Alerts ✅ DONE
 
 **Type:** Delivery
 **Depends on:** WC-05-01
+**Results:** Morning email (23K chars): predictions, VBs, group standings. Evening email (8K chars): results, 2/2 correct, Brier tracking, top-10 Elo table. Dark theme HTML. HTML-escaped team names. Pipeline-resilient (try/except on SMTP). No email on non-match days.
 **Reuses:** `src/delivery/email_alerts.py` (SMTP connection, HTML templates)
 
 Send daily email alerts with WC predictions and value bets.
