@@ -1,0 +1,501 @@
+groups:
+  A:
+    - name: "Mexico"
+      fifa_code: "MEX"
+      confederation: "CONCACAF"
+      is_host: true
+      wc_appearances: 17
+      best_wc_finish: "Quarter-final"
+      capital_lat: 19.4326
+      capital_lon: -99.1332
+      avg_june_temp_c: 19.5
+
+    - name: "Czech Republic"
+      fifa_code: "CZE"
+      confederation: "UEFA"
+      is_host: false
+      wc_appearances: 10
+      best_wc_finish: "Runner-up"
+      capital_lat: 50.0755
+      capital_lon: 14.4378
+      avg_june_temp_c: 18.0
+
+    - name: "South Korea"
+      fifa_code: "KOR"
+      confederation: "AFC"
+      is_host: false
+      wc_appearances: 12
+      best_wc_finish: "Fourth place"
+      capital_lat: 37.5665
+      capital_lon: 126.9780
+      avg_june_temp_c: 22.5
+
+    - name: "South Africa"
+      fifa_code: "RSA"
+      confederation: "CAF"
+      is_host: false
+      wc_appearances: 4
+      best_wc_finish: "Group stage"
+      capital_lat: -25.7461
+      capital_lon: 28.2293
+      avg_june_temp_c: 15.5
+
+  B:
+    - name: "Canada"
+      fifa_code: "CAN"
+      confederation: "CONCACAF"
+      is_host: true
+      wc_appearances: 3
+      best_wc_finish: "Group stage"
+      capital_lat: 45.4215
+      capital_lon: -75.6972
+      avg_june_temp_c: 15.5
+
+    - name: "Bosnia and Herzegovina"
+      fifa_code: "BIH"
+      confederation: "UEFA"
+      is_host: false
+      wc_appearances: 2
+      best_wc_finish: "Group stage"
+      capital_lat: 43.8564
+      capital_lon: 18.4131
+      avg_june_temp_c: 21.0
+
+    - name: "Switzerland"
+      fifa_code: "SUI"
+      confederation: "UEFA"
+      is_host: false
+      wc_appearances: 12
+      best_wc_finish: "Quarter-final"
+      capital_lat: 46.9479
+      capital_lon: 7.4474
+      avg_june_temp_c: 16.5
+
+    - name: "Qatar"
+      fifa_code: "QAT"
+      confederation: "AFC"
+      is_host: false
+      wc_appearances: 2
+      best_wc_finish: "Group stage"
+      capital_lat: 25.2854
+      capital_lon: 51.5310
+      avg_june_temp_c: 41.0
+
+  C:
+    - name: "Brazil"
+      fifa_code: "BRA"
+      confederation: "CONMEBOL"
+      is_host: false
+      wc_appearances: 23
+      best_wc_finish: "Winner"
+      capital_lat: -15.7975
+      capital_lon: -47.8919
+      avg_june_temp_c: 22.0
+
+    - name: "Scotland"
+      fifa_code: "SCO"
+      confederation: "UEFA"
+      is_host: false
+      wc_appearances: 9
+      best_wc_finish: "Group stage"
+      capital_lat: 55.9533
+      capital_lon: -3.1883
+      avg_june_temp_c: 13.5
+
+    - name: "Haiti"
+      fifa_code: "HAI"
+      confederation: "CONCACAF"
+      is_host: false
+      wc_appearances: 2
+      best_wc_finish: "Group stage"
+      capital_lat: 18.5944
+      capital_lon: -72.2978
+      avg_june_temp_c: 29.5
+
+    - name: "Morocco"
+      fifa_code: "MAR"
+      confederation: "CAF"
+      is_host: false
+      wc_appearances: 7
+      best_wc_finish: "Fourth place"
+      capital_lat: 34.0209
+      capital_lon: -6.8416
+      avg_june_temp_c: 22.5
+
+  D:
+    - name: "Paraguay"
+      fifa_code: "PAR"
+      confederation: "CONMEBOL"
+      is_host: false
+      wc_appearances: 9
+      best_wc_finish: "Quarter-final"
+      capital_lat: -25.2637
+      capital_lon: -57.5759
+      avg_june_temp_c: 16.0
+
+    - name: "Turkey"
+      fifa_code: "TUR"
+      confederation: "UEFA"
+      is_host: false
+      wc_appearances: 3
+      best_wc_finish: "Third place"
+      capital_lat: 39.9334
+      capital_lon: 32.8597
+      avg_june_temp_c: 27.0
+
+    - name: "Australia"
+      fifa_code: "AUS"
+      confederation: "AFC"
+      is_host: false
+      wc_appearances: 7
+      best_wc_finish: "Round of 16"
+      capital_lat: -35.2809
+      capital_lon: 149.1300
+      avg_june_temp_c: 13.0
+
+    - name: "USA"
+      fifa_code: "USA"
+      confederation: "CONCACAF"
+      is_host: true
+      wc_appearances: 12
+      best_wc_finish: "Third place"
+      capital_lat: 38.9072
+      capital_lon: -77.0369
+      avg_june_temp_c: 24.0
+
+  E:
+    - name: "Ecuador"
+      fifa_code: "ECU"
+      confederation: "CONMEBOL"
+      is_host: false
+      wc_appearances: 4
+      best_wc_finish: "Round of 16"
+      capital_lat: -0.2295
+      capital_lon: -78.5243
+      avg_june_temp_c: 10.0
+
+    - name: "Germany"
+      fifa_code: "GER"
+      confederation: "UEFA"
+      is_host: false
+      wc_appearances: 20
+      best_wc_finish: "Winner"
+      capital_lat: 52.5200
+      capital_lon: 13.4050
+      avg_june_temp_c: 17.5
+
+    - name: "Ivory Coast"
+      fifa_code: "CIV"
+      confederation: "CAF"
+      is_host: false
+      wc_appearances: 4
+      best_wc_finish: "Group stage"
+      capital_lat: 6.8270
+      capital_lon: -5.2893
+      avg_june_temp_c: 25.5
+
+    - name: "Curaçao"
+      fifa_code: "CUW"
+      confederation: "CONCACAF"
+      is_host: false
+      wc_appearances: 1
+      best_wc_finish: "Group stage"
+      capital_lat: 12.1696
+      capital_lon: -68.9900
+      avg_june_temp_c: 28.5
+
+  F:
+    - name: "Netherlands"
+      fifa_code: "NED"
+      confederation: "UEFA"
+      is_host: false
+      wc_appearances: 12
+      best_wc_finish: "Runner-up"
+      capital_lat: 52.3676
+      capital_lon: 4.9041
+      avg_june_temp_c: 15.5
+
+    - name: "Sweden"
+      fifa_code: "SWE"
+      confederation: "UEFA"
+      is_host: false
+      wc_appearances: 12
+      best_wc_finish: "Runner-up"
+      capital_lat: 59.3293
+      capital_lon: 18.0686
+      avg_june_temp_c: 14.5
+
+    - name: "Japan"
+      fifa_code: "JPN"
+      confederation: "AFC"
+      is_host: false
+      wc_appearances: 8
+      best_wc_finish: "Round of 16"
+      capital_lat: 35.6762
+      capital_lon: 139.6503
+      avg_june_temp_c: 23.0
+
+    - name: "Tunisia"
+      fifa_code: "TUN"
+      confederation: "CAF"
+      is_host: false
+      wc_appearances: 7
+      best_wc_finish: "Group stage"
+      capital_lat: 36.8065
+      capital_lon: 10.1857
+      avg_june_temp_c: 28.0
+
+  G:
+    - name: "Belgium"
+      fifa_code: "BEL"
+      confederation: "UEFA"
+      is_host: false
+      wc_appearances: 15
+      best_wc_finish: "Third place"
+      capital_lat: 50.8503
+      capital_lon: 4.3517
+      avg_june_temp_c: 16.5
+
+    - name: "Iran"
+      fifa_code: "IRN"
+      confederation: "AFC"
+      is_host: false
+      wc_appearances: 7
+      best_wc_finish: "Group stage"
+      capital_lat: 35.6892
+      capital_lon: 51.3890
+      avg_june_temp_c: 30.5
+
+    - name: "Egypt"
+      fifa_code: "EGY"
+      confederation: "CAF"
+      is_host: false
+      wc_appearances: 4
+      best_wc_finish: "Round of 16"
+      capital_lat: 30.0444
+      capital_lon: 31.2357
+      avg_june_temp_c: 29.5
+
+    - name: "New Zealand"
+      fifa_code: "NZL"
+      confederation: "OFC"
+      is_host: false
+      wc_appearances: 3
+      best_wc_finish: "Group stage"
+      capital_lat: -41.2865
+      capital_lon: 174.7762
+      avg_june_temp_c: 10.0
+
+  H:
+    - name: "Spain"
+      fifa_code: "ESP"
+      confederation: "UEFA"
+      is_host: false
+      wc_appearances: 17
+      best_wc_finish: "Winner"
+      capital_lat: 40.4168
+      capital_lon: -3.7038
+      avg_june_temp_c: 24.5
+
+    - name: "Uruguay"
+      fifa_code: "URU"
+      confederation: "CONMEBOL"
+      is_host: false
+      wc_appearances: 14
+      best_wc_finish: "Winner"
+      capital_lat: -34.9011
+      capital_lon: -56.1645
+      avg_june_temp_c: 10.5
+
+    - name: "Saudi Arabia"
+      fifa_code: "KSA"
+      confederation: "AFC"
+      is_host: false
+      wc_appearances: 7
+      best_wc_finish: "Round of 16"
+      capital_lat: 24.7136
+      capital_lon: 46.6753
+      avg_june_temp_c: 39.5
+
+    - name: "Cape Verde"
+      fifa_code: "CPV"
+      confederation: "CAF"
+      is_host: false
+      wc_appearances: 1
+      best_wc_finish: "Group stage"
+      capital_lat: 14.9167
+      capital_lon: -23.6333
+      avg_june_temp_c: 23.5
+
+  I:
+    - name: "Norway"
+      fifa_code: "NOR"
+      confederation: "UEFA"
+      is_host: false
+      wc_appearances: 4
+      best_wc_finish: "Group stage"
+      capital_lat: 59.9139
+      capital_lon: 10.7522
+      avg_june_temp_c: 13.5
+
+    - name: "France"
+      fifa_code: "FRA"
+      confederation: "UEFA"
+      is_host: false
+      wc_appearances: 17
+      best_wc_finish: "Winner"
+      capital_lat: 48.8566
+      capital_lon: 2.3522
+      avg_june_temp_c: 18.5
+
+    - name: "Senegal"
+      fifa_code: "SEN"
+      confederation: "CAF"
+      is_host: false
+      wc_appearances: 4
+      best_wc_finish: "Quarter-final"
+      capital_lat: 14.6928
+      capital_lon: -17.0467
+      avg_june_temp_c: 26.5
+
+    - name: "Iraq"
+      fifa_code: "IRQ"
+      confederation: "AFC"
+      is_host: false
+      wc_appearances: 2
+      best_wc_finish: "Group stage"
+      capital_lat: 33.3128
+      capital_lon: 44.3615
+      avg_june_temp_c: 38.0
+
+  J:
+    - name: "Argentina"
+      fifa_code: "ARG"
+      confederation: "CONMEBOL"
+      is_host: false
+      wc_appearances: 19
+      best_wc_finish: "Winner"
+      capital_lat: -34.6037
+      capital_lon: -58.3816
+      avg_june_temp_c: 12.5
+
+    - name: "Austria"
+      fifa_code: "AUT"
+      confederation: "UEFA"
+      is_host: false
+      wc_appearances: 8
+      best_wc_finish: "Third place"
+      capital_lat: 48.2082
+      capital_lon: 16.3738
+      avg_june_temp_c: 19.5
+
+    - name: "Algeria"
+      fifa_code: "ALG"
+      confederation: "CAF"
+      is_host: false
+      wc_appearances: 5
+      best_wc_finish: "Round of 16"
+      capital_lat: 36.7372
+      capital_lon: 3.0869
+      avg_june_temp_c: 26.5
+
+    - name: "Jordan"
+      fifa_code: "JOR"
+      confederation: "AFC"
+      is_host: false
+      wc_appearances: 1
+      best_wc_finish: "Group stage"
+      capital_lat: 31.9454
+      capital_lon: 35.9284
+      avg_june_temp_c: 31.0
+
+  K:
+    - name: "Colombia"
+      fifa_code: "COL"
+      confederation: "CONMEBOL"
+      is_host: false
+      wc_appearances: 7
+      best_wc_finish: "Quarter-final"
+      capital_lat: 4.7110
+      capital_lon: -74.0721
+      avg_june_temp_c: 13.5
+
+    - name: "Portugal"
+      fifa_code: "POR"
+      confederation: "UEFA"
+      is_host: false
+      wc_appearances: 9
+      best_wc_finish: "Third place"
+      capital_lat: 38.7223
+      capital_lon: -9.1393
+      avg_june_temp_c: 21.5
+
+    - name: "Uzbekistan"
+      fifa_code: "UZB"
+      confederation: "AFC"
+      is_host: false
+      wc_appearances: 1
+      best_wc_finish: "Group stage"
+      capital_lat: 41.2995
+      capital_lon: 69.2401
+      avg_june_temp_c: 29.0
+
+    - name: "DR Congo"
+      fifa_code: "COD"
+      confederation: "CAF"
+      is_host: false
+      wc_appearances: 2
+      best_wc_finish: "Group stage"
+      capital_lat: -4.3276
+      capital_lon: 15.3136
+      avg_june_temp_c: 24.0
+
+  L:
+    - name: "England"
+      fifa_code: "ENG"
+      confederation: "UEFA"
+      is_host: false
+      wc_appearances: 17
+      best_wc_finish: "Winner"
+      capital_lat: 51.5074
+      capital_lon: -0.1278
+      avg_june_temp_c: 15.5
+
+    - name: "Croatia"
+      fifa_code: "CRO"
+      confederation: "UEFA"
+      is_host: false
+      wc_appearances: 7
+      best_wc_finish: "Runner-up"
+      capital_lat: 45.8150
+      capital_lon: 15.9819
+      avg_june_temp_c: 21.5
+
+    - name: "Panama"
+      fifa_code: "PAN"
+      confederation: "CONCACAF"
+      is_host: false
+      wc_appearances: 2
+      best_wc_finish: "Group stage"
+      capital_lat: 8.9824
+      capital_lon: -79.5199
+      avg_june_temp_c: 26.0
+
+    - name: "Ghana"
+      fifa_code: "GHA"
+      confederation: "CAF"
+      is_host: false
+      wc_appearances: 5
+      best_wc_finish: "Quarter-final"
+      capital_lat: 5.6037
+      capital_lon: -0.1870
+      avg_june_temp_c: 25.0
+
+odds_api_name_map:
+  "Bosnia & Herzegovina": "Bosnia and Herzegovina"
+  "Türkiye": "Turkey"
+  "Czechia": "Czech Republic"
+  "United States": "USA"
+  "Congo DR": "DR Congo"
+  "Côte d'Ivoire": "Ivory Coast"
+  "Korea Republic": "South Korea"

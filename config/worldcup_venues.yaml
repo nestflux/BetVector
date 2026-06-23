@@ -1,0 +1,144 @@
+venues:
+  - name: "Estadio Azteca"
+    city: "Mexico City"
+    country: "Mexico"
+    capacity: 87506
+    altitude_m: 2240
+    latitude: 19.3043
+    longitude: -99.1611
+    avg_june_temp_c: 19.5
+
+  - name: "MetLife Stadium"
+    city: "East Rutherford"
+    country: "USA"
+    capacity: 82500
+    altitude_m: 3
+    latitude: 40.8135
+    longitude: -74.0745
+    avg_june_temp_c: 23.0
+
+  - name: "AT&T Stadium"
+    city: "Arlington"
+    country: "USA"
+    capacity: 80000
+    altitude_m: 137
+    latitude: 32.8975
+    longitude: -97.0937
+    avg_june_temp_c: 31.0
+
+  - name: "SoFi Stadium"
+    city: "Inglewood"
+    country: "USA"
+    capacity: 70240
+    altitude_m: 95
+    latitude: 33.9537
+    longitude: -118.3383
+    avg_june_temp_c: 21.0
+
+  - name: "Arrowhead Stadium"
+    city: "Kansas City"
+    country: "USA"
+    capacity: 76416
+    altitude_m: 245
+    latitude: 39.0489
+    longitude: -94.4852
+    avg_june_temp_c: 26.0
+
+  - name: "Levi's Stadium"
+    city: "Santa Clara"
+    country: "USA"
+    capacity: 68500
+    altitude_m: 30
+    latitude: 37.4048
+    longitude: -121.9732
+    avg_june_temp_c: 19.5
+
+  - name: "NRG Stadium"
+    city: "Houston"
+    country: "USA"
+    capacity: 72220
+    altitude_m: 3
+    latitude: 29.6848
+    longitude: -95.4107
+    avg_june_temp_c: 33.0
+
+  - name: "Lincoln Financial Field"
+    city: "Philadelphia"
+    country: "USA"
+    capacity: 69176
+    altitude_m: 25
+    latitude: 39.9012
+    longitude: -75.1698
+    avg_june_temp_c: 24.0
+
+  - name: "Mercedes-Benz Stadium"
+    city: "Atlanta"
+    country: "USA"
+    capacity: 71000
+    altitude_m: 313
+    latitude: 33.7490
+    longitude: -84.3880
+    avg_june_temp_c: 27.0
+
+  - name: "Lumen Field"
+    city: "Seattle"
+    country: "USA"
+    capacity: 69000
+    altitude_m: 175
+    latitude: 47.5952
+    longitude: -122.3316
+    avg_june_temp_c: 16.0
+
+  - name: "Hard Rock Stadium"
+    city: "Miami"
+    country: "USA"
+    capacity: 65326
+    altitude_m: 4
+    latitude: 25.9581
+    longitude: -80.2389
+    avg_june_temp_c: 31.0
+
+  - name: "Gillette Stadium"
+    city: "Foxborough"
+    country: "USA"
+    capacity: 65878
+    altitude_m: 46
+    latitude: 42.0909
+    longitude: -71.2643
+    avg_june_temp_c: 20.0
+
+  - name: "BC Place"
+    city: "Vancouver"
+    country: "Canada"
+    capacity: 54500
+    altitude_m: 2
+    latitude: 49.2770
+    longitude: -123.1119
+    avg_june_temp_c: 16.0
+
+  - name: "BMO Field"
+    city: "Toronto"
+    country: "Canada"
+    capacity: 45975
+    altitude_m: 77
+    latitude: 43.6629
+    longitude: -79.3957
+    avg_june_temp_c: 20.0
+
+  - name: "Estadio BBVA"
+    city: "Monterrey"
+    country: "Mexico"
+    capacity: 72970
+    altitude_m: 645
+    latitude: 25.6866
+    longitude: -100.2544
+    avg_june_temp_c: 29.0
+
+  - name: "Estadio Akron"
+    city: "Guadalajara"
+    country: "Mexico"
+    capacity: 46552
+    altitude_m: 1567
+    latitude: 20.6633
+    longitude: -103.3107
+    avg_june_temp_c: 24.0

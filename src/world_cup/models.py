@@ -1,0 +1,337 @@
+"""
+BetVector World Cup 2026 — ORM Models (WC-01-01)
+==================================================
+SQLAlchemy 2.0 ORM models for World Cup data. All tables prefixed with
+``wc_`` to avoid collision with league tables. Inherits ``Base`` from
+``src.database.db`` so ``init_db()`` creates these alongside league tables.
+
+Tables:
+    1. wc_teams               — 48 participating nations
+    2. wc_matches             — Group + knockout fixtures and results
+    3. wc_historical_matches  — Historical international results for Elo/training
+    4. wc_odds                — Bookmaker odds per match
+    5. wc_predictions         — Model outputs per match
+    6. wc_value_bets          — Identified value bets
+    7. wc_features            — Computed feature vectors per match
+"""
+
+from __future__ import annotations
+
+from sqlalchemy import (
+    Column,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+    func,
+)
+from sqlalchemy.orm import relationship
+
+from src.database.db import Base
+
+
+class WCTeam(Base):
+    __tablename__ = "wc_teams"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String, nullable=False, unique=True)
+    fifa_code = Column(String(3), nullable=False, unique=True)
+    confederation = Column(String, nullable=False)
+    group_letter = Column(String(1), nullable=False)
+
+    # Elo & rankings
+    elo_rating = Column(Float, nullable=True)
+    fifa_ranking = Column(Integer, nullable=True)
+    fifa_points = Column(Float, nullable=True)
+
+    # Economic indicators (World Bank API — WC-02-04)
+    gdp_per_capita = Column(Float, nullable=True)
+    population = Column(Float, nullable=True)
+    gini_coefficient = Column(Float, nullable=True)
+    political_stability = Column(Float, nullable=True)
+
+    # Squad data (Transfermarkt / YAML seed — WC-02-05)
+    squad_market_value = Column(Float, nullable=True)
+    avg_squad_age = Column(Float, nullable=True)
+    players_in_top5_leagues = Column(Integer, nullable=True)
+    cl_players = Column(Integer, nullable=True)
+    avg_caps = Column(Float, nullable=True)
+    squad_mv_gini = Column(Float, nullable=True)
+
+    # Manager
+    manager_name = Column(String, nullable=True)
+    manager_tenure_months = Column(Integer, nullable=True)
+
+    # Historical WC record
+    wc_appearances = Column(Integer, nullable=False, server_default="0")
+    best_wc_finish = Column(String, nullable=True)
+    is_host = Column(Integer, nullable=False, server_default="0")
+
+    # Meta
+    dark_horse_score = Column(Float, nullable=True)
+    home_capital_lat = Column(Float, nullable=True)
+    home_capital_lon = Column(Float, nullable=True)
+    home_avg_june_temp_c = Column(Float, nullable=True)
+
+    created_at = Column(String, nullable=False, server_default=func.now())
+
+    # Relationships
+    home_matches = relationship(
+        "WCMatch", foreign_keys="WCMatch.home_team_id", back_populates="home_team",
+    )
+    away_matches = relationship(
+        "WCMatch", foreign_keys="WCMatch.away_team_id", back_populates="away_team",
+    )
+
+    def __repr__(self) -> str:
+        return f"WCTeam(id={self.id}, name='{self.name}', group='{self.group_letter}')"
+
+
+class WCMatch(Base):
+    __tablename__ = "wc_matches"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    match_number = Column(Integer, nullable=True, unique=True)
+    group_letter = Column(String(1), nullable=True)
+    stage = Column(String, nullable=False, server_default="group")
+    matchday = Column(Integer, nullable=True)
+    date = Column(String, nullable=False)
+    kickoff_time = Column(String, nullable=True)
+    venue = Column(String, nullable=True)
+    city = Column(String, nullable=True)
+    altitude_m = Column(Float, nullable=True, server_default="0")
+
+    home_team_id = Column(Integer, ForeignKey("wc_teams.id"), nullable=False)
+    away_team_id = Column(Integer, ForeignKey("wc_teams.id"), nullable=False)
+    home_goals = Column(Integer, nullable=True)
+    away_goals = Column(Integer, nullable=True)
+    home_goals_ht = Column(Integer, nullable=True)
+    away_goals_ht = Column(Integer, nullable=True)
+    home_xg = Column(Float, nullable=True)
+    away_xg = Column(Float, nullable=True)
+    attendance = Column(Integer, nullable=True)
+    temperature_c = Column(Float, nullable=True)
+
+    status = Column(String, nullable=False, server_default="scheduled")
+
+    created_at = Column(String, nullable=False, server_default=func.now())
+    updated_at = Column(String, nullable=False, server_default=func.now())
+
+    # Relationships
+    home_team = relationship("WCTeam", foreign_keys=[home_team_id], back_populates="home_matches")
+    away_team = relationship("WCTeam", foreign_keys=[away_team_id], back_populates="away_matches")
+    odds = relationship("WCOdds", back_populates="match", cascade="all, delete-orphan")
+    predictions = relationship("WCPrediction", back_populates="match", cascade="all, delete-orphan")
+    value_bets = relationship("WCValueBet", back_populates="match", cascade="all, delete-orphan")
+    features = relationship("WCFeature", back_populates="match", uselist=False, cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("ix_wc_matches_date", "date"),
+        Index("ix_wc_matches_status", "status"),
+        Index("ix_wc_matches_stage", "stage"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"WCMatch(id={self.id}, #{self.match_number}, "
+            f"stage='{self.stage}', status='{self.status}')"
+        )
+
+
+class WCHistoricalMatch(Base):
+    __tablename__ = "wc_historical_matches"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    date = Column(String, nullable=False)
+    home_team = Column(String, nullable=False)
+    away_team = Column(String, nullable=False)
+    home_goals = Column(Integer, nullable=False)
+    away_goals = Column(Integer, nullable=False)
+    tournament = Column(String, nullable=True)
+    match_weight = Column(Float, nullable=False, server_default="0.5")
+    neutral_venue = Column(Integer, nullable=False, server_default="0")
+
+    __table_args__ = (
+        UniqueConstraint("date", "home_team", "away_team", name="uq_wc_hist_match"),
+        Index("ix_wc_hist_date", "date"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"WCHistoricalMatch({self.date}: {self.home_team} "
+            f"{self.home_goals}-{self.away_goals} {self.away_team})"
+        )
+
+
+class WCOdds(Base):
+    __tablename__ = "wc_odds"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    match_id = Column(Integer, ForeignKey("wc_matches.id"), nullable=False)
+    bookmaker = Column(String, nullable=False)
+    market_type = Column(String, nullable=False)
+    selection = Column(String, nullable=False)
+    odds_decimal = Column(Float, nullable=False)
+    implied_prob = Column(Float, nullable=True)
+    point = Column(Float, nullable=True)
+    captured_at = Column(String, nullable=False, server_default=func.now())
+    source = Column(String, nullable=True, server_default="odds_api")
+
+    # Relationships
+    match = relationship("WCMatch", back_populates="odds")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "match_id", "bookmaker", "market_type", "selection",
+            name="uq_wc_odds_entry",
+        ),
+        Index("ix_wc_odds_match", "match_id"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"WCOdds(match={self.match_id}, {self.bookmaker}, "
+            f"{self.market_type}: {self.selection} @ {self.odds_decimal})"
+        )
+
+
+class WCPrediction(Base):
+    __tablename__ = "wc_predictions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    match_id = Column(Integer, ForeignKey("wc_matches.id"), nullable=False)
+    model_name = Column(String, nullable=False, server_default="wc_poisson_v1")
+    home_win_prob = Column(Float, nullable=False)
+    draw_prob = Column(Float, nullable=False)
+    away_win_prob = Column(Float, nullable=False)
+    home_expected_goals = Column(Float, nullable=False)
+    away_expected_goals = Column(Float, nullable=False)
+    over_25_prob = Column(Float, nullable=True)
+    btts_prob = Column(Float, nullable=True)
+    most_likely_score = Column(String, nullable=True)
+    created_at = Column(String, nullable=False, server_default=func.now())
+
+    # Relationships
+    match = relationship("WCMatch", back_populates="predictions")
+    value_bets = relationship("WCValueBet", back_populates="prediction", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("ix_wc_preds_match", "match_id"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"WCPrediction(match={self.match_id}, "
+            f"H={self.home_win_prob:.2f}/D={self.draw_prob:.2f}/A={self.away_win_prob:.2f})"
+        )
+
+
+class WCValueBet(Base):
+    __tablename__ = "wc_value_bets"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    match_id = Column(Integer, ForeignKey("wc_matches.id"), nullable=False)
+    prediction_id = Column(Integer, ForeignKey("wc_predictions.id"), nullable=False)
+    market_type = Column(String, nullable=False)
+    selection = Column(String, nullable=False)
+    model_prob = Column(Float, nullable=False)
+    best_odds = Column(Float, nullable=False)
+    implied_prob = Column(Float, nullable=False)
+    edge = Column(Float, nullable=False)
+    bookmaker = Column(String, nullable=False)
+    kelly_stake = Column(Float, nullable=True)
+    outcome = Column(String, nullable=True)
+    created_at = Column(String, nullable=False, server_default=func.now())
+
+    # Relationships
+    match = relationship("WCMatch", back_populates="value_bets")
+    prediction = relationship("WCPrediction", back_populates="value_bets")
+
+    __table_args__ = (
+        Index("ix_wc_vb_match", "match_id"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"WCValueBet(match={self.match_id}, {self.selection} "
+            f"@ {self.best_odds}, edge={self.edge:.3f})"
+        )
+
+
+class WCFeature(Base):
+    __tablename__ = "wc_features"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    match_id = Column(Integer, ForeignKey("wc_matches.id"), nullable=False, unique=True)
+
+    # Tier 1 — Strength
+    elo_diff = Column(Float, nullable=True)
+    elo_home = Column(Float, nullable=True)
+    elo_away = Column(Float, nullable=True)
+    market_value_ratio = Column(Float, nullable=True)
+
+    # Tier 1 — Squad
+    avg_age_home = Column(Float, nullable=True)
+    avg_age_away = Column(Float, nullable=True)
+    top5_league_players_home = Column(Integer, nullable=True)
+    top5_league_players_away = Column(Integer, nullable=True)
+    cl_players_home = Column(Integer, nullable=True)
+    cl_players_away = Column(Integer, nullable=True)
+
+    # Tier 1 — Historical
+    wc_appearances_home = Column(Integer, nullable=True)
+    wc_appearances_away = Column(Integer, nullable=True)
+    best_finish_home = Column(Integer, nullable=True)
+    best_finish_away = Column(Integer, nullable=True)
+
+    # Tier 1 — Context
+    is_host_home = Column(Integer, nullable=True)
+    is_host_away = Column(Integer, nullable=True)
+
+    # Tier 2 — Confederation & rest
+    confederation_adj_home = Column(Float, nullable=True)
+    confederation_adj_away = Column(Float, nullable=True)
+    rest_days_home = Column(Integer, nullable=True)
+    rest_days_away = Column(Integer, nullable=True)
+
+    # Tier 2 — Economic
+    gdp_ratio = Column(Float, nullable=True)
+    population_ratio = Column(Float, nullable=True)
+
+    # Tier 2 — Tactical
+    manager_tenure_home = Column(Integer, nullable=True)
+    manager_tenure_away = Column(Integer, nullable=True)
+
+    # Tier 2 — Form & meta
+    home_form_last5 = Column(Float, nullable=True)
+    away_form_last5 = Column(Float, nullable=True)
+    dark_horse_score_home = Column(Float, nullable=True)
+    dark_horse_score_away = Column(Float, nullable=True)
+
+    # Tier 3 — Venue
+    altitude_m = Column(Float, nullable=True)
+    climate_gap_home = Column(Float, nullable=True)
+    climate_gap_away = Column(Float, nullable=True)
+    travel_distance_home_km = Column(Float, nullable=True)
+    travel_distance_away_km = Column(Float, nullable=True)
+
+    # Tier 3 — Tournament dynamics
+    motivation_home = Column(String, nullable=True)
+    motivation_away = Column(String, nullable=True)
+    matchday = Column(Integer, nullable=True)
+    group_strength = Column(Float, nullable=True)
+    stage_code = Column(Integer, nullable=True)
+
+    created_at = Column(String, nullable=False, server_default=func.now())
+
+    # Relationships
+    match = relationship("WCMatch", back_populates="features")
+
+    __table_args__ = (
+        Index("ix_wc_features_match", "match_id"),
+    )
+
+    def __repr__(self) -> str:
+        return f"WCFeature(match={self.match_id}, elo_diff={self.elo_diff})"
