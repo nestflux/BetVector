@@ -200,6 +200,10 @@ def _run_evening() -> dict:
     from src.world_cup.scraper import scrape_wc_results
     results["scrape_results"] = _step("Scrape WC Results", scrape_wc_results)
 
+    # 1b. Freeze closing lines + CLV for picks whose match just finished (WC-09-01)
+    from src.world_cup.value_finder import capture_wc_closing_lines
+    results["closing_lines"] = _step("Capture Closing Lines (CLV)", capture_wc_closing_lines)
+
     # 2. Update Elo
     from src.world_cup.calibration import update_tournament_elo
     results["elo_update"] = _step("Update Tournament Elo", update_tournament_elo)

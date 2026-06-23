@@ -244,6 +244,11 @@ class WCValueBet(Base):
     bookmaker = Column(String, nullable=False)
     kelly_stake = Column(Float, nullable=True)
     outcome = Column(String, nullable=True)
+    # Closing-line value (WC-09-01). closing_odds = best price for this selection
+    # frozen once the match starts (the last stored pre-kickoff snapshot — no new
+    # API cost). clv = (1/closing_odds) - (1/best_odds); +ve = we beat the close.
+    closing_odds = Column(Float, nullable=True)
+    clv = Column(Float, nullable=True)
     created_at = Column(String, nullable=False, server_default=func.now())
 
     # Relationships

@@ -19,6 +19,7 @@ from pathlib import Path
 
 import yaml
 from sqlalchemy import select
+from sqlalchemy.orm import joinedload
 
 from src.database.db import get_session
 from src.world_cup.models import (
@@ -359,6 +360,70 @@ def save_wc_value_bets(value_bets: list[WCValueBetResult]) -> dict:
                 new_count, updated_count, skipped)
     return {"new": new_count, "updated": updated_count, "skipped": skipped,
             "total": len(value_bets)}
+
+
+def capture_wc_closing_lines() -> dict:
+    """Freeze the closing line and compute CLV for WC shadow picks whose match
+    has finished (WC-09-01).
+
+    The closing line is the best stored price for the pick's selection — i.e. the
+    last pre-kickoff odds snapshot, which is already in ``wc_odds`` (the scraper
+    upserts, so once a match leaves the API its odds are frozen). So this adds
+    **no new API cost**. Idempotent: only fills ``closing_odds`` where it is NULL.
+
+    CLV = (1/closing_odds) - (1/best_odds) — the league convention. A positive CLV
+    means we took a better price than the close, the leading indicator of edge.
+    """
+    captured = 0
+    skipped_no_odds = 0
+
+    with get_session() as session:
+        # Picks that don't yet have a closing line, with match + teams + odds eager-loaded
+        vbs = session.execute(
+            select(WCValueBet)
+            .where(WCValueBet.closing_odds.is_(None))
+            .options(
+                joinedload(WCValueBet.match).joinedload(WCMatch.home_team),
+                joinedload(WCValueBet.match).joinedload(WCMatch.away_team),
+                joinedload(WCValueBet.match).joinedload(WCMatch.odds),
+            )
+        ).unique().scalars().all()
+
+        for vb in vbs:
+            m = vb.match
+            # The line is only "closed" once the match has been played.
+            if not m or m.status != "finished":
+                continue
+
+            home_name = m.home_team.name if m.home_team else ""
+            away_name = m.away_team.name if m.away_team else ""
+
+            # Best frozen price for this pick's canonical selection = the close.
+            best = 0.0
+            for o in m.odds:
+                if o.market_type != vb.market_type:
+                    continue
+                canon = _canonical_selection(
+                    o.market_type, o.selection, home_name, away_name, o.point
+                )
+                if canon == vb.selection and o.odds_decimal > best:
+                    best = o.odds_decimal
+
+            if best <= 1.0:
+                skipped_no_odds += 1
+                continue
+
+            vb.closing_odds = best
+            vb.clv = round((1.0 / best) - (1.0 / vb.best_odds), 6)
+            captured += 1
+
+        session.commit()
+
+    logger.info(
+        "capture_wc_closing_lines: %d closing lines captured, %d skipped (no odds)",
+        captured, skipped_no_odds,
+    )
+    return {"captured": captured, "skipped_no_odds": skipped_no_odds}
 
 
 if __name__ == "__main__":
