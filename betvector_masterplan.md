@@ -1,6 +1,6 @@
 # BetVector — Masterplan
 
-Version 1.3 · March 2026
+Version 1.4 · June 2026
 
 ---
 
@@ -1534,7 +1534,7 @@ The model trained on just 2 seasons (760 matches) — a dangerously small sample
 | **E23-06 (Full Backfill)** | **0.5781** | **+2.78%** | **6 seasons (2,280)** | **3× training data — model now profitable** |
 | E25-03 (XGBoost Backtest) | 0.5781 | +2.78% | 5 seasons (1,900) | Poisson wins — XGBoost overfits (Brier 0.5821, ROI −19%), ensemble unprofitable (ROI −9.4%) |
 
-### 13.14 — E24 — Dashboard Fixes & Fixtures Value Grid (Planned)
+### 13.14 — E24 — Dashboard Fixes & Fixtures Value Grid (Completed)
 
 Three dashboard issues preventing effective forward-looking use: Today's Picks shows stale 2024 data due to an unbounded fallback cascade, the Match Deep Dive page is empty for future matches even when predictions exist, and the Fixtures page gives no analytical insight without clicking into each match.
 
@@ -1548,7 +1548,7 @@ Three dashboard issues preventing effective forward-looking use: Today's Picks s
 
 **E24-05: Fixtures + Picks Integration Test.** End-to-end verification: run the morning pipeline → confirm fixtures show color-coded grid with live data → confirm Today's Picks shows only upcoming matches → confirm Deep Dive works for every scheduled match with full prediction content.
 
-### 13.15 — E25 — XGBoost Ensemble Model (Planned)
+### 13.15 — E25 — XGBoost Ensemble Model (Completed)
 
 The Poisson GLM is at its ceiling — it cannot exploit non-linear interactions between features (e.g., Pinnacle odds × Elo × congestion). XGBoost (gradient-boosted decision trees) is the natural next model, and the architecture was designed for this from day one: `BaseModel` defines the abstract interface, every model produces a 7×7 scoreline matrix, and `ensemble_weights.py` already handles weighted combination.
 
@@ -1559,3 +1559,12 @@ The Poisson GLM is at its ceiling — it cannot exploit non-linear interactions 
 **E25-03: Walk-Forward Backtest.** Compare three configurations across 5 historical seasons: Poisson-only, XGBoost-only, and weighted ensemble. Metrics: Brier score, ROI, calibration, log-loss. Store results in ModelPerformance table. This determines which configuration becomes the production default.
 
 **E25-04: Promote Best Model.** Based on E25-03 results, update `config/settings.yaml` to set the winning model/ensemble as the production default. Update pipeline to use the promoted configuration. If XGBoost underperforms, Poisson remains the sole production model — no forced adoption.
+
+### 13.16 — Epic History From E26 Onward (Pointer)
+
+This changelog originally recorded one narrative subsection per epic (13.1–13.15, through E25). From **E26 onward** that detailed history is maintained in two places that the gate process already keeps current, and is **not** duplicated here:
+
+- **`CLAUDE.md` → "Current Status"** — the authoritative, committed ledger of every completed epic and post-critical-path (PC-xx) issue, each with a one-line outcome (e.g. E26 Dashboard UX Overhaul, E33 Neon migration, E34 multi-user auth, E40 Transfermarkt datasets, PC-01–PC-25).
+- **Build plans** — `betvector_buildplan.md` (league system) and `worldcup_buildplan.md` (the time-boxed World Cup 2026 add-on module — isolated `wc_`-prefixed tables and `src/world_cup/` code, complete and self-contained).
+
+Rationale: the project accumulated four overlapping status records (this section, CLAUDE.md, the build plans, primer.md), and §13 drifted because it was the most effortful copy to maintain. Collapsing to a single source of truth — CLAUDE.md + the build plans — prevents recurrence. Architectural changes from later epics that affect the core system (e.g. the E33 SQLite→Neon migration) are folded directly into the relevant sections above (§5, §6) as they occur, per Rule 8 Tier 1.
