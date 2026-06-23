@@ -16,7 +16,7 @@ from sqlalchemy.orm import joinedload
 from src.database.db import get_session
 from src.world_cup.flags import render_flag
 from src.world_cup.models import (
-    WCMatch, WCOdds, WCPrediction, WCTeam, WCValueBet,
+    WCMatch, WCPrediction, WCTeam, WCValueBet,
 )
 from src.world_cup.predictor import MODEL_NAME
 from src.world_cup.timeutil import EASTERN, eastern_date, format_kickoff_et
@@ -33,10 +33,6 @@ YELLOW = "#D29922"
 BORDER = "#30363D"
 
 TOTAL_MATCHES = 104  # FIFA 2026: 48 group + 16 R32 + 8 R16 + 4 QF + 2 SF + 2 (3rd/Final)
-
-
-def _today() -> str:
-    return date.today().isoformat()
 
 
 def _section_header(title: str) -> None:
@@ -74,7 +70,7 @@ def _render_header() -> None:
     # so the page leads with content, not chrome (WC-08-03).
     st.markdown(
         "#### 🏆 FIFA World Cup 2026 "
-        f"<span style='color:#8B949E;font-weight:400;font-size:0.85rem'>"
+        f"<span style='color:{TEXT_DIM};font-weight:400;font-size:0.85rem'>"
         f"· {played}/{TOTAL_MATCHES} played · {days_remaining} days to final</span>",
         unsafe_allow_html=True,
     )
