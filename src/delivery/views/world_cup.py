@@ -205,7 +205,8 @@ def _compute_group_standings() -> dict[str, list[dict]]:
         if t.group_letter not in raw:
             raw[t.group_letter] = {}
         raw[t.group_letter][t.id] = {
-            "name": t.name, "pts": 0, "gd": 0, "gf": 0, "mp": 0, "w": 0, "d": 0, "l": 0,
+            "name": t.name, "fifa_code": t.fifa_code,
+            "pts": 0, "gd": 0, "gf": 0, "mp": 0, "w": 0, "d": 0, "l": 0,
         }
 
     for m in finished:
@@ -252,8 +253,6 @@ def _compute_group_standings() -> dict[str, list[dict]]:
 # ============================================================================
 
 def _render_group_standings() -> None:
-    _section_header("Group Standings")
-
     standings = _compute_group_standings()
 
     # Display in 2-column grid (6 rows)
@@ -281,9 +280,10 @@ def _render_group_standings() -> None:
                             color = YELLOW
                         else:
                             color = RED
-                        name_cell = f'<span style="color:{color}">●</span> {t["name"]}'
+                        name_cell = (f'{render_flag(t["fifa_code"])} '
+                                     f'<span style="color:{color}">●</span> {escape(t["name"])}')
                     else:
-                        name_cell = t["name"]
+                        name_cell = f'{render_flag(t["fifa_code"])} {escape(t["name"])}'
                     rows_html += (
                         f"<tr>"
                         f"<td>{name_cell}</td>"
@@ -315,8 +315,6 @@ def _color_for_prob(p: float) -> str:
 
 
 def _render_group_advancement() -> None:
-    _section_header("Group Advancement Probabilities")
-
     try:
         result = _cached_simulation()
         probs = result.get("team_probs", {})
@@ -363,20 +361,22 @@ def _render_group_advancement() -> None:
             teams_sorted = sorted(groups_data[g], key=lambda x: -x["advance"])
 
             with col:
-                with st.expander(f"Group {g}", expanded=False):
-                    for t in teams_sorted:
-                        adv = t["advance"]
-                        color = _color_for_prob(adv)
-                        st.markdown(
-                            f'<span style="color:{color}">●</span> '
-                            f'**{t["name"]}** — P(advance) = {adv:.0%}',
-                            unsafe_allow_html=True,
-                        )
-                        st.caption(
-                            f"1st: {t['p_1st']:.0%} · 2nd: {t['p_2nd']:.0%} · "
-                            f"3rd-Q: {t['p_3rd_q']:.0%} · Elim: {1 - adv:.0%}"
-                        )
-                    st.write("")
+                # Plain group block (no inner expander — the whole section sits
+                # inside a top-level expander, and Streamlit forbids nesting them).
+                st.markdown(f"**Group {g}**")
+                for t in teams_sorted:
+                    adv = t["advance"]
+                    color = _color_for_prob(adv)
+                    st.markdown(
+                        f'<span style="color:{color}">●</span> '
+                        f'**{escape(t["name"])}** — P(advance) = {adv:.0%}',
+                        unsafe_allow_html=True,
+                    )
+                    st.caption(
+                        f"1st: {t['p_1st']:.0%} · 2nd: {t['p_2nd']:.0%} · "
+                        f"3rd-Q: {t['p_3rd_q']:.0%} · Elim: {1 - adv:.0%}"
+                    )
+                st.write("")
 
     # What-if scenario selector
     _section_header("What-If Scenario")
@@ -446,8 +446,18 @@ def _render_group_advancement() -> None:
                             unsafe_allow_html=True,
                         )
 
-    # Third-place comparison table — actual standings 3rd + sim P(qualify as best 3rd)
-    _section_header("Third-Place Qualification")
+
+def _render_third_place() -> None:
+    """Third-place race — teams currently ranked 3rd in their group, sorted by
+    simulated P(qualify as one of the best-8 third-placed teams). Its own
+    collapsible on the Groups tab (WC-08-05)."""
+    try:
+        pos_probs = _cached_simulation().get("position_probs", {})
+    except Exception as e:
+        st.warning(f"Could not load simulation: {e}")
+        return
+    standings = _compute_group_standings()
+
     st.caption(
         "Best 8 of 12 third-placed teams advance to the Round of 32. "
         "Teams shown are currently ranked 3rd in their group."
@@ -477,6 +487,8 @@ def _render_group_advancement() -> None:
         third_place_rows.sort(key=lambda x: -x["_sort"])
         display_rows = [{k: v for k, v in r.items() if k != "_sort"} for r in third_place_rows]
         st.dataframe(display_rows, use_container_width=True, hide_index=True)
+    else:
+        st.info("Third-place standings appear once group matches are played.")
 
 
 # ============================================================================
@@ -871,8 +883,13 @@ def main() -> None:
         _render_value_bets()
 
     with tab_groups:
-        _render_group_standings()
-        _render_group_advancement()
+        # Collapsed by default so the tab opens compact — expand what you need.
+        with st.expander("📊 Group Standings", expanded=False):
+            _render_group_standings()
+        with st.expander("🎯 Advancement Probabilities & What-If", expanded=False):
+            _render_group_advancement()
+        with st.expander("🥉 Third-Place Race", expanded=False):
+            _render_third_place()
 
     with tab_ko:
         _render_knockout_bracket()
