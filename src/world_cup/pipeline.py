@@ -29,6 +29,18 @@ logger = logging.getLogger(__name__)
 
 LOG_DIR = Path(__file__).resolve().parents[2] / "data" / "logs"
 
+# Load .env for local/direct runs so DATABASE_URL (Neon) is honored, exactly
+# like run_pipeline.py does for the league pipeline. The launchd wrapper
+# (run_wc_pipeline.sh) also sources .env, but auto-loading here ensures a
+# direct `python -m src.world_cup.pipeline` run targets the SAME database —
+# preventing the SQLite/Neon split-brain where odds and predictions landed
+# in different DBs and value bets could never be produced.
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+except ImportError:
+    pass  # python-dotenv not installed — env vars must be set externally
+
 
 def _setup_logging(mode: str) -> None:
     """Configure file + console logging for this pipeline run."""

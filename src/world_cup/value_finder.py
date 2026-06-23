@@ -25,6 +25,7 @@ from src.world_cup.models import (
     WCMatch, WCOdds, WCPrediction, WCTeam, WCValueBet,
 )
 from src.world_cup.predictor import MODEL_NAME
+from src.world_cup.scraper import _normalize_team_name
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,52 @@ MARKET_TO_PROB = {
     ("btts", "yes"): "btts_prob",
     ("btts", "no"): "_btts_no_prob",  # computed as 1 - btts_prob
 }
+
+
+def _canonical_selection(
+    market_type: str,
+    selection: str,
+    home_name: str,
+    away_name: str,
+    point: float | None,
+) -> str | None:
+    """Translate a raw Odds API selection into the canonical key used by
+    MARKET_TO_PROB.
+
+    The Odds API stores h2h outcomes as team names ("Argentina") plus
+    "Draw", and totals as "Over"/"Under" with the line in a separate
+    ``point`` field. The WC model exposes probabilities keyed by
+    home/draw/away and the 2.5-goals line only, so we map team names to
+    home/away (applying the same name normalization the scraper uses) and
+    ignore totals lines other than 2.5. Returns None for anything we can't
+    line up with a model probability (e.g. spreads, h2h_lay, other lines).
+    """
+    sel = (selection or "").strip()
+    if market_type == "h2h":
+        if sel.lower() == "draw":
+            return "draw"
+        norm = _normalize_team_name(sel)
+        if norm == home_name:
+            return "home"
+        if norm == away_name:
+            return "away"
+        return None
+    if market_type == "totals":
+        # The model only prices the 2.5 line; skip every other line so we
+        # never compare, say, Over 1.5 odds against the 2.5 probability.
+        if point is not None and abs(point - 2.5) > 1e-9:
+            return None
+        low = sel.lower()
+        if low.startswith("over"):
+            return "over"
+        if low.startswith("under"):
+            return "under"
+        return None
+    if market_type == "btts":
+        low = sel.lower()
+        if low in ("yes", "no"):
+            return low
+    return None
 
 
 @dataclass
@@ -160,10 +207,18 @@ def find_wc_value_bets(
             if not odds_rows:
                 continue
 
-            # Find best odds per (market_type, selection)
+            # Find best odds per (market_type, canonical_selection). The Odds
+            # API returns h2h selections as team names + "Draw" and totals as
+            # "Over"/"Under"; normalize to the home/draw/away/over/under keys
+            # MARKET_TO_PROB uses so model probabilities line up with odds.
             best_per_market: dict[tuple[str, str], WCOdds] = {}
             for o in odds_rows:
-                key = (o.market_type, o.selection)
+                canon = _canonical_selection(
+                    o.market_type, o.selection, home_name, away_name, o.point
+                )
+                if canon is None:
+                    continue
+                key = (o.market_type, canon)
                 if key not in best_per_market or o.odds_decimal > best_per_market[key].odds_decimal:
                     best_per_market[key] = o
 
