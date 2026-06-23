@@ -2,10 +2,12 @@
 
 Version 1.0 · June 2026
 
-> **MODULE STATUS: ✅ COMPLETE — 21/21 issues (all 7 epics)** · June 23, 2026
-> All issues passed the 3-gate review. Pipeline + launchd automation ready for
-> the tournament. Install step: `cp scripts/com.betvector.wc_*.plist ~/Library/LaunchAgents/`
-> then `launchctl load` both. Full test suite: 621/621 passing.
+> **MODULE STATUS: ✅ COMPLETE — 28/28 issues (8 epics, incl. WC-08 UX redesign)** · June 23, 2026
+> All issues passed the 3-gate review. Pipeline + launchd automation ready for the
+> tournament; the dashboard is redesigned into 4 tabs with country flags, ET kickoff
+> times, and collapsible reference sections (WC-08). Install step:
+> `cp scripts/com.betvector.wc_*.plist ~/Library/LaunchAgents/` then `launchctl load`
+> both. Full test suite: 667/667 passing.
 
 ---
 
@@ -821,7 +823,7 @@ horizontally on narrow screens). Target is "good on both," not pixel-perfect.
 
 ---
 
-### WC-08-01 — Country Flag Assets & Helper
+### WC-08-01 — Country Flag Assets & Helper ✅ DONE
 
 **Type:** UI / Data
 **Depends on:** Nothing (extends the existing WC dashboard + badge pattern)
@@ -841,14 +843,14 @@ team-badge pattern in `data/badges/`.
 - No render-time CDN dependency — flags served from local assets.
 
 **Acceptance Criteria:**
-- [ ] `data/flags/` contains a flag for all 48 WC teams
-- [ ] England / Scotland / Wales show their own flags (not the Union Jack)
-- [ ] `render_flag()` returns an inline image; a missing flag falls back to text without erroring
-- [ ] Re-running the downloader is idempotent (skips existing files)
+- [x] `data/flags/` contains a flag for all 48 WC teams
+- [x] England / Scotland / Wales show their own flags (not the Union Jack)
+- [x] `render_flag()` returns an inline image; a missing flag falls back to text without erroring
+- [x] Re-running the downloader is idempotent (skips existing files)
 
 ---
 
-### WC-08-02 — Eastern Time Conversion Utility
+### WC-08-02 — Eastern Time Conversion Utility ✅ DONE
 
 **Type:** UI
 **Depends on:** Nothing
@@ -865,14 +867,14 @@ Convert UTC kickoff times to US Eastern for display.
 - Guard against missing/empty kickoff times (return a clear placeholder).
 
 **Acceptance Criteria:**
-- [ ] UTC kickoff converts to correct US Eastern time (EDT in June)
-- [ ] Date-shift across midnight is handled correctly
-- [ ] Times render labelled "ET"
-- [ ] Missing/empty kickoff shows a safe placeholder, no crash
+- [x] UTC kickoff converts to correct US Eastern time (EDT in June)
+- [x] Date-shift across midnight is handled correctly
+- [x] Times render labelled "ET"
+- [x] Missing/empty kickoff shows a safe placeholder, no crash
 
 ---
 
-### WC-08-03 — Tabbed Shell & Slim Header
+### WC-08-03 — Tabbed Shell & Slim Header ✅ DONE
 
 **Type:** UI
 **Depends on:** Nothing
@@ -889,14 +891,14 @@ section logic changes yet).
 - Default tab = Today & Bets (first).
 
 **Acceptance Criteria:**
-- [ ] Page renders 4 tabs; Today & Bets is the landing tab
-- [ ] Slim one-line header replaces the metric cards
-- [ ] All existing sections still render (relocated, not removed)
-- [ ] No regression in data loading (predictions / odds / value bets still shown)
+- [x] Page renders 4 tabs; Today & Bets is the landing tab
+- [x] Slim one-line header replaces the metric cards
+- [x] All existing sections still render (relocated, not removed)
+- [x] No regression in data loading (predictions / odds / value bets still shown)
 
 ---
 
-### WC-08-04 — Tab 1: Today & Bets
+### WC-08-04 — Tab 1: Today & Bets ✅ DONE
 
 **Type:** UI
 **Depends on:** WC-08-01, WC-08-02, WC-08-03
@@ -915,15 +917,15 @@ Build the actionable landing tab.
 - Responsive: small flags, dense rows, `st.dataframe` for the value table.
 
 **Acceptance Criteria:**
-- [ ] Fixtures strip shows flags, ET kickoffs, model lean, best price for today + 2 days
-- [ ] Value Bets table appears immediately below fixtures
-- [ ] Value bets labelled as tracked / shadow picks
-- [ ] No N+1 queries (verified by query count)
-- [ ] Renders cleanly on a narrow (mobile) viewport
+- [x] Fixtures strip shows flags, ET kickoffs, model lean, best price for today + 2 days
+- [x] Value Bets table appears immediately below fixtures
+- [x] Value bets labelled as tracked / shadow picks
+- [x] No N+1 queries (verified by query count)
+- [x] Renders cleanly on a narrow (mobile) viewport
 
 ---
 
-### WC-08-05 — Tab 2: Groups (Collapsible)
+### WC-08-05 — Tab 2: Groups (Collapsible) ✅ DONE
 
 **Type:** UI
 **Depends on:** WC-08-01, WC-08-03
@@ -939,14 +941,14 @@ Move group reference content into collapsible sections.
 - Add flags to standings rows.
 
 **Acceptance Criteria:**
-- [ ] Standings, advancement, and third-place each in a collapsed expander
-- [ ] Flags shown in standings rows
-- [ ] What-if widget still works
-- [ ] Expanding / collapsing does not re-trigger the 10K simulation (cache intact)
+- [x] Standings, advancement, and third-place each in a collapsed expander
+- [x] Flags shown in standings rows
+- [x] What-if widget still works
+- [x] Expanding / collapsing does not re-trigger the 10K simulation (cache intact)
 
 ---
 
-### WC-08-06 — Tab 3 & Tab 4: Knockouts + Model
+### WC-08-06 — Tab 3 & Tab 4: Knockouts + Model ✅ DONE
 
 **Type:** UI
 **Depends on:** WC-08-01, WC-08-03
@@ -961,13 +963,13 @@ Relocate the bracket and model sections into their tabs.
 - Responsive layouts.
 
 **Acceptance Criteria:**
-- [ ] Knockouts tab shows the bracket with flags
-- [ ] Model tab shows winner probabilities + Brier / calibration
-- [ ] Both render on narrow viewports
+- [x] Knockouts tab shows the bracket with flags
+- [x] Model tab shows winner probabilities + Brier / calibration
+- [x] Both render on narrow viewports
 
 ---
 
-### WC-08-07 — Responsive Polish & Integration Test
+### WC-08-07 — Responsive Polish & Integration Test ✅ DONE
 
 **Type:** Test
 **Depends on:** WC-08-04, WC-08-05, WC-08-06
@@ -983,11 +985,11 @@ Verify the full redesign on desktop + mobile and lock behavior with tests.
   predictions, standings).
 
 **Acceptance Criteria:**
-- [ ] All 4 tabs render error-free against Neon
-- [ ] Flag helper + ET conversion covered by unit tests
-- [ ] Tab 1 fixtures / value queries are bulk (no N+1)
-- [ ] Verified on desktop and narrow / mobile viewport
-- [ ] Full test suite green
+- [x] All 4 tabs render error-free against Neon
+- [x] Flag helper + ET conversion covered by unit tests
+- [x] Tab 1 fixtures / value queries are bulk (no N+1)
+- [x] Verified on desktop and narrow / mobile viewport
+- [x] Full test suite green
 
 ---
 

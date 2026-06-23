@@ -350,9 +350,9 @@ single-line expression.
 
 ## Current Status
 
-Last completed: PC-27 Cloud Re-migration ✅ — hybrid cloud cutover verified live (local pipeline → Neon → Streamlit Cloud). Also fixed WC odds/value bets not showing on cloud (split-brain + schema drift + value_finder selection bug; commit f7a70c3). League + WC modules feature-complete.
-Currently working: Nothing on the critical path. Recommended next: WC model calibration (edges skew to totals/under + h2h/draw → likely draw/under over-prediction bias).
-Next up: WC model calibration vs 12 finished results + league-style edge cap/λ clamp guardrails. Owner tasks: (1) install WC launchd plists; (2) PC-27 7-day cloud soak monitoring.
+Last completed: WC-08 Dashboard UX Redesign ✅ — WC dashboard rebuilt into 4 tabs (Today & Bets / Groups / Knockouts / Model) with country flags, ET kickoff times, collapsible group reference, responsive (desktop+mobile). 7 issues, 3-gate reviewed, 667/667 tests. Earlier this session: WC model calibration (removed draw_boost, edge ceiling), PC-27 cloud cutover, WC split-brain fix.
+Currently working: Nothing on the critical path. League + WC modules feature-complete.
+Next up: (optional) WC model calibration round 2 / Bayesian model (Tier-2 proposal). Owner tasks: (1) reboot Streamlit Cloud to see the WC-08 redesign; (2) install WC launchd plists; (3) PC-27 7-day cloud soak.
 Hybrid cloud: DB is Neon Postgres (DATABASE_URL in .env / Streamlit Cloud secrets [database] connection_string); local SQLite kept as backup.
 
 E40 complete: All 10 issues done ✅ (TM datasets download, lineup/formation/manager backfill, manager features, injury club fix, minutes impact, recomputation, weekly refresh, integration test — 14,187 matches, 9,829 TM-mapped, 393K lineups, 42 tests)
