@@ -695,12 +695,14 @@ Display the knockout bracket with predicted advancement probabilities.
 - Use SVG or HTML/CSS for bracket layout (not matplotlib — needs to be interactive)
 
 **Acceptance Criteria:**
-- [ ] Knockout bracket displays all rounds (R32 → Final)
-- [ ] Each matchup shows both teams with advancement probabilities
-- [ ] Completed matches show actual results
-- [ ] Predicted matches show model probabilities
-- [ ] Value bet flags visible on bracket
-- [ ] Bracket renders correctly in Streamlit
+- [x] Knockout bracket displays all rounds (R32 → Final)
+- [x] Each matchup shows both teams with advancement probabilities
+- [x] Completed matches show actual results
+- [x] Predicted matches show model probabilities
+- [x] Value bet flags visible on bracket
+- [x] Bracket renders correctly in Streamlit
+
+**Status:** ✅ DONE — HTML/CSS bracket cards with Elo + P(advance) + best odds + value bet flags. Projected bracket from group standings (sorted top-8 thirds), actual bracket from DB knockout matches. html.escape defense, None-safe Elo, try/except fallback. 621/621 tests.
 
 ---
 

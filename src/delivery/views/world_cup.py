@@ -6,6 +6,7 @@ value bets, model performance, and winner probability chart.
 """
 
 from datetime import date, datetime
+from html import escape
 
 import plotly.graph_objects as go
 import streamlit as st
@@ -629,6 +630,183 @@ def _render_winner_chart() -> None:
 
 
 # ============================================================================
+# Section 7 — Knockout Bracket Visualization (WC-06-03)
+# ============================================================================
+
+def _render_knockout_bracket() -> None:
+    _section_header("Knockout Bracket")
+
+    with get_session() as session:
+        ko_matches = session.execute(
+            select(WCMatch)
+            .where(WCMatch.stage != "group")
+            .options(
+                joinedload(WCMatch.home_team),
+                joinedload(WCMatch.away_team),
+                joinedload(WCMatch.value_bets),
+                joinedload(WCMatch.odds),
+            )
+            .order_by(WCMatch.stage, WCMatch.match_number)
+        ).unique().scalars().all()
+
+    try:
+        result = _cached_simulation()
+        probs = result.get("team_probs", {})
+    except Exception:
+        probs = {}
+
+    # If no knockout matches in DB yet, build projected bracket from standings
+    if not ko_matches:
+        try:
+            standings = _compute_group_standings()
+            projected = _build_projected_bracket(standings, probs)
+            if projected:
+                st.caption("Projected bracket based on current group standings. Updates as matches are played.")
+                _render_projected_bracket_html(projected, probs)
+            else:
+                st.info("Knockout bracket will appear once group results determine the matchups.")
+        except Exception as e:
+            st.warning(f"Could not build projected bracket: {e}")
+        return
+
+    # Organize by stage
+    stages = {"r32": [], "r16": [], "qf": [], "sf": [], "final": []}
+    for m in ko_matches:
+        if m.stage in stages:
+            stages[m.stage].append(m)
+
+    stage_labels = {"r32": "Round of 32", "r16": "Round of 16", "qf": "Quarter-Finals",
+                    "sf": "Semi-Finals", "final": "Final"}
+
+    for stage_key, label in stage_labels.items():
+        matches = stages.get(stage_key, [])
+        if not matches:
+            continue
+
+        st.markdown(f"**{label}**")
+        for m in matches:
+            h_name = escape(m.home_team.name) if m.home_team else "TBD"
+            a_name = escape(m.away_team.name) if m.away_team else "TBD"
+
+            h_elo = (m.home_team.elo_rating or 0) if m.home_team else 0
+            a_elo = (m.away_team.elo_rating or 0) if m.away_team else 0
+
+            h_adv = probs.get(h_name, {}).get(stage_key, 0)
+            a_adv = probs.get(a_name, {}).get(stage_key, 0)
+
+            has_vb = len(m.value_bets) > 0
+
+            if m.status == "finished" and m.home_goals is not None:
+                score = f"{m.home_goals} - {m.away_goals}"
+                # Knockout draws go to ET/pens — DB stores final result
+                winner = h_name if m.home_goals > m.away_goals else (
+                    a_name if m.away_goals > m.home_goals else None)
+                result_color = GREEN
+            else:
+                score = "vs"
+                winner = None
+                result_color = TEXT_DIM
+
+            vb_flag = f' <span style="color:{YELLOW}">★</span>' if has_vb else ""
+
+            # Best h2h odds for unfinished matches
+            odds_line = ""
+            if m.status != "finished" and m.odds:
+                best_by_sel: dict[str, float] = {}
+                for o in m.odds:
+                    if o.market_type == "h2h":
+                        if o.selection not in best_by_sel or o.odds_decimal > best_by_sel[o.selection]:
+                            best_by_sel[o.selection] = o.odds_decimal
+                if best_by_sel:
+                    parts = [f"{sel}: {dec:.2f}" for sel, dec in sorted(best_by_sel.items())]
+                    odds_line = (
+                        f'<div style="font-size:0.75rem;color:{TEXT_DIM};text-align:center;">'
+                        f'Odds: {" · ".join(parts)}</div>'
+                    )
+
+            h_info = f"{h_name} ({h_elo:.0f}, {h_adv:.0%})"
+            a_info = f"{a_name} ({a_elo:.0f}, {a_adv:.0%})"
+
+            st.markdown(
+                f'<div style="border:1px solid {BORDER};border-radius:4px;margin-bottom:4px;'
+                f'padding:4px 8px;font-size:0.85rem;">'
+                f'<div style="display:flex;justify-content:space-between;">'
+                f'<span style="color:{GREEN if winner == h_name else TEXT}">{h_info}</span>'
+                f'<span style="color:{result_color}">{score}</span>'
+                f'<span style="color:{GREEN if winner == a_name else TEXT}">{a_info}</span>'
+                f'{vb_flag}</div>{odds_line}</div>',
+                unsafe_allow_html=True,
+            )
+
+
+def _build_projected_bracket(
+    standings: dict[str, list[dict]],
+    probs: dict,
+) -> list[dict]:
+    """Build projected R32 matchups from current group standings."""
+    winners = {}
+    runners = {}
+    for g, teams in standings.items():
+        if len(teams) >= 2:
+            winners[g] = teams[0]["name"]
+            runners[g] = teams[1]["name"]
+
+    # Third-place teams sorted by pts/GD/GF then top-8 (matches simulator logic)
+    thirds_raw = []
+    for g, teams in standings.items():
+        if len(teams) >= 3:
+            thirds_raw.append(teams[2])
+    thirds_raw.sort(key=lambda x: (-x["pts"], -x["gd"], -x["gf"]))
+    thirds = [t["name"] for t in thirds_raw[:8]]
+
+    # Cross-group pairings (same as simulator _build_r32)
+    wr_pairs = [
+        ("C", "D"), ("D", "C"), ("G", "H"), ("H", "G"),
+        ("I", "K"), ("K", "I"), ("J", "L"), ("L", "J"),
+    ]
+    matchups = []
+    for w_group, r_group in wr_pairs:
+        w = winners.get(w_group, "TBD")
+        r = runners.get(r_group, "TBD")
+        matchups.append({"home": w, "away": r, "type": "W vs R"})
+
+    wt_groups = ["A", "B", "E", "F"]
+    for i, gl in enumerate(wt_groups):
+        w = winners.get(gl, "TBD")
+        t = thirds[i] if i < len(thirds) else "TBD"
+        matchups.append({"home": w, "away": t, "type": "W vs 3rd"})
+
+    rt_groups = ["A", "B", "E", "F"]
+    for i, gl in enumerate(rt_groups):
+        r = runners.get(gl, "TBD")
+        idx = i + 4
+        t = thirds[idx] if idx < len(thirds) else "TBD"
+        matchups.append({"home": r, "away": t, "type": "R vs 3rd"})
+
+    return matchups
+
+
+def _render_projected_bracket_html(matchups: list[dict], probs: dict) -> None:
+    """Render projected bracket as styled HTML matchup cards."""
+    for i, m in enumerate(matchups):
+        h_adv = probs.get(m["home"], {}).get("r32", 0)
+        a_adv = probs.get(m["away"], {}).get("r32", 0)
+
+        h_color = GREEN if h_adv > a_adv else TEXT
+        a_color = GREEN if a_adv > h_adv else TEXT
+
+        st.markdown(
+            f'<div style="display:flex;justify-content:space-between;padding:4px 8px;'
+            f'border:1px solid {BORDER};border-radius:4px;margin-bottom:4px;font-size:0.85rem;">'
+            f'<span style="color:{h_color}">{escape(m["home"])} ({h_adv:.0%})</span>'
+            f'<span style="color:{TEXT_DIM}">vs</span>'
+            f'<span style="color:{a_color}">{escape(m["away"])} ({a_adv:.0%})</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+
+# ============================================================================
 # Page Entry Point
 # ============================================================================
 
@@ -637,6 +815,7 @@ def main() -> None:
     _render_todays_matches()
     _render_group_standings()
     _render_group_advancement()
+    _render_knockout_bracket()
     _render_value_bets()
     _render_model_performance()
     _render_winner_chart()
