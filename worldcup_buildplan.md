@@ -483,10 +483,11 @@ Adapt the BetVector Poisson model for international World Cup football.
 
 ---
 
-### WC-04-02 — Tournament Simulator
+### WC-04-02 — Tournament Simulator ✅ DONE
 
 **Type:** Model
 **Depends on:** WC-04-01
+**Results:** 10K sims in 3.9s. Winner sum=1.0. Top 5: Argentina 6.0%, Spain 5.5%, Japan 4.8%, Morocco 4.2%, France 4.1%. H2H tiebreaker, correct R32 bracket (winners face thirds), penalty clamp [0.35,0.65].
 
 Monte Carlo simulation of the entire tournament to compute advancement probabilities.
 
