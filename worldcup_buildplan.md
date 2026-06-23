@@ -260,10 +260,11 @@ Compute Elo ratings for all 48 teams from historical international results.
 
 ---
 
-### WC-02-04 — World Bank & Alternative Data Collector
+### WC-02-04 — World Bank & Alternative Data Collector ✅ DONE
 
 **Type:** Scraper
 **Depends on:** WC-01-02
+**Results:** GDP 48/48, Population 48/48, Gini 48/48 (10 regional fallbacks), Political Stability 48/48 (WGI 2023 hardcoded — API retired). Batch API (3 calls vs 192). Cached to data/raw/wc_world_bank_cache.json. Climate gap and travel distance computed for all 48 teams.
 
 Fetch economic, demographic, and governance indicators from the World Bank API for all 48 teams.
 
@@ -294,11 +295,12 @@ Fetch economic, demographic, and governance indicators from the World Bank API f
 
 ---
 
-### WC-02-05 — Squad Data Collector
+### WC-02-05 — Squad Data Collector ✅ DONE
 
 **Type:** Scraper
 **Depends on:** WC-01-02
 **Reuses:** `src/scrapers/transfermarkt.py` (scraping patterns)
+**Results:** 48/48 squads loaded from YAML seed file. All fields populated: MV, age, top5, CL, caps, Gini, manager, tenure. Dark horse scores: Iran +23, Algeria +19, Australia +15. Range: €8M (Curaçao) to €1,380M (England).
 
 Collect squad-level data for all 48 teams: market value, age profile, club league distribution.
 

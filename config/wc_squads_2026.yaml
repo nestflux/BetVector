@@ -1,0 +1,495 @@
+# World Cup 2026 Squad Data — Seed File
+# Source: Transfermarkt national team squad pages (June 2026 estimates)
+# This file is the authoritative source for squad-level features.
+# Values are pre-tournament estimates — updated if official squads change.
+#
+# Fields:
+#   squad_market_value: total squad value in EUR millions
+#   avg_squad_age: average age of 26-player squad
+#   players_in_top5_leagues: players at EPL/LaLiga/SerieA/Bundesliga/Ligue1 clubs
+#   cl_players: players at 2025-26 Champions League clubs
+#   avg_caps: average international appearances per player
+#   squad_mv_gini: intra-squad market value inequality (0-1, higher = more star-dependent)
+#   manager_name: current national team head coach
+#   manager_tenure_months: months since appointment (as of June 2026)
+
+squads:
+  ALG:
+    squad_market_value: 95.0
+    avg_squad_age: 27.1
+    players_in_top5_leagues: 12
+    cl_players: 3
+    avg_caps: 28
+    squad_mv_gini: 0.52
+    manager_name: Vladimir Petković
+    manager_tenure_months: 24
+
+  ARG:
+    squad_market_value: 890.0
+    avg_squad_age: 28.4
+    players_in_top5_leagues: 22
+    cl_players: 14
+    avg_caps: 42
+    squad_mv_gini: 0.61
+    manager_name: Lionel Scaloni
+    manager_tenure_months: 96
+
+  AUS:
+    squad_market_value: 72.0
+    avg_squad_age: 27.8
+    players_in_top5_leagues: 8
+    cl_players: 2
+    avg_caps: 30
+    squad_mv_gini: 0.48
+    manager_name: Tony Popovic
+    manager_tenure_months: 20
+
+  AUT:
+    squad_market_value: 210.0
+    avg_squad_age: 27.3
+    players_in_top5_leagues: 14
+    cl_players: 6
+    avg_caps: 25
+    squad_mv_gini: 0.45
+    manager_name: Ralf Rangnick
+    manager_tenure_months: 26
+
+  BEL:
+    squad_market_value: 540.0
+    avg_squad_age: 27.0
+    players_in_top5_leagues: 20
+    cl_players: 10
+    avg_caps: 30
+    squad_mv_gini: 0.55
+    manager_name: Domenico Tedesco
+    manager_tenure_months: 36
+
+  BIH:
+    squad_market_value: 105.0
+    avg_squad_age: 27.5
+    players_in_top5_leagues: 10
+    cl_players: 3
+    avg_caps: 22
+    squad_mv_gini: 0.50
+    manager_name: Sergej Barbarez
+    manager_tenure_months: 18
+
+  BRA:
+    squad_market_value: 1150.0
+    avg_squad_age: 27.2
+    players_in_top5_leagues: 23
+    cl_players: 16
+    avg_caps: 28
+    squad_mv_gini: 0.58
+    manager_name: Dorival Júnior
+    manager_tenure_months: 24
+
+  CAN:
+    squad_market_value: 155.0
+    avg_squad_age: 27.6
+    players_in_top5_leagues: 11
+    cl_players: 4
+    avg_caps: 25
+    squad_mv_gini: 0.53
+    manager_name: Jesse Marsch
+    manager_tenure_months: 18
+
+  CPV:
+    squad_market_value: 32.0
+    avg_squad_age: 28.0
+    players_in_top5_leagues: 5
+    cl_players: 1
+    avg_caps: 20
+    squad_mv_gini: 0.55
+    manager_name: Pedro Brito
+    manager_tenure_months: 36
+
+  COL:
+    squad_market_value: 295.0
+    avg_squad_age: 27.4
+    players_in_top5_leagues: 16
+    cl_players: 7
+    avg_caps: 30
+    squad_mv_gini: 0.52
+    manager_name: Néstor Lorenzo
+    manager_tenure_months: 48
+
+  CRO:
+    squad_market_value: 350.0
+    avg_squad_age: 28.1
+    players_in_top5_leagues: 16
+    cl_players: 8
+    avg_caps: 38
+    squad_mv_gini: 0.55
+    manager_name: Zlatko Dalić
+    manager_tenure_months: 108
+
+  CUW:
+    squad_market_value: 8.0
+    avg_squad_age: 27.9
+    players_in_top5_leagues: 1
+    cl_players: 0
+    avg_caps: 15
+    squad_mv_gini: 0.60
+    manager_name: Dick Advocaat
+    manager_tenure_months: 12
+
+  CZE:
+    squad_market_value: 185.0
+    avg_squad_age: 27.2
+    players_in_top5_leagues: 12
+    cl_players: 5
+    avg_caps: 24
+    squad_mv_gini: 0.47
+    manager_name: Ivan Hašek
+    manager_tenure_months: 24
+
+  COD:
+    squad_market_value: 130.0
+    avg_squad_age: 26.8
+    players_in_top5_leagues: 10
+    cl_players: 4
+    avg_caps: 18
+    squad_mv_gini: 0.56
+    manager_name: Sébastien Desabre
+    manager_tenure_months: 30
+
+  ECU:
+    squad_market_value: 120.0
+    avg_squad_age: 26.5
+    players_in_top5_leagues: 8
+    cl_players: 3
+    avg_caps: 22
+    squad_mv_gini: 0.50
+    manager_name: Sebastián Beccacece
+    manager_tenure_months: 18
+
+  EGY:
+    squad_market_value: 155.0
+    avg_squad_age: 27.9
+    players_in_top5_leagues: 10
+    cl_players: 4
+    avg_caps: 32
+    squad_mv_gini: 0.62
+    manager_name: Hossam Hassan
+    manager_tenure_months: 18
+
+  ENG:
+    squad_market_value: 1380.0
+    avg_squad_age: 26.8
+    players_in_top5_leagues: 25
+    cl_players: 18
+    avg_caps: 28
+    squad_mv_gini: 0.50
+    manager_name: Thomas Tuchel
+    manager_tenure_months: 21
+
+  FRA:
+    squad_market_value: 1280.0
+    avg_squad_age: 27.0
+    players_in_top5_leagues: 24
+    cl_players: 17
+    avg_caps: 30
+    squad_mv_gini: 0.55
+    manager_name: Didier Deschamps
+    manager_tenure_months: 168
+
+  GER:
+    squad_market_value: 920.0
+    avg_squad_age: 27.1
+    players_in_top5_leagues: 23
+    cl_players: 15
+    avg_caps: 26
+    squad_mv_gini: 0.48
+    manager_name: Julian Nagelsmann
+    manager_tenure_months: 30
+
+  GHA:
+    squad_market_value: 85.0
+    avg_squad_age: 26.4
+    players_in_top5_leagues: 9
+    cl_players: 3
+    avg_caps: 18
+    squad_mv_gini: 0.54
+    manager_name: Otto Addo
+    manager_tenure_months: 24
+
+  HAI:
+    squad_market_value: 18.0
+    avg_squad_age: 27.3
+    players_in_top5_leagues: 2
+    cl_players: 0
+    avg_caps: 20
+    squad_mv_gini: 0.52
+    manager_name: Raoul Savoy
+    manager_tenure_months: 12
+
+  IRN:
+    squad_market_value: 65.0
+    avg_squad_age: 28.3
+    players_in_top5_leagues: 5
+    cl_players: 2
+    avg_caps: 35
+    squad_mv_gini: 0.50
+    manager_name: Amir Ghalenoei
+    manager_tenure_months: 18
+
+  IRQ:
+    squad_market_value: 28.0
+    avg_squad_age: 27.0
+    players_in_top5_leagues: 2
+    cl_players: 0
+    avg_caps: 25
+    squad_mv_gini: 0.48
+    manager_name: Jesús Casas
+    manager_tenure_months: 20
+
+  CIV:
+    squad_market_value: 215.0
+    avg_squad_age: 26.7
+    players_in_top5_leagues: 14
+    cl_players: 6
+    avg_caps: 22
+    squad_mv_gini: 0.56
+    manager_name: Faouzi Benzarti
+    manager_tenure_months: 12
+
+  JPN:
+    squad_market_value: 285.0
+    avg_squad_age: 27.5
+    players_in_top5_leagues: 18
+    cl_players: 8
+    avg_caps: 30
+    squad_mv_gini: 0.45
+    manager_name: Hajime Moriyasu
+    manager_tenure_months: 96
+
+  JOR:
+    squad_market_value: 18.0
+    avg_squad_age: 27.8
+    players_in_top5_leagues: 1
+    cl_players: 0
+    avg_caps: 30
+    squad_mv_gini: 0.45
+    manager_name: Hussein Ammouta
+    manager_tenure_months: 18
+
+  MEX:
+    squad_market_value: 195.0
+    avg_squad_age: 27.6
+    players_in_top5_leagues: 10
+    cl_players: 4
+    avg_caps: 32
+    squad_mv_gini: 0.48
+    manager_name: Javier Aguirre
+    manager_tenure_months: 24
+
+  MAR:
+    squad_market_value: 410.0
+    avg_squad_age: 27.3
+    players_in_top5_leagues: 19
+    cl_players: 10
+    avg_caps: 28
+    squad_mv_gini: 0.52
+    manager_name: Walid Regragui
+    manager_tenure_months: 48
+
+  NED:
+    squad_market_value: 680.0
+    avg_squad_age: 27.0
+    players_in_top5_leagues: 20
+    cl_players: 12
+    avg_caps: 26
+    squad_mv_gini: 0.50
+    manager_name: Ronald Koeman
+    manager_tenure_months: 36
+
+  NZL:
+    squad_market_value: 15.0
+    avg_squad_age: 28.2
+    players_in_top5_leagues: 2
+    cl_players: 0
+    avg_caps: 28
+    squad_mv_gini: 0.50
+    manager_name: Darren Bazeley
+    manager_tenure_months: 24
+
+  NOR:
+    squad_market_value: 345.0
+    avg_squad_age: 26.5
+    players_in_top5_leagues: 16
+    cl_players: 8
+    avg_caps: 22
+    squad_mv_gini: 0.65
+    manager_name: Ståle Solbakken
+    manager_tenure_months: 64
+
+  PAN:
+    squad_market_value: 22.0
+    avg_squad_age: 28.0
+    players_in_top5_leagues: 2
+    cl_players: 0
+    avg_caps: 30
+    squad_mv_gini: 0.48
+    manager_name: Thomas Christiansen
+    manager_tenure_months: 48
+
+  PAR:
+    squad_market_value: 85.0
+    avg_squad_age: 27.1
+    players_in_top5_leagues: 6
+    cl_players: 2
+    avg_caps: 20
+    squad_mv_gini: 0.50
+    manager_name: Alfaro
+    manager_tenure_months: 30
+
+  POR:
+    squad_market_value: 920.0
+    avg_squad_age: 27.4
+    players_in_top5_leagues: 22
+    cl_players: 14
+    avg_caps: 32
+    squad_mv_gini: 0.58
+    manager_name: Roberto Martínez
+    manager_tenure_months: 36
+
+  QAT:
+    squad_market_value: 25.0
+    avg_squad_age: 28.5
+    players_in_top5_leagues: 0
+    cl_players: 0
+    avg_caps: 40
+    squad_mv_gini: 0.42
+    manager_name: Marquez López
+    manager_tenure_months: 18
+
+  KSA:
+    squad_market_value: 60.0
+    avg_squad_age: 28.0
+    players_in_top5_leagues: 2
+    cl_players: 1
+    avg_caps: 35
+    squad_mv_gini: 0.50
+    manager_name: Roberto Mancini
+    manager_tenure_months: 36
+
+  SCO:
+    squad_market_value: 145.0
+    avg_squad_age: 27.8
+    players_in_top5_leagues: 14
+    cl_players: 5
+    avg_caps: 26
+    squad_mv_gini: 0.48
+    manager_name: Steve Clarke
+    manager_tenure_months: 84
+
+  SEN:
+    squad_market_value: 205.0
+    avg_squad_age: 27.0
+    players_in_top5_leagues: 15
+    cl_players: 6
+    avg_caps: 24
+    squad_mv_gini: 0.52
+    manager_name: Pape Thiaw
+    manager_tenure_months: 12
+
+  RSA:
+    squad_market_value: 55.0
+    avg_squad_age: 27.5
+    players_in_top5_leagues: 4
+    cl_players: 1
+    avg_caps: 22
+    squad_mv_gini: 0.48
+    manager_name: Hugo Broos
+    manager_tenure_months: 60
+
+  KOR:
+    squad_market_value: 195.0
+    avg_squad_age: 27.6
+    players_in_top5_leagues: 12
+    cl_players: 5
+    avg_caps: 32
+    squad_mv_gini: 0.55
+    manager_name: Hong Myung-bo
+    manager_tenure_months: 24
+
+  ESP:
+    squad_market_value: 1050.0
+    avg_squad_age: 26.2
+    players_in_top5_leagues: 24
+    cl_players: 16
+    avg_caps: 24
+    squad_mv_gini: 0.48
+    manager_name: Luis de la Fuente
+    manager_tenure_months: 42
+
+  SWE:
+    squad_market_value: 165.0
+    avg_squad_age: 27.4
+    players_in_top5_leagues: 13
+    cl_players: 4
+    avg_caps: 24
+    squad_mv_gini: 0.48
+    manager_name: Jon Dahl Tomasson
+    manager_tenure_months: 36
+
+  SUI:
+    squad_market_value: 275.0
+    avg_squad_age: 27.8
+    players_in_top5_leagues: 16
+    cl_players: 7
+    avg_caps: 30
+    squad_mv_gini: 0.48
+    manager_name: Murat Yakin
+    manager_tenure_months: 60
+
+  TUN:
+    squad_market_value: 75.0
+    avg_squad_age: 28.1
+    players_in_top5_leagues: 8
+    cl_players: 2
+    avg_caps: 28
+    squad_mv_gini: 0.48
+    manager_name: Faouzi Benzarti
+    manager_tenure_months: 18
+
+  TUR:
+    squad_market_value: 380.0
+    avg_squad_age: 27.0
+    players_in_top5_leagues: 15
+    cl_players: 6
+    avg_caps: 24
+    squad_mv_gini: 0.50
+    manager_name: Vincenzo Montella
+    manager_tenure_months: 30
+
+  USA:
+    squad_market_value: 320.0
+    avg_squad_age: 26.8
+    players_in_top5_leagues: 18
+    cl_players: 8
+    avg_caps: 26
+    squad_mv_gini: 0.50
+    manager_name: Mauricio Pochettino
+    manager_tenure_months: 12
+
+  URU:
+    squad_market_value: 310.0
+    avg_squad_age: 27.8
+    players_in_top5_leagues: 16
+    cl_players: 8
+    avg_caps: 32
+    squad_mv_gini: 0.54
+    manager_name: Marcelo Bielsa
+    manager_tenure_months: 30
+
+  UZB:
+    squad_market_value: 28.0
+    avg_squad_age: 27.2
+    players_in_top5_leagues: 3
+    cl_players: 1
+    avg_caps: 25
+    squad_mv_gini: 0.48
+    manager_name: Timur Kapadze
+    manager_tenure_months: 12
