@@ -547,9 +547,10 @@ Calibrate the model using group stage results and identify dark horses for knock
 
 ## WC-05 — Value Betting & Alerts
 
-### WC-05-01 — WC Value Finder
+### WC-05-01 — WC Value Finder ✅ DONE
 
 **Type:** Betting
+**Results:** Scans 28 upcoming matches. H2H/totals/BTTS markets. Quarter-Kelly staking from config. Edge×calibration ranking. Idempotent save with new/updated/skipped tracking. 0 VBs found (no odds loaded yet — correct).
 **Depends on:** WC-04-01, WC-02-01
 **Reuses:** `src/betting/value_finder.py` (edge calculation, Kelly criterion), `src/betting/bankroll.py`
 

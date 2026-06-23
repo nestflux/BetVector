@@ -515,3 +515,12 @@ odds_api_name_map:
   "Congo DR": "DR Congo"
   "Côte d'Ivoire": "Ivory Coast"
   "Korea Republic": "South Korea"
+
+betting:
+  edge_threshold: 0.03
+  kelly_fraction: 0.25
+  max_edge_display: 0.30
+  # Spreads deferred — Poisson model doesn't produce spread-adjusted probs
+  markets:
+    - h2h
+    - totals
