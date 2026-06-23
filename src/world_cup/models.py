@@ -173,7 +173,9 @@ class WCOdds(Base):
     bookmaker = Column(String, nullable=False)
     market_type = Column(String, nullable=False)
     selection = Column(String, nullable=False)
-    odds_decimal = Column(Float, nullable=False)
+    odds_decimal = Column(Float, nullable=False)        # current / latest price
+    opening_odds = Column(Float, nullable=True)         # first price seen — set on
+    # insert, never updated → enables line movement (WC-09-03)
     implied_prob = Column(Float, nullable=True)
     point = Column(Float, nullable=True)
     captured_at = Column(String, nullable=False, server_default=func.now())

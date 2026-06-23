@@ -181,6 +181,7 @@ def _load_odds_to_db(events: list[dict[str, Any]]) -> int:
                                 market_type=market_type,
                                 selection=selection,
                                 odds_decimal=price,
+                                opening_odds=price,  # frozen first-seen price (WC-09-03)
                                 implied_prob=implied_prob,
                                 point=point,
                                 source="odds_api",
