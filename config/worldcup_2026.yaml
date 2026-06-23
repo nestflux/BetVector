@@ -491,6 +491,22 @@ groups:
       capital_lon: -0.1870
       avg_june_temp_c: 25.0
 
+elo:
+  default_rating: 1500.0
+  regression_factor: 0.20
+  regression_cutoff_date: "2022-12-19"
+  min_year: 2018
+  k_factors:
+    friendly: 20
+    qualifier: 25
+    confederation_tournament: 35
+    wc_group: 40
+    wc_knockout: 50
+  home_advantage:
+    true_home: 100
+    partial_home: 50
+    neutral: 0
+
 odds_api_name_map:
   "Bosnia & Herzegovina": "Bosnia and Herzegovina"
   "Türkiye": "Turkey"
