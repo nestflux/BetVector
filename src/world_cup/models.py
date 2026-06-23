@@ -218,6 +218,7 @@ class WCPrediction(Base):
     value_bets = relationship("WCValueBet", back_populates="prediction", cascade="all, delete-orphan")
 
     __table_args__ = (
+        UniqueConstraint("match_id", "model_name", name="uq_wc_pred_match_model"),
         Index("ix_wc_preds_match", "match_id"),
     )
 

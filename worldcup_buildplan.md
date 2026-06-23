@@ -434,9 +434,10 @@ Add features unique to tournament dynamics: motivation, matchday, group position
 
 ## WC-04 — Prediction Model
 
-### WC-04-01 — International Poisson Model
+### WC-04-01 — International Poisson Model ✅ DONE
 
 **Type:** Model
+**Results:** WCPoissonPredictor in predictor.py. 1039 training matches, rho=-0.062, max|coef|=0.39. Holdout Brier 0.194/class (46 WC 2022 matches, 54% accuracy). 40 WC 2026 predictions stored. Dixon-Coles + knockout deflation + group draw inflation.
 **Depends on:** WC-03-01
 **Reuses:** `src/models/poisson.py` (Poisson distribution math, scoreline matrix)
 
