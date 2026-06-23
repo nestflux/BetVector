@@ -46,7 +46,8 @@ This build plan is informed by:
 | WC-05 | Value Betting & Alerts | 2 | Value finder integration, email alerts for WC picks |
 | WC-06 | Dashboard | 3 | WC dashboard page, group simulator widget, live tournament tracker |
 | WC-07 | Pipeline & Automation | 2 | Daily WC pipeline, launchd integration |
-| **Total** | | **21** | |
+| WC-08 | Dashboard UX Redesign (post-MVP) | 7 | Tabbed layout, country flags, ET times, collapsible reference, responsive |
+| **Total** | | **28** (21 MVP + 7 post-MVP) | |
 
 ---
 
@@ -62,6 +63,12 @@ WC-06-01 → WC-06-02 → WC-06-03 →
 WC-07-01 → WC-07-02
 ```
 
+**Post-MVP (Phase 5):**
+```
+WC-08-01 → WC-08-02 → WC-08-03 → WC-08-04 →
+WC-08-05 → WC-08-06 → WC-08-07
+```
+
 ### Phase Strategy
 
 | Phase | Issues | Deadline | Goal |
@@ -70,6 +77,7 @@ WC-07-01 → WC-07-02
 | **Phase 2: Value & Alerts** | WC-04-02 through WC-05-02 | June 26 | Value betting + email picks for final group matches |
 | **Phase 3: Dashboard** | WC-06-01 through WC-06-03 | June 28 (knockouts) | Full dashboard + group advancement simulator |
 | **Phase 4: Knockouts** | WC-04-03, WC-07-01, WC-07-02 | June 30 | Knockout model + automated daily pipeline |
+| **Phase 5: Post-MVP UX** | WC-08-01 through WC-08-07 | post-tournament-safe | Tabbed dashboard, flags, ET times, collapsible reference, responsive |
 
 ---
 
@@ -781,6 +789,205 @@ Add WC pipeline to the existing launchd schedule alongside league pipelines.
 - [x] Pipeline exits cleanly on days with no WC matches
 
 **Status:** ✅ DONE — run_wc_pipeline.sh + 2 launchd plists (08:00/22:00). 30-min timeout, stale process killer, log rotation. Zero interference with league pipeline. 621/621 tests.
+
+---
+
+## WC-08 — Dashboard UX Redesign (Phase 5, Post-MVP)
+
+**Context:** The WC dashboard page (`src/delivery/views/world_cup.py`) grew to
+~6,500px in a single scroll, ordered reference-first (group standings and
+advancement probabilities at the top) with the actionable Value Bets buried at
+the bottom — inverted for a betting tool. This epic restructures the page into
+four tabs, adds country flags, converts kickoff times to US Eastern, and makes
+the reference sections collapsible, so the user lands on what's actionable
+without scrolling.
+
+**Owner decisions (2026-06-23):** tabs (not single-page collapsibles);
+responsive for desktop **and** mobile; **image** flags (not emoji); fixtures and
+value bets kept as **separate** components on Tab 1.
+
+**Target layout:**
+```
+Slim header (logo + "Matchday X · N days to Final")
+┌ Tab 1: Today & Bets ┐ Tab 2: Groups ┐ Tab 3: Knockouts ┐ Tab 4: Model ┐
+│ • Upcoming fixtures  │ • Standings ▾ │ • Bracket        │ • Winner probs │
+│   (flag·ET·lean·odds)│ • Advance.  ▾ │   (w/ flags)     │ • Brier/calib  │
+│ • Value Bets table   │ • 3rd-place ▾ │                  │                │
+└──────────────────────┘───────────────┘──────────────────┘────────────────┘
+```
+
+**Note:** Streamlit responsiveness is limited (columns stack and tables scroll
+horizontally on narrow screens). Target is "good on both," not pixel-perfect.
+
+---
+
+### WC-08-01 — Country Flag Assets & Helper
+
+**Type:** UI / Data
+**Depends on:** Nothing (extends the existing WC dashboard + badge pattern)
+
+Download national-team flag images and provide a render helper, mirroring the
+team-badge pattern in `data/badges/`.
+
+**Implementation Notes:**
+- Build a `fifa_code → ISO 3166-1 alpha-2` map for all 48 teams. Home nations
+  are special: England → `gb-eng`, Scotland → `gb-sct`, Wales → `gb-wls`
+  (flagcdn supports these sub-national codes).
+- Download ~48 flags once to `data/flags/{fifa_code}.png` via flagcdn
+  (`flagcdn.com/w40/{iso}.png` and `w80` for retina). Rate-limited (≥0.5s),
+  idempotent (skip existing), via a `scripts/` downloader.
+- Add a `render_flag(team)` / base64 helper in the dashboard with a graceful
+  text/abbreviation fallback when a flag is missing.
+- No render-time CDN dependency — flags served from local assets.
+
+**Acceptance Criteria:**
+- [ ] `data/flags/` contains a flag for all 48 WC teams
+- [ ] England / Scotland / Wales show their own flags (not the Union Jack)
+- [ ] `render_flag()` returns an inline image; a missing flag falls back to text without erroring
+- [ ] Re-running the downloader is idempotent (skips existing files)
+
+---
+
+### WC-08-02 — Eastern Time Conversion Utility
+
+**Type:** UI
+**Depends on:** Nothing
+
+Convert UTC kickoff times to US Eastern for display.
+
+**Implementation Notes:**
+- Add `to_eastern(date_str, kickoff_utc_str)` using
+  `zoneinfo.ZoneInfo("America/New_York")` — returns a tz-aware Eastern datetime
+  (correctly EDT in summer, EST in winter).
+- Handle the date shift: a near-midnight UTC kickoff can fall on a different
+  Eastern calendar date; return both the Eastern date and time.
+- Format helper → e.g. `Wed 3:00 PM ET`. Always label "ET" (covers EST/EDT).
+- Guard against missing/empty kickoff times (return a clear placeholder).
+
+**Acceptance Criteria:**
+- [ ] UTC kickoff converts to correct US Eastern time (EDT in June)
+- [ ] Date-shift across midnight is handled correctly
+- [ ] Times render labelled "ET"
+- [ ] Missing/empty kickoff shows a safe placeholder, no crash
+
+---
+
+### WC-08-03 — Tabbed Shell & Slim Header
+
+**Type:** UI
+**Depends on:** Nothing
+
+Restructure `main()` into four tabs with a minimal header (pure relocation — no
+section logic changes yet).
+
+**Implementation Notes:**
+- Replace the sequential section calls with
+  `st.tabs(["Today & Bets", "Groups", "Knockouts", "Model"])`.
+- Slim header above the tabs: logo + one context line
+  (`Matchday X · N days to Final`), replacing the 3-metric block.
+- Move the existing render functions into the relevant tab bodies unchanged.
+- Default tab = Today & Bets (first).
+
+**Acceptance Criteria:**
+- [ ] Page renders 4 tabs; Today & Bets is the landing tab
+- [ ] Slim one-line header replaces the metric cards
+- [ ] All existing sections still render (relocated, not removed)
+- [ ] No regression in data loading (predictions / odds / value bets still shown)
+
+---
+
+### WC-08-04 — Tab 1: Today & Bets
+
+**Type:** UI
+**Depends on:** WC-08-01, WC-08-02, WC-08-03
+
+Build the actionable landing tab.
+
+**Implementation Notes:**
+- Compact upcoming-fixtures strip: rows of
+  `flag · Team — Team · kickoff (ET) · model lean (1X2) · best price`.
+  Window = **today + next 2 days**; today's games visually highlighted. Replaces
+  the large "Today's Matches" cards.
+- Value Bets table directly below (existing edge / odds / bookmaker / Kelly
+  table), labelled as **tracked / shadow picks** (calibration caveat from the
+  edge-ceiling work).
+- Bulk queries only — joinedload fixtures / odds / predictions (no N+1).
+- Responsive: small flags, dense rows, `st.dataframe` for the value table.
+
+**Acceptance Criteria:**
+- [ ] Fixtures strip shows flags, ET kickoffs, model lean, best price for today + 2 days
+- [ ] Value Bets table appears immediately below fixtures
+- [ ] Value bets labelled as tracked / shadow picks
+- [ ] No N+1 queries (verified by query count)
+- [ ] Renders cleanly on a narrow (mobile) viewport
+
+---
+
+### WC-08-05 — Tab 2: Groups (Collapsible)
+
+**Type:** UI
+**Depends on:** WC-08-01, WC-08-03
+
+Move group reference content into collapsible sections.
+
+**Implementation Notes:**
+- Three `st.expander` blocks, **collapsed by default**: Group Standings (12
+  groups, with flags), Advancement Probabilities (+ what-if widget), Third-place
+  Race.
+- Preserve existing computations (`_compute_group_standings`, the cached
+  simulation, the what-if recompute).
+- Add flags to standings rows.
+
+**Acceptance Criteria:**
+- [ ] Standings, advancement, and third-place each in a collapsed expander
+- [ ] Flags shown in standings rows
+- [ ] What-if widget still works
+- [ ] Expanding / collapsing does not re-trigger the 10K simulation (cache intact)
+
+---
+
+### WC-08-06 — Tab 3 & Tab 4: Knockouts + Model
+
+**Type:** UI
+**Depends on:** WC-08-01, WC-08-03
+
+Relocate the bracket and model sections into their tabs.
+
+**Implementation Notes:**
+- Tab 3 (Knockouts): knockout bracket (projected / actual) with flags on the
+  matchup cards.
+- Tab 4 (Model): tournament winner-probabilities chart + model performance
+  (Brier / calibration reliability chart).
+- Responsive layouts.
+
+**Acceptance Criteria:**
+- [ ] Knockouts tab shows the bracket with flags
+- [ ] Model tab shows winner probabilities + Brier / calibration
+- [ ] Both render on narrow viewports
+
+---
+
+### WC-08-07 — Responsive Polish & Integration Test
+
+**Type:** Test
+**Depends on:** WC-08-04, WC-08-05, WC-08-06
+
+Verify the full redesign on desktop + mobile and lock behavior with tests.
+
+**Implementation Notes:**
+- Verify against Neon on a wide and a narrow viewport (preview tools / window
+  resize).
+- Integration test: page imports, all 4 tabs render without error; flag helper
+  and ET utility unit-tested; Tab 1 fixtures / value queries are bulk.
+- Confirm no regression against the data already in Neon (51 value bets, 40
+  predictions, standings).
+
+**Acceptance Criteria:**
+- [ ] All 4 tabs render error-free against Neon
+- [ ] Flag helper + ET conversion covered by unit tests
+- [ ] Tab 1 fixtures / value queries are bulk (no N+1)
+- [ ] Verified on desktop and narrow / mobile viewport
+- [ ] Full test suite green
 
 ---
 
