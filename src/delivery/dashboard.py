@@ -594,6 +594,11 @@ def get_pages() -> list:
             icon="🏟️",
         ),
         st.Page(
+            "views/world_cup.py",
+            title="World Cup",
+            icon="🏆",
+        ),
+        st.Page(
             "views/model_health.py",
             title="Model Health",
             icon="🔬",

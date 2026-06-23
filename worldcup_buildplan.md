@@ -619,7 +619,7 @@ Send daily email alerts with WC predictions and value bets.
 
 ## WC-06 — Dashboard
 
-### WC-06-01 — WC Dashboard Page
+### WC-06-01 — WC Dashboard Page ✅ DONE
 
 **Type:** UI
 **Depends on:** WC-04-01, WC-05-01
@@ -628,27 +628,27 @@ Send daily email alerts with WC predictions and value bets.
 Add a World Cup page to the existing BetVector Streamlit dashboard.
 
 **Implementation Notes:**
-- Create `src/delivery/pages/world_cup.py` as a new Streamlit page
+- Created `src/delivery/views/world_cup.py` (views/ per project convention)
 - Page sections:
-  1. **Header**: Tournament progress bar (matches played / 80 total), days remaining
-  2. **Today's Matches**: Cards showing each match with predictions, odds, value bet flags
+  1. **Header**: Tournament progress bar (matches played / 104 total), days remaining
+  2. **Today's Matches**: Cards showing each match with predictions, odds (joinedload, 1 query)
   3. **Group Standings**: 12 mini-tables (2 columns × 6 rows), color-coded by qualification status (green=qualified, yellow=possible, red=eliminated)
-  4. **Value Bets**: Table of current value bets with edge, odds, bookmaker, Kelly stake
-  5. **Model Performance**: Running Brier score, accuracy %, calibration chart
-  6. **Tournament Probabilities**: Bar chart showing P(win tournament) for top 16 teams
-- Use existing BetVector CSS/theme for consistency
-- Add "World Cup" to the sidebar navigation
-- Show knockout bracket visualization when knockouts begin
+  4. **Value Bets**: Table of current value bets with edge, odds, bookmaker, Kelly stake (joinedload)
+  5. **Model Performance**: Running Brier score, accuracy %, calibration chart (reliability diagram)
+  6. **Tournament Probabilities**: Bar chart showing P(win tournament) for top 16 teams (cached, 1hr TTL)
+- BetVector dark theme, JetBrains Mono for data, Plotly charts
+- "World Cup" 🏆 added to sidebar navigation in get_pages()
+- Knockout bracket deferred to WC-06-03
 
 **Acceptance Criteria:**
-- [ ] World Cup page accessible from dashboard sidebar
-- [ ] Today's matches displayed with model predictions and best odds
-- [ ] All 12 group standings displayed correctly
-- [ ] Value bets table shows edge, odds, bookmaker for each bet
-- [ ] Model performance metrics displayed (Brier score, accuracy)
-- [ ] Tournament winner probabilities shown as a bar chart
-- [ ] Page loads in under 5 seconds
-- [ ] Responsive layout works at common screen widths
+- [x] World Cup page accessible from dashboard sidebar
+- [x] Today's matches displayed with model predictions and best odds
+- [x] All 12 group standings displayed correctly
+- [x] Value bets table shows edge, odds, bookmaker for each bet
+- [x] Model performance metrics displayed (Brier score, accuracy)
+- [x] Tournament winner probabilities shown as a bar chart
+- [x] Page loads in under 5 seconds
+- [x] Responsive layout works at common screen widths
 
 ---
 
