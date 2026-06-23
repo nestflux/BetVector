@@ -14,6 +14,12 @@
       "port": 8502
     },
     {
+      "name": "wc_page",
+      "runtimeExecutable": "venv/bin/streamlit",
+      "runtimeArgs": ["run", "src/delivery/views/world_cup.py", "--server.port", "8505", "--server.headless", "true"],
+      "port": 8505
+    },
+    {
       "name": "report",
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "8503", "--directory", "docs"],

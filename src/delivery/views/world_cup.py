@@ -55,15 +55,10 @@ def _render_header() -> None:
             .where(WCMatch.status == "finished")
         ).scalar() or 0
 
-        first_date = session.execute(
-            select(WCMatch.date).order_by(WCMatch.date).limit(1)
-        ).scalar_one_or_none()
-
         last_date = session.execute(
             select(WCMatch.date).order_by(WCMatch.date.desc()).limit(1)
         ).scalar_one_or_none()
 
-    pct = played / TOTAL_MATCHES if TOTAL_MATCHES else 0
     days_remaining = "?"
     if last_date:
         try:
@@ -72,16 +67,14 @@ def _render_header() -> None:
         except ValueError:
             pass
 
+    # Slim one-line header — replaces the former 3-metric block + progress bar
+    # so the page leads with content, not chrome (WC-08-03).
     st.markdown(
-        f"### 🏆 FIFA World Cup 2026",
+        "#### 🏆 FIFA World Cup 2026 "
+        f"<span style='color:#8B949E;font-weight:400;font-size:0.85rem'>"
+        f"· {played}/{TOTAL_MATCHES} played · {days_remaining} days to final</span>",
+        unsafe_allow_html=True,
     )
-
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Matches Played", f"{played} / {TOTAL_MATCHES}")
-    c2.metric("Progress", f"{pct:.0%}")
-    c3.metric("Days Remaining", days_remaining)
-
-    st.progress(pct)
 
 
 # ============================================================================
@@ -812,13 +805,28 @@ def _render_projected_bracket_html(matchups: list[dict], probs: dict) -> None:
 
 def main() -> None:
     _render_header()
-    _render_todays_matches()
-    _render_group_standings()
-    _render_group_advancement()
-    _render_knockout_bracket()
-    _render_value_bets()
-    _render_model_performance()
-    _render_winner_chart()
+
+    # Four tabs replace the former single 6,500px scroll. The actionable
+    # content (fixtures + value bets) is the default landing tab; reference
+    # material is one click away, not a long scroll down (WC-08-03).
+    tab_bets, tab_groups, tab_ko, tab_model = st.tabs(
+        ["📋 Today & Bets", "📊 Groups", "🏆 Knockouts", "📈 Model"]
+    )
+
+    with tab_bets:
+        _render_todays_matches()
+        _render_value_bets()
+
+    with tab_groups:
+        _render_group_standings()
+        _render_group_advancement()
+
+    with tab_ko:
+        _render_knockout_bracket()
+
+    with tab_model:
+        _render_winner_chart()
+        _render_model_performance()
 
 
 main()
