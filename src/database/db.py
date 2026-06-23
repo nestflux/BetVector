@@ -200,7 +200,14 @@ def _create_engine_with_retry(url: str, max_retries: int = 1) -> Engine:
                 engine_kwargs.update({
                     "pool_size": 3,
                     "max_overflow": 2,
-                    "pool_recycle": 300,
+                    "pool_recycle": 60,
+                    "pool_timeout": 30,
+                    "connect_args": {
+                        "keepalives": 1,
+                        "keepalives_idle": 30,
+                        "keepalives_interval": 10,
+                        "keepalives_count": 3,
+                    },
                 })
 
             engine = create_engine(url, **engine_kwargs)
@@ -237,7 +244,7 @@ def _create_engine_with_retry(url: str, max_retries: int = 1) -> Engine:
 
 @contextmanager
 def get_session() -> Generator[Session, None, None]:
-    """Provide a transactional session scope.
+    """Provide a transactional session scope with automatic retry on disconnect.
 
     Usage::
 
@@ -245,8 +252,11 @@ def get_session() -> Generator[Session, None, None]:
             session.execute(text("SELECT 1"))
 
     On success the session is committed; on exception it is rolled back.
-    The session is always closed on exit.  This satisfies the context-manager
-    pattern recommended by SQLAlchemy 2.0.
+    The session is always closed on exit.
+
+    If session creation fails with an OperationalError (Neon scale-to-zero,
+    network blip), disposes the connection pool and retries once with a
+    fresh connection.
     """
     global _SessionFactory
 
@@ -254,7 +264,26 @@ def get_session() -> Generator[Session, None, None]:
     if _SessionFactory is None:
         _SessionFactory = sessionmaker(bind=engine, expire_on_commit=False)
 
-    session = _SessionFactory()
+    last_err: Exception | None = None
+    for attempt in range(2):
+        try:
+            session = _SessionFactory()
+            session.execute(text("SELECT 1"))
+            break
+        except OperationalError as exc:
+            last_err = exc
+            if attempt == 0:
+                logger.warning(
+                    "Session connect failed (%s), disposing pool and retrying...",
+                    exc,
+                )
+                engine.dispose()
+                time.sleep(1)
+            else:
+                raise
+    else:
+        raise last_err  # type: ignore[misc]
+
     try:
         yield session
         session.commit()
