@@ -5,7 +5,7 @@ Tournament hub: today's matches with predictions, group standings,
 value bets, model performance, and winner probability chart.
 """
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from html import escape
 
 import plotly.graph_objects as go
@@ -14,10 +14,13 @@ from sqlalchemy import func as sa_func, select
 from sqlalchemy.orm import joinedload
 
 from src.database.db import get_session
+from src.world_cup.flags import render_flag
 from src.world_cup.models import (
     WCMatch, WCOdds, WCPrediction, WCTeam, WCValueBet,
 )
 from src.world_cup.predictor import MODEL_NAME
+from src.world_cup.timeutil import EASTERN, eastern_date, format_kickoff_et
+from src.world_cup.value_finder import _canonical_selection
 
 # Design system (CLAUDE.md Rule 5)
 BG = "#0D1117"
@@ -78,64 +81,110 @@ def _render_header() -> None:
 
 
 # ============================================================================
-# Section 2 — Today's Matches
+# Section 2 — Upcoming Fixtures (Tab 1)
 # ============================================================================
 
+def _model_lean_html(pred) -> str:
+    """Compact 1X2 lean with the favored outcome highlighted."""
+    if not pred:
+        return f'<span style="color:{TEXT_DIM}">—</span>'
+    outcomes = [("H", pred.home_win_prob), ("D", pred.draw_prob), ("A", pred.away_win_prob)]
+    top_i = max(range(3), key=lambda i: outcomes[i][1])
+    parts = []
+    for i, (label, prob) in enumerate(outcomes):
+        if i == top_i:
+            parts.append(f'<span style="color:{TEXT};font-weight:700">{label} {prob:.0%}</span>')
+        else:
+            parts.append(f'<span style="color:{TEXT_DIM}">{label} {prob:.0%}</span>')
+    return " · ".join(parts)
+
+
+def _best_price_html(m: WCMatch, home_name: str, away_name: str, pred) -> str:
+    """Best available decimal odds for the model's favored 1X2 outcome."""
+    if not pred or not m.odds:
+        return ""
+    fav = max(
+        [("home", pred.home_win_prob), ("draw", pred.draw_prob), ("away", pred.away_win_prob)],
+        key=lambda x: x[1],
+    )[0]
+    best = 0.0
+    for o in m.odds:
+        if o.market_type != "h2h":
+            continue
+        canon = _canonical_selection(o.market_type, o.selection, home_name, away_name, o.point)
+        if canon == fav and o.odds_decimal > best:
+            best = o.odds_decimal
+    return f"@ {best:.2f}" if best > 0 else ""
+
+
 def _render_todays_matches() -> None:
-    _section_header("Today's Matches")
-    today = _today()
+    """Compact upcoming-fixtures strip for Tab 1 — today + the next 2 days in
+    US Eastern, each row: flag · teams · ET kickoff · model lean · best price.
+    Today's games are highlighted. Replaces the former large match cards (WC-08-04).
+    """
+    _section_header("Upcoming Fixtures")
+
+    today_et = datetime.now(EASTERN).date()
+    window_end = today_et + timedelta(days=2)
 
     with get_session() as session:
         matches = session.execute(
             select(WCMatch)
-            .where(WCMatch.date == today)
             .options(
                 joinedload(WCMatch.home_team),
                 joinedload(WCMatch.away_team),
                 joinedload(WCMatch.predictions),
                 joinedload(WCMatch.odds),
             )
-            .order_by(WCMatch.kickoff_time)
+            .order_by(WCMatch.date, WCMatch.kickoff_time)
         ).unique().scalars().all()
 
-        if not matches:
-            st.info("No World Cup matches scheduled today.")
+        # today + next 2 Eastern days, not yet finished
+        upcoming = []
+        for m in matches:
+            if m.status == "finished":
+                continue
+            ed = eastern_date(m.date, m.kickoff_time)
+            if not ed:
+                continue
+            ed_date = datetime.strptime(ed, "%Y-%m-%d").date()
+            if today_et <= ed_date <= window_end:
+                upcoming.append((m, ed_date))
+
+        if not upcoming:
+            st.info("No World Cup matches in the next 3 days.")
             return
 
-        for m in matches:
-            home_name = m.home_team.name if m.home_team else "?"
-            away_name = m.away_team.name if m.away_team else "?"
-            pred = next(
-                (p for p in m.predictions if p.model_name == MODEL_NAME), None
+        st.caption(f"Next 3 days · times in ET · {len(upcoming)} fixtures")
+
+        for m, ed_date in upcoming:
+            home, away = m.home_team, m.away_team
+            home_name = home.name if home else "?"
+            away_name = away.name if away else "?"
+            home_flag = render_flag(home.fifa_code) if home else ""
+            away_flag = render_flag(away.fifa_code) if away else ""
+            kickoff = format_kickoff_et(m.date, m.kickoff_time)
+            pred = next((p for p in m.predictions if p.model_name == MODEL_NAME), None)
+            lean = _model_lean_html(pred)
+            price = _best_price_html(m, home_name, away_name, pred)
+
+            is_today = ed_date == today_et
+            bg = SURFACE if is_today else "transparent"
+            accent = GREEN if is_today else BORDER
+
+            st.markdown(
+                f'<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;'
+                f'padding:6px 10px;margin-bottom:4px;background:{bg};'
+                f'border-left:3px solid {accent};border-radius:4px;font-size:0.85rem;">'
+                f'<span style="color:{TEXT_DIM};min-width:96px;font-size:0.72rem;">{kickoff}</span>'
+                f'<span style="flex:1;min-width:160px;">{home_flag} {escape(home_name)} '
+                f'<span style="color:{TEXT_DIM};font-size:0.75rem;">v</span> '
+                f'{escape(away_name)} {away_flag}</span>'
+                f'<span style="text-align:right;font-size:0.78rem;">{lean}</span>'
+                f'<span style="min-width:64px;text-align:right;color:{TEXT_DIM};font-size:0.75rem;">{price}</span>'
+                f'</div>',
+                unsafe_allow_html=True,
             )
-
-            with st.container():
-                cols = st.columns([1, 3, 3, 2])
-                cols[0].markdown(f"**{m.kickoff_time or 'TBD'}**")
-                cols[1].markdown(f"**{home_name}**")
-                cols[2].markdown(f"**{away_name}**")
-
-                if m.status == "finished" and m.home_goals is not None:
-                    cols[3].markdown(f"**{m.home_goals} - {m.away_goals}**")
-                elif pred:
-                    cols[3].markdown(
-                        f":green[H {pred.home_win_prob:.0%}] · "
-                        f"D {pred.draw_prob:.0%} · "
-                        f":red[A {pred.away_win_prob:.0%}]"
-                    )
-
-                if pred and m.status != "finished":
-                    h2h_odds = sorted(
-                        [o for o in m.odds if o.market_type == "h2h"],
-                        key=lambda o: -o.odds_decimal,
-                    )[:3]
-                    if h2h_odds:
-                        odds_str = " · ".join(
-                            f"{o.selection}: {o.odds_decimal:.2f}" for o in h2h_odds
-                        )
-                        st.caption(f"Best odds: {odds_str}")
-
-                st.divider()
 
 
 # ============================================================================
@@ -436,6 +485,10 @@ def _render_group_advancement() -> None:
 
 def _render_value_bets() -> None:
     _section_header("Value Bets")
+    st.caption(
+        "⚠️ Tracked / shadow picks — the WC model is not yet calibrated against a "
+        "sharp market on this little data. Monitor CLV before staking real money."
+    )
 
     with get_session() as session:
         vbs = session.execute(
