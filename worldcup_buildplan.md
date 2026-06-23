@@ -2,12 +2,11 @@
 
 Version 1.0 · June 2026
 
-> **MODULE STATUS: ✅ COMPLETE — 28/28 issues (8 epics, incl. WC-08 UX redesign)** · June 23, 2026
-> All issues passed the 3-gate review. Pipeline + launchd automation ready for the
-> tournament; the dashboard is redesigned into 4 tabs with country flags, ET kickoff
-> times, and collapsible reference sections (WC-08). Install step:
-> `cp scripts/com.betvector.wc_*.plist ~/Library/LaunchAgents/` then `launchctl load`
-> both. Full test suite: 667/667 passing.
+> **MODULE STATUS: MVP + UX COMPLETE (28/28) · WC-09 (decision support + Bayesian R&D) IN PROGRESS** · June 23, 2026
+> WC-01 through WC-08 done (3-gate reviewed); dashboard is 4 tabs with flags + ET
+> times. **WC-09 (Option A)** adds a shadow CLV scorecard, a per-match research card,
+> a Bayesian hierarchical model (shadow only, Tier-2 approved), and a player-props
+> feasibility spike. Full test suite: 667/667 passing.
 
 ---
 
@@ -49,7 +48,8 @@ This build plan is informed by:
 | WC-06 | Dashboard | 3 | WC dashboard page, group simulator widget, live tournament tracker |
 | WC-07 | Pipeline & Automation | 2 | Daily WC pipeline, launchd integration |
 | WC-08 | Dashboard UX Redesign (post-MVP) | 7 | Tabbed layout, country flags, ET times, collapsible reference, responsive |
-| **Total** | | **28** (21 MVP + 7 post-MVP) | |
+| WC-09 | Decision Support & Bayesian R&D (post-MVP) | 8 | Shadow CLV scorecard, research card, Bayesian shadow model, player-props spike |
+| **Total** | | **36** (21 MVP + 15 post-MVP) | |
 
 ---
 
@@ -71,6 +71,14 @@ WC-08-01 → WC-08-02 → WC-08-03 → WC-08-04 →
 WC-08-05 → WC-08-06 → WC-08-07
 ```
 
+**Post-MVP (Phase 6 — Option A, parallel tracks):**
+```
+Scorecard:     WC-09-01 → WC-09-02          (build first)
+Research card: WC-09-03 → WC-09-04
+Bayesian (||): WC-09-05 → WC-09-06 → WC-09-07
+Props spike:   WC-09-08                     (go/no-go, last)
+```
+
 ### Phase Strategy
 
 | Phase | Issues | Deadline | Goal |
@@ -80,6 +88,7 @@ WC-08-05 → WC-08-06 → WC-08-07
 | **Phase 3: Dashboard** | WC-06-01 through WC-06-03 | June 28 (knockouts) | Full dashboard + group advancement simulator |
 | **Phase 4: Knockouts** | WC-04-03, WC-07-01, WC-07-02 | June 30 | Knockout model + automated daily pipeline |
 | **Phase 5: Post-MVP UX** | WC-08-01 through WC-08-07 | post-tournament-safe | Tabbed dashboard, flags, ET times, collapsible reference, responsive |
+| **Phase 6: Decision Support & Bayesian R&D** | WC-09-01 through WC-09-08 (Option A) | rolling | CLV scorecard + research card (fast value), Bayesian shadow model (parallel R&D), player-props go/no-go spike |
 
 ---
 
@@ -990,6 +999,228 @@ Verify the full redesign on desktop + mobile and lock behavior with tests.
 - [x] Tab 1 fixtures / value queries are bulk (no N+1)
 - [x] Verified on desktop and narrow / mobile viewport
 - [x] Full test suite green
+
+---
+
+## WC-09 — Decision Support & Bayesian Model R&D (Phase 6, Option A, Post-MVP)
+
+**Context:** With the dashboard redesigned (WC-08), this epic turns it into a real
+decision aid and starts the model upgrade. The honest read on the WC betting problem
+— sparse data (12 results) vs a sharp 59-book market — means the priority order is:
+(1) a **measurement rig** that tells us whether any edge is real (CLV + calibration),
+(2) per-match **decision support**, (3) a better-calibrated **Bayesian model** run in
+shadow, and (4) a scoped **player-props feasibility spike**. Option A ships the
+scorecard + research card first (fast value this tournament), runs the Bayesian model
+as a parallel R&D track, and treats player props as a go/no-go spike before any full
+build.
+
+**Owner decision (2026-06-23):** Option A — scorecard + research card now, Bayesian in
+parallel, props as a later spike.
+
+**Tier 2 note:** the Bayesian model (WC-09-05..07) adds a new model architecture + the
+PyMC dependency — approved via the Rule 8 Tier-2 proposal (2026-06-23). It runs
+**shadow only** (never auto-staked) until it beats the current Poisson on CLV +
+calibration.
+
+**Prop coverage (verified 2026-06-23, 15 credits):** anytime / first goal scorer = 10
+books incl. FanDuel / DraftKings / Pinnacle; shots on target = 4; cards = 4; assists =
+2. Feasible — gated on player-data sourcing (WC-09-08 spike). Prop scraping costs
+markets × regions per call — budget discipline required.
+
+---
+
+### Phase A — Shadow Scorecard (the measurement rig — build first)
+
+### WC-09-01 — Closing-Line Capture & CLV for WC Shadow Picks
+
+**Type:** Pipeline / Data
+**Depends on:** WC-05-01 (value finder), WC-07-01 (pipeline)
+
+Capture the closing line for each WC shadow pick so CLV (the leading edge indicator)
+can be computed.
+
+**Implementation Notes:**
+- Add a near-kickoff odds snapshot to the WC pipeline: for matches kicking off within
+  ~1–2h, re-fetch odds (reuse `scrape_wc_odds`) and record them as the "closing" line.
+- Store `closing_odds` + `clv` on `WCValueBet` (add columns if absent, mirroring the
+  league `ValueBet` schema). Use the same CLV convention as the league system.
+- Idempotent — set the closing line once per pick at/after kickoff, never overwrite.
+
+**Acceptance Criteria:**
+- [ ] Closing line captured for WC picks near kickoff
+- [ ] `WCValueBet.closing_odds` + `clv` populated after a match starts
+- [ ] CLV uses the same convention as the league system
+- [ ] Idempotent (closing line set once)
+- [ ] No new API cost beyond one near-kickoff snapshot per match day
+
+---
+
+### WC-09-02 — Shadow Scorecard Computation + Dashboard Panel
+
+**Type:** UI / Analytics
+**Depends on:** WC-09-01
+
+Compute and display the self-assessment scorecard on the dashboard.
+
+**Implementation Notes:**
+- Over WC shadow picks: CLV distribution (mean, % positive), hit rate, calibration
+  bins (predicted vs actual), flat-stake paper P&L (1u/pick).
+- Surface on the Model tab (new "Scorecard" expander): headline CLV %, calibration
+  reliability, paper P&L, n picks. Honest low-sample state ("need ≥N picks").
+- Clearly labelled tracked/shadow, not realized money.
+
+**Acceptance Criteria:**
+- [ ] Scorecard shows mean CLV, % positive CLV, n picks
+- [ ] Calibration (predicted vs actual frequency) displayed
+- [ ] Flat-stake paper P&L shown
+- [ ] Low-sample state handled (<N picks → "insufficient data")
+- [ ] Clearly labelled shadow/tracked
+
+---
+
+### Phase B — Research Card (decision support)
+
+### WC-09-03 — Line-Movement & Best-Price Data Layer
+
+**Type:** Analytics
+**Depends on:** WC-02-01 (odds), WC-05-01
+
+Compute per-selection line movement and best price across books.
+
+**Implementation Notes:**
+- From `WCOdds` history (`captured_at`), compute open→current movement per (match,
+  market, canonical selection); reuse `_canonical_selection`.
+- Best price across books per selection.
+- Expose the de-vigged market consensus + model-vs-market diff per match (mostly in
+  the value finder already).
+
+**Acceptance Criteria:**
+- [ ] Line movement (open→current) computed per selection from odds history
+- [ ] Best price across books per selection
+- [ ] De-vigged market consensus + model diff exposed per match
+- [ ] Single-snapshot markets handled (no movement → "—")
+
+---
+
+### WC-09-04 — Research Card View + Review Queue
+
+**Type:** UI
+**Depends on:** WC-09-03
+
+Per-match decision card + a biggest-disagreements review queue.
+
+**Implementation Notes:**
+- Research card per match: model probs (with the Bayesian uncertainty band once
+  WC-09-06 lands), de-vigged market, edge, line movement, best price + book.
+- "Biggest disagreements" queue across upcoming matches, sorted by |model − market|,
+  framed as **hypotheses to investigate, not bets** (shadow discipline).
+- xG form **deferred** (no reliable WC xG source) — clearly-marked placeholder only.
+
+**Acceptance Criteria:**
+- [ ] Research card shows model · market · edge · movement · best price for a match
+- [ ] Review queue lists the biggest model–market disagreements
+- [ ] Framed as "review / investigate", consistent with shadow discipline
+- [ ] Renders on desktop + mobile; no N+1
+
+---
+
+### Phase C — Bayesian Shadow Model (parallel R&D)
+
+### WC-09-05 — PyMC Dependency + Bayesian Hierarchical Poisson
+
+**Type:** Model
+**Depends on:** WC-01 (data), WC-03 (features)
+
+Add PyMC and implement the hierarchical Bayesian model.
+
+**Implementation Notes:**
+- Add `pymc` (+ `arviz`) to requirements.
+- `src/world_cup/bayesian_model.py`: hierarchical Poisson — latent per-team
+  attack/defence with priors pooled toward confederation/global means; home-advantage
+  parameter; low-score correlation parameter (Dixon-Coles-style or bivariate).
+- Fit on `wc_historical_matches` (recency/importance-weighted) + finished WC matches.
+  NUTS sampler; fall back to ADVI (variational) if too slow.
+- `predict()` → posterior-predictive **7×7 scoreline matrix** (same interface as the
+  Poisson — Rule 6, zero downstream changes).
+
+**Acceptance Criteria:**
+- [ ] `pymc` in requirements; `bayesian_model.py` present
+- [ ] Model fits with acceptable diagnostics (no/low divergences)
+- [ ] `predict()` returns a 7×7 matrix compatible with `derive_market_probabilities`
+- [ ] Training completes in a tolerable, documented time
+- [ ] Posterior uncertainty (e.g. credible interval on λ) exposed
+
+---
+
+### WC-09-06 — Bayesian Shadow Integration
+
+**Type:** Pipeline
+**Depends on:** WC-09-05, WC-07-01
+
+Run the Bayesian model alongside the Poisson, shadow only.
+
+**Implementation Notes:**
+- Store Bayesian predictions under `model_name="wc_bayesian_v1"` in `wc_predictions`.
+- Wire into the WC pipeline as a parallel predictor (after the Poisson).
+- **Never auto-stake; never overrides the Poisson.**
+
+**Acceptance Criteria:**
+- [ ] Bayesian predictions stored under a distinct `model_name`
+- [ ] No value bets / no staking from the Bayesian model
+- [ ] Pipeline runs both models without error
+- [ ] Existing Poisson behavior unchanged
+
+---
+
+### WC-09-07 — Bayesian Validation Harness + Scorecard Comparison
+
+**Type:** Test / Analytics
+**Depends on:** WC-09-06, WC-09-02
+
+Compare Bayesian vs Poisson and feed the scorecard.
+
+**Implementation Notes:**
+- Walk-forward backtest (where data allows) + Brier / log-loss / calibration vs the
+  Poisson.
+- Live: the scorecard tracks both models' CLV / calibration side-by-side over the
+  remaining WC matches.
+- Document the promotion bar (beats Poisson on Brier + positive CLV) — **no
+  auto-promotion**.
+
+**Acceptance Criteria:**
+- [ ] Backtest/metrics comparing Bayesian vs Poisson produced
+- [ ] Scorecard shows both models' CLV / calibration
+- [ ] Promotion criteria documented; no automatic promotion
+- [ ] Tests for the model interface + integration
+
+---
+
+### Phase D — Player-Props Feasibility Spike (go/no-go)
+
+### WC-09-08 — Player-Prop Data-Sourcing Spike
+
+**Type:** Spike / Research (time-boxed ~half-day)
+**Depends on:** Nothing (uses the confirmed prop coverage)
+
+Decide whether a full player-props build (a future WC-10) is viable — **no production
+build in this issue**.
+
+**Implementation Notes:**
+- Investigate whether per-player goal/shot rates + expected minutes for the 48 WC
+  squads are sourceable at usable quality (Transfermarkt goals/minutes, FBref shots;
+  map to squads). Document coverage gaps.
+- Prototype the data design (`wc_players` schema) and a rough anytime-scorer estimate
+  for ONE match (team λ × player goal-share × minutes) vs the book / Pinnacle price.
+- Define the prop-scrape budget plan (markets × regions discipline given the
+  ~15-credit-per-check cost).
+- Output: a go/no-go report + recommended WC-10 scope sketch.
+
+**Acceptance Criteria:**
+- [ ] Report on per-player WC data availability/quality (sources, gaps)
+- [ ] Prototype anytime-scorer estimate for one match vs the market
+- [ ] Prop-scrape budget plan (scope to stay within quota)
+- [ ] Clear go/no-go recommendation + WC-10 scope sketch
+- [ ] Time-boxed — no production prop pipeline built here
 
 ---
 
