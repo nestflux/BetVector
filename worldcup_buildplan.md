@@ -736,17 +736,19 @@ Orchestrate the daily World Cup pipeline: scrape → compute → predict → fin
 - Add CLI entry point: `python -m src.world_cup.pipeline --mode morning`
 
 **Acceptance Criteria:**
-- [ ] Morning pipeline runs end-to-end without errors
-- [ ] Evening pipeline runs end-to-end without errors
-- [ ] Results scraped and stored correctly
-- [ ] Elo updated after each match
-- [ ] Fresh odds collected for upcoming matches
-- [ ] Predictions generated for all scheduled matches
-- [ ] Value bets identified and stored
-- [ ] Emails sent (morning picks, evening review)
-- [ ] Pipeline completes in under 10 minutes
-- [ ] Logs written to `data/logs/wc_*.log`
-- [ ] CLI entry point works: `python -m src.world_cup.pipeline --mode morning`
+- [x] Morning pipeline runs end-to-end without errors
+- [x] Evening pipeline runs end-to-end without errors
+- [x] Results scraped and stored correctly
+- [x] Elo updated after each match
+- [x] Fresh odds collected for upcoming matches
+- [x] Predictions generated for all scheduled matches
+- [x] Value bets identified and stored
+- [x] Emails sent (morning picks, evening review)
+- [x] Pipeline completes in under 10 minutes
+- [x] Logs written to `data/logs/wc_*.log`
+- [x] CLI entry point works: `python -m src.world_cup.pipeline --mode morning`
+
+**Status:** ✅ DONE — Morning (8 steps) + evening (5 steps) pipelines with per-step error isolation, file+console logging, CLI entry point. 621/621 tests.
 
 ---
 
