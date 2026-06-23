@@ -25,17 +25,17 @@ logger = logging.getLogger(__name__)
 CONFIG_DIR = Path(__file__).resolve().parent.parent.parent / "config"
 SQUAD_FILE = CONFIG_DIR / "wc_squads_2026.yaml"
 
-# Columns that map directly from YAML to WCTeam
-SQUAD_FIELDS = [
-    "squad_market_value",
-    "avg_squad_age",
-    "players_in_top5_leagues",
-    "cl_players",
-    "avg_caps",
-    "squad_mv_gini",
-    "manager_name",
-    "manager_tenure_months",
-]
+# Columns that map directly from YAML to WCTeam, with expected types
+SQUAD_FIELDS = {
+    "squad_market_value": (int, float),
+    "avg_squad_age": (int, float),
+    "players_in_top5_leagues": (int,),
+    "cl_players": (int,),
+    "avg_caps": (int, float),
+    "squad_mv_gini": (int, float),
+    "manager_name": (str,),
+    "manager_tenure_months": (int,),
+}
 
 
 def fetch_squad_data() -> dict[str, dict]:
@@ -84,9 +84,15 @@ def _store_squad_data(squads: dict[str, dict]) -> None:
                     missing.append(fifa_code)
                     continue
 
-                for field in SQUAD_FIELDS:
+                for field, expected_types in SQUAD_FIELDS.items():
                     value = data.get(field)
                     if value is not None:
+                        if not isinstance(value, expected_types):
+                            logger.warning(
+                                "%s.%s: expected %s, got %s — skipping",
+                                fifa_code, field, expected_types, type(value).__name__,
+                            )
+                            continue
                         setattr(team, field, value)
                 updated += 1
 
@@ -101,29 +107,29 @@ def _store_squad_data(squads: dict[str, dict]) -> None:
 
 def _compute_dark_horse_scores() -> None:
     """
-    Compute dark_horse_score = elo_rank - market_value_rank.
+    Compute dark_horse_score = mv_rank - elo_rank.
 
-    A positive score means the team's Elo ranking is higher (better) than
-    their market value would suggest — a potential overperformer.
+    Positive = team's Elo ranking is better than their market value ranking,
+    meaning they're stronger than the money suggests. Bookmakers weight squad
+    value heavily, so a high dark_horse_score flags teams the market likely
+    undervalues — a potential edge for value betting.
     Example: Morocco might have Elo rank 4 but MV rank 15 → score +11.
     """
     try:
         with get_session() as session:
             teams = session.execute(select(WCTeam)).scalars().all()
+            n_teams = len(teams)
 
-            # Rank by Elo (descending — highest Elo = rank 1)
             by_elo = sorted(teams, key=lambda t: t.elo_rating or 0, reverse=True)
             elo_rank = {t.fifa_code: i + 1 for i, t in enumerate(by_elo)}
 
-            # Rank by market value (descending — highest MV = rank 1)
             by_mv = sorted(teams, key=lambda t: t.squad_market_value or 0, reverse=True)
             mv_rank = {t.fifa_code: i + 1 for i, t in enumerate(by_mv)}
 
             computed = 0
             for team in teams:
-                er = elo_rank.get(team.fifa_code, 48)
-                mr = mv_rank.get(team.fifa_code, 48)
-                # Positive = overperformer (Elo rank better than MV rank)
+                er = elo_rank.get(team.fifa_code, n_teams)
+                mr = mv_rank.get(team.fifa_code, n_teams)
                 team.dark_horse_score = float(mr - er)
                 computed += 1
 
@@ -173,18 +179,17 @@ if __name__ == "__main__":
 
         print("\n=== Top 10 by Market Value ===")
         for t in teams[:10]:
-            print(
-                f"  {t.name:<25s} MV=€{t.squad_market_value:>7.0f}M "
-                f"Age={t.avg_squad_age:.1f} "
-                f"Top5={t.players_in_top5_leagues:>2d} "
-                f"CL={t.cl_players:>2d} "
-                f"DH={t.dark_horse_score:>+5.0f}"
-            )
+            mv = t.squad_market_value or 0
+            age = t.avg_squad_age or 0
+            t5 = t.players_in_top5_leagues or 0
+            cl = t.cl_players or 0
+            dh = t.dark_horse_score or 0
+            print(f"  {t.name:<25s} MV=€{mv:>7.0f}M Age={age:.1f} Top5={t5:>2d} CL={cl:>2d} DH={dh:>+5.0f}")
 
         print("\n=== Top 5 Dark Horses ===")
         dark = sorted(teams, key=lambda t: t.dark_horse_score or 0, reverse=True)
         for t in dark[:5]:
-            print(
-                f"  {t.name:<25s} DH={t.dark_horse_score:>+5.0f} "
-                f"(Elo={t.elo_rating:.0f}, MV=€{t.squad_market_value:.0f}M)"
-            )
+            dh = t.dark_horse_score or 0
+            elo = t.elo_rating or 0
+            mv = t.squad_market_value or 0
+            print(f"  {t.name:<25s} DH={dh:>+5.0f} (Elo={elo:.0f}, MV=€{mv:.0f}M)")
