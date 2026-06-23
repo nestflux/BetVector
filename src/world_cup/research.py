@@ -32,6 +32,26 @@ _GROUPS = {
 }
 
 
+_SHORT_LABELS = {
+    ("h2h", "home"): "Home", ("h2h", "draw"): "Draw", ("h2h", "away"): "Away",
+    ("totals", "over"): "Over 2.5", ("totals", "under"): "Under 2.5",
+}
+
+
+def _model_probs(pred) -> dict:
+    """Model probability per canonical selection, or {} when no prediction."""
+    if not pred:
+        return {}
+    over = pred.over_25_prob
+    return {
+        ("h2h", "home"): pred.home_win_prob,
+        ("h2h", "draw"): pred.draw_prob,
+        ("h2h", "away"): pred.away_win_prob,
+        ("totals", "over"): over,
+        ("totals", "under"): (1.0 - over) if over is not None else None,
+    }
+
+
 def _devig(implied: dict) -> dict:
     total = sum(implied.values())
     return {k: v / total for k, v in implied.items()} if total > 0 else dict(implied)
@@ -95,17 +115,7 @@ def build_research_card(match_id: int) -> dict | None:
         match_date = m.date
         kickoff = m.kickoff_time
 
-    # Model probability per canonical selection
-    model = {}
-    if pred:
-        over = pred.over_25_prob
-        model = {
-            ("h2h", "home"): pred.home_win_prob,
-            ("h2h", "draw"): pred.draw_prob,
-            ("h2h", "away"): pred.away_win_prob,
-            ("totals", "over"): over,
-            ("totals", "under"): (1.0 - over) if over is not None else None,
-        }
+    model = _model_probs(pred)
 
     labels = {
         ("h2h", "home"): f"Home ({home})",
@@ -148,3 +158,53 @@ def build_research_card(match_id: int) -> dict | None:
         "kickoff_time": kickoff,
         "selections": selections,
     }
+
+
+def top_disagreements(limit: int = 10) -> list[dict]:
+    """Across all upcoming matches, the selections where the model most disagrees
+    with the de-vigged market consensus — a review queue of hypotheses to
+    investigate, sorted by |edge| descending. One bulk query (no N+1).
+    """
+    out: list[dict] = []
+    with get_session() as session:
+        matches = session.execute(
+            select(WCMatch)
+            .where(WCMatch.status != "finished")
+            .options(
+                joinedload(WCMatch.home_team),
+                joinedload(WCMatch.away_team),
+                joinedload(WCMatch.odds),
+                joinedload(WCMatch.predictions),
+            )
+        ).unique().scalars().all()
+
+        for m in matches:
+            home = m.home_team.name if m.home_team else "?"
+            away = m.away_team.name if m.away_team else "?"
+            pred = next((p for p in m.predictions if p.model_name == MODEL_NAME), None)
+            if not pred:
+                continue
+            model = _model_probs(pred)
+            data = _collect(m.odds, home, away)
+            for market, sels in _GROUPS.items():
+                cur, _ = _consensus(data, market, sels)
+                if cur is None:
+                    continue
+                for sel in sels:
+                    mp, kp = model.get((market, sel)), cur.get(sel)
+                    if mp is None or kp is None:
+                        continue
+                    d = data.get((market, sel)) or {}
+                    best, book = d.get("best", (0.0, ""))
+                    out.append({
+                        "match": f"{home} v {away}",
+                        "selection": _SHORT_LABELS.get((market, sel), sel),
+                        "edge": mp - kp,
+                        "model": mp,
+                        "market": kp,
+                        "best_odds": best if best > 1.0 else None,
+                        "best_book": book or None,
+                    })
+
+    out.sort(key=lambda x: -abs(x["edge"]))
+    return out[:limit]

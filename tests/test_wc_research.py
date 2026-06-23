@@ -8,7 +8,9 @@ from sqlalchemy.orm import sessionmaker
 
 from src.database.db import Base
 import src.world_cup.research as research
-from src.world_cup.research import build_research_card, _devig, _consensus
+from src.world_cup.research import (
+    build_research_card, top_disagreements, _devig, _consensus,
+)
 from src.world_cup.models import WCTeam, WCMatch, WCOdds, WCPrediction
 from src.world_cup.predictor import MODEL_NAME
 
@@ -102,3 +104,19 @@ def test_build_research_card(session, monkeypatch):
 def test_missing_match_returns_none(session, monkeypatch):
     _patch(session, monkeypatch)
     assert build_research_card(99999) is None
+
+
+def test_top_disagreements_sorted(session, monkeypatch):
+    _seed(session)
+    _patch(session, monkeypatch)
+    dq = top_disagreements(limit=10)
+    assert len(dq) == 5  # 3 h2h + 2 totals on the one upcoming match
+    edges = [abs(d["edge"]) for d in dq]
+    assert edges == sorted(edges, reverse=True)  # sorted by |edge| desc
+    assert all("match" in d and "selection" in d for d in dq)
+
+
+def test_top_disagreements_respects_limit(session, monkeypatch):
+    _seed(session)
+    _patch(session, monkeypatch)
+    assert len(top_disagreements(limit=2)) == 2

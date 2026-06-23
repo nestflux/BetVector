@@ -532,6 +532,81 @@ def _render_value_bets() -> None:
 
 
 # ============================================================================
+# Section 4b — Research Card (WC-09-04)
+# ============================================================================
+
+def _render_research_card() -> None:
+    """Per-match decision support: model vs de-vigged market, edge, line movement,
+    and best price across books. Where you disagree with the consensus — a thing
+    to investigate, not an auto-bet."""
+    _section_header("🔍 Research Card")
+    st.caption(
+        "Model vs market for one match — your disagreement with the consensus and "
+        "the best available price. A hypothesis to investigate, not a bet."
+    )
+
+    with get_session() as session:
+        upcoming = session.execute(
+            select(WCMatch)
+            .where(WCMatch.status != "finished")
+            .options(joinedload(WCMatch.home_team), joinedload(WCMatch.away_team))
+            .order_by(WCMatch.date, WCMatch.kickoff_time)
+        ).unique().scalars().all()
+        labels = {
+            m.id: f"{m.home_team.name if m.home_team else '?'} v "
+                  f"{m.away_team.name if m.away_team else '?'} "
+                  f"({format_kickoff_et(m.date, m.kickoff_time, with_day=True)})"
+            for m in upcoming
+        }
+
+    if not labels:
+        st.info("No upcoming matches to research.")
+        return
+
+    sel_id = st.selectbox("Match", options=list(labels.keys()),
+                          format_func=lambda x: labels[x], key="research_match")
+
+    from src.world_cup.research import build_research_card
+    card = build_research_card(sel_id)
+    if not card or not card["selections"]:
+        st.info("No odds / prediction data for this match yet.")
+        return
+
+    rows = []
+    for x in card["selections"]:
+        rows.append({
+            "Selection": x["label"],
+            "Model": f"{x['model_prob']:.0%}" if x["model_prob"] is not None else "—",
+            "Market": f"{x['market_prob']:.0%}" if x["market_prob"] is not None else "—",
+            "Edge": f"{x['edge']:+.1%}" if x["edge"] is not None else "—",
+            "Move": f"{x['movement']:+.1%}" if x["movement"] is not None else "—",
+            "Best price": f"{x['best_odds']:.2f} ({x['best_book']})" if x["best_odds"] else "—",
+        })
+    st.dataframe(rows, use_container_width=True, hide_index=True)
+    st.caption(
+        "Edge = model − de-vigged market. Move = consensus shift since opening "
+        "(+ = market moved toward it). xG form: no reliable WC source — deferred."
+    )
+
+    # Review queue — biggest model-market disagreements across upcoming matches
+    st.markdown("**Biggest disagreements to review**")
+    from src.world_cup.research import top_disagreements
+    disagreements = top_disagreements(limit=10)
+    if not disagreements:
+        st.caption("No disagreements to review yet (needs odds + predictions).")
+        return
+    q_rows = [{
+        "Match": d["match"],
+        "Selection": d["selection"],
+        "Model": f"{d['model']:.0%}",
+        "Market": f"{d['market']:.0%}",
+        "Edge": f"{d['edge']:+.1%}",
+        "Best price": f"{d['best_odds']:.2f} ({d['best_book']})" if d["best_odds"] else "—",
+    } for d in disagreements]
+    st.dataframe(q_rows, use_container_width=True, hide_index=True)
+
+
+# ============================================================================
 # Section 5a — Shadow Scorecard (WC-09-02)
 # ============================================================================
 
@@ -934,6 +1009,7 @@ def main() -> None:
     with tab_bets:
         _render_todays_matches()
         _render_value_bets()
+        _render_research_card()
 
     with tab_groups:
         # Collapsed by default so the tab opens compact — expand what you need.
