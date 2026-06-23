@@ -350,9 +350,10 @@ single-line expression.
 
 ## Current Status
 
-Last completed: World Cup 2026 add-on module ✅ — all 21 issues (WC-01-01 → WC-07-02), 3-gate reviewed, 621/621 tests
-Currently working: Nothing — league system + WC module both feature-complete
-Next up: None on the critical path. Owner action pending: install WC launchd plists (`cp scripts/com.betvector.wc_*.plist ~/Library/LaunchAgents/` then `launchctl load` both) to activate the WC pipeline before the tournament.
+Last completed: PC-27 Cloud Re-migration ✅ — hybrid cloud cutover verified live (local pipeline → Neon → Streamlit Cloud). Also fixed WC odds/value bets not showing on cloud (split-brain + schema drift + value_finder selection bug; commit f7a70c3). League + WC modules feature-complete.
+Currently working: Nothing on the critical path. Recommended next: WC model calibration (edges skew to totals/under + h2h/draw → likely draw/under over-prediction bias).
+Next up: WC model calibration vs 12 finished results + league-style edge cap/λ clamp guardrails. Owner tasks: (1) install WC launchd plists; (2) PC-27 7-day cloud soak monitoring.
+Hybrid cloud: DB is Neon Postgres (DATABASE_URL in .env / Streamlit Cloud secrets [database] connection_string); local SQLite kept as backup.
 
 E40 complete: All 10 issues done ✅ (TM datasets download, lineup/formation/manager backfill, manager features, injury club fix, minutes impact, recomputation, weekly refresh, integration test — 14,187 matches, 9,829 TM-mapped, 393K lineups, 42 tests)
 
