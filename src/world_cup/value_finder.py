@@ -166,8 +166,14 @@ def find_wc_value_bets(
     threshold = edge_threshold if edge_threshold is not None else cfg.get("edge_threshold", 0.03)
     fraction = kelly_fraction if kelly_fraction is not None else cfg.get("kelly_fraction", 0.25)
     supported_markets = set(cfg.get("markets", ["h2h", "totals", "spreads"]))
+    # Edge ceiling guardrail. Against a sharp 59-bookmaker WC market, an edge
+    # this large almost always reflects model error (the measured under/home
+    # biases on sparse international data) rather than genuine value. Capping it
+    # stops miscalibration from manufacturing phantom "value" bets. Config-driven.
+    max_edge = cfg.get("max_actionable_edge", 0.15)
 
     results: list[WCValueBetResult] = []
+    capped = 0
 
     with get_session() as session:
         # Get all upcoming matches with predictions
@@ -256,6 +262,15 @@ def find_wc_value_bets(
                 if edge < threshold:
                     continue
 
+                if edge > max_edge:
+                    # Too large to be real against a sharp market — model error.
+                    capped += 1
+                    logger.info(
+                        "Skip %s/%s match %d: edge %.1f%% > actionable ceiling %.1f%%",
+                        mkt, sel, match.id, edge * 100, max_edge * 100,
+                    )
+                    continue
+
                 kelly = _compute_kelly(model_prob, best.odds_decimal, fraction)
 
                 results.append(WCValueBetResult(
@@ -284,8 +299,9 @@ def find_wc_value_bets(
     confidence = max(0.5, min(1.0, 1.0 - bpc / 0.333)) if cal.get("n_matches", 0) > 0 else 1.0
     results.sort(key=lambda x: -(x.edge * confidence))
     logger.info(
-        "find_wc_value_bets: %d value bets found across %d matches (threshold=%.1f%%)",
-        len(results), len(upcoming), threshold * 100,
+        "find_wc_value_bets: %d value bets across %d matches "
+        "(threshold=%.1f%%, ceiling=%.1f%%, %d capped as model-error)",
+        len(results), len(upcoming), threshold * 100, max_edge * 100, capped,
     )
     return results
 

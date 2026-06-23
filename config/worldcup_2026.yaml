@@ -520,6 +520,10 @@ betting:
   edge_threshold: 0.03
   kelly_fraction: 0.25
   max_edge_display: 0.30
+  # Edge ceiling (WC calibration 2026-06-23): against a sharp 59-book WC market,
+  # edges above this reflect model error (measured under +3.9pp / home +3.7pp
+  # biases on sparse international data), not value — excluded from actionable bets.
+  max_actionable_edge: 0.15
   # Spreads deferred — Poisson model doesn't produce spread-adjusted probs
   markets:
     - h2h

@@ -538,14 +538,15 @@ class WCPoissonPredictor:
         draw = sum(matrix[h][h] for h in range(MAX_GOALS))
         away_win = sum(matrix[h][a] for h in range(MAX_GOALS) for a in range(h + 1, MAX_GOALS))
 
-        # Draw inflation for group stage only — knockout matches cannot end in
-        # draws (extra time + penalties), so no adjustment needed there.
-        if is_group:
-            draw_boost = 0.03
-            draw += draw_boost
-            home_win -= draw_boost / 2
-            away_win -= draw_boost / 2
-
+        # No ad-hoc draw inflation. Draw frequency is modeled directly by the
+        # scoreline matrix and the MLE-estimated Dixon-Coles rho (which already
+        # captures the low-score correlation that drives draws). A previous flat
+        # +0.03 group-stage "draw_boost" was measured to over-predict draws by
+        # ~4.5pp against the de-vigged 59-bookmaker market consensus, manufacturing
+        # spurious h2h/draw value bets, so it was removed (WC calibration 2026-06-23).
+        # is_group is retained for the interface; knockout goal dynamics are handled
+        # upstream via knockout_deflation on lambda, not here.
+        _ = is_group
         total = home_win + draw + away_win
         home_win /= total
         draw /= total
