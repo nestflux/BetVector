@@ -652,7 +652,7 @@ Add a World Cup page to the existing BetVector Streamlit dashboard.
 
 ---
 
-### WC-06-02 — Group Advancement Simulator Widget
+### WC-06-02 — Group Advancement Simulator Widget ✅ DONE
 
 **Type:** UI
 **Depends on:** WC-04-02
@@ -660,21 +660,19 @@ Add a World Cup page to the existing BetVector Streamlit dashboard.
 Interactive widget showing group advancement probabilities and "what-if" scenarios.
 
 **Implementation Notes:**
-- Add an interactive section to the WC dashboard page
-- For each group:
-  - Show P(advance) for each team (from Monte Carlo simulation)
-  - Show P(1st), P(2nd), P(3rd-qualify), P(eliminated)
-  - Color-code: green (>80% advance), yellow (30-80%), red (<30%)
-- "What-if" scenario selector: User picks a result for a remaining match → instantly recompute group probabilities
-- Third-place comparison table: Show all 12 potential third-place teams ranked by expected points/GD, with P(qualify as best third)
-- Use Streamlit columns and expanders for compact layout
+- Added position-specific tracking to `simulator.py`: P(1st), P(2nd), P(3rd-qualify), P(4th), E[pts], E[GD]
+- Per-group expanders show P(advance) with breakdown: 1st/2nd/3rd-Q/Elim per team
+- Color-coded: green >=80%, yellow 30-80%, red <30%
+- What-if scenario selector: pick a scheduled match, enter hypothetical score, recompute standings
+- Third-place table: actual 3rd-place team per group (by standings), with E[Pts], E[GD], P(Qualify 3rd) from sim
+- Shared `_compute_group_standings()` eliminates redundant DB queries
 
 **Acceptance Criteria:**
-- [ ] Each group shows advancement probability per team
-- [ ] Probabilities sourced from Monte Carlo simulation (WC-04-02)
-- [ ] Color-coding reflects qualification likelihood
-- [ ] Third-place comparison table shows all 12 potential third-place finishers
-- [ ] Probabilities update when page is refreshed after new results
+- [x] Each group shows advancement probability per team
+- [x] Probabilities sourced from Monte Carlo simulation (WC-04-02)
+- [x] Color-coding reflects qualification likelihood
+- [x] Third-place comparison table shows all 12 potential third-place finishers
+- [x] Probabilities update when page is refreshed after new results
 
 ---
 

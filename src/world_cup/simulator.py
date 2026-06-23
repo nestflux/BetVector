@@ -88,19 +88,36 @@ def simulate_tournament(
     stages = ["group", "r32", "r16", "qf", "sf", "final", "winner"]
     counts = {team_name_map[t.id]: {s: 0 for s in stages} for t in teams}
 
+    # Per-position tracking for group advancement breakdown
+    pos_counts = {team_name_map[t.id]: {"1st": 0, "2nd": 0, "3rd_qualify": 0, "4th": 0}
+                  for t in teams}
+    # Accumulate pts/GD across sims for expected values
+    pts_accum = {team_name_map[t.id]: 0.0 for t in teams}
+    gd_accum = {team_name_map[t.id]: 0.0 for t in teams}
+
     for _ in range(n_sims):
         # 1. Simulate group stage
         standings = _simulate_groups(
             groups, finished_group, scheduled_group, lambda_cache, rng,
         )
 
-        # Track group advancement
+        # Track group advancement and per-position counts
         advancing_32 = set()
         for group_letter, table in standings.items():
             for pos, (tid, pts, gd, gf) in enumerate(table):
-                if pos < 2:
+                name = team_name_map[tid]
+                pts_accum[name] += pts
+                gd_accum[name] += gd
+                if pos == 0:
                     advancing_32.add(tid)
-                    counts[team_name_map[tid]]["group"] += 1
+                    counts[name]["group"] += 1
+                    pos_counts[name]["1st"] += 1
+                elif pos == 1:
+                    advancing_32.add(tid)
+                    counts[name]["group"] += 1
+                    pos_counts[name]["2nd"] += 1
+                elif pos == 3:
+                    pos_counts[name]["4th"] += 1
 
         # 2. Select 8 best third-placed teams
         thirds = []
@@ -111,9 +128,15 @@ def simulate_tournament(
 
         thirds.sort(key=lambda x: (-x[1], -x[2], -x[3]))
         best_thirds = thirds[:8]
-        for tid, pts, gd, gf, gl in best_thirds:
-            advancing_32.add(tid)
-            counts[team_name_map[tid]]["group"] += 1
+        qualifying_third_ids = {t[0] for t in best_thirds}
+        for group_letter, table in standings.items():
+            if len(table) >= 3:
+                tid = table[2][0]
+                name = team_name_map[tid]
+                if tid in qualifying_third_ids:
+                    pos_counts[name]["3rd_qualify"] += 1
+                    advancing_32.add(tid)
+                    counts[name]["group"] += 1
 
         # 3. Build R32 bracket
         group_winners = {}
@@ -170,12 +193,25 @@ def simulate_tournament(
     for name, stage_counts in counts.items():
         team_probs[name] = {s: c / n_sims for s, c in stage_counts.items()}
 
+    # Per-position probabilities and expected values
+    position_probs = {}
+    for name, pc in pos_counts.items():
+        position_probs[name] = {
+            "p_1st": pc["1st"] / n_sims,
+            "p_2nd": pc["2nd"] / n_sims,
+            "p_3rd_qualify": pc["3rd_qualify"] / n_sims,
+            "p_4th": pc["4th"] / n_sims,
+            "expected_pts": pts_accum[name] / n_sims,
+            "expected_gd": gd_accum[name] / n_sims,
+        }
+
     # Verify winner probabilities sum to ~1.0
     winner_sum = sum(p.get("winner", 0) for p in team_probs.values())
     logger.info("Winner probability sum: %.4f (should be ~1.0)", winner_sum)
 
     return {
         "team_probs": team_probs,
+        "position_probs": position_probs,
         "n_sims": n_sims,
         "elapsed_seconds": elapsed,
         "winner_sum": winner_sum,

@@ -145,12 +145,11 @@ def _render_todays_matches() -> None:
 
 
 # ============================================================================
-# Section 3 — Group Standings
+# Shared — Group standings computation (used by sections 3 and 3b)
 # ============================================================================
 
-def _render_group_standings() -> None:
-    _section_header("Group Standings")
-
+def _compute_group_standings() -> dict[str, list[dict]]:
+    """Compute group standings from DB. Returns {group: [sorted team dicts]}."""
     with get_session() as session:
         teams = session.execute(select(WCTeam)).scalars().all()
         finished = session.execute(
@@ -158,12 +157,11 @@ def _render_group_standings() -> None:
             .where(WCMatch.status == "finished", WCMatch.stage == "group")
         ).scalars().all()
 
-    # Build standings
-    standings: dict[str, dict[int, dict]] = {}
+    raw: dict[str, dict[int, dict]] = {}
     for t in teams:
-        if t.group_letter not in standings:
-            standings[t.group_letter] = {}
-        standings[t.group_letter][t.id] = {
+        if t.group_letter not in raw:
+            raw[t.group_letter] = {}
+        raw[t.group_letter][t.id] = {
             "name": t.name, "pts": 0, "gd": 0, "gf": 0, "mp": 0, "w": 0, "d": 0, "l": 0,
         }
 
@@ -171,8 +169,8 @@ def _render_group_standings() -> None:
         if m.home_goals is None or not m.group_letter:
             continue
         g = m.group_letter
-        h = standings.get(g, {}).get(m.home_team_id)
-        a = standings.get(g, {}).get(m.away_team_id)
+        h = raw.get(g, {}).get(m.home_team_id)
+        a = raw.get(g, {}).get(m.away_team_id)
         if not h or not a:
             continue
 
@@ -197,6 +195,24 @@ def _render_group_standings() -> None:
             a["w"] += 1
             h["l"] += 1
 
+    result: dict[str, list[dict]] = {}
+    for g, teams_dict in raw.items():
+        result[g] = sorted(
+            teams_dict.values(),
+            key=lambda x: (-x["pts"], -x["gd"], -x["gf"]),
+        )
+    return result
+
+
+# ============================================================================
+# Section 3 — Group Standings
+# ============================================================================
+
+def _render_group_standings() -> None:
+    _section_header("Group Standings")
+
+    standings = _compute_group_standings()
+
     # Display in 2-column grid (6 rows)
     # Color-coding: top 2 = green (qualified), 3rd = yellow (possible R32),
     # 4th = red (eliminated). FIFA 2026: top 2 + best 8 third-place teams advance.
@@ -208,10 +224,7 @@ def _render_group_standings() -> None:
             if idx >= len(sorted_groups):
                 break
             g = sorted_groups[idx]
-            teams_sorted = sorted(
-                standings[g].values(),
-                key=lambda x: (-x["pts"], -x["gd"], -x["gf"]),
-            )
+            teams_sorted = standings[g]
             with col:
                 st.markdown(f"**Group {g}**")
                 has_results = any(t["mp"] > 0 for t in teams_sorted)
@@ -244,6 +257,183 @@ def _render_group_standings() -> None:
                     f"</tr></thead><tbody>{rows_html}</tbody></table>",
                     unsafe_allow_html=True,
                 )
+
+
+# ============================================================================
+# Section 3b — Group Advancement Probabilities (WC-06-02)
+# ============================================================================
+
+def _color_for_prob(p: float) -> str:
+    if p >= 0.8:
+        return GREEN
+    if p >= 0.3:
+        return YELLOW
+    return RED
+
+
+def _render_group_advancement() -> None:
+    _section_header("Group Advancement Probabilities")
+
+    try:
+        result = _cached_simulation()
+        probs = result.get("team_probs", {})
+        pos_probs = result.get("position_probs", {})
+        if not probs:
+            st.info("No simulation data available.")
+            return
+    except Exception as e:
+        st.warning(f"Could not load simulation: {e}")
+        return
+
+    # Extract team→group mapping from standings (no extra DB query)
+    standings = _compute_group_standings()
+    team_group_map: dict[str, str] = {}
+    for g, team_list in standings.items():
+        for t in team_list:
+            team_group_map[t["name"]] = g
+
+    # Build per-group advancement data with position breakdown
+    groups_data: dict[str, list[dict]] = {}
+    for name, sp in probs.items():
+        g = team_group_map.get(name)
+        if not g:
+            continue
+        pp = pos_probs.get(name, {})
+        groups_data.setdefault(g, []).append({
+            "name": name,
+            "advance": sp.get("group", 0),
+            "p_1st": pp.get("p_1st", 0),
+            "p_2nd": pp.get("p_2nd", 0),
+            "p_3rd_q": pp.get("p_3rd_qualify", 0),
+            "p_elim": pp.get("p_4th", 0) + (1 - sp.get("group", 0) - pp.get("p_4th", 0)),
+        })
+
+    # Display in 2-column grid with expanders
+    sorted_groups = sorted(groups_data.keys())
+    for i in range(0, len(sorted_groups), 2):
+        cols = st.columns(2)
+        for j, col in enumerate(cols):
+            idx = i + j
+            if idx >= len(sorted_groups):
+                break
+            g = sorted_groups[idx]
+            teams_sorted = sorted(groups_data[g], key=lambda x: -x["advance"])
+
+            with col:
+                with st.expander(f"Group {g}", expanded=False):
+                    for t in teams_sorted:
+                        adv = t["advance"]
+                        color = _color_for_prob(adv)
+                        st.markdown(
+                            f'<span style="color:{color}">●</span> '
+                            f'**{t["name"]}** — P(advance) = {adv:.0%}',
+                            unsafe_allow_html=True,
+                        )
+                        st.caption(
+                            f"1st: {t['p_1st']:.0%} · 2nd: {t['p_2nd']:.0%} · "
+                            f"3rd-Q: {t['p_3rd_q']:.0%} · Elim: {1 - adv:.0%}"
+                        )
+                    st.write("")
+
+    # What-if scenario selector
+    _section_header("What-If Scenario")
+    st.caption("Pick a hypothetical result for a remaining match to see how it affects group standings.")
+
+    with get_session() as session:
+        scheduled = session.execute(
+            select(WCMatch)
+            .where(WCMatch.status != "finished", WCMatch.stage == "group")
+            .options(joinedload(WCMatch.home_team), joinedload(WCMatch.away_team))
+            .order_by(WCMatch.date, WCMatch.kickoff_time)
+        ).unique().scalars().all()
+
+    if not scheduled:
+        st.info("All group matches have been played.")
+    else:
+        match_labels = {
+            m.id: f"{m.home_team.name if m.home_team else '?'} vs "
+                  f"{m.away_team.name if m.away_team else '?'} ({m.date})"
+            for m in scheduled
+        }
+        selected_id = st.selectbox(
+            "Select a match",
+            options=list(match_labels.keys()),
+            format_func=lambda x: match_labels[x],
+        )
+        c1, c2 = st.columns(2)
+        home_goals = c1.number_input("Home goals", min_value=0, max_value=10, value=1, key="wif_hg")
+        away_goals = c2.number_input("Away goals", min_value=0, max_value=10, value=0, key="wif_ag")
+
+        if st.button("Simulate with this result"):
+            sel_match = next((m for m in scheduled if m.id == selected_id), None)
+            if sel_match:
+                # Recompute standings with the hypothetical result injected
+                what_if_standings = _compute_group_standings()
+                g = sel_match.group_letter
+                if g and g in what_if_standings:
+                    h_team = sel_match.home_team.name if sel_match.home_team else None
+                    a_team = sel_match.away_team.name if sel_match.away_team else None
+                    for t in what_if_standings[g]:
+                        if t["name"] == h_team:
+                            t["gf"] += home_goals
+                            t["gd"] += home_goals - away_goals
+                            t["mp"] += 1
+                            if home_goals > away_goals:
+                                t["pts"] += 3
+                            elif home_goals == away_goals:
+                                t["pts"] += 1
+                        elif t["name"] == a_team:
+                            t["gf"] += away_goals
+                            t["gd"] += away_goals - home_goals
+                            t["mp"] += 1
+                            if away_goals > home_goals:
+                                t["pts"] += 3
+                            elif home_goals == away_goals:
+                                t["pts"] += 1
+
+                    what_if_standings[g].sort(
+                        key=lambda x: (-x["pts"], -x["gd"], -x["gf"]),
+                    )
+                    st.markdown(f"**Group {g} — with {h_team} {home_goals}-{away_goals} {a_team}:**")
+                    for rank, t in enumerate(what_if_standings[g]):
+                        color = GREEN if rank < 2 else (YELLOW if rank == 2 else RED)
+                        st.markdown(
+                            f'<span style="color:{color}">●</span> '
+                            f'{t["name"]} — {t["pts"]} pts, GD {t["gd"]:+d}',
+                            unsafe_allow_html=True,
+                        )
+
+    # Third-place comparison table — actual standings 3rd + sim P(qualify as best 3rd)
+    _section_header("Third-Place Qualification")
+    st.caption(
+        "Best 8 of 12 third-placed teams advance to the Round of 32. "
+        "Teams shown are currently ranked 3rd in their group."
+    )
+
+    third_place_rows = []
+    for g in sorted(standings.keys()):
+        group_teams = standings[g]
+        if len(group_teams) >= 3:
+            third = group_teams[2]
+            pp = pos_probs.get(third["name"], {})
+            p_3rd_q = pp.get("p_3rd_qualify", 0)
+            exp_pts = pp.get("expected_pts", 0)
+            exp_gd = pp.get("expected_gd", 0)
+            third_place_rows.append({
+                "Team": third["name"],
+                "Group": g,
+                "Pts": third["pts"],
+                "GD": f"{third['gd']:+d}" if third["mp"] > 0 else "0",
+                "E[Pts]": f"{exp_pts:.1f}",
+                "E[GD]": f"{exp_gd:+.1f}",
+                "P(Qualify 3rd)": f"{p_3rd_q:.0%}",
+                "_sort": p_3rd_q,
+            })
+
+    if third_place_rows:
+        third_place_rows.sort(key=lambda x: -x["_sort"])
+        display_rows = [{k: v for k, v in r.items() if k != "_sort"} for r in third_place_rows]
+        st.dataframe(display_rows, use_container_width=True, hide_index=True)
 
 
 # ============================================================================
@@ -446,6 +636,7 @@ def main() -> None:
     _render_header()
     _render_todays_matches()
     _render_group_standings()
+    _render_group_advancement()
     _render_value_bets()
     _render_model_performance()
     _render_winner_chart()
