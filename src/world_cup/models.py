@@ -338,3 +338,26 @@ class WCFeature(Base):
 
     def __repr__(self) -> str:
         return f"WCFeature(match={self.match_id}, elo_diff={self.elo_diff})"
+
+
+class WCCalibrationMetric(Base):
+    __tablename__ = "wc_calibration_metrics"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    timestamp = Column(String, nullable=False, server_default=func.now())
+    calibration_type = Column(String, nullable=False)
+    n_matches = Column(Integer, nullable=False)
+    brier = Column(Float, nullable=True)
+    brier_per_class = Column(Float, nullable=True)
+    log_loss = Column(Float, nullable=True)
+    accuracy = Column(Float, nullable=True)
+
+    __table_args__ = (
+        Index("ix_wc_cal_type", "calibration_type"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"WCCalibrationMetric(type='{self.calibration_type}', "
+            f"brier={self.brier}, n={self.n_matches})"
+        )

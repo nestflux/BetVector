@@ -519,10 +519,11 @@ Monte Carlo simulation of the entire tournament to compute advancement probabili
 
 ---
 
-### WC-04-03 — Model Calibration & Dark Horse Detection
+### WC-04-03 — Model Calibration & Dark Horse Detection ✅ DONE
 
 **Type:** Model
 **Depends on:** WC-04-01
+**Results:** Pre-cal Brier 0.4552 (0.152/class), 75% accuracy on 12 matches. Post-cal Brier 0.4517. Config-driven K-factors (40/50), GD multiplier, idempotent Elo. Metrics persisted to wc_calibration_metrics. Dark horse detection supports match-level + tournament-advancement probabilities.
 
 Calibrate the model using group stage results and identify dark horses for knockout betting.
 
