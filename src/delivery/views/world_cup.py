@@ -532,6 +532,48 @@ def _render_value_bets() -> None:
 
 
 # ============================================================================
+# Section 5a — Shadow Scorecard (WC-09-02)
+# ============================================================================
+
+def _render_scorecard() -> None:
+    """CLV · calibration · paper P&L on tracked/shadow picks — the self-assessment
+    rig (CLV is the leading edge indicator, not realized money)."""
+    _section_header("Shadow Scorecard")
+    st.caption(
+        "Self-assessment on tracked / shadow picks. CLV (closing-line value) is the "
+        "leading indicator of edge — not realized money."
+    )
+
+    from src.world_cup.scorecard import compute_wc_scorecard
+    sc = compute_wc_scorecard()
+
+    if sc.get("n", 0) == 0:
+        st.info(
+            "No settled shadow picks yet — the scorecard fills as tracked picks' "
+            "matches finish. CLV needs ~30+ picks before it means much."
+        )
+        return
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Picks settled", sc["n"])
+    if sc.get("mean_clv") is not None:
+        c2.metric("Mean CLV", f"{sc['mean_clv']:+.3f}",
+                  help="(1/close) − (1/entry); positive = beat the closing line")
+        c3.metric("% positive CLV", f"{sc['pct_positive_clv']:.0%}")
+    c4.metric("Paper P&L (1u flat)", f"{sc['pnl_units']:+.1f}u", f"{sc['roi']:+.1%} ROI")
+
+    if sc.get("calibration"):
+        st.caption("Calibration — predicted vs actual hit rate")
+        st.dataframe(sc["calibration"], use_container_width=True, hide_index=True)
+
+    if sc["n"] < 30:
+        st.caption(
+            f"⚠️ Only {sc['n']} settled picks — too few to conclude; "
+            f"CLV stabilizes around 30–50+."
+        )
+
+
+# ============================================================================
 # Section 5 — Model Performance
 # ============================================================================
 
@@ -906,6 +948,7 @@ def main() -> None:
         _render_knockout_bracket()
 
     with tab_model:
+        _render_scorecard()
         _render_winner_chart()
         _render_model_performance()
 
