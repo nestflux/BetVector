@@ -691,6 +691,19 @@ def _render_winner_chart() -> None:
 # Section 7 — Knockout Bracket Visualization (WC-06-03)
 # ============================================================================
 
+@st.cache_data(ttl=3600)
+def _team_fifa_map() -> dict:
+    """Map team name → FIFA code, for flags in the bracket (which works in names)."""
+    with get_session() as session:
+        return {t.name: t.fifa_code for t in session.execute(select(WCTeam)).scalars().all()}
+
+
+def _flag_for_name(name: str) -> str:
+    """Inline flag for a team name, or '' for TBD/unknown (with a trailing space)."""
+    fifa = _team_fifa_map().get(name)
+    return f"{render_flag(fifa)} " if fifa else ""
+
+
 def _render_knockout_bracket() -> None:
     _section_header("Knockout Bracket")
 
@@ -782,8 +795,10 @@ def _render_knockout_bracket() -> None:
                         f'Odds: {" · ".join(parts)}</div>'
                     )
 
-            h_info = f"{h_name} ({h_elo:.0f}, {h_adv:.0%})"
-            a_info = f"{a_name} ({a_elo:.0f}, {a_adv:.0%})"
+            h_flag = _flag_for_name(m.home_team.name) if m.home_team else ""
+            a_flag = _flag_for_name(m.away_team.name) if m.away_team else ""
+            h_info = f"{h_flag}{h_name} ({h_elo:.0f}, {h_adv:.0%})"
+            a_info = f"{a_flag}{a_name} ({a_elo:.0f}, {a_adv:.0%})"
 
             st.markdown(
                 f'<div style="border:1px solid {BORDER};border-radius:4px;margin-bottom:4px;'
@@ -856,9 +871,9 @@ def _render_projected_bracket_html(matchups: list[dict], probs: dict) -> None:
         st.markdown(
             f'<div style="display:flex;justify-content:space-between;padding:4px 8px;'
             f'border:1px solid {BORDER};border-radius:4px;margin-bottom:4px;font-size:0.85rem;">'
-            f'<span style="color:{h_color}">{escape(m["home"])} ({h_adv:.0%})</span>'
+            f'<span style="color:{h_color}">{_flag_for_name(m["home"])}{escape(m["home"])} ({h_adv:.0%})</span>'
             f'<span style="color:{TEXT_DIM}">vs</span>'
-            f'<span style="color:{a_color}">{escape(m["away"])} ({a_adv:.0%})</span>'
+            f'<span style="color:{a_color}">{_flag_for_name(m["away"])}{escape(m["away"])} ({a_adv:.0%})</span>'
             f'</div>',
             unsafe_allow_html=True,
         )
