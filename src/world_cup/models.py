@@ -323,6 +323,8 @@ class WCFeature(Base):
     matchday = Column(Integer, nullable=True)
     group_strength = Column(Float, nullable=True)
     stage_code = Column(Integer, nullable=True)
+    # Knockout matches produce ~15% fewer goals (research) — model multiplies xG by this
+    knockout_deflation = Column(Float, nullable=True, server_default="1.0")
 
     created_at = Column(String, nullable=False, server_default=func.now())
 

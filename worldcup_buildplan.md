@@ -333,10 +333,11 @@ Collect squad-level data for all 48 teams: market value, age profile, club leagu
 
 ## WC-03 — Feature Engineering
 
-### WC-03-01 — Core Match Features
+### WC-03-01 — Core Match Features ✅ DONE
 
 **Type:** Feature
 **Depends on:** WC-02-03, WC-02-04, WC-02-05
+**Results:** 40/40 matches with full Tier 1 features. 0 NULL values. Elo diff, MV ratio (log), squad features, WC appearances, host flags all computed.
 
 Compute the primary feature vector for each WC match.
 
@@ -368,10 +369,11 @@ Compute the primary feature vector for each WC match.
 
 ---
 
-### WC-03-02 — Alternative Features
+### WC-03-02 — Alternative Features ✅ DONE
 
 **Type:** Feature
 **Depends on:** WC-03-01
+**Results:** GDP/pop ratio (log), climate gap (venue-specific), travel distance (haversine), dark horse, manager tenure, form (last 5 competitive). All stored in wc_features.
 
 Add Tier 2 and Tier 3 features from the research: economic, climatic, and tactical indicators.
 
@@ -398,10 +400,11 @@ Add Tier 2 and Tier 3 features from the research: economic, climatic, and tactic
 
 ---
 
-### WC-03-03 — Tournament-Specific Features
+### WC-03-03 — Tournament-Specific Features ✅ DONE
 
 **Type:** Feature
 **Depends on:** WC-03-01
+**Results:** Motivation (standard/must_win/comfortable/dead_rubber/live), matchday inferred, group strength, stage code, knockout deflation (0.85). All 40 matches, 0 NULLs.
 
 Add features unique to tournament dynamics: motivation, matchday, group position.
 
