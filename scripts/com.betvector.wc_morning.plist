@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  BetVector — WC Morning Pipeline (WC-07-02)
+  ===========================================
+  Runs at 08:00 local time daily during WC 2026 (June 11 - July 19).
+  Full pipeline: scrape → elo → odds → features → predict → simulate →
+  value bets → morning email.
+
+  Install:  cp scripts/com.betvector.wc_morning.plist ~/Library/LaunchAgents/ && launchctl load ~/Library/LaunchAgents/com.betvector.wc_morning.plist
+  Unload:   launchctl unload ~/Library/LaunchAgents/com.betvector.wc_morning.plist
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.betvector.wc_morning</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/kyng/Projects/BetVector/scripts/run_wc_pipeline.sh</string>
+        <string>morning</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/kyng/Projects/BetVector</string>
+
+    <!-- Run at 08:00 local time every day -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>8</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/kyng/Projects/BetVector/data/logs/launchd_wc_morning_stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/kyng/Projects/BetVector/data/logs/launchd_wc_morning_stderr.log</string>
+
+</dict>
+</plist>

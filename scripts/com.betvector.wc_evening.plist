@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  BetVector — WC Evening Pipeline (WC-07-02)
+  ===========================================
+  Runs at 22:00 local time daily during WC 2026 (June 11 - July 19).
+  Results pipeline: scrape results → elo update → accuracy metrics →
+  evening review email.
+
+  Install:  cp scripts/com.betvector.wc_evening.plist ~/Library/LaunchAgents/ && launchctl load ~/Library/LaunchAgents/com.betvector.wc_evening.plist
+  Unload:   launchctl unload ~/Library/LaunchAgents/com.betvector.wc_evening.plist
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.betvector.wc_evening</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/kyng/Projects/BetVector/scripts/run_wc_pipeline.sh</string>
+        <string>evening</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/kyng/Projects/BetVector</string>
+
+    <!-- Run at 22:00 local time every day -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>22</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/kyng/Projects/BetVector/data/logs/launchd_wc_evening_stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/kyng/Projects/BetVector/data/logs/launchd_wc_evening_stderr.log</string>
+
+</dict>
+</plist>

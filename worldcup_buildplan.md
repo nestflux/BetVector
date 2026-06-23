@@ -768,12 +768,14 @@ Add WC pipeline to the existing launchd schedule alongside league pipelines.
 - Only run on days with WC matches (check schedule) — or run daily and exit early if no matches
 
 **Acceptance Criteria:**
-- [ ] Launchd plist files created for WC morning and evening
-- [ ] WC pipeline runs automatically at 08:00 and 22:00
-- [ ] Pipeline timeout prevents zombie processes (30 min max)
-- [ ] Logs appear in `data/logs/wc_morning_{date}.log`
-- [ ] WC pipeline does not interfere with league pipeline schedule
-- [ ] Pipeline exits cleanly on days with no WC matches
+- [x] Launchd plist files created for WC morning and evening
+- [x] WC pipeline runs automatically at 08:00 and 22:00
+- [x] Pipeline timeout prevents zombie processes (30 min max)
+- [x] Logs appear in `data/logs/wc_morning_{date}.log`
+- [x] WC pipeline does not interfere with league pipeline schedule
+- [x] Pipeline exits cleanly on days with no WC matches
+
+**Status:** ✅ DONE — run_wc_pipeline.sh + 2 launchd plists (08:00/22:00). 30-min timeout, stale process killer, log rotation. Zero interference with league pipeline. 621/621 tests.
 
 ---
 
