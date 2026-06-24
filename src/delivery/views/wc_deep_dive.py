@@ -49,7 +49,7 @@ from src.world_cup.player_rates import player_rate
 from src.world_cup.predictor import scoreline_matrix_from_lambdas
 from src.world_cup.research import (
     build_book_comparison, build_group_context, build_lineup_impact,
-    build_model_comparison, build_movement,
+    build_model_comparison, build_movement, build_scorer_board,
 )
 from src.world_cup.timeutil import format_kickoff_et
 
@@ -616,7 +616,138 @@ def _render_lineup_impact(match_id: int) -> None:
 
 
 # ============================================================================
-# Section 7 — Group & qualification impact (DF-10)
+# Section 7 — Who's likely to score (WC-11A-03)
+# ============================================================================
+# build_scorer_board turns each confirmed-XI player's expected goals (his goal-share
+# of the team's adjusted λ, from WC-11A-02) into an anytime-scorer chance,
+# P = 1 − e^(−player_λ). This is the MODEL's "who scores" ranking — NOT a market
+# line, and NO odds are pulled (zero Odds API credits). The probability is shown
+# neutrally (it's an estimate, not an edge); the penalty taker is flagged but not
+# bumped (his spot-kicks already sit in his goals-per-90). Display-only, shadow.
+
+def _scorer_row_html(rank: int, p: dict) -> str:
+    """One ranked anytime-scorer row: rank · player (+ penalty-taker / international
+    tags) · goals-per-90 · the anytime probability with a neutral proportional bar.
+    The probability is the model's estimate, shown neutrally — not an edge, not a
+    market line. All dynamic strings escaped."""
+    name = escape(str(p.get("player", "")))
+    prob = p.get("p_anytime") or 0.0
+    gp90 = p.get("goals_per_90")
+    gp90_txt = f"{gp90:.2f}" if gp90 is not None else "—"
+    pct = max(0.0, min(100.0, prob * 100.0))
+
+    tags = ""
+    if p.get("is_pen_taker"):
+        tags += (f'<span title="Designated penalty taker — his spot-kicks are already '
+                 f'in his goals-per-90" style="margin-left:6px;border:1px solid {BORDER};'
+                 f'border-radius:4px;padding:0 4px;font-size:0.62rem;color:{TEXT_DIM};'
+                 f'font-family:JetBrains Mono,monospace;vertical-align:middle;">PK</span>')
+    if p.get("source") == "international":
+        tags += (f'<span title="No recent club minutes — rate from international '
+                 f'goals-per-cap" style="margin-left:6px;border:1px dashed {BORDER};'
+                 f'border-radius:4px;padding:0 4px;font-size:0.62rem;color:{TEXT_DIM};'
+                 f'font-family:JetBrains Mono,monospace;vertical-align:middle;">intl</span>')
+
+    return (
+        f'<tr>'
+        f'<td style="padding:3px 8px;color:{TEXT_DIM};font-family:JetBrains Mono,monospace;'
+        f'font-size:0.78rem;border-bottom:1px solid {BORDER};text-align:right;">{rank}</td>'
+        f'<td style="padding:3px 8px;color:{TEXT};font-size:0.83rem;'
+        f'border-bottom:1px solid {BORDER};">{name}{tags}</td>'
+        f'<td style="text-align:center;padding:3px 8px;color:{TEXT_DIM};'
+        f'font-family:JetBrains Mono,monospace;font-size:0.8rem;'
+        f'border-bottom:1px solid {BORDER};">{gp90_txt}</td>'
+        f'<td style="padding:3px 8px;border-bottom:1px solid {BORDER};">'
+        f'<div style="display:flex;align-items:center;gap:6px;justify-content:flex-end;">'
+        f'<div style="width:46px;height:5px;background:{BORDER};border-radius:3px;'
+        f'overflow:hidden;"><div style="width:{pct:.0f}%;height:100%;'
+        f'background:{TEXT_DIM};"></div></div>'
+        f'<span style="font-family:JetBrains Mono,monospace;color:{TEXT};'
+        f'font-size:0.82rem;min-width:34px;text-align:right;">{prob:.0%}</span>'
+        f'</div></td></tr>'
+    )
+
+
+def _scorer_board_card_html(t: dict) -> str:
+    """Pure HTML card for one team's anytime-scorer board: the ranked XI with each
+    player's modelled chance of scoring, the penalty taker flagged, and the
+    international-fallback labelled. Names escaped; neutral, display-only framing."""
+    nation = escape(str(t.get("team", "")))
+    status = t.get("status")
+    shell = (f'<div style="border:1px solid {BORDER};border-radius:8px;'
+             f'padding:10px 12px;background:{SURFACE};">')
+    if status == "not_announced":
+        return (f'{shell}<div style="color:{TEXT};font-weight:700;font-size:0.95rem;">'
+                f'{nation}</div><div style="color:{TEXT_DIM};font-size:0.82rem;'
+                f'margin-top:4px;">XI not announced yet.</div></div>')
+
+    formation = escape(str(t.get("formation") or "—"))
+    header = (
+        f'<div style="color:{TEXT};font-weight:700;font-size:0.95rem;">{nation}</div>'
+        f'<div style="color:{TEXT_DIM};font-family:JetBrains Mono,monospace;'
+        f'font-size:0.78rem;margin-bottom:4px;">Formation {formation}</div>')
+    if status == "no_model":
+        return (f'{shell}{header}<div style="color:{TEXT_DIM};font-size:0.82rem;'
+                f'margin-top:4px;">XI confirmed, but the model hasn\'t scored this '
+                f'match yet — no expected goals to split.</div></div>')
+
+    players = t.get("players") or []
+    if not players:
+        return (f'{shell}{header}<div style="color:{TEXT_DIM};font-size:0.82rem;'
+                f'margin-top:4px;">No rated scorers in this XI — nothing to rank.</div></div>')
+
+    rows = "".join(_scorer_row_html(i, p) for i, p in enumerate(players, start=1))
+    board = (
+        f'<table style="width:100%;border-collapse:collapse;margin-top:2px;">'
+        f'<thead><tr style="color:{TEXT_DIM};">'
+        f'<th style="padding:3px 8px;font-size:0.72rem;text-align:right;">#</th>'
+        f'<th style="text-align:left;padding:3px 8px;font-size:0.72rem;">Player</th>'
+        f'<th style="padding:3px 8px;font-size:0.72rem;">g/90</th>'
+        f'<th style="padding:3px 8px;font-size:0.72rem;text-align:right;">Anytime</th>'
+        f'</tr></thead><tbody>{rows}</tbody></table>')
+
+    foot = ""
+    if any(p.get("is_pen_taker") for p in players):
+        foot += (f'<div style="color:{TEXT_DIM};font-size:0.72rem;margin-top:6px;">'
+                 f'<b>PK</b> · takes penalties (already counted in his goals-per-90).</div>')
+    if any(p.get("source") == "international" for p in players):
+        foot += (f'<div style="color:{TEXT_DIM};font-size:0.72rem;margin-top:2px;">'
+                 f'<b>intl</b> · no recent club minutes — rate from international '
+                 f'goals-per-cap.</div>')
+    missing = t.get("missing") or []
+    if missing:
+        names = escape(", ".join(str(x) for x in missing))
+        foot += (f'<div style="color:{TEXT_DIM};font-size:0.72rem;margin-top:2px;">'
+                 f'Unrated, not ranked: {names}.</div>')
+    return f'{shell}{header}{board}{foot}</div>'
+
+
+def _render_scorer_board(match_id: int) -> None:
+    st.markdown(
+        f'<div class="bv-section-header">Who\'s likely to score{_MODEL_BADGE}</div>',
+        unsafe_allow_html=True,
+    )
+    data = build_scorer_board(match_id, player_rate)
+    if not data or not any(t.get("status") == "announced" for t in data["teams"]):
+        st.info(
+            "🔒 Lineups not announced yet — the anytime-scorer board appears once "
+            "ESPN posts the confirmed XIs (about an hour before kickoff)."
+        )
+        return
+    st.caption(
+        "The model's view of who's likely to score, from the confirmed XI: each "
+        "player's expected goals (his goal-share of the team's adjusted xG) turned "
+        "into an anytime chance, P = 1 − e^(−λ). It's the model's ranking — not a "
+        "market line and not a bet. The penalty taker is flagged (his spot-kicks are "
+        "already in his goals-per-90); unrated players are left out."
+    )
+    for col, t in zip(st.columns(len(data["teams"])), data["teams"]):
+        with col:
+            st.markdown(_scorer_board_card_html(t), unsafe_allow_html=True)
+
+
+# ============================================================================
+# Section 8 — Group & qualification impact (DF-10)
 # ============================================================================
 # What this match does to the group table, from build_group_context. The
 # qualification reads are points-only and deliberately conservative — a
@@ -735,7 +866,7 @@ def _render_group_context(match_id: int) -> None:
 
 
 # ============================================================================
-# Section 8 — Bayesian vs Poisson (per-match shadow read, DF-10)
+# Section 9 — Bayesian vs Poisson (per-match shadow read, DF-10)
 # ============================================================================
 # The two STORED predictions side by side — the staked Poisson and the Bayesian
 # shadow — for THIS match. Display-only: the Bayesian never stakes and promotion
@@ -818,7 +949,7 @@ def _render_model_compare(match_id: int) -> None:
 
 
 # ============================================================================
-# Section 9 — Glossary (DF-10 + WC-11A-02)
+# Section 10 — Glossary (DF-10 + WC-11A-02/03)
 # ============================================================================
 # Short, plain-English definitions for the deep-dive terms (the owner is learning,
 # MP §12). Built by a pure helper so it stays testable.
@@ -849,6 +980,12 @@ _GLOSSARY = [
     ("Goal-share", "A player's share of his team's attacking output, from his recent "
      "goals-per-90. Used to split the expected goals across the XI and to weigh how "
      "much a rotation moves the adjusted-xG what-if."),
+    ("Anytime scorer %", "The model's chance a player scores at least once: P = 1 − "
+     "e^(−λ), where his λ is his goal-share of the team's adjusted expected goals. "
+     "The model's own ranking — not a market line, not a bet."),
+    ("Penalty taker", "The team's designated penalty taker. His spot-kicks are already "
+     "counted in his goals-per-90, so the flag marks who takes them — it doesn't add "
+     "an extra bump (that would double-count)."),
 ]
 
 
@@ -981,6 +1118,8 @@ def _render_deep_dive(match_id: int) -> None:
     _render_lineups(match_id)
     st.divider()
     _render_lineup_impact(match_id)
+    st.divider()
+    _render_scorer_board(match_id)
     st.divider()
     _render_group_context(match_id)
     st.divider()

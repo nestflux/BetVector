@@ -2003,10 +2003,34 @@ card path untouched).
 - Flag the **designated penalty taker** (real anytime bump) from the TM penalty data.
 
 **Acceptance Criteria:**
-- [ ] Ranked anytime-scorer table for the confirmed XI (Kane-type ≈ 45–50 %,
+- [x] Ranked anytime-scorer table for the confirmed XI (Kane-type ≈ 45–50 %,
   defenders low), with the penalty-taker flagged; international-fallback labelled.
-- [ ] No Odds API credits spent; shadow caption ("the model's view, not a market
+- [x] No Odds API credits spent; shadow caption ("the model's view, not a market
   line; not a bet").
+
+**Result (DONE — commit pending):** New pure `research.build_scorer_board(match_id,
+rate_lookup)` reuses the WC-11A-02 read (`_match_legs`, factored out of
+`build_lineup_impact` so both share one DB pass) and `_team_impact` wholesale, so the
+per-player λ has a single source of truth. For each in-XI player it takes his
+`exp_goals` (= goal-share × the team's adjusted λ — the WC-11A-02 slice) as `player_λ`
+and turns it into an anytime chance `P = 1 − exp(−player_λ)` via `_anytime_prob`
+(Poisson P(≥1); guards λ≤0/None → None, never a guess). Each player also carries
+`is_pen_taker` + the goals-per-90 `source` ('club'/'international') re-read via the
+SAME `rate_lookup`/full-name the impact layer used; ranked P desc; unrated and
+rotated-out players excluded (a zero-rate keeper is silently dropped — rated zero, not
+"unrated"). The pen taker is **flagged, not bumped** — his spot-kicks are already in
+his goals-per-90, so an extra bump would double-count. NO odds pull anywhere → zero
+Odds API credits. Deep-dive Section 7 `_render_scorer_board` (after lineup impact,
+before group context): per-team ranked card (#, player + PK/intl chips, g/90, anytime
+% with a NEUTRAL grey proportional bar — it's an estimate, not an edge), not-announced
+/ no-model / all-unrated states, shadow caption, footnotes for the PK/intl tags + the
+unrated list. Glossary +"Anytime scorer %"/"Penalty taker". READ-ONLY: no
+add/commit, nothing written back; `predictor.py` + `value_finder.py` ×2 byte-for-byte
+unchanged (empty diff). 14 tests (formula + ranking + flags + zero-rate drop +
+read-only + escaping + view AST); 956/956. Gate 1 PASS 6/6 · Gate 2 CLEAN · Gate 3
+APPROVED (two cosmetic no-fix nits, both addressed/accepted). Real-rate PNG on owner
+Desktop: Kane 52.5% [PK] top for England; Ronaldo 41.4% [PK,intl] for Portugal;
+defenders low (Shaw 1.5%, Dias 2.5%).
 
 #### WC-11A-04 — Player watch extras (optional polish)
 

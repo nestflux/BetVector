@@ -13,6 +13,7 @@ only a single snapshot exists, movement is None and the UI shows "—".
 from __future__ import annotations
 
 import logging
+import math
 from statistics import median
 
 from sqlalchemy import select
@@ -1226,6 +1227,22 @@ def build_lineup_impact(match_id: int, rate_lookup) -> dict | None:
     WCPrediction — the value finder still stakes off the stored λ, not this what-if.
     Returns ``None`` if the match doesn't exist; each team's ``status`` covers the
     not-announced / no-model cases."""
+    read = _match_legs(match_id)
+    if read is None:
+        return None
+    info, legs, sig_by_name = read
+    info["teams"] = [_team_impact(leg, sig_by_name.get(leg["nation"], {}), rate_lookup)
+                     for leg in legs]
+    return info
+
+
+def _match_legs(match_id: int) -> tuple | None:
+    """Shared read behind the lineup-impact (WC-11A-02) and scorer-board (WC-11A-03)
+    layers: the match header, the per-team legs (nation, stored Poisson λ, and the
+    confirmed + prior starter rows the resolver needs), and the per-nation
+    ``lineup_signal`` entries. READ-ONLY — one query each for the signal and the
+    match; no writes. Returns ``(info, legs, sig_by_name)`` or ``None`` if either the
+    signal or the match is absent."""
     sig = lineup_signal(match_id)
     if sig is None:
         return None
@@ -1261,7 +1278,105 @@ def build_lineup_impact(match_id: int, rate_lookup) -> dict | None:
             "home_fifa": m.home_team.fifa_code if m.home_team else None,
             "away_fifa": m.away_team.fifa_code if m.away_team else None,
         }
+    return info, legs, sig_by_name
 
-    info["teams"] = [_team_impact(leg, sig_by_name.get(leg["nation"], {}), rate_lookup)
+
+# ============================================================================
+# WC-11A-03 — "Who's likely to score" board + penalty-taker flag
+# ============================================================================
+# The model's own "who scores" view for a confirmed XI — NOT a market line, NO odds
+# pull, zero Odds API credits. We reuse the WC-11A-02 per-player expected goals (each
+# in-XI player's exp_goals IS player_λ = his goal-share × the team's adjusted λ) and
+# turn it into an anytime-scorer probability via the Poisson P(≥1 goal):
+#     P_anytime = 1 − exp(−player_λ)
+# Minutes are held flat (the honest framing — we don't model substitution time), so
+# this ranks who the model expects to score, nothing more. The designated penalty
+# taker is flagged: his goals-per-90 already counts his spot-kicks, so his anytime %
+# is already pen-inflated — the flag just marks who takes them (no extra bump, which
+# would double-count). Display-only, shadow: never a bet, nothing written.
+
+
+def _anytime_prob(player_lambda: float | None) -> float | None:
+    """Anytime-scorer probability from a player's expected goals: the Poisson chance
+    of at least one goal, ``P(≥1) = 1 − e^(−λ)``. ``None`` when there's no usable λ
+    (an unrated player — we don't guess), mirroring the resolver's blank-on-doubt."""
+    if player_lambda is None or player_lambda <= 0:
+        return None
+    return 1.0 - math.exp(-player_lambda)
+
+
+def _team_scorer_board(leg: dict, sig_entry: dict, rate_lookup) -> dict:
+    """Per-team anytime-scorer ranking from the confirmed XI (pure; no DB).
+
+    Reuses ``_team_impact`` wholesale for the per-player expected goals (so the λ math
+    has a single source of truth — the scorer board automatically tracks any change to
+    the adjusted-λ formula), then turns each in-XI player's ``exp_goals`` (player_λ)
+    into an anytime probability and re-reads his profile via the SAME injected
+    ``rate_lookup`` (same full_name / position the impact layer used) to tag the
+    penalty taker and the goals-per-90 source. Ranked by probability, highest first.
+    Unrated players (no goal-share) are left out — no honest estimate to rank."""
+    impact = _team_impact(leg, sig_entry, rate_lookup)
+    status = impact.get("status")
+    if status != "announced":
+        # not_announced / no_model — carry through what _team_impact gave us.
+        return {"team": impact["team"], "status": status,
+                "formation": impact.get("formation"),
+                "heavy_rotation": impact.get("heavy_rotation"),
+                "changes": impact.get("changes")}
+
+    nation = leg["nation"]
+    rows_by_name = {r["name"]: r for r in leg["current"]}
+    players: list = []
+    for s in impact.get("scorers", []):
+        if not s.get("in_xi"):                 # rotated-out players don't play → skip
+            continue
+        player_lambda = s.get("exp_goals")     # player_λ from the WC-11A-02 layer
+        prob = _anytime_prob(player_lambda)
+        if prob is None:                       # unrated → not ranked
+            continue
+        r = rows_by_name.get(s["player"], {})
+        looked = rate_lookup(r.get("full_name") or s["player"],
+                             nation, r.get("position")) or {}
+        players.append({
+            "player": s["player"],
+            "player_lambda": player_lambda,
+            "p_anytime": prob,
+            "goals_per_90": s.get("share"),
+            "is_pen_taker": bool(looked.get("is_pen_taker")),
+            "source": looked.get("source") or "club",
+        })
+    players.sort(key=lambda p: -p["p_anytime"])
+
+    return {
+        "team": nation, "status": "announced",
+        "formation": impact.get("formation"),
+        "heavy_rotation": impact.get("heavy_rotation"),
+        "changes": impact.get("changes"),
+        "lambda_model": impact.get("lambda_model"),
+        "lambda_adjusted": impact.get("lambda_adjusted"),
+        "players": players,
+        "missing": impact.get("missing", []),
+        "n_ranked": len(players),
+    }
+
+
+def build_scorer_board(match_id: int, rate_lookup) -> dict | None:
+    """WC-11A-03 — per-team anytime-scorer board for the deep dive (shadow).
+
+    The model's "who's likely to score" ranking for the confirmed XIs, built entirely
+    from data already on hand (the stored λ + the player-rate cache via the injected
+    ``rate_lookup``) — NO odds pull, so zero Odds API credits. ``rate_lookup``
+    ``(name, nation, position) -> dict|None`` is injected (the view passes
+    ``player_rates.player_rate``) to keep this module free of the cache and the math
+    unit-testable.
+
+    READ-ONLY: shares the ``_match_legs`` read with the lineup-impact layer and adds
+    nothing — never a bet, never written back. Returns ``None`` if the match doesn't
+    exist; each team's ``status`` covers the not-announced / no-model cases."""
+    read = _match_legs(match_id)
+    if read is None:
+        return None
+    info, legs, sig_by_name = read
+    info["teams"] = [_team_scorer_board(leg, sig_by_name.get(leg["nation"], {}), rate_lookup)
                      for leg in legs]
     return info
