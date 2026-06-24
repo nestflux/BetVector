@@ -381,7 +381,13 @@ class WCLineup(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     match_id = Column(Integer, ForeignKey("wc_matches.id"), nullable=False)
     team_id = Column(Integer, ForeignKey("wc_teams.id"), nullable=False)
-    player_name = Column(String, nullable=False)
+    player_name = Column(String, nullable=False)   # ESPN displayName (short, e.g. "Vinicius Jr")
+    # WC-11A-01: fuller identity for the player-rate join. ESPN returns both a short
+    # displayName and a full name + a stable athlete id; the short form zero-matches
+    # external player datasets (Transfermarkt), so we keep the full name for the
+    # name resolver and the id as a future stable key. Both nullable (back-compat).
+    full_name = Column(String, nullable=True)       # ESPN fullName (e.g. "Vinicius Junior")
+    espn_athlete_id = Column(String, nullable=True)  # ESPN athlete.id (stable join key)
     is_starter = Column(Integer, nullable=False, server_default="0")  # 1 = in the XI
     position = Column(String, nullable=True)    # ESPN abbrev (G, CD-L, AM-C, F, ...)
     jersey = Column(Integer, nullable=True)

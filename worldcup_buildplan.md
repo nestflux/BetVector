@@ -1900,14 +1900,17 @@ unit-tested `research.build_lineup_impact()` + one thin escaped deep-dive render
 - Capture ESPN **`fullName`** for join accuracy. Recommended: add **nullable**
   `full_name` + `espn_athlete_id` columns to `WCLineup` (additive, `wc_`-only
   migration; keeps `player_name`/`displayName` so the rotation signal is undisturbed)
-  and store `athlete.id` (the clean, stable join key the feed already returns).
+  and store `athlete.id` as a stable identifier. NOTE: Transfermarkt carries no ESPN
+  ids, so the id is **not** a direct join key — the resolve is name-based; the id is
+  kept for dedup / a future ESPN-id→player_id bridge that could seed the override map.
 - New streamlit-free `src/world_cup/player_rates.py`: from the local Transfermarkt
   files, build a cached per-player lookup — recency-weighted **goals-per-90**,
   minutes, **cards-per-90**, **penalty-taker** flag, `position`/`sub_position`,
   market value, and an `international_goals/caps` fallback. Pure, unit-tested.
-- New resolver `resolve_player(name, nation, position=None, espn_id=None) → player_id
-  | None`: `espn_id` exact-match first; else normalised(name)+nation, tiebreak
-  max `last_season` + position; else a curated override map; else **None** (blank).
+- New resolver `resolve_player(name, nation, position=None) → player_id | None`: a
+  curated override map first; else normalised(name)+nation, tiebreak max
+  `last_season` + position; else a unique name-only fallback; else **None** (blank —
+  never guess).
 
 **Acceptance Criteria:**
 - [ ] `player_rates` computes sane goals-per-90 for known stars (Kane ≈ 1.1, Haaland

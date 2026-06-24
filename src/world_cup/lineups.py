@@ -122,9 +122,16 @@ def fetch_wc_lineup(match_id: int) -> dict:
             formation = team.get("formation")
             for p in team.get("roster", []):
                 ath = p.get("athlete", {})
+                # player_name stays the short displayName (the rotation signal +
+                # existing rows key on it). full_name / espn_athlete_id (WC-11A-01)
+                # are the fuller identity the player-rate join needs — the feed
+                # carries both, and the short form alone zero-matches club datasets.
                 pname = ath.get("displayName") or ath.get("fullName")
                 if not pname:
                     continue
+                full_name = ath.get("fullName") or ath.get("displayName")
+                espn_id = ath.get("id")
+                espn_id = str(espn_id) if espn_id is not None else None
                 pos = p.get("position")
                 pos = pos.get("abbreviation") if isinstance(pos, dict) else pos
                 jersey = p.get("jersey")
@@ -140,12 +147,15 @@ def fetch_wc_lineup(match_id: int) -> dict:
                 ).scalar_one_or_none()
                 if existing:
                     existing.is_starter = is_starter
+                    existing.full_name = full_name
+                    existing.espn_athlete_id = espn_id
                     existing.position = pos
                     existing.jersey = jersey
                     existing.formation = formation
                     existing.captured_at = _utc_now_iso()
                 else:
                     s.add(WCLineup(match_id=match_id, team_id=team_id, player_name=pname,
+                                   full_name=full_name, espn_athlete_id=espn_id,
                                    is_starter=is_starter, position=pos, jersey=jersey,
                                    formation=formation, captured_at=_utc_now_iso()))
                 stored += 1

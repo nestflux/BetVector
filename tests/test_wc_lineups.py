@@ -88,6 +88,29 @@ def test_fetch_stores_xi(session, monkeypatch):
     assert row.formation == "4-3-3" and row.jersey is not None
 
 
+def test_captures_full_name_and_espn_id(session, monkeypatch):
+    # WC-11A-01: when ESPN provides the richer identity (fullName + athlete id) we
+    # store it for the player-rate join, while player_name stays the short form.
+    brazil = {"team": {"displayName": "Brazil"}, "formation": "4-3-3", "roster": (
+        [{"athlete": {"displayName": "Vinicius Jr", "fullName": "Vinicius Junior",
+                      "id": "371998"}, "starter": True,
+          "position": {"abbreviation": "LW"}, "jersey": "7"}]
+        + [{"athlete": {"displayName": f"BRA {i}"}, "starter": True,
+            "position": {"abbreviation": "M"}, "jersey": str(i + 10)} for i in range(10)])}
+    _patch(session, monkeypatch, _scoreboard("Brazil", "Scotland"),
+           {"rosters": [brazil, _roster("Scotland", "4-4-2")]})
+    assert fetch_wc_lineup(13)["status"] == "ok"
+
+    vini = session.execute(select(WCLineup).where(
+        WCLineup.player_name == "Vinicius Jr")).scalar_one()
+    assert vini.full_name == "Vinicius Junior"      # the join-friendly full name
+    assert vini.espn_athlete_id == "371998"         # stable id, stored as str
+    # No richer fields -> full_name falls back to the name, id is NULL.
+    other = session.execute(select(WCLineup).where(
+        WCLineup.player_name == "Scotland Starter 0")).scalar_one()
+    assert other.full_name == "Scotland Starter 0" and other.espn_athlete_id is None
+
+
 def test_idempotent_no_duplicates(session, monkeypatch):
     _patch(session, monkeypatch, _scoreboard("Brazil", "Scotland"),
            {"rosters": [_roster("Brazil", "4-3-3"), _roster("Scotland", "4-4-2")]})

@@ -339,6 +339,11 @@ def _apply_schema_migrations(engine: Engine) -> None:
             "password_hash",
             "VARCHAR" if is_postgres else "TEXT",
         ),
+        # WC-11A-01 (June 2026): fuller player identity on captured WC lineups so
+        # the player-rate engine can join confirmed XIs to club-stats datasets.
+        # Both nullable — older rows simply carry NULL until re-captured.
+        ("wc_lineups", "full_name", "VARCHAR" if is_postgres else "TEXT"),
+        ("wc_lineups", "espn_athlete_id", "VARCHAR" if is_postgres else "TEXT"),
     ]
 
     with engine.begin() as conn:
