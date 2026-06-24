@@ -368,3 +368,35 @@ class WCCalibrationMetric(Base):
             f"WCCalibrationMetric(type='{self.calibration_type}', "
             f"brier={self.brier}, n={self.n_matches})"
         )
+
+
+class WCLineup(Base):
+    """Starting XI / squad for a WC match, scraped from ESPN's free JSON API in the
+    pre-kickoff window (WC-10-06). Decision-support only — feeds the rotation/absence
+    flag on the research card (WC-10-07); it never changes the model or value bets.
+    """
+
+    __tablename__ = "wc_lineups"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    match_id = Column(Integer, ForeignKey("wc_matches.id"), nullable=False)
+    team_id = Column(Integer, ForeignKey("wc_teams.id"), nullable=False)
+    player_name = Column(String, nullable=False)
+    is_starter = Column(Integer, nullable=False, server_default="0")  # 1 = in the XI
+    position = Column(String, nullable=True)    # ESPN abbrev (G, CD-L, AM-C, F, ...)
+    jersey = Column(Integer, nullable=True)
+    formation = Column(String, nullable=True)   # team formation, e.g. "4-2-3-1"
+    captured_at = Column(String, nullable=False, server_default=func.now())
+
+    team = relationship("WCTeam")
+
+    __table_args__ = (
+        UniqueConstraint("match_id", "team_id", "player_name", name="uq_wc_lineup"),
+        Index("ix_wc_lineup_match", "match_id"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"WCLineup(match={self.match_id}, team={self.team_id}, "
+            f"{self.player_name!r}, starter={self.is_starter})"
+        )

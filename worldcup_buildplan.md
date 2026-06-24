@@ -2,14 +2,14 @@
 
 Version 1.0 · June 2026
 
-> **MODULE STATUS: WC-09 COMPLETE (36/36) · WC-10 (Live Ops) IN PROGRESS — 5/7 (Phase 2 code done)** · June 24, 2026
-> WC-01→09 done (3-gate); decision-support + Bayesian shadow model live. **WC-10 —
-> Live Operations & Automation** (owner-confirmed). ✅ Phase 1: 10-01/02 (odds 12→2
-> credits, 09:30 ET morning job live). ✅ Phase 2 (code): 10-03 (heartbeat dispatcher,
-> idle = no Neon) + 10-04 (focused 2-credit per-event prematch pull) + 10-05 (CLV
-> integrity verified — CLV reads 0 until the dispatcher is live). ⏸ PENDING owner OK:
-> INSTALL the dispatcher (credit-spending job — turns CLV from 0 into a real signal).
-> Then Phase 3 10-06/07 lineup flag. WC shadow-only. Full suite: 743/743 passing.
+> **MODULE STATUS: WC-09 COMPLETE (36/36) · WC-10 (Live Ops) IN PROGRESS — 6/7** · June 24, 2026
+> WC-01→09 done (3-gate). **WC-10 — Live Operations & Automation** (owner-confirmed).
+> ✅ Phase 1: 10-01/02 (odds 12→2 credits, 09:30 ET morning job live). ✅ Phase 2
+> LIVE: 10-03/04/05 dispatcher + per-event prematch pull + CLV integrity —
+> **dispatcher INSTALLED + running** (every 15 min, fires odds ~40min pre-KO). ✅
+> Phase 3: 10-06 lineup capture via **ESPN's free JSON API** (API-Football free tier
+> has no 2026; ESPN serves WC XIs + formation, wired into the dispatcher's lineup
+> pass). Next: 10-07 rotation flag on the research card. WC shadow-only. Suite: 754/754.
 
 ---
 
@@ -1407,26 +1407,35 @@ install (held for owner OK).
 
 ### Phase 3 — Lineups (decision support)
 
-### WC-10-06 — WC Lineup Capture (API-Football)
+### WC-10-06 — WC Lineup Capture (ESPN) ✅ DONE
 
 **Type:** Scraper
-**Depends on:** WC-10-04
+**Depends on:** WC-10-03
 
-Pull official XIs in the pre-KO window using the integration we already have.
+**Source change (spike-confirmed 2026-06-24):** API-Football's **free tier has no
+2026 access** ("Free plans do not have access to this season, try from 2022 to
+2024"), so the planned lineup source is unusable without a paid plan. The WC-10-06
+spike found **ESPN's free, key-less JSON API** (`site.api.espn.com/.../soccer/
+fifa.world/summary?event={id}`) serves the full WC 2026 XI — formation, starters,
+positions, jerseys. Free + JSON + requests-only (stack-compliant) — strictly better
+than the paid API-Football option. Building against ESPN instead.
 
 **Implementation Notes:**
-- Reuse `src/scrapers/api_football.py` to fetch the lineups endpoint for a WC match
-  when the dispatcher fires (~30–40 min pre-KO, when the official XI drops).
+- `src/world_cup/lineups.py`: resolve a WC match → ESPN event id (scoreboard for the
+  match date, matched by team names via a small ESPN→DB name map), then fetch the
+  summary `rosters` → the starting XI + formation.
 - Store in a new `wc_lineups` table (match_id, team_id, player_name, is_starter,
-  position); idempotent upsert.
-- Rate-limit aware (free 100/day; WC uses ~2–8/day); graceful no-op when the lineup
-  isn't published yet — never crash the dispatcher.
+  position, jersey, formation, captured_at); idempotent upsert on
+  (match_id, team_id, player_name).
+- ESPN is **free/no-quota**, so capture is wired into the dispatcher as a per-tick
+  retry in a wider window (~[KO−60, KO)) until the XI is published, separate from
+  the once-only odds fire. Graceful no-op when the XI isn't out yet — never crashes.
 
 **Acceptance Criteria:**
-- [ ] Official XIs fetched + stored for an upcoming match
-- [ ] Respects the API-Football free-tier rate limit
-- [ ] Early/missing lineup handled gracefully (no crash, retried next tick)
-- [ ] Idempotent storage (no duplicate lineup rows)
+- [x] Official XIs fetched + stored for a WC match from ESPN (XI + formation)
+- [x] Free/key-less ESPN JSON API; no quota concern; polite single request per check
+- [x] Early/missing lineup handled gracefully (no crash, retried next tick)
+- [x] Idempotent storage (no duplicate lineup rows on re-fetch)
 
 ### WC-10-07 — Rotation / Absence Flag on the Research Card
 

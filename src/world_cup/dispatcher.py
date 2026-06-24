@@ -31,7 +31,9 @@ _WC_DIR = PROJECT_ROOT / "data" / "world_cup"
 CACHE_PATH = _WC_DIR / "today_fixtures.json"
 STATE_PATH = _WC_DIR / "dispatcher_state.json"
 
-PREKO_WINDOW_MIN = 40   # fire when within this many minutes before kickoff
+PREKO_WINDOW_MIN = 40    # fire the odds pull when within this many minutes before kickoff
+LINEUP_WINDOW_MIN = 60   # check ESPN for the XI from this many minutes before kickoff
+                         # (free / no quota, so retried each tick until the XI is out)
 
 
 def _utcnow() -> _dt.datetime:
@@ -101,19 +103,30 @@ def _save_state(state: dict) -> None:
 
 # --------------------------------------------------------------- heartbeat
 def _fire_prematch(match_id: int) -> None:
-    """Trigger the focused pre-kickoff run for one match. Lazily imported so the
-    idle heartbeat never even imports the pipeline/DB layer."""
+    """Trigger the focused pre-kickoff odds run for one match. Lazily imported so
+    the idle heartbeat never even imports the pipeline/DB layer."""
     from src.world_cup.pipeline import run_prematch
     run_prematch(match_id)
 
 
-def run_dispatcher(now: _dt.datetime | None = None,
-                   window_min: int = PREKO_WINDOW_MIN) -> dict:
-    """Heartbeat tick. Fire the prematch run for any match inside the pre-KO
-    window [KO − window_min, KO) that hasn't been prepped today, exactly once.
+def _fetch_lineup(match_id: int) -> dict:
+    """Fetch the ESPN lineup for one match (lazily imported; free, no quota)."""
+    from src.world_cup.lineups import fetch_wc_lineup
+    return fetch_wc_lineup(match_id)
 
-    The idle path (no match in window) reads only the local cache + state files
-    and opens **no** Neon connection.
+
+def run_dispatcher(now: _dt.datetime | None = None,
+                   window_min: int = PREKO_WINDOW_MIN,
+                   lineup_window_min: int = LINEUP_WINDOW_MIN) -> dict:
+    """Heartbeat tick. Two passes per match:
+
+    * **Odds** — fire the focused prematch run exactly once when the match enters
+      [KO − window_min, KO) (costs Odds-API credits, so once-only via prepped-state).
+    * **Lineup** — from [KO − lineup_window_min, KO), check ESPN for the XI; ESPN is
+      free, so this retries each tick until the XI is published (then marked done).
+
+    The idle path (no match in either window) reads only the local cache + state
+    files and opens **no** Neon connection.
     """
     now = now or _utcnow()
     today = now.date().isoformat()
@@ -121,22 +134,26 @@ def run_dispatcher(now: _dt.datetime | None = None,
     cache = _load_json(CACHE_PATH)
     if not cache or not cache.get("fixtures"):
         logger.info("Dispatcher: no fixture cache — nothing to do")
-        return {"fired": 0, "checked": 0, "reason": "no_cache"}
+        return {"fired": 0, "lineups": 0, "checked": 0, "reason": "no_cache"}
 
     state = _load_state(today)
     prepped = set(state["prepped"])
+    lineups_done = set(state.get("lineups", []))
     fired: list[int] = []
+    lineups: list[int] = []
 
     for fx in cache["fixtures"]:
         mid = fx.get("match_id")
-        if mid is None or mid in prepped:
+        if mid is None:
             continue
         try:
             ko = _dt.datetime.fromisoformat(fx["kickoff_utc"])
         except (ValueError, KeyError, TypeError):
             continue
-        if ko - _dt.timedelta(minutes=window_min) <= now < ko:
-            label = f'{fx.get("home", "?")} v {fx.get("away", "?")}'
+        label = f'{fx.get("home", "?")} v {fx.get("away", "?")}'
+
+        # Odds fire — once per match in [KO − window_min, KO).
+        if mid not in prepped and ko - _dt.timedelta(minutes=window_min) <= now < ko:
             logger.info("Dispatcher: match %s (%s) in pre-KO window — firing prematch",
                         mid, label)
             try:
@@ -147,13 +164,26 @@ def run_dispatcher(now: _dt.datetime | None = None,
                 logger.exception("Dispatcher: prematch run failed for match %s — "
                                  "leaving unprepped to retry next tick", mid)
 
-    if fired:
+        # Lineup capture — retry each tick in [KO − lineup_window_min, KO) until out.
+        if mid not in lineups_done and ko - _dt.timedelta(minutes=lineup_window_min) <= now < ko:
+            try:
+                res = _fetch_lineup(mid)
+                if res.get("status") == "ok":
+                    lineups_done.add(mid)
+                    lineups.append(mid)
+                    logger.info("Dispatcher: lineup captured for match %s (%s)", mid, label)
+            except Exception:
+                logger.exception("Dispatcher: lineup fetch failed for match %s", mid)
+
+    if fired or lineups:
         state["prepped"] = sorted(prepped)
+        state["lineups"] = sorted(lineups_done)
         _save_state(state)
 
-    logger.info("Dispatcher tick: %d fixture(s) checked, %d fired %s",
-                len(cache["fixtures"]), len(fired), fired or "")
-    return {"fired": len(fired), "checked": len(cache["fixtures"]), "match_ids": fired}
+    logger.info("Dispatcher tick: %d checked, %d odds-fired %s, %d lineups %s",
+                len(cache["fixtures"]), len(fired), fired or "", len(lineups), lineups or "")
+    return {"fired": len(fired), "lineups": len(lineups),
+            "checked": len(cache["fixtures"]), "match_ids": fired}
 
 
 def main() -> None:

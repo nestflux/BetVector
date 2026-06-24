@@ -33,6 +33,13 @@ def paths(tmp_path, monkeypatch):
     return cache, state
 
 
+@pytest.fixture(autouse=True)
+def _stub_lineup_fetch(monkeypatch):
+    """Keep dispatcher tests hermetic: by default the lineup pass never hits ESPN
+    or the DB. Lineup-specific tests override this with their own stub."""
+    monkeypatch.setattr(disp, "_fetch_lineup", lambda mid: {"status": "skip"})
+
+
 def _write_cache(cache: Path, fixtures):
     cache.write_text(json.dumps({"written_at": "x", "fixtures": fixtures}))
 
@@ -148,3 +155,52 @@ def test_write_fixture_cache_roundtrip(paths, monkeypatch):
     monkeypatch.setattr(disp, "_fire_prematch", fired.append)
     disp.run_dispatcher(now=KO - dt.timedelta(minutes=20))
     assert fired == [13]
+
+
+# ----------------------------------------------------------- lineup pass (WC-10-06)
+def test_lineup_pass_captures_in_wider_window(paths, monkeypatch):
+    """The lineup window [KO−60, KO) is wider than the odds window [KO−40, KO):
+    at KO−50 the lineup is fetched but odds are NOT yet fired."""
+    cache, state = paths
+    _write_cache(cache, [_fx(13, KO)])
+    monkeypatch.setattr(disp, "_fire_prematch", lambda mid: None)
+    got = []
+    monkeypatch.setattr(disp, "_fetch_lineup", lambda mid: got.append(mid) or {"status": "ok"})
+    res = disp.run_dispatcher(now=KO - dt.timedelta(minutes=50))
+    assert res["lineups"] == 1 and got == [13]
+    assert res["fired"] == 0                                  # KO−50 is outside [KO−40, KO)
+    assert json.loads(state.read_text())["lineups"] == [13]
+
+
+def test_lineup_retries_until_published(paths, monkeypatch):
+    cache, _ = paths
+    _write_cache(cache, [_fx(13, KO)])
+    monkeypatch.setattr(disp, "_fire_prematch", lambda mid: None)
+    calls = {"n": 0}
+
+    def fetch(mid):
+        calls["n"] += 1
+        return {"status": "ok"} if calls["n"] >= 2 else {"status": "no_lineup_yet"}
+
+    monkeypatch.setattr(disp, "_fetch_lineup", fetch)
+    now = KO - dt.timedelta(minutes=50)
+    assert disp.run_dispatcher(now=now)["lineups"] == 0                       # XI not out yet
+    assert disp.run_dispatcher(now=now + dt.timedelta(minutes=15))["lineups"] == 1  # now out
+    assert calls["n"] == 2                                    # retried each tick until ok
+
+
+def test_lineup_captured_only_once(paths, monkeypatch):
+    cache, _ = paths
+    _write_cache(cache, [_fx(13, KO)])
+    monkeypatch.setattr(disp, "_fire_prematch", lambda mid: None)
+    n = {"calls": 0}
+
+    def fetch(mid):
+        n["calls"] += 1
+        return {"status": "ok"}
+
+    monkeypatch.setattr(disp, "_fetch_lineup", fetch)
+    now = KO - dt.timedelta(minutes=50)
+    disp.run_dispatcher(now=now)                              # captures
+    disp.run_dispatcher(now=now + dt.timedelta(minutes=15))   # already done → no re-fetch
+    assert n["calls"] == 1
