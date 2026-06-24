@@ -144,6 +144,27 @@ def test_espn_name_map_resolves(session, monkeypatch):
                            .where(WCLineup.team_id == 3)).scalar() == 13
 
 
+def test_scoreboard_queried_with_date_window(session, monkeypatch):
+    # ESPN's date can be a day off ours (late kickoffs) → query a ±1-day range.
+    captured = {}
+
+    def fake_get(url, params=None, timeout=None):
+        if url.endswith("/scoreboard"):
+            captured["dates"] = (params or {}).get("dates")
+            return _Resp(200, _scoreboard("Brazil", "Scotland"))
+        return _Resp(200, {"rosters": [_roster("Brazil", "4-3-3"), _roster("Scotland", "4-4-2")]})
+
+    monkeypatch.setattr(lineups.requests, "get", fake_get)
+
+    @contextmanager
+    def fake():
+        yield session
+
+    monkeypatch.setattr(lineups, "get_session", fake)
+    fetch_wc_lineup(13)                                   # match date 2026-06-25
+    assert captured["dates"] == "20260624-20260626"      # ±1 day window
+
+
 def test_scoreboard_error(session, monkeypatch):
     monkeypatch.setattr(lineups.requests, "get", lambda *a, **k: _Resp(500, {}))
 

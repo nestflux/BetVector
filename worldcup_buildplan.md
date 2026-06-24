@@ -2,14 +2,13 @@
 
 Version 1.0 · June 2026
 
-> **MODULE STATUS: WC-09 COMPLETE (36/36) · WC-10 (Live Ops) IN PROGRESS — 6/7** · June 24, 2026
-> WC-01→09 done (3-gate). **WC-10 — Live Operations & Automation** (owner-confirmed).
-> ✅ Phase 1: 10-01/02 (odds 12→2 credits, 09:30 ET morning job live). ✅ Phase 2
-> LIVE: 10-03/04/05 dispatcher + per-event prematch pull + CLV integrity —
-> **dispatcher INSTALLED + running** (every 15 min, fires odds ~40min pre-KO). ✅
-> Phase 3: 10-06 lineup capture via **ESPN's free JSON API** (API-Football free tier
-> has no 2026; ESPN serves WC XIs + formation, wired into the dispatcher's lineup
-> pass). Next: 10-07 rotation flag on the research card. WC shadow-only. Suite: 754/754.
+> **MODULE STATUS: WC-09 COMPLETE (36/36) · WC-10 COMPLETE (7/7 — 10-08 deferred) · WHOLE WC MODULE LIVE** · June 24, 2026
+> WC-01→09 done. **WC-10 — Live Operations & Automation** ✅ COMPLETE + LIVE:
+> Phase 1 (10-01/02: odds 12→2 credits, 09:30 ET morning job), Phase 2 (10-03/04/05:
+> dispatcher INSTALLED + running every 15 min — fires the 2-credit prematch pull
+> ~40min pre-KO, true-close CLV), Phase 3 (10-06/07: lineup capture via ESPN's free
+> JSON API 15/15 + rotation flag on the research card). 10-08 λ-adjust DEFERRED
+> (=WC-11, gated). WC stays shadow-only; lineups are decision-support. Suite: 763/763.
 
 ---
 
@@ -1437,7 +1436,7 @@ than the paid API-Football option. Building against ESPN instead.
 - [x] Early/missing lineup handled gracefully (no crash, retried next tick)
 - [x] Idempotent storage (no duplicate lineup rows on re-fetch)
 
-### WC-10-07 — Rotation / Absence Flag on the Research Card
+### WC-10-07 — Rotation / Absence Flag on the Research Card ✅ DONE
 
 **Type:** Feature / Dashboard
 **Depends on:** WC-10-06
@@ -1453,10 +1452,10 @@ Turn the lineup into the decision-support signal you actually want.
 - **Decision-support only — no change to λ or value-bet generation.**
 
 **Acceptance Criteria:**
-- [ ] Rotation/absence flag computed from the announced XI vs regulars
-- [ ] Surfaced on the research card; absent before the XI is announced
-- [ ] Framed as decision support; no λ / value-bet change
-- [ ] Empty/early-lineup state handled
+- [x] Rotation/absence flag computed from the announced XI vs regulars
+- [x] Surfaced on the research card; absent before the XI is announced
+- [x] Framed as decision support; no λ / value-bet change
+- [x] Empty/early-lineup state handled
 
 ### WC-10-08 — λ-Adjustment from Lineups — DEFERRED
 

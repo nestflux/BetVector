@@ -17,8 +17,10 @@ from __future__ import annotations
 
 import datetime as _dt
 import logging
+from pathlib import Path
 
 import requests
+import yaml
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
@@ -28,6 +30,7 @@ from src.world_cup.models import WCMatch, WCLineup
 logger = logging.getLogger(__name__)
 
 ESPN_BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world"
+_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "worldcup_2026.yaml"
 
 # ESPN team display name → our WCTeam.name, only where they differ (extend as found).
 _ESPN_NAME_MAP = {
@@ -58,12 +61,19 @@ def fetch_wc_lineup(match_id: int) -> dict:
             return {"status": "no_match", "match_id": match_id}
         home, away = m.home_team.name, m.away_team.name
         home_id, away_id = m.home_team_id, m.away_team_id
-        date_compact = (m.date or "").replace("-", "")   # YYYYMMDD for the scoreboard
+        # ESPN's scoreboard date can differ from ours by a day for late kickoffs
+        # (date-boundary), so query a ±1-day window (ESPN accepts a YYYYMMDD-YYYYMMDD
+        # range) and match on team names within it.
+        try:
+            _d = _dt.date.fromisoformat(m.date)
+            date_range = f"{_d - _dt.timedelta(days=1):%Y%m%d}-{_d + _dt.timedelta(days=1):%Y%m%d}"
+        except (ValueError, TypeError):
+            date_range = (m.date or "").replace("-", "")
 
-    # 1. Resolve the ESPN event id from the scoreboard for the match's date.
+    # 1. Resolve the ESPN event id from the scoreboard for the match's date window.
     try:
         sb = requests.get(f"{ESPN_BASE}/scoreboard",
-                          params={"dates": date_compact}, timeout=30)
+                          params={"dates": date_range}, timeout=30)
     except requests.RequestException as e:
         logger.warning("ESPN scoreboard request failed for match %d: %s", match_id, e)
         return {"status": "scoreboard_error", "match_id": match_id}
@@ -145,3 +155,80 @@ def fetch_wc_lineup(match_id: int) -> dict:
                 match_id, event_id, stored, starters)
     return {"status": "ok", "match_id": match_id, "event_id": event_id,
             "players": stored, "starters": starters}
+
+
+# ============================================================================
+# WC-10-07: Rotation / absence signal for the research card (decision-support)
+# ============================================================================
+
+def _rotation_threshold() -> int:
+    try:
+        with open(_CONFIG_PATH) as f:
+            data = (yaml.safe_load(f) or {}).get("lineups", {})
+        return int(data.get("rotation_threshold", 5))
+    except (FileNotFoundError, yaml.YAMLError, TypeError, ValueError):
+        return 5
+
+
+def _prior_xi(session, team_id: int, before_date: str, exclude_match_id: int) -> set | None:
+    """The team's starting XI (player names) in its most recent match BEFORE
+    before_date that has a captured lineup, or None when there's no prior XI."""
+    rows = session.execute(
+        select(WCLineup.player_name, WCLineup.match_id)
+        .join(WCMatch, WCLineup.match_id == WCMatch.id)
+        .where(WCLineup.team_id == team_id, WCLineup.is_starter == 1,
+               WCMatch.date < before_date, WCLineup.match_id != exclude_match_id)
+        .order_by(WCMatch.date.desc())
+    ).all()
+    if not rows:
+        return None
+    latest_mid = rows[0][1]                      # the most recent prior match
+    return {name for name, mid in rows if mid == latest_mid}
+
+
+def lineup_signal(match_id: int) -> dict | None:
+    """Per-team confirmed XI + a rotation flag (changes vs the team's previous
+    captured XI) for the research card (WC-10-07). **Decision-support only** — it
+    never touches the model, predictions, or value bets. Returns None for an
+    unknown match; each team's ``status`` covers the not-announced / no-prior cases.
+    """
+    threshold = _rotation_threshold()
+    out: dict = {"match_id": match_id, "threshold": threshold, "teams": []}
+    with get_session() as session:
+        m = session.execute(
+            select(WCMatch)
+            .options(joinedload(WCMatch.home_team), joinedload(WCMatch.away_team))
+            .where(WCMatch.id == match_id)
+        ).unique().scalar_one_or_none()
+        if not m:
+            return None
+
+        for team, tid in ((m.home_team, m.home_team_id), (m.away_team, m.away_team_id)):
+            name = team.name if team else "?"
+            xi = session.execute(
+                select(WCLineup).where(
+                    WCLineup.match_id == match_id,
+                    WCLineup.team_id == tid,
+                    WCLineup.is_starter == 1,
+                )
+            ).scalars().all()
+            if not xi:
+                out["teams"].append({"team": name, "status": "not_announced"})
+                continue
+
+            current = {p.player_name for p in xi}
+            entry = {
+                "team": name,
+                "status": "announced",
+                "formation": xi[0].formation,
+                "xi": sorted(current),
+                "changes": None,            # None = no prior XI to compare against
+                "heavy_rotation": False,
+            }
+            prior = _prior_xi(session, tid, m.date, match_id)
+            if prior:
+                changed = len(current - prior)  # new starters vs the previous XI
+                entry["changes"] = changed
+                entry["heavy_rotation"] = changed >= threshold
+            out["teams"].append(entry)
+    return out

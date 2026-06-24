@@ -532,8 +532,43 @@ def _render_value_bets() -> None:
 
 
 # ============================================================================
-# Section 4b — Research Card (WC-09-04)
+# Section 4b — Research Card (WC-09-04) + lineup rotation flag (WC-10-07)
 # ============================================================================
+
+def _render_lineup_flag(match_id: int) -> None:
+    """Confirmed XI + a rotation/absence flag for the selected match (WC-10-07).
+    Decision-support only — a hypothesis to re-check, never a model input."""
+    from src.world_cup.lineups import lineup_signal
+
+    sig = lineup_signal(match_id)
+    if not sig:
+        return
+    teams = sig["teams"]
+    if not any(t.get("status") == "announced" for t in teams):
+        st.caption("🔒 Lineups not announced yet — ESPN posts the XI ~1h before kickoff.")
+        return
+
+    st.markdown("**Confirmed lineups**")
+    heavy = False
+    for t in teams:
+        if t.get("status") != "announced":
+            st.caption(f"{t['team']}: XI not announced yet")
+            continue
+        note = ""
+        if t.get("heavy_rotation"):
+            heavy = True
+            note = f"  —  ⚠️ **heavy rotation: {t['changes']} changes vs last XI**"
+        elif t.get("changes") is not None:
+            note = f"  ({t['changes']} change{'s' if t['changes'] != 1 else ''} vs last XI)"
+        st.markdown(f"**{t['team']}** · {t.get('formation') or '?'}{note}")
+        st.caption(", ".join(t["xi"]))
+
+    if heavy:
+        st.warning(
+            "Heavy rotation is a hypothesis to re-check — a rested XI can invalidate a "
+            "value pick. Decision-support only; the model and value bets are unchanged."
+        )
+
 
 def _render_research_card() -> None:
     """Per-match decision support: model vs de-vigged market, edge, line movement,
@@ -587,6 +622,8 @@ def _render_research_card() -> None:
         "Edge = model − de-vigged market. Move = consensus shift since opening "
         "(+ = market moved toward it). xG form: no reliable WC source — deferred."
     )
+
+    _render_lineup_flag(sel_id)
 
     # Review queue — biggest model-market disagreements across upcoming matches
     st.markdown("**Biggest disagreements to review**")
