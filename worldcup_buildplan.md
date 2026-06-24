@@ -2,14 +2,14 @@
 
 Version 1.0 · June 2026
 
-> **MODULE STATUS: WC-09 COMPLETE (36/36) · WC-10 (Live Ops) IN PROGRESS — 4/7** · June 24, 2026
+> **MODULE STATUS: WC-09 COMPLETE (36/36) · WC-10 (Live Ops) IN PROGRESS — 5/7 (Phase 2 code done)** · June 24, 2026
 > WC-01→09 done (3-gate); decision-support + Bayesian shadow model live. **WC-10 —
-> Live Operations & Automation** (owner-confirmed). ✅ Phase 1: 10-01 (odds 12→2
-> credits) + 10-02 (09:30 ET morning job live). ✅ Phase 2: 10-03 (heartbeat
-> dispatcher, idle = no Neon) + 10-04 (focused per-event prematch pull — 2 credits,
-> only the target match, protects in-play CLV; verified on real API). Next: 10-05
-> (CLV integrity) + INSTALL dispatcher (held for owner OK — credit-spending job);
-> Phase 3 10-06/07 lineup flag. WC shadow-only. Full suite: 741/741 passing.
+> Live Operations & Automation** (owner-confirmed). ✅ Phase 1: 10-01/02 (odds 12→2
+> credits, 09:30 ET morning job live). ✅ Phase 2 (code): 10-03 (heartbeat dispatcher,
+> idle = no Neon) + 10-04 (focused 2-credit per-event prematch pull) + 10-05 (CLV
+> integrity verified — CLV reads 0 until the dispatcher is live). ⏸ PENDING owner OK:
+> INSTALL the dispatcher (credit-spending job — turns CLV from 0 into a real signal).
+> Then Phase 3 10-06/07 lineup flag. WC shadow-only. Full suite: 743/743 passing.
 
 ---
 
@@ -1375,12 +1375,24 @@ Capture the near-closing line for one match, budget-disciplined.
 - [x] 1 region only; logged credit usage
 - [x] Idempotent (no duplicate rows on re-run)
 
-### WC-10-05 — CLV Integrity End-to-End
+### WC-10-05 — CLV Integrity End-to-End ✅ DONE
 
 **Type:** Test / Validation
 **Depends on:** WC-10-04, WC-09-01
 
 Prove the scorecard's CLV is now anchored to a true closing line.
+
+**Result (2026-06-24):** Verified the prematch→finish→CLV path: because odds are
+upserted in place, the closing line a finished match yields is the LATEST stored
+price (the prematch near-closing pull), not the morning line. The headline test
+runs the real `_load_odds_to_db` upsert twice (morning 2.00 → prematch 1.50, one
+row), then `capture_wc_closing_lines`, asserting close == 1.50 (not 2.00) + CLV>0.
+Real-data validation on Neon: 4 settled picks have CLV captured but **all read
+0.0** because they finished BEFORE any prematch refresh (close == entry == morning
+line). This is the exact gap the dispatcher closes — once it fires the pre-KO pull,
+the close diverges from entry and CLV becomes a real signal. So the scorecard
+faithfully reflects captured CLV; meaningful CLV is unblocked by the dispatcher
+install (held for owner OK).
 
 **Implementation Notes:**
 - Verify the near-closing odds captured by the pre-match run are what
@@ -1389,9 +1401,9 @@ Prove the scorecard's CLV is now anchored to a true closing line.
 - Tests for the prematch→finish→CLV path; validate on one real finished match.
 
 **Acceptance Criteria:**
-- [ ] A prepped → finished match yields CLV computed from the near-closing line
-- [ ] Tests cover the prematch→finish→CLV path
-- [ ] Scorecard reflects the true-close CLV
+- [x] A prepped → finished match yields CLV computed from the near-closing line
+- [x] Tests cover the prematch→finish→CLV path
+- [x] Scorecard reflects the true-close CLV
 
 ### Phase 3 — Lineups (decision support)
 
