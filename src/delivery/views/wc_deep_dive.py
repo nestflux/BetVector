@@ -19,12 +19,15 @@ Sections:
    entry and close marked, plus the stored CLV (did we beat the close?).
 5. Confirmed lineups (DF-09) — both XIs + formations + the rotation flag, reusing
    the same lineup_signal that powers the research card.
-6. Group & qualification impact (DF-10) — the current group table with this tie
+6. Lineup impact (WC-11A-02) — a display-only adjusted-xG what-if: the model's λ
+   rescaled by how the confirmed XI's goal-share compares to the team's last XI,
+   with a per-player scorer board. Neutral, never an edge; the model is unchanged.
+7. Group & qualification impact (DF-10) — the current group table with this tie
    highlighted, plus what each result does to qualification (points-only,
    conservative). Knockout ties say "win or out" instead.
-7. Bayesian vs Poisson (DF-10) — the staked Poisson beside the stored Bayesian
+8. Bayesian vs Poisson (DF-10) — the staked Poisson beside the stored Bayesian
    shadow prediction for THIS match (display-only; the Bayesian never stakes).
-8. Glossary (DF-10) — plain-English definitions for the deep-dive terms.
+9. Glossary (DF-10 + WC-11A-02) — plain-English definitions for the deep-dive terms.
 
 The World Cup model is SHADOW / decision-support only — nothing here changes the
 model or any value bet.
@@ -42,10 +45,11 @@ from src.database.db import get_session
 from src.world_cup.flags import render_flag
 from src.world_cup.lineups import lineup_signal
 from src.world_cup.models import WCMatch, WCTeam
+from src.world_cup.player_rates import player_rate
 from src.world_cup.predictor import scoreline_matrix_from_lambdas
 from src.world_cup.research import (
-    build_book_comparison, build_group_context, build_model_comparison,
-    build_movement,
+    build_book_comparison, build_group_context, build_lineup_impact,
+    build_model_comparison, build_movement,
 )
 from src.world_cup.timeutil import format_kickoff_et
 
@@ -481,7 +485,138 @@ def _render_lineups(match_id: int) -> None:
 
 
 # ============================================================================
-# Section 6 — Group & qualification impact (DF-10)
+# Section 6 — Lineup impact: display-only adjusted-λ (WC-11A-02)
+# ============================================================================
+# Once the XI is confirmed, build_lineup_impact rescales the model's stored xG (λ)
+# by how the announced XI's goal-share compares to the team's last XI. Purely a
+# what-if for the eye — the delta is shown NEUTRALLY (not as an edge), and nothing
+# here changes the model or a value bet (the value finder still works off the
+# model's own λ). Reuses lineup_signal for the XI + player_rates for the rates.
+
+def _impact_scorer_row_html(s: dict) -> str:
+    """One scorer-board row: player · goals-per-90 (his goal-share basis) · the
+    slice of the adjusted λ he carries. A rotated-out player (not in the XI) reads
+    dim + struck through with 'rotated out'; an unrated player shows '—'. Escaped."""
+    name = escape(str(s.get("player", "")))
+    share = s.get("share")
+    exp = s.get("exp_goals")
+    share_txt = f"{share:.2f}" if share is not None else "—"
+    if not s.get("in_xi", True):
+        name_html = (f'<span style="color:{TEXT_DIM};text-decoration:line-through;">'
+                     f'{name}</span>')
+        xg_html = f'<span style="color:{TEXT_DIM};font-size:0.74rem;">rotated out</span>'
+    else:
+        name_html = f'<span style="color:{TEXT};">{name}</span>'
+        xg_html = (f'<span style="color:{TEXT};font-family:JetBrains Mono,monospace;">'
+                   f'{exp:.2f}</span>' if exp is not None else
+                   f'<span style="color:{TEXT_DIM};">—</span>')
+    return (
+        f'<tr><td style="padding:3px 8px;font-size:0.83rem;border-bottom:1px solid {BORDER};">'
+        f'{name_html}</td>'
+        f'<td style="text-align:center;padding:3px 8px;color:{TEXT_DIM};'
+        f'font-family:JetBrains Mono,monospace;font-size:0.8rem;'
+        f'border-bottom:1px solid {BORDER};">{share_txt}</td>'
+        f'<td style="text-align:center;padding:3px 8px;border-bottom:1px solid {BORDER};">'
+        f'{xg_html}</td></tr>'
+    )
+
+
+def _impact_lambda_html(t: dict) -> str:
+    """The model-λ → adjusted-λ read for one team. Deliberately NEUTRAL (no
+    green/red, no 'edge' framing): the delta is a what-if from the XI, not a signal
+    to bet on."""
+    lm, la = t.get("lambda_model"), t.get("lambda_adjusted")
+    if lm is None or la is None:
+        return ""
+    if not t.get("baseline_available"):
+        return (f'<div style="font-family:JetBrains Mono,monospace;font-size:0.92rem;'
+                f'color:{TEXT};margin:2px 0 6px;">model xG <b>{lm:.2f}</b> · adjusted '
+                f'<b>{la:.2f}</b> <span style="color:{TEXT_DIM};font-size:0.76rem;">'
+                f'(no prior XI to compare — adjusted = model)</span></div>')
+    delta = t.get("delta") or 0.0
+    arrow = "▲" if delta > 0.005 else ("▼" if delta < -0.005 else "■")
+    return (f'<div style="font-family:JetBrains Mono,monospace;font-size:0.92rem;'
+            f'color:{TEXT};margin:2px 0 6px;">model xG <b>{lm:.2f}</b> '
+            f'<span style="color:{TEXT_DIM};">→</span> adjusted <b>{la:.2f}</b> '
+            f'<span style="color:{TEXT_DIM};">({arrow} {delta:+.2f})</span></div>')
+
+
+def _impact_card_html(t: dict) -> str:
+    """Pure HTML card for one team's lineup-impact what-if: the model→adjusted λ
+    read, a scorer board (XI goal-share → xG slice, with rotated-out players shown),
+    and any unrated players. Names escaped; neutral, display-only framing."""
+    nation = escape(str(t.get("team", "")))
+    status = t.get("status")
+    shell = (f'<div style="border:1px solid {BORDER};border-radius:8px;'
+             f'padding:10px 12px;background:{SURFACE};">')
+    if status == "not_announced":
+        return (f'{shell}<div style="color:{TEXT};font-weight:700;font-size:0.95rem;">'
+                f'{nation}</div><div style="color:{TEXT_DIM};font-size:0.82rem;'
+                f'margin-top:4px;">XI not announced yet.</div></div>')
+
+    formation = escape(str(t.get("formation") or "—"))
+    changes = t.get("changes")
+    note = ""
+    if t.get("heavy_rotation"):
+        note = (f'<div style="color:{YELLOW};font-weight:700;font-size:0.76rem;'
+                f'margin-bottom:2px;">⚠️ heavy rotation · {int(changes)} changes vs last XI</div>')
+    elif changes is not None:
+        plural = "s" if changes != 1 else ""
+        note = (f'<div style="color:{TEXT_DIM};font-size:0.76rem;margin-bottom:2px;">'
+                f'{int(changes)} change{plural} vs last XI</div>')
+    header = (
+        f'<div style="color:{TEXT};font-weight:700;font-size:0.95rem;">{nation}</div>'
+        f'<div style="color:{TEXT_DIM};font-family:JetBrains Mono,monospace;'
+        f'font-size:0.78rem;margin-bottom:2px;">Formation {formation}</div>{note}')
+    if status == "no_model":
+        return (f'{shell}{header}<div style="color:{TEXT_DIM};font-size:0.82rem;'
+                f'margin-top:4px;">XI confirmed, but the model hasn\'t scored this '
+                f'match yet — no λ to adjust.</div></div>')
+
+    scorer_rows = "".join(_impact_scorer_row_html(s) for s in t.get("scorers", []))
+    board = (
+        f'<table style="width:100%;border-collapse:collapse;margin-top:2px;">'
+        f'<thead><tr style="color:{TEXT_DIM};">'
+        f'<th style="text-align:left;padding:3px 8px;font-size:0.72rem;">Player</th>'
+        f'<th style="padding:3px 8px;font-size:0.72rem;">g/90</th>'
+        f'<th style="padding:3px 8px;font-size:0.72rem;">xG slice</th></tr></thead>'
+        f'<tbody>{scorer_rows}</tbody></table>')
+    missing = t.get("missing") or []
+    miss_html = ""
+    if missing:
+        names = escape(", ".join(str(x) for x in missing))
+        miss_html = (f'<div style="color:{TEXT_DIM};font-size:0.72rem;margin-top:6px;">'
+                     f'Unrated, excluded from the what-if: {names}.</div>')
+    return f'{shell}{header}{_impact_lambda_html(t)}{board}{miss_html}</div>'
+
+
+def _render_lineup_impact(match_id: int) -> None:
+    st.markdown(
+        f'<div class="bv-section-header">Lineup impact — adjusted xG{_MODEL_BADGE}</div>',
+        unsafe_allow_html=True,
+    )
+    data = build_lineup_impact(match_id, player_rate)
+    if not data or not any(t.get("status") == "announced" for t in data["teams"]):
+        st.info(
+            "🔒 Lineups not announced yet — the adjusted-xG what-if appears once "
+            "ESPN posts the confirmed XIs (about an hour before kickoff)."
+        )
+        return
+    st.caption(
+        "A display-only what-if from the confirmed XI: the model's expected goals "
+        "rescaled by how the announced XI's goal-share compares to the team's last "
+        "XI (a rotated-out scorer pulls it down, an upgrade lifts it). It never "
+        "changes the model or a bet — the value finder still works off the model's "
+        "own xG. Goal-share is each player's recent goals-per-90; the delta is "
+        "neutral, not an edge. Unrated players are left out of the what-if."
+    )
+    for col, t in zip(st.columns(len(data["teams"])), data["teams"]):
+        with col:
+            st.markdown(_impact_card_html(t), unsafe_allow_html=True)
+
+
+# ============================================================================
+# Section 7 — Group & qualification impact (DF-10)
 # ============================================================================
 # What this match does to the group table, from build_group_context. The
 # qualification reads are points-only and deliberately conservative — a
@@ -600,7 +735,7 @@ def _render_group_context(match_id: int) -> None:
 
 
 # ============================================================================
-# Section 7 — Bayesian vs Poisson (per-match shadow read, DF-10)
+# Section 8 — Bayesian vs Poisson (per-match shadow read, DF-10)
 # ============================================================================
 # The two STORED predictions side by side — the staked Poisson and the Bayesian
 # shadow — for THIS match. Display-only: the Bayesian never stakes and promotion
@@ -683,7 +818,7 @@ def _render_model_compare(match_id: int) -> None:
 
 
 # ============================================================================
-# Section 8 — Glossary (DF-10)
+# Section 9 — Glossary (DF-10 + WC-11A-02)
 # ============================================================================
 # Short, plain-English definitions for the deep-dive terms (the owner is learning,
 # MP §12). Built by a pure helper so it stays testable.
@@ -707,6 +842,13 @@ _GLOSSARY = [
     ("Bayesian (shadow)", "A second model run alongside the staked Poisson for "
      "comparison only. It never places a bet; promotion to staking is a manual "
      "decision."),
+    ("Adjusted xG", "A display-only what-if: the model's expected goals (λ) rescaled "
+     "by how the confirmed XI's attacking firepower compares to the team's last XI. "
+     "It never changes the model or a bet — the value finder still uses the model's "
+     "own xG."),
+    ("Goal-share", "A player's share of his team's attacking output, from his recent "
+     "goals-per-90. Used to split the expected goals across the XI and to weigh how "
+     "much a rotation moves the adjusted-xG what-if."),
 ]
 
 
@@ -837,6 +979,8 @@ def _render_deep_dive(match_id: int) -> None:
     _render_movement(match_id)
     st.divider()
     _render_lineups(match_id)
+    st.divider()
+    _render_lineup_impact(match_id)
     st.divider()
     _render_group_context(match_id)
     st.divider()

@@ -180,20 +180,45 @@ def _rotation_threshold() -> int:
         return 5
 
 
-def _prior_xi(session, team_id: int, before_date: str, exclude_match_id: int) -> set | None:
-    """The team's starting XI (player names) in its most recent match BEFORE
-    before_date that has a captured lineup, or None when there's no prior XI."""
+def _starter_rows(session, match_id: int, team_id: int) -> list[dict]:
+    """Rich starter rows — ``name`` (ESPN short displayName), ``full_name`` and
+    ``position`` — for a team's confirmed XI in a match. These are the identity
+    columns the player-rate resolver needs (WC-11A); ``lineup_signal``'s name-only
+    ``xi`` doesn't carry them. Read-only."""
     rows = session.execute(
-        select(WCLineup.player_name, WCLineup.match_id)
+        select(WCLineup.player_name, WCLineup.full_name, WCLineup.position)
+        .where(WCLineup.match_id == match_id, WCLineup.team_id == team_id,
+               WCLineup.is_starter == 1)
+    ).all()
+    return [{"name": n, "full_name": fn, "position": p} for n, fn, p in rows]
+
+
+def _prior_starter_rows(session, team_id: int, before_date: str,
+                        exclude_match_id: int) -> list[dict]:
+    """Rich starter rows (name + full_name + position) for the team's most recent
+    PRIOR captured XI — the baseline the lineup-impact what-if scales against
+    (WC-11A-02) — or ``[]`` when there's no prior XI. Same selection as
+    ``_prior_xi``, just carrying the resolver's identity columns."""
+    rows = session.execute(
+        select(WCLineup.player_name, WCLineup.full_name, WCLineup.position,
+               WCLineup.match_id)
         .join(WCMatch, WCLineup.match_id == WCMatch.id)
         .where(WCLineup.team_id == team_id, WCLineup.is_starter == 1,
                WCMatch.date < before_date, WCLineup.match_id != exclude_match_id)
         .order_by(WCMatch.date.desc())
     ).all()
     if not rows:
-        return None
-    latest_mid = rows[0][1]                      # the most recent prior match
-    return {name for name, mid in rows if mid == latest_mid}
+        return []
+    latest_mid = rows[0][3]                       # the most recent prior match
+    return [{"name": n, "full_name": fn, "position": p}
+            for n, fn, p, mid in rows if mid == latest_mid]
+
+
+def _prior_xi(session, team_id: int, before_date: str, exclude_match_id: int) -> set | None:
+    """The team's starting XI (player names) in its most recent match BEFORE
+    before_date that has a captured lineup, or None when there's no prior XI."""
+    rows = _prior_starter_rows(session, team_id, before_date, exclude_match_id)
+    return {r["name"] for r in rows} if rows else None
 
 
 def lineup_signal(match_id: int) -> dict | None:

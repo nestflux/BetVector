@@ -19,6 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
 from src.database.db import get_session
+from src.world_cup.lineups import _prior_starter_rows, _starter_rows, lineup_signal
 from src.world_cup.models import WCMatch, WCTeam
 from src.world_cup.predictor import MODEL_NAME, derive_markets_from_lambdas
 from src.world_cup.value_finder import _canonical_selection, _load_betting_config
@@ -1106,4 +1107,161 @@ def build_model_comparison(match_id: int) -> dict | None:
             f"Both models lean to {label[pf]}." if pf == bf
             else f"The models disagree on the lean — Poisson favours {label[pf]}, "
                  f"the Bayesian shadow favours {label[bf]}.")
+    return info
+
+
+# ============================================================================
+# WC-11A-02 — Lineup impact: display-only adjusted-λ (the core "A1")
+# ============================================================================
+# Once the XI is confirmed, scale the model's STORED expected goals (λ) by how the
+# announced XI's attacking firepower compares to the team's PREVIOUS XI:
+#     lambda_adjusted = lambda_model × (Σ in-XI goal-share ÷ Σ baseline-XI goal-share)
+# where a player's goal-share is his recent goals-per-90 (from the injected
+# rate_lookup, WC-11A-01) and the baseline is the team's last captured XI. So a
+# rotated-out striker (high goal-share) pulls the adjusted λ down; an upgrade lifts
+# it. This is a what-if for the eye only — READ-ONLY, never written back to
+# WCPrediction, never an edge or a bet. The model and value bets are untouched
+# (shadow): the value finder keeps staking off the stored λ, not this number.
+
+# Display-only guard: the what-if can move the model's λ by at most ±50%, so a thin
+# player-rate resolve (only a striker or two matched) can't throw out a nonsensical
+# number. A real rotation moves the ratio well inside this band.
+_ADJ_RATIO_LO, _ADJ_RATIO_HI = 0.5, 1.5
+
+
+def _resolve_share(rows: list[dict], nation: str, rate_lookup) -> tuple[dict, float, list]:
+    """Resolve each XI row to its goal-share (recent goals-per-90 via ``rate_lookup``).
+    Returns ``(share_by_name, total_share, missing_names)``. A player we can't rate
+    (resolver returns None, or no goals-per-90) is excluded from the total and
+    listed in ``missing`` — never guessed at, mirroring the WC-11A-01 resolver."""
+    shares: dict = {}
+    missing: list = []
+    total = 0.0
+    for r in rows:
+        name = r.get("name")
+        looked = rate_lookup(r.get("full_name") or name, nation, r.get("position"))
+        gp90 = looked.get("goals_per_90") if looked else None
+        if gp90 is None or gp90 < 0:
+            shares[name] = None
+            missing.append(name)
+            continue
+        shares[name] = float(gp90)
+        total += float(gp90)
+    return shares, total, missing
+
+
+def _team_impact(leg: dict, sig_entry: dict, rate_lookup) -> dict:
+    """Per-team adjusted-λ from the confirmed XI vs the baseline XI (pure; no DB).
+    ``leg`` carries the team's nation, stored model λ, and the rich current +
+    baseline starter rows; ``sig_entry`` is the team's ``lineup_signal`` entry
+    (status / formation / rotation). Read-only — computes a display number, writes
+    nothing."""
+    nation = leg["nation"]
+    if sig_entry.get("status") != "announced":
+        return {"team": nation, "status": "not_announced"}
+
+    formation = sig_entry.get("formation")
+    heavy = bool(sig_entry.get("heavy_rotation"))
+    changes = sig_entry.get("changes")
+    lambda_model = leg.get("lambda_model")
+    if lambda_model is None:                      # XI in, but the model hasn't run
+        return {"team": nation, "status": "no_model", "formation": formation,
+                "heavy_rotation": heavy, "changes": changes}
+
+    cur_share, cur_total, missing = _resolve_share(leg["current"], nation, rate_lookup)
+    _, base_total, _ = _resolve_share(leg["baseline"], nation, rate_lookup)
+
+    # No usable baseline (first match, or too few players resolved either side) →
+    # we have nothing honest to scale against, so the adjusted λ is just the model λ.
+    baseline_available = bool(leg["baseline"]) and base_total > 0 and cur_total > 0
+    if baseline_available:
+        ratio = max(_ADJ_RATIO_LO, min(_ADJ_RATIO_HI, cur_total / base_total))
+    else:
+        ratio = 1.0
+    lambda_adjusted = lambda_model * ratio
+    delta = lambda_adjusted - lambda_model
+
+    # Scorer board: the confirmed XI (in_xi) plus any baseline player rotated OUT
+    # (in_xi False — surfaced so a dropped high-share striker explains the delta).
+    # Each in-XI player's exp_goals is his slice of the adjusted λ; the rated slices
+    # sum to lambda_adjusted. Highest goal-share first; unrated players sink last.
+    cur_names = {r["name"] for r in leg["current"]}
+    scorers: list = []
+    for r in leg["current"]:
+        share = cur_share.get(r["name"])
+        exp = (share / cur_total * lambda_adjusted) if (share and cur_total > 0) else None
+        scorers.append({"player": r["name"], "in_xi": True,
+                        "share": share, "exp_goals": exp})
+    for r in leg["baseline"]:
+        if r["name"] in cur_names:
+            continue
+        looked = rate_lookup(r.get("full_name") or r["name"], nation, r.get("position"))
+        gp90 = looked.get("goals_per_90") if looked else None
+        scorers.append({"player": r["name"], "in_xi": False,
+                        "share": gp90, "exp_goals": 0.0})       # benched → 0 this match
+    scorers.sort(key=lambda s: (s["share"] is None, -(s["share"] or 0.0)))
+
+    return {
+        "team": nation, "status": "announced",
+        "formation": formation, "heavy_rotation": heavy, "changes": changes,
+        "lambda_model": lambda_model, "lambda_adjusted": lambda_adjusted,
+        "delta": delta, "baseline_available": baseline_available,
+        "scorers": scorers, "missing": missing,
+        "n_xi": len(leg["current"]),
+        "n_rated": sum(1 for v in cur_share.values() if v is not None),
+    }
+
+
+def build_lineup_impact(match_id: int, rate_lookup) -> dict | None:
+    """WC-11A-02 — per-team display-only adjusted-λ for the deep dive (shadow).
+
+    Reuses ``lineup_signal`` for the confirmed XI / formation / rotation truth, reads
+    the STORED λ off the Poisson ``WCPrediction``, and scales it by the confirmed
+    XI's goal-share vs the team's previous XI (see the section note). ``rate_lookup``
+    ``(name, nation, position) -> dict|None`` is injected (the view passes
+    ``player_rates.player_rate``) so the math stays unit-testable and this module
+    stays free of the player-rate cache.
+
+    READ-ONLY: no ``session.add`` / ``commit`` here, and nothing is written back to
+    WCPrediction — the value finder still stakes off the stored λ, not this what-if.
+    Returns ``None`` if the match doesn't exist; each team's ``status`` covers the
+    not-announced / no-model cases."""
+    sig = lineup_signal(match_id)
+    if sig is None:
+        return None
+    sig_by_name = {t.get("team"): t for t in sig.get("teams", [])}
+
+    with get_session() as session:
+        m = session.execute(
+            select(WCMatch)
+            .where(WCMatch.id == match_id)
+            .options(joinedload(WCMatch.home_team),
+                     joinedload(WCMatch.away_team),
+                     joinedload(WCMatch.predictions))
+        ).unique().scalar_one_or_none()
+        if not m:
+            return None
+
+        home = m.home_team.name if m.home_team else "?"
+        away = m.away_team.name if m.away_team else "?"
+        pred = next((p for p in m.predictions if p.model_name == MODEL_NAME), None)
+        lam = ({m.home_team_id: pred.home_expected_goals,
+                m.away_team_id: pred.away_expected_goals} if pred else {})
+
+        legs = []
+        for nation, tid in ((home, m.home_team_id), (away, m.away_team_id)):
+            legs.append({
+                "nation": nation,
+                "lambda_model": lam.get(tid),
+                "current": _starter_rows(session, match_id, tid),
+                "baseline": _prior_starter_rows(session, tid, m.date, match_id),
+            })
+        info = {
+            "match_id": match_id, "home": home, "away": away,
+            "home_fifa": m.home_team.fifa_code if m.home_team else None,
+            "away_fifa": m.away_team.fifa_code if m.away_team else None,
+        }
+
+    info["teams"] = [_team_impact(leg, sig_by_name.get(leg["nation"], {}), rate_lookup)
+                     for leg in legs]
     return info
