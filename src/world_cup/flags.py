@@ -49,19 +49,41 @@ def _flag_b64(fifa_code: str) -> str | None:
     return base64.b64encode(p.read_bytes()).decode("ascii")
 
 
-def render_flag(fifa_code: str, height: int = 18) -> str:
-    """Inline base64 ``<img>`` for the team's flag for use inside
-    ``st.markdown(unsafe_allow_html=True)``.
+# Uniform flag box (DF-03). Every country's flag is drawn into the SAME fixed
+# cell — width = height × 3:2 (the commonest national flag ratio) — regardless of
+# its native aspect ratio, so a column of flags lines up cleanly beside the names
+# instead of going ragged (Qatar wide, Switzerland near-square). ``object-fit:
+# cover`` fills the cell without distortion (it trims a few px off the long edge
+# rather than stretching), and a 1px border gives pale flags (Japan, England) a
+# visible edge so they don't bleed into the #0D1117 surface.
+_FLAG_RATIO = 1.5            # box width = round(height * ratio)
+_FLAG_BORDER = "#30363D"     # design-system border token (matches world_cup.BORDER)
 
-    Falls back to the FIFA code as small grey text when the asset is missing —
-    never raises, so a missing flag can't break a dashboard row.
+
+def render_flag(fifa_code: str, height: int = 18) -> str:
+    """Inline base64 ``<img>`` of the team's flag inside a fixed uniform box,
+    for use within ``st.markdown(unsafe_allow_html=True)``.
+
+    Every flag renders at the same ``height × round(height * 1.5)`` cell (object-fit
+    cover, rounded, subtle border) so differing national aspect ratios no longer
+    produce ragged widths. Falls back to a same-size bordered cell showing the FIFA
+    code when the asset is missing — never raises, and the row stays aligned.
     """
+    width = round(height * _FLAG_RATIO)
     b64 = _flag_b64(fifa_code)
     if not b64:
         label = escape((fifa_code or "?").upper())
-        return f'<span style="font-size:0.7rem;color:#8B949E">{label}</span>'
+        # Same-size bordered cell so a missing flag keeps the row aligned.
+        return (
+            f'<span style="display:inline-block;box-sizing:border-box;'
+            f'width:{width}px;height:{height}px;line-height:{height}px;'
+            f'text-align:center;font-size:0.5rem;color:#8B949E;'
+            f'border:1px solid {_FLAG_BORDER};border-radius:3px;'
+            f'vertical-align:middle;overflow:hidden;">{label}</span>'
+        )
     return (
-        f'<img src="data:image/png;base64,{b64}" height="{height}" '
-        f'style="vertical-align:middle;border-radius:2px;" '
+        f'<img src="data:image/png;base64,{b64}" width="{width}" height="{height}" '
+        f'style="box-sizing:border-box;object-fit:cover;'
+        f'border:1px solid {_FLAG_BORDER};border-radius:3px;vertical-align:middle;" '
         f'alt="{escape((fifa_code or "").upper())}">'
     )

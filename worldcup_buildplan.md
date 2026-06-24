@@ -1531,7 +1531,7 @@ focused near-kickoff per-event pull stays lean (h2h + totals) to protect in-play
 - [x] Dates are config-driven; no hardcoded date in code
 - [x] Owner role + onboarding flows unaffected
 
-### DF-03 — Uniform Flag Component
+### DF-03 — Uniform Flag Component ✅ DONE
 
 **Type:** UI
 **Depends on:** none
@@ -1544,10 +1544,20 @@ focused near-kickoff per-event pull stays lean (h2h + totals) to protect in-play
   fixtures) with the single component + one size.
 
 **Acceptance Criteria:**
-- [ ] All flags render at one uniform box size, flush beside the country name
-- [ ] No aspect-ratio distortion; pale flags have a visible edge
-- [ ] Used consistently across WC + league surfaces (one component, one size)
-- [ ] No regression in existing flag tests
+- [x] All flags render at one uniform box size, flush beside the country name
+- [x] No aspect-ratio distortion; pale flags have a visible edge
+- [x] Used consistently across WC + league surfaces (one component, one size)
+- [x] No regression in existing flag tests
+
+**Result:** `render_flag` (`src/world_cup/flags.py`) draws every flag into one fixed
+`height × round(height*1.5)` 3:2 cell — `object-fit:cover` (fills without distortion),
+1px `#30363D` border (visible edge on pale flags like Japan/England), `border-radius:3px`,
+`box-sizing:border-box`; missing-flag fallback is a same-size bordered cell so rows stay
+aligned. All three WC flag sites (strip, group standings, knockouts via `_flag_for_name`)
+flow through the single component. League crests aligned to the same treatment in
+`_badge_helper` (`render_team_badge` + `render_badge_only`): fixed `size × size` square cell
+with `object-fit:contain` (no crop for transparent crests, no border). Verified with a real
+before/after render. 785/785 tests; Gate 2 CLEAN, Gate 3 APPROVED.
 
 ### DF-04 — Verdict-Led WC Fixtures
 

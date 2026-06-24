@@ -83,8 +83,10 @@ def render_team_badge(
         Automatically HTML-escaped to prevent entity issues (e.g. "&" in
         "Brighton & Hove Albion" becomes "&amp;").
     size : int
-        Badge image height in pixels (default 20px for inline, use 28 for
-        match headers).  Width is auto-scaled to maintain aspect ratio.
+        Badge box side in pixels (default 20px for inline, use 28 for match
+        headers).  The crest is drawn into a fixed ``size × size`` cell with
+        ``object-fit: contain`` (DF-03) so crests line up at one uniform width —
+        contain (not cover) keeps transparent crests from being cropped.
     name_style : str
         Optional inline CSS to apply to the team name ``<span>``.
         Example: ``"font-weight: 700; font-size: 24px;"``
@@ -109,9 +111,12 @@ def render_team_badge(
     )
 
     if b64:
+        # Fixed square cell + object-fit:contain → uniform width across crests
+        # of differing aspect ratios (DF-03), without cropping transparent logos.
         return (
             f'<img src="data:image/png;base64,{b64}" '
-            f'style="height: {size}px; vertical-align: middle; margin-right: 4px;" '
+            f'style="width: {size}px; height: {size}px; object-fit: contain; '
+            f'vertical-align: middle; margin-right: 4px;" '
             f'alt="{safe_name}"> {name_span}'
         )
     # Graceful fallback: plain text, no broken image icon
@@ -127,9 +132,11 @@ def render_badge_only(team_id: int, team_name: str, size: int = 20) -> str:
     b64 = _load_badge_b64(team_id)
     if b64:
         safe_name = html_mod.escape(team_name, quote=True)
+        # Same fixed square cell as render_team_badge (DF-03) for uniform width.
         return (
             f'<img src="data:image/png;base64,{b64}" '
-            f'style="height: {size}px; vertical-align: middle;" '
+            f'style="width: {size}px; height: {size}px; object-fit: contain; '
+            f'vertical-align: middle;" '
             f'alt="{safe_name}">'
         )
     return ""
