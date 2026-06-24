@@ -5,6 +5,7 @@ from datetime import date
 
 from src.world_cup.timeutil import (
     to_eastern, format_kickoff_et, eastern_date, wc_window_active, tournament_window,
+    days_to_final,
 )
 
 
@@ -85,3 +86,31 @@ class TestTournamentWindow:
         import src.world_cup.timeutil as tu
         monkeypatch.setattr(tu, "tournament_window", lambda: None)
         assert tu.wc_window_active(date(2026, 6, 24)) is False    # safe fallback
+
+
+class TestDaysToFinal:
+    """The header countdown must count to the configured final (Jul 19, 2026),
+    not to whatever fixture happens to be latest in the DB."""
+
+    def test_counts_to_config_end_not_db(self):
+        # Jun 24 -> Jul 19 is 25 days. (Before the fix this read off max(WCMatch.date),
+        # which is a mid-group fixture weeks before the real final.)
+        assert days_to_final(date(2026, 6, 24)) == 25
+
+    def test_full_window_length_on_opening_day(self):
+        assert days_to_final(date(2026, 6, 11)) == 38            # Jun 11 -> Jul 19
+
+    def test_zero_on_final_day(self):
+        assert days_to_final(date(2026, 7, 19)) == 0
+
+    def test_clamped_to_zero_after_final(self):
+        assert days_to_final(date(2026, 7, 25)) == 0             # never negative
+
+    def test_no_arg_uses_today_without_crashing(self):
+        # Config is present, so the default-today branch returns an int.
+        assert isinstance(days_to_final(), int)
+
+    def test_none_when_window_unconfigured(self, monkeypatch):
+        import src.world_cup.timeutil as tu
+        monkeypatch.setattr(tu, "tournament_window", lambda: None)
+        assert tu.days_to_final(date(2026, 6, 24)) is None       # caller hides the chip

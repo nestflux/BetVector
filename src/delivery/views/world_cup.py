@@ -5,7 +5,7 @@ Tournament hub: today's matches with predictions, group standings,
 value bets, model performance, and winner probability chart.
 """
 
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from html import escape
 
 import plotly.graph_objects as go
@@ -19,7 +19,9 @@ from src.world_cup.models import (
     WCMatch, WCPrediction, WCTeam, WCValueBet,
 )
 from src.world_cup.predictor import MODEL_NAME
-from src.world_cup.timeutil import EASTERN, eastern_date, format_kickoff_et
+from src.world_cup.timeutil import (
+    EASTERN, days_to_final, eastern_date, format_kickoff_et,
+)
 from src.world_cup.value_finder import (
     _load_betting_config,
     classify_fixture_verdict,
@@ -61,24 +63,22 @@ def _render_header() -> None:
             .where(WCMatch.status == "finished")
         ).scalar() or 0
 
-        last_date = session.execute(
-            select(WCMatch.date).order_by(WCMatch.date.desc()).limit(1)
-        ).scalar_one_or_none()
-
-    days_remaining = "?"
-    if last_date:
-        try:
-            end = datetime.strptime(last_date, "%Y-%m-%d").date()
-            days_remaining = max(0, (end - date.today()).days)
-        except ValueError:
-            pass
+    # "Days to final" counts to the configured tournament end date (the final),
+    # NOT the latest fixture in the DB. Early in the tournament the Odds API has
+    # published only a rolling window of group fixtures (no knockout bracket yet),
+    # so max(WCMatch.date) would point at a group game weeks before the real final
+    # and badly understate the countdown. config/worldcup_2026.yaml is the source.
+    dtf = days_to_final()
+    countdown = (
+        f" · {dtf} day{'s' if dtf != 1 else ''} to final" if dtf is not None else ""
+    )
 
     # Slim one-line header — replaces the former 3-metric block + progress bar
     # so the page leads with content, not chrome (WC-08-03).
     st.markdown(
         "#### 🏆 FIFA World Cup 2026 "
         f"<span style='color:{TEXT_DIM};font-weight:400;font-size:0.85rem'>"
-        f"· {played}/{TOTAL_MATCHES} played · {days_remaining} days to final</span>",
+        f"· {played}/{TOTAL_MATCHES} played{countdown}</span>",
         unsafe_allow_html=True,
     )
 

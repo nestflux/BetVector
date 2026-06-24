@@ -121,3 +121,24 @@ def wc_window_active(today: date | None = None) -> bool:
         today = datetime.now(EASTERN).date()
     start, end = window
     return start <= today <= end
+
+
+def days_to_final(today: date | None = None) -> int | None:
+    """Whole days from ``today`` (default: the current US Eastern date) to the WC
+    final — the configured tournament ``end_date`` (the final is the last match of
+    the window). ``None`` when the window is unset/unparseable, and clamped at 0
+    from the final onward.
+
+    Deliberately counts to the CONFIGURED final date, not the latest fixture in
+    the database: early in the tournament the Odds API has published only a
+    rolling window of group fixtures (no knockout bracket yet), so the DB's max
+    match date points at a group game weeks before the real final. The config
+    (``worldcup_2026.yaml`` → ``tournament.end_date``) is the authoritative
+    source."""
+    window = tournament_window()
+    if window is None:
+        return None
+    if today is None:
+        today = datetime.now(EASTERN).date()
+    _, end = window
+    return max(0, (end - today).days)
