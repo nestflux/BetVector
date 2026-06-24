@@ -649,6 +649,83 @@ def _render_scorecard() -> None:
 
 
 # ============================================================================
+# Section 4b — Bayesian vs Poisson (shadow comparison, WC-09-07)
+# ============================================================================
+
+def _pct(x) -> str:
+    return f"{x:.0%}" if x is not None else "—"
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _cached_live_metrics() -> dict:
+    from src.world_cup.bayesian_validation import live_model_metrics
+    return live_model_metrics()
+
+
+@st.cache_data(ttl=3600, show_spinner="Backtesting both models on the 2022 WC…")
+def _cached_holdout() -> dict:
+    from src.world_cup.bayesian_validation import run_holdout_comparison
+    return run_holdout_comparison()
+
+
+def _render_model_comparison() -> None:
+    """Bayesian (shadow) vs Poisson (staked): a leak-free holdout backtest plus a
+    live tracker over finished WC matches, so we can see whether the shadow model
+    earns promotion. No auto-promotion — the Poisson stays the only staked model."""
+    _section_header("Bayesian vs Poisson — shadow comparison")
+    st.caption(
+        "The Bayesian model runs in shadow (never staked). This is whether it actually "
+        "predicts better than the staked Poisson. **Promotion is manual** — these numbers "
+        "inform a decision; they never change which model places bets."
+    )
+
+    live = _cached_live_metrics()
+    st.markdown(f"**Live — finished 2026 WC matches** ({live['n_matches']} so far)")
+    if live["n_matches"] == 0:
+        st.info("No finished WC matches with both models' predictions yet.")
+    else:
+        p, b = live["poisson"], live["bayesian"]
+        st.dataframe([
+            {"Model": "Poisson (staked)", "Brier": p["brier"], "Log-loss": p["log_loss"],
+             "Accuracy": _pct(p["accuracy"]), "n": p["n"]},
+            {"Model": "Bayesian (shadow)", "Brier": b["brier"], "Log-loss": b["log_loss"],
+             "Accuracy": _pct(b["accuracy"]), "n": b["n"]},
+        ], use_container_width=True, hide_index=True)
+        st.caption(
+            "Lower Brier / log-loss = better-calibrated probabilities. "
+            + (f"⚠️ Only {live['n_matches']} matches, and live predictions refresh each run "
+               "— directional, not proof. The holdout below is the clean test."
+               if live["n_matches"] < 30 else "")
+        )
+
+    with st.expander("Holdout backtest — 2022 World Cup (leak-free)", expanded=False):
+        h = _cached_holdout()
+        p, b = h.get("poisson"), h.get("bayesian")
+        if not p or not b:
+            st.info("Backtest unavailable (a model failed to fit).")
+        else:
+            st.dataframe([
+                {"Model": "Poisson", "Brier": round(p["brier"], 4),
+                 "Accuracy": _pct(p.get("accuracy")), "matches scored": p.get("n_evaluated")},
+                {"Model": "Bayesian", "Brier": b["brier"],
+                 "Accuracy": _pct(b.get("accuracy")), "matches scored": b.get("n_evaluated")},
+            ], use_container_width=True, hide_index=True)
+            winner = h.get("brier_winner")
+            if winner:
+                better = "Bayesian" if winner == "bayesian" else "Poisson"
+                st.caption(
+                    f"Lower Brier wins: **{better}** (Δ {h.get('brier_delta'):+.4f}). "
+                    "The two models score different match counts — the Poisson skips matches "
+                    "it can't build features for, the Bayesian needs only team names — so read "
+                    "this as directional, not a perfectly controlled head-to-head."
+                )
+
+    with st.expander("Promotion criteria (manual — never automatic)", expanded=False):
+        from src.world_cup.bayesian_validation import PROMOTION_CRITERIA
+        st.text(PROMOTION_CRITERIA)
+
+
+# ============================================================================
 # Section 5 — Model Performance
 # ============================================================================
 
@@ -1025,6 +1102,7 @@ def main() -> None:
 
     with tab_model:
         _render_scorecard()
+        _render_model_comparison()
         _render_winner_chart()
         _render_model_performance()
 

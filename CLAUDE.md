@@ -350,9 +350,9 @@ single-line expression.
 
 ## Current Status
 
-Last completed: WC-09-06 ✅ — Bayesian shadow integration. bayesian_model.predict_all_shadow() stores predictions under model_name="wc_bayesian_v1" (separate row per UniqueConstraint(match_id,model_name)); wired into pipeline step 5b after Poisson, _step-isolated, gated on _fitted. SHADOW ONLY: value_finder reads only Poisson name → no Bayesian value bets/staking; never overrides Poisson. _TEAM_ALIASES{USA→United States} for name alignment (40/40 WC matches on real Neon). 3-gate (Gate 3 verified DB-level idempotency + isolation). 5 tests (14 total bayesian), 703/703. Bayesian disagrees w/ Poisson on sparse teams (Portugal-Uzbekistan 84%→63%) — shrinkage pulls extremes in.
-Currently working: WC-09-07 — Bayesian validation harness + scorecard comparison (both models' CLV/calibration/Brier side-by-side; promotion bar documented; NO auto-promotion).
-Next up (WC-09 remaining): 09-08 player-props go/no-go spike (Odds API coverage confirmed: anytime scorer 10 books incl. Pinnacle). Owner tasks: install WC launchd plists; PC-27 7-day cloud soak.
+Last completed: WC-09-07 ✅ — Bayesian validation harness + scorecard comparison. src/world_cup/bayesian_validation.py: run_holdout_comparison (both models on 2022 WC, leak-free, same multi-class Brier), live_model_metrics (finished WC matches), PROMOTION_CRITERIA (manual only). bayesian_model.evaluate_holdout (fit()→_fit_on refactor for temporal train subset). Dashboard _render_model_comparison on Model tab (cached holdout behind expander, live tracker, honest n-counts + leakage caveat). RESULT: Bayesian competitive but doesn't beat Poisson (holdout Brier 0.602 vs 0.585) → stays shadow, no promotion. 3-gate all green. 10 tests, 713/713.
+Currently working: WC-09-08 — player-props go/no-go spike (TIME-BOXED research, NO production build). Per-player WC data sourcing assessment + 1-match anytime-scorer prototype vs market + scrape-budget plan + go/no-go report.
+Next up: WC-09 COMPLETE after 09-08 (last issue). Owner tasks: install WC launchd plists; PC-27 7-day cloud soak.
 Hybrid cloud: DB is Neon Postgres (DATABASE_URL in .env / Streamlit Cloud secrets [database] connection_string); local SQLite kept as backup.
 
 E40 complete: All 10 issues done ✅ (TM datasets download, lineup/formation/manager backfill, manager features, injury club fix, minutes impact, recomputation, weekly refresh, integration test — 14,187 matches, 9,829 TM-mapped, 393K lineups, 42 tests)

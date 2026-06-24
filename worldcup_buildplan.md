@@ -2,12 +2,12 @@
 
 Version 1.0 · June 2026
 
-> **MODULE STATUS: MVP + UX COMPLETE (28/28) · WC-09 IN PROGRESS — 6/8** · June 23, 2026
+> **MODULE STATUS: MVP + UX COMPLETE (28/28) · WC-09 IN PROGRESS — 7/8** · June 23, 2026
 > WC-01 through WC-08 done (3-gate reviewed); dashboard is 4 tabs with flags + ET
-> times. **WC-09 (Option A):** ✅ 09-01→04 (decision-support tracks A+B) + ✅ 09-05/06
-> (Bayesian shadow model — scipy MAP+Laplace, live in pipeline under wc_bayesian_v1,
-> 40/40 WC matches, never staked). ⏸ Remaining: 09-07 validation + scorecard
-> comparison, 09-08 player-props spike. Full test suite: 703/703 passing.
+> times. **WC-09 (Option A):** ✅ 09-01→04 (decision-support A+B) + ✅ 09-05/06/07
+> (Bayesian shadow model + validation — scipy MAP+Laplace, holdout backtest vs
+> Poisson on the Model tab; competitive but not promoted, stays shadow). ⏸ Remaining:
+> 09-08 player-props go/no-go spike. Full test suite: 713/713 passing.
 
 ---
 
@@ -1184,7 +1184,7 @@ Run the Bayesian model alongside the Poisson, shadow only.
 
 ---
 
-### WC-09-07 — Bayesian Validation Harness + Scorecard Comparison
+### WC-09-07 — Bayesian Validation Harness + Scorecard Comparison ✅ DONE
 
 **Type:** Test / Analytics
 **Depends on:** WC-09-06, WC-09-02
@@ -1200,10 +1200,10 @@ Compare Bayesian vs Poisson and feed the scorecard.
   auto-promotion**.
 
 **Acceptance Criteria:**
-- [ ] Backtest/metrics comparing Bayesian vs Poisson produced
-- [ ] Scorecard shows both models' CLV / calibration
-- [ ] Promotion criteria documented; no automatic promotion
-- [ ] Tests for the model interface + integration
+- [x] Backtest/metrics comparing Bayesian vs Poisson produced
+- [x] Scorecard shows both models' CLV / calibration
+- [x] Promotion criteria documented; no automatic promotion
+- [x] Tests for the model interface + integration
 
 ---
 

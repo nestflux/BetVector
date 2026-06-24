@@ -115,7 +115,12 @@ class BayesianPoissonModel:
 
     # ------------------------------------------------------------------- fit
     def fit(self) -> dict:
-        rows = self._load_matches()
+        """Fit on all historical + finished-WC matches."""
+        return self._fit_on(self._load_matches())
+
+    def _fit_on(self, rows: list[tuple]) -> dict:
+        """MAP fit + Laplace on a given list of match rows. Factored out of fit()
+        so the holdout evaluator can fit on a temporal train subset."""
         if len(rows) < 100:
             logger.error("Bayesian fit: insufficient data (%d matches)", len(rows))
             return {"status": "error", "reason": "insufficient data"}
@@ -342,3 +347,62 @@ class BayesianPoissonModel:
         except Exception as e:
             logger.error("predict_all_shadow failed: %s", e)
             return 0
+
+    # ----------------------------------------------------------- validation
+    def evaluate_holdout(self, holdout_tournament: str = "FIFA World Cup",
+                         holdout_start: str = "2022-11-01",
+                         holdout_end: str = "2022-12-31") -> dict:
+        """Temporal holdout backtest (default: the 2022 World Cup). Fit on every
+        historical match EXCEPT the holdout period, then score multi-class Brier /
+        log-loss / accuracy on the holdout. Mirrors
+        ``WCPoissonPredictor.evaluate_holdout`` (same holdout, same metrics) so the
+        two models can be compared apples-to-apples — this is the rigorous,
+        leak-free comparison (vs the live tracker, which re-fits each run)."""
+        with get_session() as s:
+            hist = s.execute(
+                select(WCHistoricalMatch).order_by(WCHistoricalMatch.date)
+            ).scalars().all()
+            rows_all = [(m.date, m.home_team, m.away_team, float(m.home_goals),
+                         float(m.away_goals), float(m.match_weight or 0.5),
+                         int(m.neutral_venue or 0), m.tournament) for m in hist]
+
+        train, holdout = [], []
+        for r in rows_all:
+            if r[7] == holdout_tournament and holdout_start <= r[0] <= holdout_end:
+                holdout.append(r)
+            else:
+                train.append(r)
+
+        info = self._fit_on([r[:7] for r in train])
+        if info.get("status") != "ok":
+            return {"status": "error", "reason": "fit failed", "detail": info}
+
+        briers, log_losses, correct, n = [], [], 0, 0
+        for date, home, away, hg, ag, *_ in holdout:
+            p = self.predict(home, away)
+            if not p:
+                continue
+            if hg > ag:
+                actual = [1, 0, 0]
+            elif hg == ag:
+                actual = [0, 1, 0]
+            else:
+                actual = [0, 0, 1]
+            pred = [p["home_win_prob"], p["draw_prob"], p["away_win_prob"]]
+            briers.append(sum((pred[i] - actual[i]) ** 2 for i in range(3)))
+            p_actual = min(max(pred[actual.index(1)], 1e-12), 1.0 - 1e-12)
+            log_losses.append(-np.log(p_actual))
+            if pred.index(max(pred)) == actual.index(1):
+                correct += 1
+            n += 1
+
+        return {
+            "status": "ok",
+            "model": MODEL_NAME_BAYES,
+            "holdout": f"{holdout_tournament} {holdout_start[:4]}",
+            "n_holdout": len(holdout),
+            "n_evaluated": n,
+            "brier": round(sum(briers) / n, 4) if n else None,
+            "log_loss": round(sum(log_losses) / n, 4) if n else None,
+            "accuracy": round(correct / n, 4) if n else None,
+        }
