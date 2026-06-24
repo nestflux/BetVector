@@ -10,6 +10,7 @@ from src.database.db import Base
 import src.world_cup.research as research
 from src.world_cup.research import (
     build_research_card, top_disagreements, _devig, _consensus,
+    summarize_card,
 )
 from src.world_cup.models import WCTeam, WCMatch, WCOdds, WCPrediction
 from src.world_cup.predictor import MODEL_NAME
@@ -190,3 +191,134 @@ def test_derive_markets_from_lambdas_helper():
     assert m["over_15"] > m["over_25"] > m["over_35"]      # monotone
     assert 0 < m["btts"] < 1
     assert derive_markets_from_lambdas(None, 1.0) == {}    # graceful on missing input
+
+
+# ---- DF-06: digestible card — market blocks, model-vs-market reads, headline ----
+
+def _row(mk, sel, label, model, mkt, best_odds=None, best_book=None, move=None):
+    """A build_research_card selection row (edge = model − de-vigged market)."""
+    edge = (model - mkt) if (model is not None and mkt is not None) else None
+    return {"market": mk, "selection": sel, "label": label,
+            "model_prob": model, "market_prob": mkt, "edge": edge,
+            "best_odds": best_odds, "best_book": best_book, "movement": move}
+
+
+def _card(home, away, rows):
+    return {"home": home, "away": away, "selections": rows}
+
+
+def test_edge_trust_boundaries():
+    # Same bounds the value finder stakes on: [0.03, 0.15].
+    assert research._edge_trust(None, 0.03, 0.15) == "na"
+    assert research._edge_trust(0.029, 0.03, 0.15) == "none"
+    assert research._edge_trust(0.03, 0.03, 0.15) == "value"     # threshold inclusive
+    assert research._edge_trust(0.15, 0.03, 0.15) == "value"     # ceiling inclusive
+    assert research._edge_trust(0.1501, 0.03, 0.15) == "capped"  # past ceiling
+    assert research._edge_trust(-0.2, 0.03, 0.15) == "none"      # model below market
+
+
+def test_summarize_groups_into_three_blocks_with_trust():
+    card = _card("Brazil", "Scotland", [
+        _row("h2h", "home", "Home (Brazil)", 0.55, 0.47, 2.05, "FanDuel"),  # +.08 value
+        _row("h2h", "draw", "Draw", 0.25, 0.27),                            # −.02 none
+        _row("h2h", "away", "Away (Scotland)", 0.20, 0.26),                 # −.06 none
+        _row("ou25", "over_2.5", "Over 2.5", 0.52, 0.50),                   # +.02 none
+        _row("ou25", "under_2.5", "Under 2.5", 0.48, 0.50),
+        _row("btts", "btts_yes", "BTTS Yes", 0.70, 0.48),                   # +.22 capped
+        _row("btts", "btts_no", "BTTS No", 0.30, 0.52),
+    ])
+    s = summarize_card(card)
+    assert [b["title"] for b in s["blocks"]] == \
+        ["Match result", "Goals", "Both teams to score"]
+    by = {r["selection"]: r for b in s["blocks"] for r in b["selections"]}
+    assert by["home"]["trust"] == "value"
+    assert by["btts_yes"]["trust"] == "capped"
+    assert by["over_2.5"]["trust"] == "none"
+
+
+def test_summarize_omits_empty_blocks():
+    # Only h2h priced → only the Match result block appears.
+    card = _card("A", "B", [
+        _row("h2h", "home", "Home (A)", 0.50, 0.45),
+        _row("h2h", "draw", "Draw", 0.27, 0.28),
+        _row("h2h", "away", "Away (B)", 0.23, 0.27),
+    ])
+    s = summarize_card(card)
+    assert [b["title"] for b in s["blocks"]] == ["Match result"]
+
+
+def test_headline_prefers_trustworthy_lean_over_bigger_capped_gap():
+    # +.08 value (h2h) vs +.22 capped (btts) → the value lean is the headline.
+    card = _card("Brazil", "Scotland", [
+        _row("h2h", "home", "Home (Brazil)", 0.55, 0.47, 2.05, "FanDuel"),
+        _row("h2h", "draw", "Draw", 0.25, 0.27),
+        _row("h2h", "away", "Away (Scotland)", 0.20, 0.26),
+        _row("btts", "btts_yes", "BTTS Yes", 0.70, 0.48),
+        _row("btts", "btts_no", "BTTS No", 0.30, 0.52),
+    ])
+    h = summarize_card(card)["headline"]
+    assert h["class"] == "value" and h["selection"] == "home"
+    assert "Brazil" in h["text"] and "Match result" in h["text"]
+    assert "@ 2.05 (FanDuel)" in h["text"]
+
+
+def test_headline_capped_when_only_oversized_gap():
+    card = _card("A", "B", [
+        _row("btts", "btts_yes", "BTTS Yes", 0.80, 0.50),   # +.30 capped
+        _row("btts", "btts_no", "BTTS No", 0.20, 0.50),
+    ])
+    h = summarize_card(card)["headline"]
+    assert h["class"] == "capped"
+    assert "likely model error" in h["text"]
+
+
+def test_headline_none_when_model_agrees():
+    card = _card("A", "B", [
+        _row("h2h", "home", "Home (A)", 0.50, 0.49),
+        _row("h2h", "draw", "Draw", 0.25, 0.26),
+        _row("h2h", "away", "Away (B)", 0.25, 0.25),
+    ])
+    h = summarize_card(card)["headline"]
+    assert h["class"] == "none"
+    assert "agrees with the market" in h["text"]
+
+
+def test_block_read_names_where_the_edge_is():
+    card = _card("Brazil", "Scotland", [
+        _row("h2h", "home", "Home (Brazil)", 0.55, 0.47, 2.05),
+        _row("h2h", "draw", "Draw", 0.25, 0.27),
+        _row("h2h", "away", "Away (Scotland)", 0.20, 0.26),
+    ])
+    read = summarize_card(card)["blocks"][0]["read"]
+    assert read["class"] == "value"
+    assert "Brazil" in read["text"] and "55%" in read["text"]
+
+
+def test_block_read_capped_is_flagged_not_celebrated():
+    card = _card("A", "B", [
+        _row("btts", "btts_yes", "BTTS Yes", 0.80, 0.50),
+        _row("btts", "btts_no", "BTTS No", 0.20, 0.50),
+    ])
+    read = summarize_card(card)["blocks"][0]["read"]
+    assert read["class"] == "capped"
+    assert "model error" in read["text"]
+
+
+def test_headline_handles_no_prices():
+    s = summarize_card(_card("A", "B", []))
+    assert s["blocks"] == []
+    assert s["headline"]["class"] == "na"
+
+
+def test_build_research_card_attaches_blocks_and_headline(session, monkeypatch):
+    _seed(session)
+    _patch(session, monkeypatch)
+    card = build_research_card(20)
+    assert "blocks" in card and "headline" in card
+    assert "Match result" in [b["title"] for b in card["blocks"]]
+    assert all("trust" in r for r in card["selections"])
+    # Seed: Over 2.5 model 0.55 vs de-vigged market 0.50 → +0.05 edge (value),
+    # the only selection clearing the threshold → it's the headline lean.
+    h = card["headline"]
+    assert h["class"] == "value" and h["selection"] == "over_2.5"
+    assert "Goals" in h["text"]

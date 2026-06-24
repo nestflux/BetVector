@@ -1633,10 +1633,30 @@ Gate 2 CLEAN, Gate 3 APPROVED.
   the shadow chip. Line movement stays as the confirmation signal.
 
 **Acceptance Criteria:**
-- [ ] Selections grouped by market with model-vs-market visual bars (the gap stands out)
-- [ ] Headline names the strongest trustworthy lean + a trust label
-- [ ] One plain-English read per market block ("the edge is on X, not Y")
-- [ ] Edge ceiling honoured (a big gap is labelled likely model error, not celebrated)
+- [x] Selections grouped by market with model-vs-market visual bars (the gap stands out)
+- [x] Headline names the strongest trustworthy lean + a trust label
+- [x] One plain-English read per market block ("the edge is on X, not Y")
+- [x] Edge ceiling honoured (a big gap is labelled likely model error, not celebrated)
+
+**Result:** ✅ DONE. The research card now leads with a headline lean and groups selections
+into three blocks — Match result / Goals / BTTS — each a stack of model-vs-market paired
+bars (model in an accent over the de-vigged market in grey, so the GAP between the two bars
+*is* the edge). All the grouping, wording, and trust logic lives in a new pure
+`research.summarize_card` (streamlit-free, unit-tested apart from the page module, which runs
+`main()` at import): it annotates each selection with a trust class, arranges the blocks, and
+writes one plain-English read per block ("Edge is on Over 2.5 — model 58% vs market 50%
+(+8%)") plus the card's single headline. Trust uses the SAME bounds the value finder stakes on
+(`edge_threshold` 0.03 / `max_actionable_edge` 0.15 from `config/worldcup_2026.yaml` via
+`_load_betting_config` — no hardcoded duplicate): a lean is highlighted (filled green pill +
+best price) only inside `[threshold, ceiling]`; a gap past the ceiling is rendered amber and
+labelled "likely model error, not a bet" — never celebrated. Line movement is folded in as the
+confirmation signal (headline "line confirms / caution"; per-row ▲/▼ since open). The view
+(`world_cup.py`) only turns `blocks`/`headline` into HTML (`_research_headline_html` /
+`_research_block_html` / `_research_bar_html`), all dynamic values escaped. `build_research_card`
+keeps every prior key and adds `blocks`/`headline` (backward-compatible; `top_disagreements`
+unchanged). The value/model path (`value_finder.py`, `predictor.py`) is byte-for-byte unchanged
+— the card stays shadow / decision-support. 822/822 (+13 DF-06 tests); Gate 2 CLEAN, Gate 3
+APPROVED. The "Biggest disagreements" queue is intentionally left for DF-07.
 
 ### DF-07 — Biggest Disagreements Redesign
 

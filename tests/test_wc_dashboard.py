@@ -87,3 +87,28 @@ class TestCollapsibleGroups:
         # Tab 2 wraps standings / advancement / third-place in expanders.
         main_src = _func_source("main")
         assert main_src.count("st.expander(") >= 3
+
+
+class TestResearchCardRedesign:
+    """DF-06: the research card groups selections into market blocks of
+    model-vs-market paired bars led by a headline lean — replacing the flat
+    dataframe with the digestible, gap-as-visual layout."""
+
+    def test_research_helpers_present(self):
+        assert {"_research_headline_html", "_research_block_html",
+                "_research_bar_html", "_research_edge_tag"} <= FUNCS
+
+    def test_card_uses_grouped_bars_not_dataframe(self):
+        src = _func_source("_render_research_card")
+        # The headline + per-block bars now carry the card.
+        assert "_research_headline_html(" in src
+        assert "_research_block_html(" in src
+        # The old flat per-selection table (its "Move" column) is gone; the
+        # disagreements queue dataframe (DF-07's scope) is untouched here.
+        assert '"Move"' not in src
+
+    def test_bars_stack_model_over_market(self):
+        # Two bars per selection: model in an accent, market in grey.
+        src = _func_source("_research_bar_html")
+        assert '"Model"' in src and '"Market"' in src
+        assert "MARKET_GREY" in src

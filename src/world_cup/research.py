@@ -21,7 +21,7 @@ from sqlalchemy.orm import joinedload
 from src.database.db import get_session
 from src.world_cup.models import WCMatch
 from src.world_cup.predictor import MODEL_NAME, derive_markets_from_lambdas
-from src.world_cup.value_finder import _canonical_selection
+from src.world_cup.value_finder import _canonical_selection, _load_betting_config
 
 logger = logging.getLogger(__name__)
 
@@ -217,7 +217,7 @@ def build_research_card(match_id: int) -> dict | None:
                 "movement": move,  # +ve = market moved toward this selection since open
             })
 
-    return {
+    card = {
         "match_id": match_id,
         "home": home,
         "away": away,
@@ -227,6 +227,164 @@ def build_research_card(match_id: int) -> dict | None:
         "kickoff_time": kickoff,
         "selections": selections,
     }
+    # DF-06: attach the digestible view structure — three plain-English blocks
+    # (each with a model-vs-market read) and one headline lean for the card.
+    summary = summarize_card(card)
+    card["blocks"] = summary["blocks"]
+    card["headline"] = summary["headline"]
+    return card
+
+
+# ============================================================================
+# DF-06 — Research-card display structure (pure; the view only draws the bars)
+# ============================================================================
+# The research card groups its selections into three plain-English blocks
+# (Match result / Goals / Both teams to score), each with a one-line read of
+# where the edge sits, plus a single headline lean for the whole card. "Trust"
+# uses the SAME edge bounds the WC value finder stakes on (config edge_threshold
+# / max_actionable_edge): a lean is only highlighted inside [threshold, ceiling];
+# a gap past the ceiling is flagged "likely model error", never celebrated. This
+# is display-only — no model/value math changes (the card stays shadow).
+
+# (display key, block title, the build_research_card market keys it gathers)
+_BLOCKS = (
+    ("h2h", "Match result", ("h2h",)),
+    ("goals", "Goals", ("ou15", "ou25", "ou35")),
+    ("btts", "Both teams to score", ("btts",)),
+)
+
+
+def _trust_bounds(cfg: dict | None = None) -> tuple[float, float]:
+    """(edge_threshold, max_actionable_edge) — the same staking bounds the value
+    finder uses, so the card's 'trust range' matches what we'd actually bet."""
+    if cfg is None:
+        try:
+            cfg = _load_betting_config()
+        except Exception:                     # config unreadable → safe defaults
+            cfg = {}
+    return cfg.get("edge_threshold", 0.03), cfg.get("max_actionable_edge", 0.15)
+
+
+def _edge_trust(edge, threshold: float, ceiling: float) -> str:
+    """Trust class for one model-vs-market edge: 'value' = a lean inside
+    [threshold, ceiling]; 'capped' = past the ceiling (likely model error);
+    'none' = sub-threshold or model at/below market; 'na' = no priced edge."""
+    if edge is None:
+        return "na"
+    if edge >= threshold:
+        return "capped" if edge > ceiling else "value"
+    return "none"
+
+
+def _read_name(row: dict, home: str, away: str) -> str:
+    """Plain-English subject for a selection in an 'edge is on X' sentence."""
+    sel = row.get("selection")
+    if sel == "home":
+        return home
+    if sel == "away":
+        return away
+    if sel == "draw":
+        return "the draw"
+    if sel == "btts_yes":
+        return "both teams scoring"
+    if sel == "btts_no":
+        return "one team kept off the scoresheet"
+    return row.get("label") or (sel or "")      # "Over 2.5" etc.
+
+
+def _block_read(rows: list[dict], home: str, away: str,
+                threshold: float, ceiling: float) -> dict:
+    """One plain-English read for a market block — names where the edge sits (if
+    any), honouring the ceiling. Picks the selection the model most favours."""
+    priced = [r for r in rows if r.get("edge") is not None]
+    if not priced:
+        return {"text": "No prices for this market yet.", "class": "na"}
+    top = max(priced, key=lambda r: r["edge"])
+    cls = _edge_trust(top["edge"], threshold, ceiling)
+    name = _read_name(top, home, away)
+    if cls == "value":
+        return {"class": "value",
+                "text": (f"Edge is on {name} — model {top['model_prob']:.0%} "
+                         f"vs market {top['market_prob']:.0%} ({top['edge']:+.0%}).")}
+    if cls == "capped":
+        return {"class": "capped",
+                "text": (f"Model leans hard to {name}, but the {top['edge']:+.0%} "
+                         f"gap is past the trust ceiling — likely model error, "
+                         f"not a bet.")}
+    return {"class": "none", "text": "In line with the market — no edge worth backing."}
+
+
+def _headline(selections: list[dict], home: str, away: str,
+              threshold: float, ceiling: float) -> dict:
+    """The card's single headline: the strongest TRUSTWORTHY lean (inside the
+    ceiling) if one exists; otherwise the biggest over-ceiling gap flagged as
+    likely model error; otherwise agreement with the market."""
+    block_of = {mk: title for _, title, keys in _BLOCKS for mk in keys}
+    priced = [r for r in selections if r.get("edge") is not None]
+    if not priced:
+        return {"class": "na", "text": "No odds for this match yet."}
+
+    values = [r for r in priced if threshold <= r["edge"] <= ceiling]
+    capped = [r for r in priced if r["edge"] > ceiling]
+
+    if values:
+        top = max(values, key=lambda r: r["edge"])
+        name = _read_name(top, home, away)
+        block = block_of.get(top["market"], "this match")
+        price = (f" @ {top['best_odds']:.2f} ({top['best_book']})"
+                 if top.get("best_odds") and top.get("best_book") else
+                 (f" @ {top['best_odds']:.2f}" if top.get("best_odds") else ""))
+        return {
+            "class": "value", "selection": top["selection"], "label": name,
+            "block": block, "edge": top["edge"], "model_prob": top["model_prob"],
+            "market_prob": top["market_prob"], "best_odds": top.get("best_odds"),
+            "best_book": top.get("best_book"), "movement": top.get("movement"),
+            "text": (f"Strongest lean: {name} ({block}) — model "
+                     f"{top['model_prob']:.0%} vs market {top['market_prob']:.0%}, "
+                     f"{top['edge']:+.0%} edge{price}."),
+        }
+    if capped:
+        top = max(capped, key=lambda r: r["edge"])
+        name = _read_name(top, home, away)
+        block = block_of.get(top["market"], "this match")
+        return {
+            "class": "capped", "selection": top["selection"], "label": name,
+            "block": block, "edge": top["edge"], "movement": top.get("movement"),
+            "text": (f"Biggest gap: {name} ({block}), {top['edge']:+.0%} — past the "
+                     f"trust ceiling, so treat it as likely model error, not a signal."),
+        }
+    return {"class": "none", "text": "Model agrees with the market — no clear edge here."}
+
+
+def summarize_card(card: dict, cfg: dict | None = None) -> dict:
+    """DF-06: annotate each selection with a trust class and arrange the card into
+    the three display blocks + a headline lean. Pure (no Streamlit) so the
+    grouping, wording, and ceiling logic stay unit-testable; the view draws bars
+    from ``blocks`` / ``headline``."""
+    threshold, ceiling = _trust_bounds(cfg)
+    home = card.get("home", "Home")
+    away = card.get("away", "Away")
+    sels = card.get("selections", [])
+
+    for r in sels:
+        r["trust"] = _edge_trust(r.get("edge"), threshold, ceiling)
+
+    by_market: dict[str, list] = {}
+    for r in sels:
+        by_market.setdefault(r.get("market"), []).append(r)
+
+    blocks = []
+    for key, title, mkeys in _BLOCKS:
+        rows = [r for mk in mkeys for r in by_market.get(mk, [])]
+        if not rows:
+            continue
+        blocks.append({
+            "key": key, "title": title, "selections": rows,
+            "read": _block_read(rows, home, away, threshold, ceiling),
+        })
+
+    return {"blocks": blocks,
+            "headline": _headline(sels, home, away, threshold, ceiling)}
 
 
 def top_disagreements(limit: int = 10) -> list[dict]:

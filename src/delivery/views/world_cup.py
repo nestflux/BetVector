@@ -34,6 +34,10 @@ GREEN = "#3FB950"
 RED = "#F85149"
 YELLOW = "#D29922"
 BORDER = "#30363D"
+ACCENT = "#58A6FF"        # neutral model-bar colour when there's no actionable lean
+MARKET_GREY = "#8B949E"   # de-vigged market bar (always grey, so the model gap pops)
+BAR_TRACK = "#21262D"
+_MOVE_EPS = 0.005         # ignore sub-0.5pp line drift as noise when showing movement
 
 TOTAL_MATCHES = 104  # FIFA 2026: 48 group + 16 R32 + 8 R16 + 4 QF + 2 SF + 2 (3rd/Final)
 
@@ -620,6 +624,139 @@ def _render_lineup_flag(match_id: int) -> None:
         )
 
 
+# ---------------------------------------------------------------------------
+# DF-06 — Research card: grouped model-vs-market paired bars
+# ---------------------------------------------------------------------------
+# The card groups selections into Match result / Goals / BTTS blocks. Each
+# selection draws two stacked bars — model (accent) over de-vigged market (grey)
+# — so the GAP between them is the visual; the edge is highlighted only inside
+# the trust range, and a gap past the ceiling is labelled likely model error.
+# All the grouping / wording / trust logic lives in research.summarize_card; here
+# we only turn its blocks + headline into HTML.
+
+def _pill(text: str, colour: str, filled: bool = False) -> str:
+    """Small mono pill — filled (highlight) or outlined."""
+    if filled:
+        return (f'<span style="background:{colour};color:{BG};border-radius:4px;'
+                f'padding:1px 6px;font-size:0.72rem;font-weight:700;'
+                f'font-family:JetBrains Mono,monospace;">{escape(text)}</span>')
+    return (f'<span style="border:1px solid {colour};color:{colour};border-radius:4px;'
+            f'padding:0 5px;font-size:0.72rem;font-weight:600;'
+            f'font-family:JetBrains Mono,monospace;">{escape(text)}</span>')
+
+
+def _research_edge_tag(row: dict) -> str:
+    """Right-aligned edge marker for one selection: a filled green pill when it's a
+    trustworthy lean (with the best price), an amber 'likely model error' pill when
+    capped, dim text otherwise; plus a tiny ▲/▼ market-move-since-open marker."""
+    edge = row.get("edge")
+    if edge is None:
+        return f'<span style="color:{TEXT_DIM};font-size:0.7rem;">no price</span>'
+    trust = row.get("trust", "none")
+    parts = []
+    if trust == "value":
+        parts.append(_pill(f"{edge:+.0%}", GREEN, filled=True))
+        if row.get("best_odds"):
+            book = f" {escape(row['best_book'])}" if row.get("best_book") else ""
+            parts.append(f'<span style="color:{TEXT_DIM};font-size:0.7rem;">'
+                         f'@ {row["best_odds"]:.2f}{book}</span>')
+    elif trust == "capped":
+        parts.append(_pill(f"{edge:+.0%} ⚠", YELLOW))
+        parts.append(f'<span style="color:{TEXT_DIM};font-size:0.68rem;">likely model error</span>')
+    else:
+        parts.append(f'<span style="color:{TEXT_DIM};font-size:0.72rem;'
+                     f'font-family:JetBrains Mono,monospace;">{edge:+.0%}</span>')
+    move = row.get("movement")
+    if move is not None and abs(move) >= _MOVE_EPS:
+        arrow = "▲" if move > 0 else "▼"
+        mcol = GREEN if move > 0 else TEXT_DIM
+        parts.append(f'<span style="color:{mcol};font-size:0.66rem;" '
+                     f'title="market move toward this selection since open">'
+                     f'{arrow}{abs(move):.0%}</span>')
+    return " ".join(parts)
+
+
+def _research_bar_html(row: dict) -> str:
+    """One selection: label + edge tag, then a model bar (accent) stacked over a
+    market bar (grey). The two widths differing IS the edge, made visual."""
+    label = escape(row.get("label") or row.get("selection") or "")
+    model_col = {"value": GREEN, "capped": YELLOW}.get(row.get("trust"), ACCENT)
+
+    def bar(caption: str, val, fill: str) -> str:
+        pct = f"{val:.0%}" if val is not None else "—"
+        width = max(0.0, min(1.0, val)) * 100 if val is not None else 0.0
+        return (
+            f'<div style="display:flex;align-items:center;gap:8px;margin:2px 0;">'
+            f'<span style="width:48px;color:{TEXT_DIM};font-size:0.64rem;'
+            f'text-transform:uppercase;letter-spacing:0.03em;">{caption}</span>'
+            f'<div style="flex:1;background:{BAR_TRACK};border-radius:3px;height:11px;'
+            f'overflow:hidden;">'
+            f'<div style="width:{width:.1f}%;background:{fill};height:100%;'
+            f'border-radius:3px;"></div></div>'
+            f'<span style="width:40px;text-align:right;font-family:JetBrains Mono,monospace;'
+            f'font-size:0.72rem;color:{TEXT};">{pct}</span></div>'
+        )
+
+    return (
+        f'<div style="margin:9px 0 12px 0;">'
+        f'<div style="display:flex;justify-content:space-between;align-items:baseline;'
+        f'margin-bottom:2px;gap:8px;">'
+        f'<span style="color:{TEXT};font-size:0.85rem;font-weight:600;">{label}</span>'
+        f'<span style="text-align:right;">{_research_edge_tag(row)}</span></div>'
+        f'{bar("Model", row.get("model_prob"), model_col)}'
+        f'{bar("Market", row.get("market_prob"), MARKET_GREY)}'
+        f'</div>'
+    )
+
+
+def _research_block_html(block: dict) -> str:
+    """A market block: title, its one-line plain-English read, then the bars."""
+    read = block.get("read") or {}
+    read_col = {"value": GREEN, "capped": YELLOW}.get(read.get("class"), TEXT_DIM)
+    bars = "".join(_research_bar_html(r) for r in block.get("selections", []))
+    return (
+        f'<div style="margin:14px 0 4px 0;">'
+        f'<div style="color:{TEXT};font-weight:700;font-size:0.95rem;'
+        f'border-bottom:1px solid {BORDER};padding-bottom:4px;margin-bottom:4px;">'
+        f'{escape(block.get("title", ""))}</div>'
+        f'<div style="color:{read_col};font-size:0.8rem;margin:4px 0 8px 0;">'
+        f'{escape(read.get("text", ""))}</div>'
+        f'{bars}</div>'
+    )
+
+
+def _research_headline_html(h: dict) -> str:
+    """The card's headline lean banner — green when it names a trustworthy lean,
+    amber when the biggest gap is past the ceiling, neutral on agreement. Line
+    movement is folded in as the confirmation signal for a trustworthy lean."""
+    cls = h.get("class", "none")
+    if cls == "value":
+        icon, col, bg = "🟢", GREEN, "rgba(63,185,80,0.10)"
+    elif cls == "capped":
+        icon, col, bg = "⚠", YELLOW, "rgba(210,153,34,0.10)"
+    else:
+        icon, col, bg = "•", TEXT_DIM, "rgba(139,148,158,0.07)"
+
+    conf = ""
+    if cls == "value":
+        move = h.get("movement")
+        if move is not None and move > _MOVE_EPS:
+            conf = (f'<div style="color:{TEXT_DIM};font-size:0.74rem;margin-top:3px;">'
+                    f'Line confirms — market has drifted toward it since open '
+                    f'({move:+.0%}).</div>')
+        elif move is not None and move < -_MOVE_EPS:
+            conf = (f'<div style="color:{TEXT_DIM};font-size:0.74rem;margin-top:3px;">'
+                    f'Caution — market has drifted away since open ({move:+.0%}); '
+                    f'the edge may be going stale.</div>')
+
+    return (
+        f'<div style="background:{bg};border:1px solid {col};border-left:3px solid {col};'
+        f'border-radius:8px;padding:10px 14px;margin:4px 0 12px 0;">'
+        f'<span style="color:{col};font-weight:700;font-size:0.9rem;">'
+        f'{icon} {escape(h.get("text", ""))}</span>{conf}</div>'
+    )
+
+
 def _render_research_card() -> None:
     """Per-match decision support: model vs de-vigged market, edge, line movement,
     and best price across books. Where you disagree with the consensus — a thing
@@ -657,20 +794,23 @@ def _render_research_card() -> None:
         st.info("No odds / prediction data for this match yet.")
         return
 
-    rows = []
-    for x in card["selections"]:
-        rows.append({
-            "Selection": x["label"],
-            "Model": f"{x['model_prob']:.0%}" if x["model_prob"] is not None else "—",
-            "Market": f"{x['market_prob']:.0%}" if x["market_prob"] is not None else "—",
-            "Edge": f"{x['edge']:+.1%}" if x["edge"] is not None else "—",
-            "Move": f"{x['movement']:+.1%}" if x["movement"] is not None else "—",
-            "Best price": f"{x['best_odds']:.2f} ({x['best_book']})" if x["best_odds"] else "—",
-        })
-    st.dataframe(rows, use_container_width=True, hide_index=True)
+    # DF-06: lead with one headline lean, then a block per market (Match result /
+    # Goals / BTTS). Each selection is a model-vs-market paired bar so the gap is
+    # the visual; a one-line read says where the edge is. Grouping + wording come
+    # from research.summarize_card (attached to the card as blocks/headline).
+    headline_html = _research_headline_html(card.get("headline", {}))
+    blocks_html = "".join(_research_block_html(b) for b in card.get("blocks", []))
+    st.markdown(
+        f'<div style="background:{SURFACE};border:1px solid {BORDER};border-radius:10px;'
+        f'padding:12px 18px 16px 18px;">{headline_html}{blocks_html}</div>',
+        unsafe_allow_html=True,
+    )
     st.caption(
-        "Edge = model − de-vigged market. Move = consensus shift since opening "
-        "(+ = market moved toward it). xG form: no reliable WC source — deferred."
+        "Each selection shows the model probability (accent) over the de-vigged "
+        "market (grey) — the gap between the bars is the edge. A lean is highlighted "
+        "only inside the trust range; a gap past the ceiling is flagged likely model "
+        "error, not a bet. ▲/▼ = market move since open (the confirmation signal). "
+        "xG form: no reliable WC source — deferred."
     )
 
     _render_lineup_flag(sel_id)
