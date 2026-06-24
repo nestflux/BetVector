@@ -20,7 +20,10 @@ from src.world_cup.models import (
 )
 from src.world_cup.predictor import MODEL_NAME
 from src.world_cup.timeutil import EASTERN, eastern_date, format_kickoff_et
-from src.world_cup.value_finder import _canonical_selection
+from src.world_cup.value_finder import (
+    _load_betting_config,
+    classify_fixture_verdict,
+)
 
 # Design system (CLAUDE.md Rule 5)
 BG = "#0D1117"
@@ -80,44 +83,82 @@ def _render_header() -> None:
 # Section 2 — Upcoming Fixtures (Tab 1)
 # ============================================================================
 
-def _model_lean_html(pred) -> str:
-    """Compact 1X2 lean with the favored outcome highlighted."""
+# Verdict tier → (accent colour, glyph). value = actionable shadow edge;
+# capped = edge too big to trust (re-check); none = no model edge.
+_VERDICT_STYLE = {
+    "value":  (GREEN, "✓"),
+    "capped": (YELLOW, "⚠"),
+    "none":   (TEXT_DIM, "—"),
+}
+
+
+def _verdict_chip_html(v) -> str:
+    """One at-a-glance, colour-tiered verdict for a fixture (DF-04): the model's
+    single best shadow pick as selection · edge · best price. Capped edges are
+    flagged as re-check (likely model noise), never dressed up as value."""
+    colour, glyph = _VERDICT_STYLE.get(v.tier, _VERDICT_STYLE["none"])
+    if v.tier == "none" or v.label is None:
+        return f'<span style="color:{TEXT_DIM};font-size:0.8rem;">{glyph} no model edge</span>'
+    label = escape(v.label)
+    edge = f"{v.edge:+.1%}"
+    if v.tier == "capped":
+        return (
+            f'<span style="color:{colour};font-weight:700;">{glyph} {label} {edge}</span> '
+            f'<span style="color:{TEXT_DIM};font-size:0.72rem;">re-check · likely model noise</span>'
+        )
+    # value
+    price = f'@ {v.best_odds:.2f}' if v.best_odds else ""
+    return (
+        f'<span style="color:{colour};font-weight:700;">{glyph} {label} {edge}</span> '
+        f'<span style="color:{TEXT_DIM};font-size:0.72rem;">{escape(price)}</span>'
+    )
+
+
+# Note: _pct (percent-or-em-dash) is defined once near the model-performance
+# section below and reused here — no duplicate definition.
+def _verdict_detail_html(pred, v, home_name: str, away_name: str) -> str:
+    """Full model probabilities behind the per-fixture expander (DF-04):
+    1X2, goals, BTTS, expected goals, and the verdict pick's price vs market."""
     if not pred:
-        return f'<span style="color:{TEXT_DIM}">—</span>'
-    outcomes = [("H", pred.home_win_prob), ("D", pred.draw_prob), ("A", pred.away_win_prob)]
-    top_i = max(range(3), key=lambda i: outcomes[i][1])
-    parts = []
-    for i, (label, prob) in enumerate(outcomes):
-        if i == top_i:
-            parts.append(f'<span style="color:{TEXT};font-weight:700">{label} {prob:.0%}</span>')
-        else:
-            parts.append(f'<span style="color:{TEXT_DIM}">{label} {prob:.0%}</span>')
-    return " · ".join(parts)
+        return f'<span style="color:{TEXT_DIM};font-size:0.8rem;">No model prediction for this fixture.</span>'
 
+    def row(label, body):
+        return (
+            f'<div style="margin:2px 0;font-size:0.8rem;">'
+            f'<span style="color:{TEXT_DIM};display:inline-block;min-width:96px;">{label}</span>'
+            f'<span style="color:{TEXT};">{body}</span></div>'
+        )
 
-def _best_price_html(m: WCMatch, home_name: str, away_name: str, pred) -> str:
-    """Best available decimal odds for the model's favored 1X2 outcome."""
-    if not pred or not m.odds:
-        return ""
-    fav = max(
-        [("home", pred.home_win_prob), ("draw", pred.draw_prob), ("away", pred.away_win_prob)],
-        key=lambda x: x[1],
-    )[0]
-    best = 0.0
-    for o in m.odds:
-        if o.market_type != "h2h":
-            continue
-        canon = _canonical_selection(o.market_type, o.selection, home_name, away_name, o.point)
-        if canon == fav and o.odds_decimal > best:
-            best = o.odds_decimal
-    return f"@ {best:.2f}" if best > 0 else ""
+    o25 = pred.over_25_prob
+    btts = pred.btts_prob
+    rows = [
+        row("Match result",
+            f'{escape(home_name)} {_pct(pred.home_win_prob)} · '
+            f'Draw {_pct(pred.draw_prob)} · '
+            f'{escape(away_name)} {_pct(pred.away_win_prob)}'),
+        row("Goals O/U 2.5",
+            f'Over {_pct(o25)} · Under {_pct(1 - o25 if o25 is not None else None)}'),
+        row("Both score",
+            f'Yes {_pct(btts)} · No {_pct(1 - btts if btts is not None else None)}'),
+        row("Expected goals",
+            f'{escape(home_name)} {pred.home_expected_goals:.2f} · '
+            f'{escape(away_name)} {pred.away_expected_goals:.2f}'),
+    ]
+    if v.tier in ("value", "capped") and v.label:
+        book = f' ({escape(v.bookmaker)})' if v.bookmaker else ""
+        rows.append(row(
+            "Verdict pick",
+            f'{escape(v.label)} @ {v.best_odds:.2f}{book} — '
+            f'model {_pct(v.model_prob)} vs market {_pct(v.implied_prob)} '
+            f'(edge {v.edge:+.1%})'))
+    return "".join(rows)
 
 
 def _render_todays_matches() -> None:
-    """Compact upcoming-fixtures strip for Tab 1 — today + the next 2 days in
-    US Eastern, each row: flag · teams · ET kickoff · model lean · best price.
-    Today's games are highlighted. Replaces the former large match cards (WC-08-04).
-    """
+    """Decision-first upcoming-fixtures strip for Tab 1 — today + the next 2 days
+    in US Eastern. Each row leads with one colour-tiered shadow verdict (value /
+    re-check / no-edge) from the model's best pick; full probabilities sit behind
+    a per-fixture expander. Today's games are highlighted (DF-04)."""
     _section_header("Upcoming Fixtures")
 
     today_et = datetime.now(EASTERN).date()
@@ -151,7 +192,13 @@ def _render_todays_matches() -> None:
             st.info("No World Cup matches in the next 3 days.")
             return
 
-        st.caption(f"Next 3 days · times in ET · {len(upcoming)} fixtures")
+        st.caption(
+            f"Next 3 days · times in ET · {len(upcoming)} fixtures · "
+            "verdicts are shadow (track-only) — decision-support, not staked"
+        )
+
+        # Edge band/ceiling loaded once; the verdict reuses the value finder's math.
+        cfg = _load_betting_config()
 
         for m, ed_date in upcoming:
             home, away = m.home_team, m.away_team
@@ -161,8 +208,7 @@ def _render_todays_matches() -> None:
             away_flag = render_flag(away.fifa_code) if away else ""
             kickoff = format_kickoff_et(m.date, m.kickoff_time)
             pred = next((p for p in m.predictions if p.model_name == MODEL_NAME), None)
-            lean = _model_lean_html(pred)
-            price = _best_price_html(m, home_name, away_name, pred)
+            verdict = classify_fixture_verdict(pred, list(m.odds), home_name, away_name, cfg)
 
             is_today = ed_date == today_et
             bg = SURFACE if is_today else "transparent"
@@ -170,17 +216,21 @@ def _render_todays_matches() -> None:
 
             st.markdown(
                 f'<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;'
-                f'padding:6px 10px;margin-bottom:4px;background:{bg};'
+                f'padding:6px 10px;margin-bottom:2px;background:{bg};'
                 f'border-left:3px solid {accent};border-radius:4px;font-size:0.85rem;">'
                 f'<span style="color:{TEXT_DIM};min-width:96px;font-size:0.72rem;">{kickoff}</span>'
                 f'<span style="flex:1;min-width:160px;">{home_flag} {escape(home_name)} '
                 f'<span style="color:{TEXT_DIM};font-size:0.75rem;">v</span> '
                 f'{escape(away_name)} {away_flag}</span>'
-                f'<span style="text-align:right;font-size:0.78rem;">{lean}</span>'
-                f'<span style="min-width:64px;text-align:right;color:{TEXT_DIM};font-size:0.75rem;">{price}</span>'
+                f'<span style="flex:1;min-width:180px;text-align:right;">{_verdict_chip_html(verdict)}</span>'
                 f'</div>',
                 unsafe_allow_html=True,
             )
+            with st.expander("Model probabilities", expanded=False):
+                st.markdown(
+                    _verdict_detail_html(pred, verdict, home_name, away_name),
+                    unsafe_allow_html=True,
+                )
 
 
 # ============================================================================

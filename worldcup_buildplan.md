@@ -1559,7 +1559,7 @@ flow through the single component. League crests aligned to the same treatment i
 with `object-fit:contain` (no crop for transparent crests, no border). Verified with a real
 before/after render. 785/785 tests; Gate 2 CLEAN, Gate 3 APPROVED.
 
-### DF-04 — Verdict-Led WC Fixtures
+### DF-04 — Verdict-Led WC Fixtures ✅ DONE
 
 **Type:** UI
 **Depends on:** DF-01, DF-03
@@ -1572,10 +1572,23 @@ before/after render. 785/785 tests; Gate 2 CLEAN, Gate 3 APPROVED.
 - Reads the existing value-finder output; no model/value math changes.
 
 **Acceptance Criteria:**
-- [ ] Each fixture shows one colour-tiered verdict (value / capped / no-edge) at a glance
-- [ ] Selection, edge, best price on the row; full probabilities on tap
-- [ ] Edge > ceiling shown as "re-check / likely model noise", not as value
-- [ ] WC verdicts framed as shadow ("track"); decision-support only
+- [x] Each fixture shows one colour-tiered verdict (value / capped / no-edge) at a glance
+- [x] Selection, edge, best price on the row; full probabilities on tap
+- [x] Edge > ceiling shown as "re-check / likely model noise", not as value
+- [x] WC verdicts framed as shadow ("track"); decision-support only
+
+**Result:** New additive `classify_fixture_verdict()` + batch `wc_fixture_verdicts()` in
+`value_finder.py` reuse the EXACT edge math (`edge = model_prob - 1/odds`) and config
+thresholds (`edge_threshold` 0.03, `max_actionable_edge` 0.15, `markets` [h2h, totals]) as
+`find_wc_value_bets` but KEEP the two cases the finder discards — over-ceiling ("capped") and
+sub-threshold ("none") — so every fixture gets a tier. `find_wc_value_bets` is byte-for-byte
+unchanged (git diff: 0 deletions; value/staking path provably untouched). Value takes
+precedence over capped. The strip leads with a colour-tiered chip
+(`_verdict_chip_html`: green ✓ value / yellow ⚠ "re-check · likely model noise" / dim — no
+edge) and full probabilities sit behind a per-fixture `st.expander` (`_verdict_detail_html`:
+1X2 / O/U 2.5 / BTTS / xG / pick model-vs-market). Caption reframed shadow/"track". Removed
+the now-dead `_model_lean_html`/`_best_price_html`. Verified with a real value/capped/no-edge
+render. 795/795 tests; Gate 2 CLEAN, Gate 3 APPROVED.
 
 ### DF-05 — Verdict-Led League Fixtures (trust-weighted)
 

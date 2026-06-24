@@ -44,7 +44,9 @@ class TestPageStructure:
         assert expected <= FUNCS, f"missing renderers: {expected - FUNCS}"
 
     def test_tab1_helpers_present(self):
-        assert {"_model_lean_html", "_best_price_html",
+        # DF-04: the row leads with a colour-tiered verdict chip + an expander of
+        # full probabilities, replacing the old inline lean/price helpers.
+        assert {"_verdict_chip_html", "_verdict_detail_html",
                 "_flag_for_name", "_team_fifa_map"} <= FUNCS
 
 
@@ -65,8 +67,10 @@ class TestIntegrationWiring:
         assert "format_kickoff_et" in IMPORTED
         assert "eastern_date" in IMPORTED
 
-    def test_canonical_selection_imported(self):
-        assert "_canonical_selection" in IMPORTED
+    def test_verdict_classifier_imported(self):
+        # DF-04: the strip delegates canonicalization + edge math to the value
+        # finder's verdict classifier rather than importing _canonical_selection.
+        assert "classify_fixture_verdict" in IMPORTED
 
 
 class TestNoN1Queries:

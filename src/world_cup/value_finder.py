@@ -139,6 +139,182 @@ def _compute_kelly(model_prob: float, odds: float, fraction: float = 0.25) -> fl
     return round(full_kelly * fraction, 6)
 
 
+# ============================================================================
+# Decision-first fixture verdicts (DF-04)
+# ============================================================================
+# A single headline verdict per fixture for the at-a-glance strip. This reuses
+# the EXACT edge math and config thresholds of find_wc_value_bets — the only
+# difference is it KEEPS the two cases find_wc_value_bets discards: edges over
+# the actionable ceiling ("capped" → likely model noise) and sub-threshold
+# fixtures ("none"). So the value/staking path is byte-for-byte unchanged; this
+# is a read-only classifier layered on top, so the strip can explain EVERY
+# fixture (DF-01 precedent — don't touch the value path, build alongside it).
+
+# Human-readable labels for the non-team canonical selections. home/away resolve
+# to the actual team names at classification time.
+_VERDICT_STATIC_LABELS = {
+    "draw": "Draw",
+    "over": "Over 2.5", "under": "Under 2.5",
+    "yes": "BTTS Yes", "no": "BTTS No",
+}
+
+
+@dataclass
+class WCFixtureVerdict:
+    """One headline shadow verdict for a fixture (DF-04).
+
+    tier:
+      "value"  — best edge sits within [edge_threshold, max_actionable_edge]:
+                 an actionable shadow pick.
+      "capped" — best edge exceeds the actionable ceiling: surfaced as
+                 "re-check / likely model noise", NEVER as value (the same
+                 guardrail find_wc_value_bets uses to drop these from staking).
+      "none"   — no selection clears the edge threshold (or no pred/odds).
+    """
+    tier: str
+    market_type: str | None = None
+    selection: str | None = None          # canonical key (home/draw/over/yes/…)
+    label: str | None = None              # human label ("Brazil", "Over 2.5")
+    edge: float | None = None
+    model_prob: float | None = None
+    implied_prob: float | None = None
+    best_odds: float | None = None
+    bookmaker: str | None = None
+
+
+def _verdict_selection_label(canon: str, home_name: str, away_name: str) -> str:
+    """Human label for a canonical selection (team names for home/away)."""
+    if canon == "home":
+        return home_name
+    if canon == "away":
+        return away_name
+    return _VERDICT_STATIC_LABELS.get(canon, canon)
+
+
+def _model_prob_for(pred, market_type: str, canon: str) -> float | None:
+    """Model probability for a canonical (market, selection), mirroring
+    find_wc_value_bets' MARKET_TO_PROB handling (incl. the computed complements
+    for Under 2.5 and BTTS No). Returns None when the value isn't available."""
+    prob_attr = MARKET_TO_PROB.get((market_type, canon))
+    if prob_attr is None:
+        return None
+    if prob_attr == "_under_25_prob":
+        return (1.0 - pred.over_25_prob) if pred.over_25_prob is not None else None
+    if prob_attr == "_btts_no_prob":
+        return (1.0 - pred.btts_prob) if pred.btts_prob is not None else None
+    return getattr(pred, prob_attr, None)
+
+
+def classify_fixture_verdict(
+    pred,
+    odds_rows,
+    home_name: str,
+    away_name: str,
+    cfg: dict | None = None,
+) -> WCFixtureVerdict:
+    """Best single shadow pick for one fixture + its tier (DF-04).
+
+    Pure (no DB): give it a WCPrediction and that match's WCOdds rows. It scores
+    every priceable selection with the same edge = model_prob - implied_prob the
+    value finder uses, then classifies the best one:
+      - an actionable edge in [threshold, ceiling] → "value"
+      - otherwise the largest over-ceiling edge → "capped" (likely model noise)
+      - otherwise → "none".
+    Value takes precedence over capped: an actionable bet is the headline; capped
+    only surfaces when there is no actionable edge but the model still flags a
+    (too-large-to-trust) gap, which is exactly what to "re-check".
+    """
+    if cfg is None:
+        cfg = _load_betting_config()
+    threshold = cfg.get("edge_threshold", 0.03)
+    max_edge = cfg.get("max_actionable_edge", 0.15)
+    supported = set(cfg.get("markets", ["h2h", "totals", "spreads"]))
+
+    if not pred or not odds_rows:
+        return WCFixtureVerdict(tier="none")
+
+    # Best price per (market, canonical selection) — same reduction as the finder.
+    best_per: dict[tuple[str, str], WCOdds] = {}
+    for o in odds_rows:
+        canon = _canonical_selection(
+            o.market_type, o.selection, home_name, away_name, o.point
+        )
+        if canon is None:
+            continue
+        key = (o.market_type, canon)
+        if key not in best_per or o.odds_decimal > best_per[key].odds_decimal:
+            best_per[key] = o
+
+    # Edge for every priceable, supported selection (no threshold filter yet).
+    scored = []
+    for (mkt, canon), best in best_per.items():
+        if mkt not in supported or best.odds_decimal <= 1.0:
+            continue
+        model_prob = _model_prob_for(pred, mkt, canon)
+        if model_prob is None:
+            continue
+        implied = 1.0 / best.odds_decimal
+        scored.append((model_prob - implied, mkt, canon, model_prob, implied, best))
+
+    if not scored:
+        return WCFixtureVerdict(tier="none")
+
+    actionable = [s for s in scored if threshold <= s[0] <= max_edge]
+    over_ceiling = [s for s in scored if s[0] > max_edge]
+
+    if actionable:
+        edge, mkt, canon, mp, ip, best = max(actionable, key=lambda s: s[0])
+        tier = "value"
+    elif over_ceiling:
+        edge, mkt, canon, mp, ip, best = max(over_ceiling, key=lambda s: s[0])
+        tier = "capped"
+    else:
+        return WCFixtureVerdict(tier="none")
+
+    return WCFixtureVerdict(
+        tier=tier,
+        market_type=mkt,
+        selection=canon,
+        label=_verdict_selection_label(canon, home_name, away_name),
+        edge=round(edge, 6),
+        model_prob=round(mp, 6),
+        implied_prob=round(ip, 6),
+        best_odds=best.odds_decimal,
+        bookmaker=best.bookmaker,
+    )
+
+
+def wc_fixture_verdicts(match_ids=None) -> dict[int, WCFixtureVerdict]:
+    """Headline verdict per upcoming fixture, keyed by match_id (DF-04).
+
+    One eager-loaded pass over upcoming matches (optionally restricted to
+    ``match_ids``); no N+1. Read-only — does not write or alter value bets.
+    """
+    cfg = _load_betting_config()
+    out: dict[int, WCFixtureVerdict] = {}
+    with get_session() as session:
+        q = (
+            select(WCMatch)
+            .where(WCMatch.status != "finished")
+            .options(
+                joinedload(WCMatch.home_team),
+                joinedload(WCMatch.away_team),
+                joinedload(WCMatch.predictions),
+                joinedload(WCMatch.odds),
+            )
+        )
+        if match_ids is not None:
+            q = q.where(WCMatch.id.in_(list(match_ids)))
+        for m in session.execute(q).unique().scalars().all():
+            pred = next(
+                (p for p in m.predictions if p.model_name == MODEL_NAME), None
+            )
+            home = m.home_team.name if m.home_team else "?"
+            away = m.away_team.name if m.away_team else "?"
+            out[m.id] = classify_fixture_verdict(pred, list(m.odds), home, away, cfg)
+    return out
+
+
 def find_wc_value_bets(
     edge_threshold: float | None = None,
     kelly_fraction: float | None = None,
