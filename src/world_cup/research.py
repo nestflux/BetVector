@@ -705,3 +705,134 @@ def build_book_comparison(match_id: int, cfg: dict | None = None) -> dict | None
 
     info["markets"] = markets
     return info
+
+
+# ============================================================================
+# DF-09 — Line movement for backable selections (the CLV story)
+# ============================================================================
+# WCOdds keeps only the opening price (frozen on first insert) and the latest
+# price — there is no per-snapshot tick history — so a backable selection's
+# movement is the handful of real prices we actually hold, all on one consistent
+# best-available-across-books basis: the opening line, the entry we logged (the
+# best price when the value bet was found), the current best line, and the
+# closing line frozen at kickoff. CLV (entry vs close) is the headline. Read-only
+# over stored odds + stored value bets — no model/value change (shadow).
+
+# A stored value bet's (market_type, canonical selection) → (research canon key so
+# we can pull its prices out of _collect, friendly market label). The WC value
+# finder only ever bets the O/U 2.5 line (value_finder.MARKET_TO_PROB), so totals
+# map straight to the 2.5 selections.
+_VB_TO_CANON = {
+    ("h2h", "home"): ("home", "Match result"),
+    ("h2h", "draw"): ("draw", "Match result"),
+    ("h2h", "away"): ("away", "Match result"),
+    ("totals", "over"): ("over_2.5", "Goals (O/U 2.5)"),
+    ("totals", "under"): ("under_2.5", "Goals (O/U 2.5)"),
+    ("btts", "yes"): ("btts_yes", "Both teams to score"),
+    ("btts", "no"): ("btts_no", "Both teams to score"),
+}
+
+
+def _best_price(prices: list) -> float | None:
+    """Best (longest) price in a list, or None when empty — the bettor-friendly
+    pick, matching how entry/close are defined (best available at that time)."""
+    return max(prices) if prices else None
+
+
+def build_movement(match_id: int) -> dict | None:
+    """DF-09 — line movement for each backable selection on a WC match (the CLV
+    story). For every value bet logged on the match, trace its price on one
+    consistent best-available-across-books basis — the opening line, the entry we
+    logged, the current best line, and the closing line frozen at kickoff — plus
+    the stored CLV (entry vs close; positive = we beat the close). WCOdds keeps
+    only the opening + latest price (no tick history), so ``points`` is the real
+    snapshots we hold, in time order, not a dense series.
+
+    Read-only over stored odds + value bets; the WC system stays shadow /
+    decision-support. Returns ``None`` if the match doesn't exist; ``selections``
+    is ``[]`` when nothing has been flagged backable. Selections are ordered by
+    CLV (strongest 'beat the close' first; unknown CLV last)."""
+    with get_session() as session:
+        m = session.execute(
+            select(WCMatch)
+            .where(WCMatch.id == match_id)
+            .options(
+                joinedload(WCMatch.home_team),
+                joinedload(WCMatch.away_team),
+                joinedload(WCMatch.odds),
+                joinedload(WCMatch.value_bets),
+            )
+        ).unique().scalar_one_or_none()
+        if not m:
+            return None
+
+        home = m.home_team.name if m.home_team else "?"
+        away = m.away_team.name if m.away_team else "?"
+        data = _collect(m.odds, home, away)
+        # Snapshot the value bets to plain dicts while the session is open, so the
+        # rest runs detached (mirrors build_book_comparison's session handling).
+        vbs = [{
+            "market_type": vb.market_type,
+            "selection": vb.selection,
+            "best_odds": vb.best_odds,
+            "bookmaker": vb.bookmaker,
+            "closing_odds": vb.closing_odds,
+            "clv": vb.clv,
+            "edge": vb.edge,
+            "model_prob": vb.model_prob,
+        } for vb in m.value_bets]
+        info = {
+            "match_id": match_id,
+            "home": home,
+            "away": away,
+            "home_fifa": m.home_team.fifa_code if m.home_team else None,
+            "away_fifa": m.away_team.fifa_code if m.away_team else None,
+            "date": m.date,
+            "kickoff_time": m.kickoff_time,
+            "status": m.status,
+        }
+
+    # h2h carries the team name; every other selection uses its short label.
+    labels = dict(_SHORT_LABELS)
+    labels["home"], labels["away"], labels["draw"] = home, away, "Draw"
+
+    selections = []
+    for vb in vbs:
+        mapped = _VB_TO_CANON.get((vb["market_type"], vb["selection"]))
+        if not mapped:
+            continue                          # a market we don't trace (defensive)
+        canon, market_label = mapped
+        d = data.get(canon) or {}
+        open_price = _best_price(d.get("open") or [])
+        cur_odds, cur_book = d.get("best", (0.0, ""))
+        current = cur_odds if cur_odds > 1.0 else None
+        entry = vb["best_odds"]
+        close = vb["closing_odds"]
+
+        # Real price snapshots in time order; skip any stage we don't hold.
+        points = [(stage, price) for stage, price in (
+            ("Open", open_price), ("Entry", entry),
+            ("Current", current), ("Close", close),
+        ) if price]
+
+        selections.append({
+            "market": market_label,
+            "selection": labels.get(canon, canon),
+            "canon": canon,
+            "open": open_price,
+            "entry": entry,
+            "entry_book": vb["bookmaker"],
+            "current": current,
+            "current_book": cur_book or None,
+            "close": close,
+            "clv": vb["clv"],
+            "edge": vb["edge"],
+            "model_prob": vb["model_prob"],
+            "points": points,
+        })
+
+    # Best CLV first (strongest beat-the-close story); unknown CLV sinks last.
+    selections.sort(key=lambda s: (s["clv"] is None, -(s["clv"] or 0.0)))
+    info["selections"] = selections
+    info["has_movement"] = any(len(s["points"]) >= 2 for s in selections)
+    return info

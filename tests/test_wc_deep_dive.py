@@ -1,13 +1,14 @@
-"""DF-08 — WC deep-dive view structural integration test.
+"""DF-08 / DF-09 — WC deep-dive view structural integration test.
 
 The deep-dive page module resolves the match id and renders at import time
 (same pattern as match_detail.py / world_cup.py), so we verify its structure via
 AST rather than executing it. The pure data layer it draws — model-vs-every-book
-(``build_book_comparison``) and the 7x7 matrix (``scoreline_matrix_from_lambdas``)
-— is unit-tested with real data in test_wc_research.py. Here we confirm the view
-is wired: the section renderers exist, the match id is resolved from session_state
-+ query param, the heatmap and model-vs-books sections are present, dynamic HTML
-is escaped, empty states are handled, and the WC hub + nav route into this page.
+(``build_book_comparison``), the 7x7 matrix (``scoreline_matrix_from_lambdas``),
+and line movement (``build_movement``) — is unit-tested with real data in
+test_wc_research.py. Here we confirm the view is wired: the section renderers
+exist, the match id is resolved from session_state + query param, the heatmap /
+model-vs-books / movement / lineups sections are present, dynamic HTML is escaped,
+empty states are handled, and the WC hub + nav route into this page.
 """
 
 import ast
@@ -106,6 +107,66 @@ class TestEntryWiring:
 
     def test_page_registered_in_nav(self):
         assert '"views/wc_deep_dive.py"' in DASH_SRC
+
+
+class TestMovement:
+    def test_movement_renderers_present(self):
+        expected = {"_render_movement", "_movement_chart", "_movement_table_html",
+                    "_price_td", "_clv_td"}
+        assert expected <= DD_FUNCS, f"missing: {expected - DD_FUNCS}"
+
+    def test_build_movement_imported(self):
+        # The view draws the unit-tested pure layer, not its own CLV math.
+        assert "build_movement" in DD_IMPORTS
+
+    def test_chart_marks_entry_and_close(self):
+        # The movement chart is a real plotly chart; entry + close are the
+        # emphasised marker stages (AC: price history with entry + close markers).
+        src = _func_src(DD_TREE, DD_SRC, "_render_movement")
+        assert "st.plotly_chart(" in src
+        assert "Entry" in DD_SRC and "Close" in DD_SRC
+
+    def test_empty_state_when_nothing_backable(self):
+        assert "st.info(" in _func_src(DD_TREE, DD_SRC, "_render_movement")
+
+    def test_clv_cell_signed_and_escaped(self):
+        # CLV cell colours on the sign (green = beat the close, red = didn't).
+        clv = _func_src(DD_TREE, DD_SRC, "_clv_td")
+        assert "GREEN" in clv and "RED" in clv
+        # The selection label flows into HTML — it must be escaped.
+        assert "escape(" in _func_src(DD_TREE, DD_SRC, "_movement_table_html")
+
+    def test_wired_into_deep_dive(self):
+        assert "_render_movement(" in _func_src(DD_TREE, DD_SRC, "_render_deep_dive")
+
+
+class TestLineups:
+    def test_lineup_renderers_present(self):
+        assert {"_render_lineups", "_lineup_card_html"} <= DD_FUNCS
+
+    def test_reuses_lineup_signal(self):
+        # The SAME signal that powers the research-card flag — no divergent logic.
+        assert "lineup_signal" in DD_IMPORTS
+        assert "lineup_signal(" in _func_src(DD_TREE, DD_SRC, "_render_lineups")
+
+    def test_both_xis_and_formation(self):
+        card = _func_src(DD_TREE, DD_SRC, "_lineup_card_html")
+        assert "Formation" in card
+        assert 'team.get("xi"' in card          # the 11 starters
+        assert "escape(" in card                # player + team names escaped
+
+    def test_rotation_flag_surfaced(self):
+        # Decision-support framing: heavy rotation is flagged + a warning shown.
+        assert "heavy_rotation" in DD_SRC
+        assert "st.warning(" in _func_src(DD_TREE, DD_SRC, "_render_lineups")
+
+    def test_not_announced_graceful(self):
+        src = _func_src(DD_TREE, DD_SRC, "_render_lineups")
+        assert "st.info(" in src
+        assert "not announced" in DD_SRC.lower()
+
+    def test_wired_into_deep_dive(self):
+        assert "_render_lineups(" in _func_src(DD_TREE, DD_SRC, "_render_deep_dive")
 
 
 def _func_src(tree: ast.AST, source: str, name: str) -> str:

@@ -7,17 +7,22 @@ WCOdds). Reached from the World Cup hub: the upcoming-fixtures strip and the
 research card set ``st.session_state["wc_deep_dive_match_id"]`` and switch here;
 the id is also synced to ``?wc_match_id=<id>`` so the URL stays shareable.
 
-Sections (this issue — DF-08):
+Sections:
 1. Match header — flags, names, date, kickoff (ET), result if finished.
 2. Scoreline matrix — the model's 7x7 Poisson grid, rebuilt from the stored
    expected goals (wc_predictions stores lambda, not the matrix).
 3. Model vs every book — per market (1X2 / O/U 1.5·2.5·3.5 / BTTS), the model
    probability beside EVERY pulled book's own de-vigged line, with the model edge
    highlighted and the best price flagged (line shopping).
+4. Line movement & CLV (DF-09) — for each backable selection, its best-available
+   price across the snapshots we hold (open → entry → current → close) with the
+   entry and close marked, plus the stored CLV (did we beat the close?).
+5. Confirmed lineups (DF-09) — both XIs + formations + the rotation flag, reusing
+   the same lineup_signal that powers the research card.
 
-DF-09 adds line movement + lineups; DF-10 adds qualification impact + the
-Bayesian shadow read. The World Cup model is SHADOW / decision-support only —
-nothing here changes the model or any value bet.
+DF-10 adds qualification impact + the Bayesian shadow read. The World Cup model
+is SHADOW / decision-support only — nothing here changes the model or any value
+bet.
 """
 
 from html import escape
@@ -30,9 +35,10 @@ from sqlalchemy.orm import aliased
 
 from src.database.db import get_session
 from src.world_cup.flags import render_flag
+from src.world_cup.lineups import lineup_signal
 from src.world_cup.models import WCMatch, WCTeam
 from src.world_cup.predictor import scoreline_matrix_from_lambdas
-from src.world_cup.research import build_book_comparison
+from src.world_cup.research import build_book_comparison, build_movement
 from src.world_cup.timeutil import format_kickoff_et
 
 # Design system (CLAUDE.md Rule 5) — defined locally; the WC hub page runs main()
@@ -43,6 +49,7 @@ TEXT = "#E6EDF3"
 TEXT_DIM = "#8B949E"
 GREEN = "#3FB950"
 YELLOW = "#D29922"
+RED = "#F85149"
 BORDER = "#30363D"
 
 # Inline pill marking model-generated numbers (mirrors match_detail.py).
@@ -259,6 +266,213 @@ def _render_model_vs_books(comp: dict) -> None:
 
 
 # ============================================================================
+# Section 4 — Line movement & CLV (DF-09)
+# ============================================================================
+# WCOdds holds only the opening + latest price (no tick history), so a backable
+# selection's movement is the few real snapshots we have, all on one consistent
+# best-available basis: open → entry (logged) → current → close (frozen at
+# kickoff). The chart marks entry + close; the table carries the CLV (entry vs
+# close, +ve = we beat the close). All read-only / shadow — nothing is staked.
+
+# Marker per snapshot: entry + close (the decision points) are large/solid; the
+# context points (open, current) are smaller and hollow.
+_MV_SYMBOL = {"Open": "circle-open", "Entry": "circle",
+              "Current": "circle-open", "Close": "diamond"}
+_MV_SIZE = {"Open": 9, "Entry": 14, "Current": 9, "Close": 14}
+_MV_ORDER = ["Open", "Entry", "Current", "Close"]
+# Distinct line colours per selection (design-system green/blue/amber/violet/…).
+_MV_PALETTE = (GREEN, "#58A6FF", YELLOW, "#BC8CFF", "#F778BA", "#79C0FF")
+
+
+def _movement_chart(selections: list[dict]) -> go.Figure:
+    """One line per backable selection across the captured snapshots (Open →
+    Entry → Current → Close), with the entry and close points emphasised. The
+    shape is the CLV story: a line drifting up after entry means the price we beat
+    got longer; the close marker is where it settled."""
+    fig = go.Figure()
+    for i, s in enumerate(selections):
+        pts = s["points"]
+        if len(pts) < 2:               # a single point isn't a movement line
+            continue
+        xs = [stage for stage, _ in pts]
+        ys = [price for _, price in pts]
+        colour = _MV_PALETTE[i % len(_MV_PALETTE)]
+        fig.add_trace(go.Scatter(
+            x=xs, y=ys, mode="lines+markers", name=s["selection"],
+            line=dict(color=colour, width=2),
+            marker=dict(
+                color=colour,
+                symbol=[_MV_SYMBOL.get(x, "circle") for x in xs],
+                size=[_MV_SIZE.get(x, 9) for x in xs],
+                line=dict(color=colour, width=1.5),
+            ),
+            hovertemplate=("%{x}: %{y:.2f}<extra>"
+                           + escape(s["selection"]) + "</extra>"),
+        ))
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="JetBrains Mono, monospace", color=TEXT_DIM, size=12),
+        xaxis=dict(categoryorder="array", categoryarray=_MV_ORDER,
+                   showgrid=False, title=""),
+        yaxis=dict(title="Decimal odds", gridcolor=BORDER, zeroline=False),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0,
+                    font=dict(size=11)),
+        margin=dict(l=55, r=20, t=46, b=28), height=360,
+    )
+    return fig
+
+
+def _price_td(value, mark: bool = False) -> str:
+    """One price cell; em-dash when we don't hold that snapshot. ``mark`` bolds
+    the decision points (entry + close)."""
+    if not value:
+        return (f'<td style="text-align:center;padding:5px 8px;color:{TEXT_DIM};'
+                f'border-bottom:1px solid {BORDER};">—</td>')
+    weight = "700" if mark else "400"
+    return (f'<td style="text-align:center;padding:5px 8px;color:{TEXT};'
+            f'font-weight:{weight};font-family:JetBrains Mono,monospace;'
+            f'font-size:0.84rem;border-bottom:1px solid {BORDER};">{value:.2f}</td>')
+
+
+def _clv_td(clv) -> str:
+    """CLV cell: +ve green (beat the close), −ve red, 0 dim; 'awaiting close'
+    until the closing line is captured near kickoff."""
+    if clv is None:
+        return (f'<td style="text-align:center;padding:5px 8px;color:{TEXT_DIM};'
+                f'font-size:0.78rem;border-bottom:1px solid {BORDER};">awaiting close</td>')
+    col = GREEN if clv > 0 else (RED if clv < 0 else TEXT_DIM)
+    return (f'<td style="text-align:center;padding:5px 8px;color:{col};font-weight:700;'
+            f'font-family:JetBrains Mono,monospace;font-size:0.84rem;'
+            f'border-bottom:1px solid {BORDER};">{clv:+.1%}</td>')
+
+
+def _movement_table_html(data: dict) -> str:
+    """Pure HTML: one row per backable selection — its open / entry / current /
+    close price (entry + close bolded as the decision points) and the stored CLV.
+    Returned (not drawn) so it stays testable + renderable."""
+    headers = ("Open", "Entry", "Current", "Close", "CLV")
+    head = (
+        f'<thead><tr><th style="text-align:left;padding:6px 8px;color:{TEXT_DIM};'
+        f'font-size:0.78rem;">Backable selection</th>'
+        + "".join(
+            f'<th style="text-align:center;padding:6px 8px;color:{TEXT_DIM};'
+            f'font-size:0.78rem;">{h}</th>' for h in headers)
+        + '</tr></thead>'
+    )
+    rows = []
+    for s in data["selections"]:
+        label = escape(f'{s["selection"]} · {s["market"]}')
+        rows.append(
+            f'<tr><td style="padding:5px 8px;color:{TEXT};font-size:0.82rem;'
+            f'border-bottom:1px solid {BORDER};">{label}</td>'
+            f'{_price_td(s["open"])}{_price_td(s["entry"], mark=True)}'
+            f'{_price_td(s["current"])}{_price_td(s["close"], mark=True)}'
+            f'{_clv_td(s["clv"])}</tr>'
+        )
+    return (
+        f'<div style="border:1px solid {BORDER};border-radius:8px;overflow:auto;'
+        f'margin-bottom:8px;"><table style="width:100%;border-collapse:collapse;">'
+        f'{head}<tbody>{"".join(rows)}</tbody></table></div>'
+    )
+
+
+def _render_movement(match_id: int) -> None:
+    st.markdown('<div class="bv-section-header">Line movement &amp; CLV</div>',
+                unsafe_allow_html=True)
+    data = build_movement(match_id)
+    if not data or not data["selections"]:
+        st.info(
+            "No backable selections were flagged on this match, so there's no line "
+            "to track. The World Cup model is shadow / decision-support — it logs a "
+            "shadow bet only when it sees value, and only those appear here."
+        )
+        return
+    st.caption(
+        "Each backable selection's best available price at the snapshots we hold — "
+        "the opening line, the entry we logged, the current best line, and the "
+        "closing line frozen at kickoff (entry and close are the marked points). "
+        "CLV is the headline: entry vs close, positive means we beat the close. WC "
+        "odds keep only the opening and latest price, so these are real snapshots, "
+        "not a tick-by-tick history. Shadow / decision-support."
+    )
+    if data["has_movement"]:
+        st.plotly_chart(_movement_chart(data["selections"]),
+                        use_container_width=True, config={"displayModeBar": False})
+    st.markdown(_movement_table_html(data), unsafe_allow_html=True)
+
+
+# ============================================================================
+# Section 5 — Confirmed lineups (DF-09)
+# ============================================================================
+# Reuses lineups.lineup_signal — the SAME signal that powers the research-card
+# rotation flag (world_cup.py:_render_lineup_flag) — so the deep dive and the card
+# never disagree. Decision-support only: a confirmed XI / rotation read is a
+# hypothesis to re-check, never a model input.
+
+def _lineup_card_html(team: dict) -> str:
+    """Pure HTML card for one team's confirmed XI: team · formation · rotation note
+    over the 11 starters. Heavy rotation reads amber (a flag to re-check), a small
+    change count reads dim. All names escaped."""
+    formation = escape(team.get("formation") or "—")
+    changes = team.get("changes")
+    note = ""
+    if team.get("heavy_rotation"):
+        note = (f'<div style="color:{YELLOW};font-weight:700;font-size:0.78rem;'
+                f'margin-bottom:2px;">⚠️ heavy rotation · {int(changes)} changes '
+                f'vs last XI</div>')
+    elif changes is not None:
+        plural = "s" if changes != 1 else ""
+        note = (f'<div style="color:{TEXT_DIM};font-size:0.78rem;margin-bottom:2px;">'
+                f'{int(changes)} change{plural} vs last XI</div>')
+    xi_html = "".join(
+        f'<li style="padding:2px 0;color:{TEXT};font-size:0.84rem;">{escape(name)}</li>'
+        for name in team.get("xi", [])
+    )
+    return (
+        f'<div style="border:1px solid {BORDER};border-radius:8px;padding:10px 12px;'
+        f'background:{SURFACE};">'
+        f'<div style="color:{TEXT};font-weight:700;font-size:0.95rem;">'
+        f'{escape(team["team"])}</div>'
+        f'<div style="color:{TEXT_DIM};font-family:JetBrains Mono,monospace;'
+        f'font-size:0.8rem;margin-bottom:4px;">Formation {formation}</div>'
+        f'{note}<ul style="list-style:none;padding:0;margin:6px 0 0;">{xi_html}</ul>'
+        f'</div>'
+    )
+
+
+def _render_lineups(match_id: int) -> None:
+    st.markdown('<div class="bv-section-header">Confirmed lineups</div>',
+                unsafe_allow_html=True)
+    sig = lineup_signal(match_id)
+    if not sig or not any(t.get("status") == "announced" for t in sig["teams"]):
+        st.info(
+            "🔒 Lineups not announced yet — ESPN posts the confirmed XI about an "
+            "hour before kickoff. Check back closer to the match."
+        )
+        return
+    st.caption(
+        "Confirmed starting XIs and formations. A heavy-rotation flag is a "
+        "hypothesis to re-check — a rested XI can undercut a value lean. "
+        "Decision-support only; the model and value bets are unchanged."
+    )
+    teams = sig["teams"]
+    heavy = False
+    for col, t in zip(st.columns(len(teams)), teams):
+        with col:
+            if t.get("status") != "announced":
+                st.markdown(f'**{escape(t["team"])}**')
+                st.caption("XI not announced yet")
+                continue
+            st.markdown(_lineup_card_html(t), unsafe_allow_html=True)
+            heavy = heavy or bool(t.get("heavy_rotation"))
+    if heavy:
+        st.warning(
+            "⚠️ Heavy rotation flagged — a much-changed XI can invalidate a value "
+            "pick. A hypothesis to re-check, not a model signal."
+        )
+
+
+# ============================================================================
 # Section 1 — Header
 # ============================================================================
 
@@ -357,6 +571,10 @@ def _render_deep_dive(match_id: int) -> None:
     _render_heatmap(comp)
     st.divider()
     _render_model_vs_books(comp)
+    st.divider()
+    _render_movement(match_id)
+    st.divider()
+    _render_lineups(match_id)
 
 
 # ============================================================================

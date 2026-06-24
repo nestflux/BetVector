@@ -1737,10 +1737,31 @@ Real heatmap + model-vs-books PNG on owner Desktop. **DF-09/DF-10 extend this sa
 - Both confirmed XIs + formations + the rotation flag (reuse `lineup_signal`).
 
 **Acceptance Criteria:**
-- [ ] Movement chart shows price history with entry + close markers
-- [ ] Both lineups + formations rendered when available; graceful "not announced"
-- [ ] Rotation flag surfaced (decision-support framing)
-- [ ] No model/value change
+- [x] Movement chart shows price history with entry + close markers
+- [x] Both lineups + formations rendered when available; graceful "not announced"
+- [x] Rotation flag surfaced (decision-support framing)
+- [x] No model/value change
+
+**Result:** ✅ DONE — Two sections added to the same deep-dive page
+(`src/delivery/views/wc_deep_dive.py`), fed by one new pure data layer
+(`research.build_movement`) and the existing `lineups.lineup_signal`. **Line
+movement & CLV:** `WCOdds` keeps only the opening + latest price (no per-snapshot
+tick history), so each *backable* selection (every logged `WCValueBet`) is traced
+on one consistent best-available-across-books basis — the opening line, the entry
+we logged (`best_odds`), the current best line, and the closing line frozen at
+kickoff (`closing_odds`) — with the entry + close marked on a Plotly line
+(`_movement_chart`) and a precise `_movement_table_html` carrying the stored CLV
+(`clv = (1/close) − (1/entry)`; +ve green = we beat the close, −ve red, "awaiting
+close" until captured). The UI is explicit that these are real snapshots, not a
+dense series. **Confirmed lineups:** `_render_lineups` reuses the SAME
+`lineup_signal` that powers the research-card flag (no divergent logic) — both XIs
++ formations side-by-side, a "🔒 not announced yet" state until ESPN posts the XI
+(~1h pre-KO), and the heavy-rotation flag surfaced as an amber card note + an
+`st.warning` framed "a hypothesis to re-check, not a model signal". Value/model
+path byte-for-byte unchanged (`value_finder.py` × 2 + `predictor.py` empty diff —
+shadow). 868/868 (+17), Gate 1 PASS 4/4 / Gate 2 CLEAN / Gate 3 APPROVED. Real
+movement-chart + CLV-table + rotation-flag PNG on owner Desktop. **DF-10 extends
+this same page** (qualification impact + Bayesian read + glossary + nav/integration).
 
 ### DF-10 — WC Deep Dive: Context + Bayesian
 

@@ -10,9 +10,9 @@ from src.database.db import Base
 import src.world_cup.research as research
 from src.world_cup.research import (
     build_research_card, top_disagreements, _devig, _consensus,
-    summarize_card, build_disagreements, build_book_comparison,
+    summarize_card, build_disagreements, build_book_comparison, build_movement,
 )
-from src.world_cup.models import WCTeam, WCMatch, WCOdds, WCPrediction
+from src.world_cup.models import WCTeam, WCMatch, WCOdds, WCPrediction, WCValueBet
 from src.world_cup.predictor import MODEL_NAME
 
 
@@ -520,3 +520,116 @@ def test_build_book_comparison_no_prediction(session, monkeypatch):
 def test_build_book_comparison_missing_match(session, monkeypatch):
     _patch(session, monkeypatch)
     assert build_book_comparison(99999) is None
+
+
+# ---- DF-09: line movement for backable selections (the CLV story) ----
+
+def _seed_movement(s):
+    """Match 50 with TWO backable selections (shadow value bets) and odds that have
+    moved since open, on a best-available-across-books basis:
+      • Brazil to win — best open 1.80, best current 1.70 (shortened), entry 1.75,
+        close 1.65 → we beat the close (clv +0.034).
+      • Over 2.5      — open 1.85, current 1.95 (drifted out), entry 1.90,
+        close 1.92 → close longer than entry, we did NOT beat it (clv −0.006).
+    """
+    s.add_all([
+        WCTeam(id=1, name="Brazil", fifa_code="BRA", confederation="CONMEBOL", group_letter="C"),
+        WCTeam(id=2, name="Scotland", fifa_code="SCO", confederation="UEFA", group_letter="C"),
+    ])
+    s.add(WCMatch(id=50, stage="group", group_letter="C", date="2026-06-25",
+                  kickoff_time="18:00", home_team_id=1, away_team_id=2, status="scheduled"))
+    s.add(WCPrediction(id=500, match_id=50, model_name=MODEL_NAME,
+                       home_win_prob=0.62, draw_prob=0.22, away_win_prob=0.16,
+                       home_expected_goals=2.0, away_expected_goals=0.7, over_25_prob=0.55))
+    s.add_all([
+        WCOdds(match_id=50, bookmaker="Pinnacle", market_type="h2h", selection="Brazil",
+               odds_decimal=1.68, opening_odds=1.80, captured_at="2026-06-25T08:00"),
+        WCOdds(match_id=50, bookmaker="FanDuel", market_type="h2h", selection="Brazil",
+               odds_decimal=1.70, opening_odds=1.78, captured_at="2026-06-25T08:00"),
+        WCOdds(match_id=50, bookmaker="Pinnacle", market_type="totals", selection="Over",
+               odds_decimal=1.95, opening_odds=1.85, point=2.5, captured_at="2026-06-25T08:00"),
+    ])
+    s.add_all([
+        WCValueBet(match_id=50, prediction_id=500, market_type="h2h", selection="home",
+                   model_prob=0.62, best_odds=1.75, implied_prob=0.571, edge=0.05,
+                   bookmaker="FanDuel", closing_odds=1.65, clv=0.034),
+        WCValueBet(match_id=50, prediction_id=500, market_type="totals", selection="over",
+                   model_prob=0.55, best_odds=1.90, implied_prob=0.526, edge=0.024,
+                   bookmaker="Pinnacle", closing_odds=1.92, clv=-0.006),
+    ])
+    s.commit()
+
+
+def test_build_movement_basic(session, monkeypatch):
+    _seed_movement(session)
+    _patch(session, monkeypatch)
+    mv = build_movement(50)
+    assert mv["home"] == "Brazil" and mv["away"] == "Scotland"
+    assert mv["has_movement"] is True
+    by = {s["canon"]: s for s in mv["selections"]}
+    assert set(by) == {"home", "over_2.5"}          # only the two backable selections
+
+    home = by["home"]
+    assert home["selection"] == "Brazil" and home["market"] == "Match result"
+    assert home["entry"] == 1.75 and home["entry_book"] == "FanDuel"
+    assert home["close"] == 1.65
+    assert home["open"] == 1.80                      # best (longest) open = max(1.80, 1.78)
+    assert home["current"] == 1.70                   # best current = max(1.68, 1.70)
+    assert home["clv"] == pytest.approx(0.034)
+    # Real snapshots in time order, all four held.
+    assert [p[0] for p in home["points"]] == ["Open", "Entry", "Current", "Close"]
+    assert [p[1] for p in home["points"]] == [1.80, 1.75, 1.70, 1.65]
+
+    over = by["over_2.5"]
+    assert over["selection"] == "Over 2.5" and over["market"] == "Goals (O/U 2.5)"
+    assert over["open"] == 1.85 and over["current"] == 1.95     # single book, drifted out
+    assert over["entry"] == 1.90 and over["close"] == 1.92
+    assert over["clv"] == pytest.approx(-0.006)
+
+
+def test_build_movement_sorts_by_clv(session, monkeypatch):
+    # Strongest beat-the-close story first: +0.034 (home) before −0.006 (over).
+    _seed_movement(session)
+    _patch(session, monkeypatch)
+    mv = build_movement(50)
+    clvs = [s["clv"] for s in mv["selections"]]
+    assert clvs == sorted(clvs, reverse=True)
+    assert mv["selections"][0]["canon"] == "home"
+
+
+def test_build_movement_no_value_bets(session, monkeypatch):
+    # Match 20 has odds + a prediction but NO value bets → nothing backable.
+    _seed(session)
+    _patch(session, monkeypatch)
+    mv = build_movement(20)
+    assert mv is not None
+    assert mv["selections"] == [] and mv["has_movement"] is False
+
+
+def test_build_movement_awaiting_close(session, monkeypatch):
+    # Bet logged but the close not captured yet (pre-kickoff): close + clv None,
+    # but open/entry/current still trace and the row still appears.
+    session.add_all([
+        WCTeam(id=1, name="Brazil", fifa_code="BRA", confederation="CONMEBOL", group_letter="C"),
+        WCTeam(id=2, name="Scotland", fifa_code="SCO", confederation="UEFA", group_letter="C"),
+    ])
+    session.add(WCMatch(id=51, stage="group", group_letter="C", date="2026-06-25",
+                        kickoff_time="18:00", home_team_id=1, away_team_id=2, status="scheduled"))
+    session.add(WCPrediction(id=510, match_id=51, model_name=MODEL_NAME,
+                             home_win_prob=0.62, draw_prob=0.22, away_win_prob=0.16,
+                             home_expected_goals=2.0, away_expected_goals=0.7, over_25_prob=0.55))
+    session.add(WCOdds(match_id=51, bookmaker="FanDuel", market_type="h2h", selection="Brazil",
+                       odds_decimal=1.70, opening_odds=1.80, captured_at="2026-06-25T08:00"))
+    session.add(WCValueBet(match_id=51, prediction_id=510, market_type="h2h", selection="home",
+                           model_prob=0.62, best_odds=1.75, implied_prob=0.571, edge=0.05,
+                           bookmaker="FanDuel", closing_odds=None, clv=None))
+    session.commit()
+    _patch(session, monkeypatch)
+    home = build_movement(51)["selections"][0]
+    assert home["close"] is None and home["clv"] is None
+    assert [p[0] for p in home["points"]] == ["Open", "Entry", "Current"]  # no Close stage
+
+
+def test_build_movement_missing_match(session, monkeypatch):
+    _patch(session, monkeypatch)
+    assert build_movement(99999) is None
