@@ -1590,7 +1590,7 @@ edge) and full probabilities sit behind a per-fixture `st.expander` (`_verdict_d
 the now-dead `_model_lean_html`/`_best_price_html`. Verified with a real value/capped/no-edge
 render. 795/795 tests; Gate 2 CLEAN, Gate 3 APPROVED.
 
-### DF-05 — Verdict-Led League Fixtures (trust-weighted)
+### DF-05 — Verdict-Led League Fixtures (trust-weighted) ✅ DONE
 
 **Type:** UI
 **Depends on:** DF-03, DF-04
@@ -1601,10 +1601,24 @@ render. 795/795 tests; Gate 2 CLEAN, Gate 3 APPROVED.
 - Reuse the DF-04 verdict component.
 
 **Acceptance Criteria:**
-- [ ] League fixtures show the same verdict-led row + uniform flags
-- [ ] The league trust tier modulates the verdict's emphasis/label
-- [ ] Probabilities on tap; no model/value math changes
-- [ ] Existing fixtures tests pass (or are updated to the new layout)
+- [x] League fixtures show the same verdict-led row + uniform flags
+- [x] The league trust tier modulates the verdict's emphasis/label
+- [x] Probabilities on tap; no model/value math changes
+- [x] Existing fixtures tests pass (or are updated to the new layout)
+
+**Result:** New streamlit-free `src/delivery/views/_verdict.py` mirrors the DF-04 verdict for
+leagues: `classify_league_verdict()` picks the highest-edge bet the ValueFinder ALREADY stored
+(via the fixture's `market_vb_info` — no recompute, no new query), and `league_verdict_chip_html()`
+renders it with the emphasis set by the league's trust tier (from `stake_multiplier` in the
+`leagues.yaml` strategy block, same PC-25 source BankrollManager uses): 🟢 proven = filled green
+pill (auto-bet tier, reads strongest), 🟡 promising = green text, 🔴 unproven = amber "treat with
+caution", no edge = dim. Deliberately NO "capped" tier (unlike WC) — the league ValueFinder has no
+actionable-edge ceiling, so caution is carried by the trust tier instead. `fixtures.py` enriches
+`market_vb_info` with odds/book (additive, zero new queries — PC-12 ≤6-query guarantee intact),
+builds the trust map once from `config.leagues` (guarded), and inserts a verdict row between teams
+and the badge row; existing market badges + Deep Dive (probabilities on tap) preserved. The league
+value path (`src/betting/value_finder.py`) is byte-for-byte unchanged. 809/809 tests (14 new);
+Gate 2 CLEAN, Gate 3 APPROVED.
 
 ### DF-06 — Research Card Redesign
 

@@ -76,6 +76,11 @@ from src.config import config
 from src.database.db import get_session
 from src.database.models import InjuryFlag, League, Match, Odds, Prediction, Team, ValueBet
 from src.delivery.views._badge_helper import render_team_badge
+from src.delivery.views._verdict import (
+    build_league_trust_map,
+    classify_league_verdict,
+    league_verdict_chip_html,
+)
 
 
 # ============================================================================
@@ -94,6 +99,15 @@ COLOURS = {
     "blue": "#58A6FF",
     "grey": "#484F58",
 }
+
+# DF-05: per-league trust tier (🟢 proven / 🟡 promising / 🔴 unproven), derived
+# once from each league's stake_multiplier (leagues.yaml strategy block — the same
+# PC-25 source BankrollManager uses). The verdict chip reads it so a pick in a
+# proven league reads stronger than the same edge in an unproven one.
+try:
+    _LEAGUE_TRUST = build_league_trust_map(config.leagues)
+except Exception:  # never let a config hiccup break the fixtures page
+    _LEAGUE_TRUST = {}
 
 
 # ============================================================================
@@ -428,6 +442,10 @@ def get_all_upcoming_fixtures(days_ahead: int = 14) -> List[Dict]:
                         "model_prob": vb.model_prob,
                         "confidence": vb.confidence,
                         "edge": vb.edge,
+                        # DF-05: carry the price + book so the verdict chip can show
+                        # "@ odds" (no extra query — vb_rows are already loaded).
+                        "odds": vb.bookmaker_odds,
+                        "bookmaker": vb.bookmaker,
                     }
 
             # Compute per-market edges for badge display.
@@ -1649,6 +1667,15 @@ if view_mode == "Upcoming":
                 fix_home = render_team_badge(fix["home_team_id"], fix["home_team"], size=20)
                 fix_away = render_team_badge(fix["away_team_id"], fix["away_team"], size=20)
 
+                # DF-05: one at-a-glance verdict from the fixture's stored value
+                # bets, with emphasis set by the league's trust tier (proven reads
+                # stronger than unproven). Raw team names — the chip escapes them.
+                verdict = classify_league_verdict(
+                    fix.get("market_vb_info"), fix["home_team"], fix["away_team"],
+                    _LEAGUE_TRUST.get(fix["league"], "promising"),
+                )
+                verdict_html = league_verdict_chip_html(verdict, COLOURS)
+
                 # Fixture card — Redesigned layout:
                 # Row 1: [date] ---- [home vs away] ---- [kickoff time]
                 #         Symmetrical: date left, teams centered, time right
@@ -1669,6 +1696,8 @@ if view_mode == "Upcoming":
                     # Right: kickoff time
                     f'<div style="flex: 0 0 90px; text-align: right;">{kickoff_html}</div>'
                     f'</div>'
+                    # ── Verdict (DF-05): the headline trust-weighted shadow pick ──
+                    f'<div style="margin: 0 0 8px 0;">{verdict_html}</div>'
                     # ── Row 2: Market badges + Model pred | League + Diagnostics ──
                     f'<div style="display: flex; justify-content: space-between; '
                     f'align-items: center;">'
