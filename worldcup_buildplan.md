@@ -9,6 +9,11 @@ Version 1.0 · June 2026
 > ~40min pre-KO, true-close CLV), Phase 3 (10-06/07: lineup capture via ESPN's free
 > JSON API 15/15 + rotation flag on the research card). 10-08 λ-adjust DEFERRED
 > (=WC-11, gated). WC stays shadow-only; lineups are decision-support. Suite: 763/763.
+>
+> **DF — Decision-First UX** (10 issues · owner-approved 2026-06-24) **IN PROGRESS** —
+> verdict-led fixtures (WC + leagues) + a digestible research card + a WC deep dive;
+> markets → 1X2 + O/U 1.5/2.5/3.5 + BTTS; WC = the login landing during the
+> tournament window. Phase A (main page) → Phase B (deep dive). DF-02 lands first.
 
 ---
 
@@ -1467,6 +1472,199 @@ like the player-props build (WC-11) — on (a) per-player WC contribution data o
 usable quality, and (b) the model first demonstrating it can beat the market at all
 (the team Bayesian is competitive but not promoted). Listed so the scope boundary is
 explicit; revisit only on owner opt-in.
+
+---
+
+## DF — Decision-First UX (post-MVP · owner-approved 2026-06-24)
+
+**Goal:** make the system answer *"what's the bet, and can I trust it?"* at every
+depth. A three-layer information architecture — **glance** (fixtures verdict) →
+**study** (research card) → **deep dive** (full dossier) — replacing flat data
+tables with a verdict-led, trust-weighted presentation. Spans the WC page **and**
+league fixtures. All of this is **presentation over the existing value-finder
+output**: the model, value bets, and temporal integrity are untouched, and WC stays
+shadow-only ("track", never "bet").
+
+**Markets:** expanded to 1X2 + Over/Under 1.5/2.5/3.5 + BTTS (owner choice). The
+model derives every market from the 7×7 scoreline matrix for free; the only cost is
+the market odds, loaded from the cheap once-per-day board pull (cost = markets ×
+regions per *request* — all matches in one call) → net ≈ +2 odds credits/day. The
+focused near-kickoff per-event pull stays lean (h2h + totals) to protect in-play CLV.
+
+**Sequence:** Phase A (main page) before Phase B (deep dive). DF-02 lands first.
+
+### DF-01 — Market Expansion (odds + model surfacing)
+
+**Type:** Data / Config
+**Depends on:** none
+
+**Implementation Notes:**
+- Add `btts` + `alternate_totals` to the **morning board** scrape only; the focused
+  per-event pull (`scrape_wc_match_odds`) keeps `h2h,totals` for the CLV closing line.
+- Verify `derive_market_probabilities()` emits BTTS + O/U 1.5/2.5/3.5 from the 7×7
+  matrix; if a line is missing, derive it from the matrix — never bypass it.
+- Surface model + de-vigged market probs for all markets in `research.py`.
+
+**Acceptance Criteria:**
+- [ ] Morning board pull includes btts + alternate_totals; per-event pull unchanged (CLV-safe)
+- [ ] Model probs for 1X2, O/U 1.5/2.5/3.5, BTTS available per upcoming match (all via the matrix)
+- [ ] De-vigged market probs for the same markets where books price them; graceful when a book doesn't
+- [ ] Odds-credit budget impact documented; net ≈ +2 credits/day
+
+### DF-02 — World Cup as the Login Landing Page (tournament window) ✅ DONE
+
+**Type:** Navigation / Config
+**Depends on:** none
+
+**Implementation Notes:**
+- Add `tournament: { start_date: 2026-06-11, end_date: 2026-07-19 }` to
+  `worldcup_2026.yaml`.
+- Helper `wc_window_active(today)` — config-driven, date-only, inclusive.
+- In `get_pages()`: when active, move the World Cup `st.Page` to the front and set
+  `default=True` on it (clearing it from Fixtures); otherwise unchanged. Reverts
+  automatically the day after `end_date`.
+- Landing-default only — every page stays reachable; onboarding nav untouched.
+
+**Acceptance Criteria:**
+- [x] Inside the window, a fresh login lands on World Cup (and it's first in the sidebar)
+- [x] Outside the window, lands on Fixtures (current behaviour) — reverts with no code change
+- [x] Dates are config-driven; no hardcoded date in code
+- [x] Owner role + onboarding flows unaffected
+
+### DF-03 — Uniform Flag Component
+
+**Type:** UI
+**Depends on:** none
+
+**Implementation Notes:**
+- One flag render at a fixed box (height = surrounding text, capped width, object-fit
+  to avoid distortion, vertical-align middle, small right gap, subtle rounded border
+  so pale flags don't bleed into `#0D1117`).
+- Replace every flag call site (WC strip, group standings, knockouts, league
+  fixtures) with the single component + one size.
+
+**Acceptance Criteria:**
+- [ ] All flags render at one uniform box size, flush beside the country name
+- [ ] No aspect-ratio distortion; pale flags have a visible edge
+- [ ] Used consistently across WC + league surfaces (one component, one size)
+- [ ] No regression in existing flag tests
+
+### DF-04 — Verdict-Led WC Fixtures
+
+**Type:** UI
+**Depends on:** DF-01, DF-03
+
+**Implementation Notes:**
+- Rework `_render_todays_matches`: per match, one headline verdict from the value
+  finder's top pick — tiers value (within the edge band) / capped (edge > ceiling →
+  likely model error) / none. Show selection · edge · best price; probabilities
+  behind an expander. WC framing = "track" (shadow).
+- Reads the existing value-finder output; no model/value math changes.
+
+**Acceptance Criteria:**
+- [ ] Each fixture shows one colour-tiered verdict (value / capped / no-edge) at a glance
+- [ ] Selection, edge, best price on the row; full probabilities on tap
+- [ ] Edge > ceiling shown as "re-check / likely model noise", not as value
+- [ ] WC verdicts framed as shadow ("track"); decision-support only
+
+### DF-05 — Verdict-Led League Fixtures (trust-weighted)
+
+**Type:** UI
+**Depends on:** DF-03, DF-04
+
+**Implementation Notes:**
+- Same verdict treatment on `fixtures.py`, folding in the per-league strategy tier
+  (`leagues.yaml`) so a pick in a proven tier reads stronger than an unproven one.
+- Reuse the DF-04 verdict component.
+
+**Acceptance Criteria:**
+- [ ] League fixtures show the same verdict-led row + uniform flags
+- [ ] The league trust tier modulates the verdict's emphasis/label
+- [ ] Probabilities on tap; no model/value math changes
+- [ ] Existing fixtures tests pass (or are updated to the new layout)
+
+### DF-06 — Research Card Redesign
+
+**Type:** UI
+**Depends on:** DF-01
+
+**Implementation Notes:**
+- Rework `_render_research_card` + extend `build_research_card`: group selections by
+  market (Match result / Goals / BTTS); model-vs-market paired bars (model accent,
+  market grey) so the gap is the visual; edge highlighted; a one-line plain-English
+  read per market block; a headline lean with a within-range / model-noise label and
+  the shadow chip. Line movement stays as the confirmation signal.
+
+**Acceptance Criteria:**
+- [ ] Selections grouped by market with model-vs-market visual bars (the gap stands out)
+- [ ] Headline names the strongest trustworthy lean + a trust label
+- [ ] One plain-English read per market block ("the edge is on X, not Y")
+- [ ] Edge ceiling honoured (a big gap is labelled likely model error, not celebrated)
+
+### DF-07 — Biggest Disagreements Redesign
+
+**Type:** UI
+**Depends on:** DF-06
+
+**Implementation Notes:**
+- Rework the disagreements queue + `top_disagreements`: each row a ranked sentence
+  with an explicit verdict — ✓ conviction (within ceiling) vs ⚠ likely model error
+  (> ceiling) — direction obvious, ordered by trustworthy edge magnitude.
+
+**Acceptance Criteria:**
+- [ ] Each disagreement reads as a sentence with a clear verdict tag
+- [ ] Conviction vs likely-model-error split is explicit (edge ceiling)
+- [ ] Ranked by trustworthy edge; the point of each row is obvious
+- [ ] Empty/early state handled
+
+### DF-08 — WC Deep Dive: Scaffold + Heatmap + Model-vs-Books
+
+**Type:** UI / Page
+**Depends on:** DF-01
+
+**Implementation Notes:**
+- New WC deep-dive view mirroring `match_detail.py` against the WC tables (WCMatch /
+  WCPrediction / WCOdds / Bayesian). Scoreline heatmap (the 7×7) + model-vs-**every
+  pulled book** visual comparison (port `_build_bookie_probs` / `_render_prob_cell`),
+  all markets.
+- Entry buttons on each fixture row + the research card (session-state match id + nav
+  switch).
+
+**Acceptance Criteria:**
+- [ ] Clicking a fixture / research card opens that match's deep dive
+- [ ] Scoreline heatmap renders the model's 7×7
+- [ ] Model vs every pulled book shown per market with the visual comparison
+- [ ] Empty/missing-data states handled
+
+### DF-09 — WC Deep Dive: Movement + Lineups
+
+**Type:** UI
+**Depends on:** DF-08
+
+**Implementation Notes:**
+- Line-movement chart (price since open, with entry + close marked — the CLV story).
+- Both confirmed XIs + formations + the rotation flag (reuse `lineup_signal`).
+
+**Acceptance Criteria:**
+- [ ] Movement chart shows price history with entry + close markers
+- [ ] Both lineups + formations rendered when available; graceful "not announced"
+- [ ] Rotation flag surfaced (decision-support framing)
+- [ ] No model/value change
+
+### DF-10 — WC Deep Dive: Context + Bayesian
+
+**Type:** UI
+**Depends on:** DF-08
+
+**Implementation Notes:**
+- Group/qualification impact of the result (what it does to the table).
+- Bayesian-vs-Poisson read for this match (shadow). Nav registration + glossary.
+
+**Acceptance Criteria:**
+- [ ] Qualification/standings impact shown for the match
+- [ ] Per-match Bayesian-vs-Poisson read rendered (shadow framing)
+- [ ] Glossary covers the new deep-dive terms
+- [ ] Page registered in nav; integration test for the deep-dive flow
 
 ---
 

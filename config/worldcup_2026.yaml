@@ -1,3 +1,11 @@
+# Tournament window (DF-02) — during [start_date, end_date] the dashboard lands on
+# the World Cup page after login (see src/world_cup/timeutil.wc_window_active).
+# Reverts to the normal landing page (Fixtures) the day after end_date — no code
+# change needed. WC 2026 runs Jun 11 – Jul 19, 2026; edit these to extend or end it.
+tournament:
+  start_date: 2026-06-11
+  end_date: 2026-07-19
+
 groups:
   A:
     - name: "Mexico"

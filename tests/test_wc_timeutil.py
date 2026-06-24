@@ -1,6 +1,11 @@
-"""WC-08-02 — Eastern-time conversion for kickoff display."""
+"""WC-08-02 — Eastern-time conversion for kickoff display.
+DF-02 — tournament-window helper that drives the WC login landing page."""
 
-from src.world_cup.timeutil import to_eastern, format_kickoff_et, eastern_date
+from datetime import date
+
+from src.world_cup.timeutil import (
+    to_eastern, format_kickoff_et, eastern_date, wc_window_active, tournament_window,
+)
 
 
 class TestToEastern:
@@ -48,3 +53,35 @@ class TestDateShift:
 
     def test_same_day_when_no_rollover(self):
         assert eastern_date("2026-06-24", "18:00") == "2026-06-24"
+
+
+class TestTournamentWindow:
+    """DF-02 — wc_window_active gates the World Cup landing page."""
+
+    def test_window_reads_config(self):
+        # WC 2026 runs Jun 11 – Jul 19, 2026 (config/worldcup_2026.yaml)
+        assert tournament_window() == (date(2026, 6, 11), date(2026, 7, 19))
+
+    def test_active_inside_window(self):
+        assert wc_window_active(date(2026, 6, 24)) is True
+
+    def test_active_on_start_boundary(self):
+        assert wc_window_active(date(2026, 6, 11)) is True       # inclusive
+
+    def test_active_on_end_boundary(self):
+        assert wc_window_active(date(2026, 7, 19)) is True        # inclusive
+
+    def test_inactive_day_before(self):
+        assert wc_window_active(date(2026, 6, 10)) is False
+
+    def test_inactive_day_after_final(self):
+        assert wc_window_active(date(2026, 7, 20)) is False       # reverts next day
+
+    def test_no_arg_uses_today_without_crashing(self):
+        # The default-today branch must run and return a bool (value is date-dependent).
+        assert isinstance(wc_window_active(), bool)
+
+    def test_inactive_when_window_unconfigured(self, monkeypatch):
+        import src.world_cup.timeutil as tu
+        monkeypatch.setattr(tu, "tournament_window", lambda: None)
+        assert tu.wc_window_active(date(2026, 6, 24)) is False    # safe fallback

@@ -63,6 +63,7 @@ from dotenv import load_dotenv
 import streamlit as st
 
 from src.config import PROJECT_ROOT
+from src.world_cup.timeutil import wc_window_active
 from src.auth import (
     is_authenticated, set_session_user, get_session_user_id,
     get_session_user_role, get_user_by_email, verify_password,
@@ -563,12 +564,16 @@ def get_pages() -> list:
     # E26-03: Fixtures is the landing page — the most interesting first
     # view, showing all matches with predicted scores and top picks.
     # Today's Picks is still prominent in the sidebar.
+    # DF-02: during the WC tournament window (config: tournament.start/end_date),
+    # the World Cup page takes over as the landing page and floats to the top of
+    # the sidebar; it reverts to Fixtures automatically the day after the final.
+    _wc_active = wc_window_active()
     pages = [
         st.Page(
             "views/fixtures.py",
             title="Fixtures",
             icon="📅",
-            default=True,
+            default=not _wc_active,
         ),
         st.Page(
             "views/picks.py",
@@ -597,6 +602,7 @@ def get_pages() -> list:
             "views/world_cup.py",
             title="World Cup",
             icon="🏆",
+            default=_wc_active,
         ),
         st.Page(
             "views/model_health.py",
@@ -619,6 +625,13 @@ def get_pages() -> list:
             icon="🔍",
         ),
     ]
+
+    # DF-02: during the tournament window, surface the World Cup page first so it
+    # is both the default landing page and the top sidebar entry.
+    if _wc_active:
+        wc_page = next(p for p in pages if p.title == "World Cup")
+        pages.remove(wc_page)
+        pages.insert(0, wc_page)
 
     # E34-05: Admin page — owners only.  Not rendered for viewer role so
     # the page never appears in the sidebar navigation.
