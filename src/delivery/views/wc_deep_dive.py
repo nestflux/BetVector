@@ -22,12 +22,19 @@ Sections:
 6. Lineup impact (WC-11A-02) — a display-only adjusted-xG what-if: the model's λ
    rescaled by how the confirmed XI's goal-share compares to the team's last XI,
    with a per-player scorer board. Neutral, never an edge; the model is unchanged.
-7. Group & qualification impact (DF-10) — the current group table with this tie
+7. Who's likely to score (WC-11A-03) — each confirmed-XI player's anytime-scorer
+   chance (P = 1 − e^(−λ)) from his goal-share, ranked, with the penalty taker
+   flagged. The model's own ranking; no odds pulled.
+8. Player watch (WC-11A-04) — squad notes off the same data: card-prone starters
+   (recent club booking rate), stars missing from the last XI, and caps/goals
+   milestones. Facts, not model numbers; no odds pulled.
+9. Group & qualification impact (DF-10) — the current group table with this tie
    highlighted, plus what each result does to qualification (points-only,
    conservative). Knockout ties say "win or out" instead.
-8. Bayesian vs Poisson (DF-10) — the staked Poisson beside the stored Bayesian
-   shadow prediction for THIS match (display-only; the Bayesian never stakes).
-9. Glossary (DF-10 + WC-11A-02) — plain-English definitions for the deep-dive terms.
+10. Bayesian vs Poisson (DF-10) — the staked Poisson beside the stored Bayesian
+    shadow prediction for THIS match (display-only; the Bayesian never stakes).
+11. Glossary (DF-10 + WC-11A-02/03/04) — plain-English definitions for the
+    deep-dive terms.
 
 The World Cup model is SHADOW / decision-support only — nothing here changes the
 model or any value bet.
@@ -49,7 +56,7 @@ from src.world_cup.player_rates import player_rate
 from src.world_cup.predictor import scoreline_matrix_from_lambdas
 from src.world_cup.research import (
     build_book_comparison, build_group_context, build_lineup_impact,
-    build_model_comparison, build_movement, build_scorer_board,
+    build_model_comparison, build_movement, build_player_watch, build_scorer_board,
 )
 from src.world_cup.timeutil import format_kickoff_et
 
@@ -747,7 +754,120 @@ def _render_scorer_board(match_id: int) -> None:
 
 
 # ============================================================================
-# Section 8 — Group & qualification impact (DF-10)
+# Section 8 — Player watch (WC-11A-04)
+# ============================================================================
+# Small squad notes off the same confirmed-XI + player-rate data: card-prone
+# starters (recent club booking rate), stars missing from the team's last XI, and
+# players nearing a caps / goals milestone. These are FACTS about the squad, not
+# model numbers (so no MODEL badge), and pull NO odds — zero Odds API credits.
+# Display-only, shadow: context for the matchup, never a bet.
+
+def _eur_short(value) -> str:
+    """Compact euro market value for a chip — €180M / €40M / €900k / —."""
+    if not value or value <= 0:
+        return "—"
+    if value >= 1_000_000:
+        return f"€{value / 1_000_000:.0f}M"
+    if value >= 1_000:
+        return f"€{value / 1_000:.0f}k"
+    return f"€{value:.0f}"
+
+
+def _player_watch_card_html(t: dict) -> str:
+    """Pure HTML card for one team's player-watch notes: booking risk (amber, like the
+    card it warns about), star absence, and caps / goals milestones — each with a
+    graceful empty state. Names + values escaped; neutral, display-only framing."""
+    nation = escape(str(t.get("team", "")))
+    shell = (f'<div style="border:1px solid {BORDER};border-radius:8px;'
+             f'padding:10px 12px;background:{SURFACE};">')
+    if t.get("status") == "not_announced":
+        return (f'{shell}<div style="color:{TEXT};font-weight:700;font-size:0.95rem;">'
+                f'{nation}</div><div style="color:{TEXT_DIM};font-size:0.82rem;'
+                f'margin-top:4px;">XI not announced yet.</div></div>')
+
+    formation = escape(str(t.get("formation") or "—"))
+    header = (
+        f'<div style="color:{TEXT};font-weight:700;font-size:0.95rem;">{nation}</div>'
+        f'<div style="color:{TEXT_DIM};font-family:JetBrains Mono,monospace;'
+        f'font-size:0.78rem;margin-bottom:2px;">Formation {formation}</div>')
+
+    def _subhead(label: str) -> str:
+        return (f'<div style="color:{TEXT_DIM};font-size:0.7rem;text-transform:uppercase;'
+                f'letter-spacing:0.05em;margin-top:8px;">{label}</div>')
+
+    body = ""
+
+    booking = t.get("booking_risk") or []
+    if booking:
+        rows = "".join(
+            f'<div style="display:flex;justify-content:space-between;gap:8px;padding:2px 0;'
+            f'font-size:0.83rem;color:{TEXT};"><span>{escape(str(b.get("player", "")))}'
+            f'<span title="High recent club yellow-card rate — card-prone" '
+            f'style="margin-left:6px;border:1px solid {YELLOW};border-radius:4px;'
+            f'padding:0 4px;font-size:0.62rem;color:{YELLOW};'
+            f'font-family:JetBrains Mono,monospace;vertical-align:middle;">YEL</span></span>'
+            f'<span style="font-family:JetBrains Mono,monospace;color:{TEXT_DIM};'
+            f'font-size:0.8rem;">{(b.get("yellows_per_90") or 0.0):.2f}/90</span></div>'
+            for b in booking)
+        body += _subhead("Booking risk") + rows
+
+    absent = t.get("absent_stars") or []
+    if absent:
+        names = ", ".join(escape(str(a.get("player", ""))) for a in absent)
+        rows = "".join(
+            f'<div style="display:flex;justify-content:space-between;gap:8px;padding:2px 0;'
+            f'font-size:0.83rem;color:{TEXT};"><span>{escape(str(a.get("player", "")))}</span>'
+            f'<span style="font-family:JetBrains Mono,monospace;color:{TEXT_DIM};'
+            f'font-size:0.8rem;">{escape(_eur_short(a.get("market_value_eur")))}</span></div>'
+            for a in absent)
+        body += (_subhead("Star absence")
+                 + f'<div style="color:{TEXT};font-size:0.83rem;margin:2px 0;">'
+                   f'{nation} without {names}.</div>' + rows
+                 + f'<div style="color:{TEXT_DIM};font-size:0.7rem;margin-top:2px;">'
+                   f'In the previous XI — rotated out or unavailable.</div>')
+
+    miles = t.get("milestones") or []
+    if miles:
+        rows = "".join(
+            f'<div style="padding:2px 0;font-size:0.83rem;color:{TEXT};">'
+            f'{escape(str(m.get("player", "")))} — {int(m.get("away", 0))} from '
+            f'{int(m.get("target", 0))} '
+            f'{"caps" if m.get("kind") == "caps" else "intl goals"} '
+            f'<span style="color:{TEXT_DIM};">({int(m.get("current", 0))} now)</span></div>'
+            for m in miles)
+        body += _subhead("Milestones") + rows
+
+    if not body:
+        body = (f'<div style="color:{TEXT_DIM};font-size:0.82rem;margin-top:4px;">'
+                f'Nothing flagged — no notably card-prone starters, star absences, '
+                f'or nearby milestones.</div>')
+
+    return f'{shell}{header}{body}</div>'
+
+
+def _render_player_watch(match_id: int) -> None:
+    st.markdown('<div class="bv-section-header">Player watch</div>',
+                unsafe_allow_html=True)
+    data = build_player_watch(match_id, player_rate)
+    if not data or not any(t.get("status") == "announced" for t in data["teams"]):
+        st.info(
+            "🔒 Lineups not announced yet — player-watch notes appear once ESPN posts "
+            "the confirmed XIs (about an hour before kickoff)."
+        )
+        return
+    st.caption(
+        "Quick squad notes from the confirmed XI: card-prone starters (recent club "
+        "booking rate — a heads-up, not a tournament caution count), stars missing from "
+        "the team's last XI, and players nearing a caps or goals milestone. Context "
+        "only — not a model number and not a bet."
+    )
+    for col, t in zip(st.columns(len(data["teams"])), data["teams"]):
+        with col:
+            st.markdown(_player_watch_card_html(t), unsafe_allow_html=True)
+
+
+# ============================================================================
+# Section 9 — Group & qualification impact (DF-10)
 # ============================================================================
 # What this match does to the group table, from build_group_context. The
 # qualification reads are points-only and deliberately conservative — a
@@ -866,7 +986,7 @@ def _render_group_context(match_id: int) -> None:
 
 
 # ============================================================================
-# Section 9 — Bayesian vs Poisson (per-match shadow read, DF-10)
+# Section 10 — Bayesian vs Poisson (per-match shadow read, DF-10)
 # ============================================================================
 # The two STORED predictions side by side — the staked Poisson and the Bayesian
 # shadow — for THIS match. Display-only: the Bayesian never stakes and promotion
@@ -949,7 +1069,7 @@ def _render_model_compare(match_id: int) -> None:
 
 
 # ============================================================================
-# Section 10 — Glossary (DF-10 + WC-11A-02/03)
+# Section 11 — Glossary (DF-10 + WC-11A-02/03/04)
 # ============================================================================
 # Short, plain-English definitions for the deep-dive terms (the owner is learning,
 # MP §12). Built by a pure helper so it stays testable.
@@ -986,6 +1106,12 @@ _GLOSSARY = [
     ("Penalty taker", "The team's designated penalty taker. His spot-kicks are already "
      "counted in his goals-per-90, so the flag marks who takes them — it doesn't add "
      "an extra bump (that would double-count)."),
+    ("Booking risk", "A starter whose recent club yellow-card rate is high (yellows per "
+     "90 minutes). A heads-up that he's card-prone — it's not a tournament caution "
+     "count, and never a model input."),
+    ("Star absence", "A high-value or high-scoring player who started the team's "
+     "previous XI but isn't in this one — rotated out or unavailable. Matchup context, "
+     "not a bet signal."),
 ]
 
 
@@ -1120,6 +1246,8 @@ def _render_deep_dive(match_id: int) -> None:
     _render_lineup_impact(match_id)
     st.divider()
     _render_scorer_board(match_id)
+    st.divider()
+    _render_player_watch(match_id)
     st.divider()
     _render_group_context(match_id)
     st.divider()

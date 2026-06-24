@@ -1380,3 +1380,122 @@ def build_scorer_board(match_id: int, rate_lookup) -> dict | None:
     info["teams"] = [_team_scorer_board(leg, sig_by_name.get(leg["nation"], {}), rate_lookup)
                      for leg in legs]
     return info
+
+
+# ============================================================================
+# WC-11A-04 — Player watch extras (booking risk · star absence · milestones)
+# ============================================================================
+# Small, display-only notes off the SAME confirmed-XI + player-rate data the
+# lineup-impact and scorer-board layers use: who's card-prone, which star sat out
+# the latest XI, and who's nearing a caps/goals milestone. These are squad FACTS
+# (booking rate, who's missing, caps/goals) — not model outputs — so they don't need
+# the stored λ and surface the moment the XI is announced. No new query (shares
+# _match_legs), NO odds pull → zero Odds API credits. The thresholds are module
+# constants (like the adjusted-λ clamp), gating a research note — never a bet, and
+# nothing is written back.
+
+_BOOKING_RISK_PER90 = 0.25        # ~a yellow every 4 full games → a real tournament card risk
+_STAR_VALUE_EUR = 40_000_000      # a rotated-out ≥ €40m player is a notable absence …
+_STAR_GP90 = 0.60                 # … or a genuine goal threat (catches a low-value veteran)
+_CAPS_STEP, _CAPS_AWAY = 50, 5    # within 5 of a 50-cap milestone (50, 100, 150 …)
+_GOALS_STEP, _GOALS_AWAY = 10, 3  # within 3 of the next ten of international goals …
+_GOALS_FLOOR = 20                 # … but only for established scorers (target ≥ 20, so
+#                                   we never celebrate a defender "nearing 10 goals")
+
+
+def _next_milestone(value, step: int, away: int, floor: int = 0) -> int | None:
+    """The next ``step`` multiple strictly above ``value`` — returned only when it's
+    within ``away`` of it, at or above ``floor`` (a landmark worth noting), and
+    ``value`` is a real count. ``None`` otherwise, so a newcomer on a handful of caps
+    (or a low international-goal tally) never flags."""
+    if not value or value <= 0:
+        return None
+    target = ((int(value) // step) + 1) * step
+    return target if (target - value) <= away and target >= floor else None
+
+
+def _team_watch(leg: dict, sig_entry: dict, rate_lookup) -> dict:
+    """Per-team player-watch notes from the confirmed XI vs the baseline XI (pure; no
+    DB). Booking risk + milestones come from the current XI; star absence from the
+    baseline players rotated out of it. Squad facts only — no model λ needed, so this
+    works the moment the XI is announced. Read-only: builds display notes, writes
+    nothing."""
+    nation = leg["nation"]
+    if sig_entry.get("status") != "announced":
+        return {"team": nation, "status": "not_announced"}
+
+    # Booking risk + milestones: read each confirmed starter once.
+    booking: list = []
+    milestones: list = []
+    for r in leg["current"]:
+        looked = rate_lookup(r.get("full_name") or r.get("name"), nation,
+                             r.get("position")) or {}
+        ypg = looked.get("yellows_per_90")
+        if ypg is not None and ypg >= _BOOKING_RISK_PER90:
+            booking.append({"player": r["name"], "yellows_per_90": float(ypg)})
+        caps = looked.get("intl_caps")
+        cap_target = _next_milestone(caps, _CAPS_STEP, _CAPS_AWAY)
+        if cap_target is not None:
+            milestones.append({"player": r["name"], "kind": "caps",
+                               "current": int(caps), "target": cap_target,
+                               "away": cap_target - int(caps)})
+        goals = looked.get("intl_goals")
+        goal_target = _next_milestone(goals, _GOALS_STEP, _GOALS_AWAY, _GOALS_FLOOR)
+        if goal_target is not None:
+            milestones.append({"player": r["name"], "kind": "goals",
+                               "current": int(goals), "target": goal_target,
+                               "away": goal_target - int(goals)})
+    booking.sort(key=lambda b: -b["yellows_per_90"])
+    milestones.sort(key=lambda m: m["away"])      # nearest milestone first
+
+    # Star absence: a player in the team's PREVIOUS XI but not this one, who's either
+    # high-value or a genuine goal threat — "Brazil without Vinícius Júnior". Mirrors
+    # the rotated-out walk in _team_impact (baseline minus current).
+    cur_names = {r["name"] for r in leg["current"]}
+    absent: list = []
+    for r in leg["baseline"]:
+        if r["name"] in cur_names:
+            continue
+        looked = rate_lookup(r.get("full_name") or r.get("name"), nation,
+                             r.get("position")) or {}
+        mv = looked.get("market_value_eur")
+        gp90 = looked.get("goals_per_90")
+        is_star = (mv is not None and mv >= _STAR_VALUE_EUR) or \
+                  (gp90 is not None and gp90 >= _STAR_GP90)
+        if is_star:
+            absent.append({"player": r["name"], "market_value_eur": mv,
+                           "goals_per_90": gp90})
+    absent.sort(key=lambda a: (-(a["market_value_eur"] or 0.0),
+                               -(a["goals_per_90"] or 0.0)))
+
+    return {
+        "team": nation, "status": "announced",
+        "formation": sig_entry.get("formation"),
+        "heavy_rotation": bool(sig_entry.get("heavy_rotation")),
+        "changes": sig_entry.get("changes"),
+        "booking_risk": booking,
+        "absent_stars": absent,
+        "milestones": milestones,
+        "n_flags": len(booking) + len(absent) + len(milestones),
+    }
+
+
+def build_player_watch(match_id: int, rate_lookup) -> dict | None:
+    """WC-11A-04 — per-team player-watch notes for the deep dive (shadow).
+
+    Card-prone starters, stars missing from the latest XI, and caps/goals milestones —
+    all from the confirmed XI + the player-rate cache (via the injected ``rate_lookup``;
+    the view passes ``player_rates.player_rate``). Shares the ``_match_legs`` read with
+    the lineup-impact / scorer-board layers, so there's NO extra query and NO odds pull
+    → zero Odds API credits.
+
+    READ-ONLY: nothing added or written back — these are research notes, never a bet.
+    Returns ``None`` if the match doesn't exist; each team's ``status`` covers the
+    not-announced case."""
+    read = _match_legs(match_id)
+    if read is None:
+        return None
+    info, legs, sig_by_name = read
+    info["teams"] = [_team_watch(leg, sig_by_name.get(leg["nation"], {}), rate_lookup)
+                     for leg in legs]
+    return info

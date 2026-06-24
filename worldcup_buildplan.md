@@ -1819,10 +1819,14 @@ epic — all 10 issues DONE.**
 
 ---
 
-## WC-11A — Player Insight (display-only, shadow) · PROPOSED 2026-06-24
+## WC-11A — Player Insight (display-only, shadow) · COMPLETE 2026-06-24
 
-**Status:** SPEC / awaiting owner go-ahead to build. This is the **display-only
-subset of WC-11** (the deferred player-props epic) — the "A1" slice agreed with
+**Status:** COMPLETE — all 4 issues done (01 rate engine + resolver → 02 adjusted-λ
+lineup impact → 03 anytime-scorer board + pen-taker → 04 player-watch extras). Every
+issue shipped display-only / shadow: the value path (`value_finder.py` ×2) and
+`predictor.py` are byte-for-byte unchanged across the whole epic, and no odds are
+pulled (zero Odds API credits). This was the **display-only subset of WC-11** (the
+deferred player-props epic) — the "A1" slice agreed with
 the owner: turn the confirmed lineups we already capture into decision-support
 about *which players carry the goals and how a changed XI shifts the picture*,
 **without** building a staked product and **without** the prop-odds budget the full
@@ -2043,8 +2047,39 @@ note (high cards-per-90 starters), a **star-absence callout** (the `missing` lis
 approaching a caps/goals milestone). All display-only, escaped, no new cost.
 
 **Acceptance Criteria:**
-- [ ] At least the booking-risk + star-absence callouts render from real data with
+- [x] At least the booking-risk + star-absence callouts render from real data with
   graceful empty states; no model/value change.
+
+**Result (DONE — closes the WC-11A epic):** New pure `research.build_player_watch(
+match_id, rate_lookup)` reuses the shared `_match_legs` read (NO extra query) and the
+injected `rate_lookup` (the view passes `player_rates.player_rate`) to emit three squad
+notes per confirmed XI — squad FACTS, not model outputs, so they need no stored λ and
+surface the moment the XI lands. **(a) Booking risk:** confirmed starters whose recent
+club `yellows_per_90` ≥ `_BOOKING_RISK_PER90` (0.25 — ~a yellow every 4 full games,
+which cleanly separates card-prone DMs/CBs at 0.25–0.34 from clean attackers/keepers
+< 0.20 in the real cache; a 2-yellow tournament suspension risk), ranked desc — framed
+as a heads-up on a *club* rate, explicitly NOT a tournament caution/suspension count.
+**(b) Star absence:** a player in the team's PREVIOUS XI but not this one (baseline
+minus current, mirroring `_team_impact`'s rotated-out walk) who is high-value
+(`market_value_eur` ≥ €40m) OR a genuine goal threat (`goals_per_90` ≥ 0.60), ranked by
+value — "Brazil without Vinícius Júnior". **(c) Milestones:** a confirmed starter within
+5 of a 50-cap landmark, or within 3 of the next ten of international goals at/above a
+floor of 20 (`_next_milestone` with a `floor` guard, so we never celebrate a defender
+"nearing 10 goals"). Each note has a graceful empty state (not-announced; "Nothing
+flagged"; star-absence needs a baseline). Deep-dive **Section 8** `_render_player_watch`
+(after the scorer board, before group context): a per-team card with a booking block
+(amber YEL chip — a literal yellow card), a star-absence block ("{nation} without …"
+plus per-player market value), and a milestone block — NO MODEL badge (these are facts,
+not model numbers) and all dynamic strings escaped. Glossary +"Booking risk"/"Star
+absence". READ-ONLY: no add/commit, nothing written back; `predictor.py` +
+`value_finder.py` ×2 byte-for-byte unchanged (empty diff). 16 tests (milestone math +
+floor + booking threshold + star-by-value/by-g90 + sorting + empty/not-announced states
++ DB read-only + escaping + view AST); 972/972. Gate 1 PASS 5/5 · Gate 2 CLEAN · Gate 3
+APPROVED (two non-blocking nits: `n_flags` is a tested convenience field mirroring the
+sibling builders' `n_ranked`; the stale module-docstring section list was renumbered).
+Real-rate PNG on owner Desktop: England (Maguire/Mainoo card-prone, "without
+Bellingham" €160m, Kane 1 from 80 intl goals + Walker 4 from 100 caps); Brazil ("without
+Vinícius Júnior, Rodrygo" €180m/€110m, a card-heavy engine room, G. Jesus 1 from 20).
 
 ### Deferred / gated add-on (NOT in WC-11A)
 
