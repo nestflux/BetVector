@@ -1955,14 +1955,40 @@ byte-for-byte unchanged. PNG on owner Desktop.
   `build_lineup_impact`, so the surfaces can't disagree).
 
 **Acceptance Criteria:**
-- [ ] Adjusted-λ shown beside the model's λ when the XI is confirmed; clean
+- [x] Adjusted-λ shown beside the model's λ when the XI is confirmed; clean
   not-announced state otherwise.
-- [ ] A rotated-out high-share striker visibly lowers adjusted-λ; the `delta` is
+- [x] A rotated-out high-share striker visibly lowers adjusted-λ; the `delta` is
   presented **neutrally** (not as an edge).
-- [ ] `predictor.py` + `value_finder.py` ×2 byte-for-byte unchanged (empty diff +
+- [x] `predictor.py` + `value_finder.py` ×2 byte-for-byte unchanged (empty diff +
   grep guard); `build_lineup_impact` is read-only (no `add`/`commit`).
-- [ ] Pure layer unit-tested; view AST-tested; glossary gains "Adjusted xG" /
+- [x] Pure layer unit-tested; view AST-tested; glossary gains "Adjusted xG" /
   "Goal-share".
+
+**Result (DONE):** New pure `research.build_lineup_impact(match_id, rate_lookup)`
+reuses `lineup_signal` for the confirmed XI / formation / rotation, reads the
+STORED Poisson λ off `WCPrediction`, and rescales it by the XI's goal-share vs the
+team's previous XI: `lambda_adjusted = lambda_model × clamp(Σ in-XI gp90 ÷ Σ
+baseline-XI gp90, 0.5, 1.5)` (the ±50% clamp is a display guard against a thin
+resolve). `rate_lookup` is injected (the view passes `player_rates.player_rate`),
+so the math is unit-testable and research.py stays free of the player cache.
+Per team it returns `{status, lambda_model, lambda_adjusted, delta,
+baseline_available, formation, heavy_rotation, changes, scorers:[{player, in_xi,
+share, exp_goals}], missing, n_xi, n_rated}`; unresolved players are excluded from
+the share and surfaced in `missing`, rotated-out baseline players appear with
+`in_xi=False`, and the rated in-XI `exp_goals` slices sum to `lambda_adjusted`.
+Two read helpers added to `lineups.py` (`_starter_rows` + `_prior_starter_rows`,
+carrying the resolver's full_name/position columns); `_prior_xi` refactored to
+delegate (behaviour-preserving). New deep-dive Section 6 `_render_lineup_impact`
+(after lineups, before group context) draws a per-team card — model→adjusted λ
+with a NEUTRAL grey delta (▲/▼, never green/red), a scorer board (g/90 → xG slice,
+rotated-out struck through), and the unrated footnote — plus glossary terms
+"Adjusted xG" / "Goal-share". READ-ONLY / shadow: no `add`/`commit`, nothing
+written back to WCPrediction; `predictor.py` + `value_finder.py` ×2 byte-for-byte
+unchanged. 15 tests (pure formula incl. clamp + read-only + escaping + view AST),
+942/942. Real-rate proof on owner Desktop (England bench Kane 1.15 → 1.90→1.44;
+France add Mbappé → 1.75→2.03). 3-gate green (Gate 2 CLEAN / Gate 3 APPROVED).
+The optional research-card echo was deferred (the AC doesn't need it; keeps the
+card path untouched).
 
 #### WC-11A-03 — "Who's likely to score" board + penalty-taker flag
 
