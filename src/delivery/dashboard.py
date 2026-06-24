@@ -628,6 +628,15 @@ def get_pages() -> list:
             title="Settings",
             icon="⚙️",
         ),
+        # HC-01: Help & Manual — the in-app guide (orientation + a searchable
+        # master glossary that is the single source of truth for every term;
+        # later a screen tour, Betting 101, and interactive tools). A normal
+        # page pinned after Settings; the deep-dive modal pages follow.
+        st.Page(
+            "views/help.py",
+            title="Help",
+            icon="❓",
+        ),
         st.Page(
             "views/match_detail.py",
             title="Match Deep Dive",

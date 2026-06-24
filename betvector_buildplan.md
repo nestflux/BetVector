@@ -9738,3 +9738,89 @@ PC-27-01 (migrate)  →  PC-27-02 (local verify)  →  PC-27-03 (cloud redeploy)
                                                    →  PC-27-04 (pipeline cutover)
                                                    →  PC-27-05 (E2E verify, 7 days)
 ```
+
+---
+
+## HC — Help Center (in-app user manual) · IN PROGRESS 2026-06-24
+
+**Status:** Phase 1 in progress. Owner-approved 2026-06-24 (a new dashboard-wide
+feature — Rule 8 Tier-2). Goal: one friendly, interactive, in-app manual answering
+“what am I looking at?” and “what does this word mean?”, plus a downloadable copy.
+Read-only and content-driven; **zero change to the model, value finder, predictions,
+or bet logic**, and $0 cost (no new data/API).
+
+**Why:** there was no Help/About/FAQ page; term definitions lived in FIVE separate
+page-level glossaries (picks / performance / bankroll / match_detail / wc_deep_dive)
+with real drift. The Help Center centralises them into one searchable source of truth
+and teaches the betting concepts the owner is learning.
+
+**Owner decisions (2026-06-24):** in-app page **plus** a downloadable doc; **full**
+depth (glossary + screen tour + Betting 101 + interactive tools); and a per-page
+“How to read this page” link on every page. The downloadable doc = Markdown +
+print-friendly HTML (no new dependency); a true in-app PDF would need a new library
+(deferred — owner OK required, Rule 2 / Rule 8 Tier-2).
+
+**Architecture:** all content authored ONCE in a streamlit-free module
+(`src/delivery/help_content.py`) — the single source of truth that feeds the Help page
+now and, at HC-06, the downloadable doc and the five page glossaries (migrated to read
+from it). Thin escaped render in `src/delivery/views/help.py` (pure HTML helpers,
+AST-tested). Mirrors the WC-11A discipline: pure data + thin escaped view + 3-gate +
+real PNG proof.
+
+**Issues (6, three phases):**
+
+#### HC-01 — Help page spine + consolidated searchable master glossary  ✅ DONE
+
+New `src/delivery/help_content.py` (single source of truth): `GLOSSARY_GROUPS` — **69
+terms** in 5 groups (Betting basics / Markets / The model / Performance & bankroll /
+World Cup) — consolidating all five page glossaries with drift resolved (**Edge** →
+de-vigged-probability precision; **BTTS** → one verb; **Confidence** → all three
+HIGH/MEDIUM/LOW tiers; **Squad value** → 1.5× “meaningful” + ~2× badge reconciled),
+plus terms the app shows but no page had defined (calibration, Brier, ensemble, MODEL
+badge, trust tiers, verdict states, line shopping, O/U 3.5, capped edge).
+`START_HERE_INTRO` / `DAILY_LOOP` / `GOOD_TO_KNOW` orientation + a pure
+`filter_glossary()` (matches term OR definition, case-insensitive; blank → all;
+no-match → graceful empty). New `views/help.py` — two tabs (📖 Start here · 🔤
+searchable Glossary) — registered as `❓ Help` in the sidebar nav after Settings. All
+dynamic HTML escaped; read-only (no DB / model / value). 17 tests (content integrity +
+term uniqueness + the four drift resolutions + definition-body search + view AST +
+hostile-input escaping + nav registration); 989/989. Gate 1 PASS · Gate 2 CLEAN (after
+adding the missing “Squad value” term the docstring had promised) · Gate 3 APPROVED.
+Real PNG on owner Desktop (Start-here orientation + a live “drawdown” glossary search).
+
+#### HC-02 — Screen-by-screen tour cards + colour/badge decoder  ← NEXT
+
+One friendly tour card per page (what it's for · the 3 things to look at first · every
+colour/badge decoded), authored in `help_content.py`, rendered as a new Help tab.
+
+#### HC-03 — FAQ + on-page “How to read this page” deep-links
+
+An FAQ tab, plus an additive “❓ How to read this page” affordance on every main page
+that deep-links into the relevant Help section (session-state + `switch_page`; no page
+logic change).
+
+#### HC-04 — Betting 101 concept cards (worked examples)
+
+Plain-English lessons with worked examples (odds ↔ implied probability, value/edge,
+de-vig, CLV, bankroll & staking, Poisson + reading the scoreline heatmap,
+calibration/Brier, ROI vs win rate, and “why did my +edge bet still lose?”).
+
+#### HC-05 — Interactive tools
+
+Read-only widgets: an odds ↔ implied-prob ↔ edge calculator with a value verdict, a
+staking demo (bankroll + method → suggested stake), and a labelled scoreline-matrix
+reader. Pure math helpers unit-tested.
+
+#### HC-06 — Downloadable doc export + migrate the 5 page glossaries to the shared source
+
+Generate a downloadable Markdown + print-friendly HTML manual from `help_content` (via
+`st.download_button`) so it never drifts; migrate the five page glossaries to read from
+the shared source (behaviour-preserving). Closes the epic → Rule 8 Tier-1 masterplan
+update (§13.x + version bump).
+
+### HC Critical Path
+
+```
+HC-01 (spine + glossary)  →  HC-02 (screen tour)  →  HC-03 (FAQ + page links)
+                          →  HC-04 (Betting 101)  →  HC-05 (tools)  →  HC-06 (export + migrate)
+```
