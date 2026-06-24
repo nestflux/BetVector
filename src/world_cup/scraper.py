@@ -17,6 +17,7 @@ from typing import Any
 import requests
 import yaml
 from sqlalchemy import select
+from sqlalchemy.orm import joinedload
 
 from src.config import PROJECT_ROOT
 from src.database.db import get_session
@@ -221,6 +222,78 @@ def _load_odds_to_db(events: list[dict[str, Any]]) -> int:
         len(events), matched, skipped_team, skipped_match, loaded, inserted, updated,
     )
     return loaded
+
+
+def scrape_wc_match_odds(match_id: int, markets: str | None = None,
+                         regions: str | None = None) -> dict:
+    """Focused pre-kickoff odds pull for ONE match (WC-10-04). Resolves the Odds
+    API event via the FREE ``/events`` lookup, then pulls just that event's odds
+    (1 region) — markets × regions credits, NO full board refresh.
+
+    Touching only the target match is deliberate: a board pull during the day
+    would overwrite *in-play* matches' pre-match closing lines with live odds and
+    corrupt their CLV. Idempotent (upsert via ``_load_odds_to_db``).
+    """
+    cfg = _get_odds_scrape_cfg()
+    markets = markets or cfg["markets"]
+    regions = regions or cfg["regions"]
+
+    api_key = _get_api_key()
+    if not api_key:
+        logger.error("THE_ODDS_API_KEY not set")
+        return {"status": "no_key", "match_id": match_id}
+
+    with get_session() as session:
+        m = session.execute(
+            select(WCMatch)
+            .options(joinedload(WCMatch.home_team), joinedload(WCMatch.away_team))
+            .where(WCMatch.id == match_id)
+        ).unique().scalar_one_or_none()
+        if not m or not m.home_team or not m.away_team:
+            logger.warning("Pre-match odds: match %d not found", match_id)
+            return {"status": "no_match", "match_id": match_id}
+        home_name, away_name = m.home_team.name, m.away_team.name
+
+    # 1. FREE /events lookup (no quota cost) → resolve this match's Odds API event id.
+    try:
+        er = requests.get(f"{API_BASE}/sports/{SPORT_KEY}/events",
+                          params={"apiKey": api_key}, timeout=30)
+    except requests.RequestException as e:
+        logger.error("Pre-match /events request failed for match %d: %s", match_id, e)
+        return {"status": "events_error", "match_id": match_id}
+    if er.status_code != 200:
+        logger.error("Odds API /events error %d: %s", er.status_code, er.text[:200])
+        return {"status": "events_error", "match_id": match_id}
+
+    event_id = None
+    for ev in er.json():
+        if (_normalize_team_name(ev.get("home_team", "")) == home_name
+                and _normalize_team_name(ev.get("away_team", "")) == away_name):
+            event_id = ev.get("id")
+            break
+    if not event_id:
+        logger.warning("Pre-match: no Odds API event for match %d (%s v %s)",
+                       match_id, home_name, away_name)
+        return {"status": "no_event", "match_id": match_id}
+
+    # 2. Paid 1-event odds pull (markets × regions credits) — the near-closing line.
+    try:
+        r = requests.get(f"{API_BASE}/sports/{SPORT_KEY}/events/{event_id}/odds",
+                         params={"apiKey": api_key, "regions": regions,
+                                 "markets": markets, "oddsFormat": "decimal"}, timeout=30)
+    except requests.RequestException as e:
+        logger.error("Pre-match odds request failed for match %d: %s", match_id, e)
+        return {"status": "odds_error", "match_id": match_id}
+    remaining = r.headers.get("x-requests-remaining", "?")
+    logger.info("Pre-match odds: match %d, 1-event pull (%s / %s) — credits remaining %s",
+                match_id, markets, regions, remaining)
+    if r.status_code != 200:
+        logger.error("Odds API event-odds error %d: %s", r.status_code, r.text[:200])
+        return {"status": "odds_error", "match_id": match_id, "remaining": remaining}
+
+    loaded = _load_odds_to_db([r.json()])   # single-event upsert — no board churn
+    return {"status": "ok", "match_id": match_id, "event_id": event_id,
+            "odds_loaded": loaded, "remaining": remaining}
 
 
 # ============================================================================

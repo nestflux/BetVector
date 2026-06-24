@@ -2,14 +2,14 @@
 
 Version 1.0 · June 2026
 
-> **MODULE STATUS: WC-09 COMPLETE (36/36) · WC-10 (Live Ops) IN PROGRESS — 3/7** · June 24, 2026
+> **MODULE STATUS: WC-09 COMPLETE (36/36) · WC-10 (Live Ops) IN PROGRESS — 4/7** · June 24, 2026
 > WC-01→09 done (3-gate); decision-support + Bayesian shadow model live. **WC-10 —
 > Live Operations & Automation** (owner-confirmed). ✅ Phase 1: 10-01 (odds 12→2
-> credits, loud SQLite-fallback warning) + 10-02 (09:30 ET morning job live; CLV +
-> accuracy + folded email). ✅ Phase 2 started: 10-03 (heartbeat dispatcher — local
-> fixture cache, fires once ~40min pre-KO, idle = no Neon). Next: 10-04 (real
-> prematch closing-line run) → install dispatcher → 10-05 (CLV integrity); Phase 3
-> 10-06/07 lineup flag. WC stays shadow-only. Full suite: 733/733 passing.
+> credits) + 10-02 (09:30 ET morning job live). ✅ Phase 2: 10-03 (heartbeat
+> dispatcher, idle = no Neon) + 10-04 (focused per-event prematch pull — 2 credits,
+> only the target match, protects in-play CLV; verified on real API). Next: 10-05
+> (CLV integrity) + INSTALL dispatcher (held for owner OK — credit-spending job);
+> Phase 3 10-06/07 lineup flag. WC shadow-only. Full suite: 741/741 passing.
 
 ---
 
@@ -1355,7 +1355,7 @@ A schedule-proof trigger for pre-kickoff runs that costs almost nothing when idl
 - [x] Prepped-state persists across restarts (no double-fire, no miss)
 - [x] One launchd job; documented install
 
-### WC-10-04 — Pre-Kickoff Focused Run (Closing Line)
+### WC-10-04 — Pre-Kickoff Focused Run (Closing Line) ✅ DONE
 
 **Type:** Pipeline
 **Depends on:** WC-10-03
@@ -1370,10 +1370,10 @@ Capture the near-closing line for one match, budget-disciplined.
 - Idempotent: re-running for the same match updates in place (no duplicate odds).
 
 **Acceptance Criteria:**
-- [ ] `prematch` mode issues exactly one Odds API call per invocation
-- [ ] Fresh odds persisted for the target match; value/edge recomputed
-- [ ] 1 region only; logged credit usage
-- [ ] Idempotent (no duplicate rows on re-run)
+- [x] `prematch` mode issues exactly one Odds API call per invocation
+- [x] Fresh odds persisted for the target match; value/edge recomputed
+- [x] 1 region only; logged credit usage
+- [x] Idempotent (no duplicate rows on re-run)
 
 ### WC-10-05 — CLV Integrity End-to-End
 

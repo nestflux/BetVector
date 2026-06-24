@@ -217,13 +217,21 @@ def _run_morning() -> dict:
 
 
 def run_prematch(match_id: int) -> dict:
-    """Focused pre-kickoff run for ONE match, fired by the dispatcher ~40 min
-    before kickoff (WC-10-03 hook). WC-10-04 implements the real action: exactly
-    one Odds-API pull (1 region) to capture the near-closing line + re-derive
-    value/edge for this match. WC-10-03 placeholder — logs only, no DB/API."""
-    logger.info("Pre-match run for match %d — placeholder (WC-10-04 fills this in)",
-                match_id)
-    return {"match_id": match_id, "status": "placeholder"}
+    """Focused pre-kickoff run for ONE match (fired by the dispatcher ~40 min
+    pre-KO, WC-10-04): one 1-event Odds-API pull (1 region) to capture the
+    near-closing line for this match, then re-derive value/edge against the
+    current predictions. Hits Neon + the Odds API — only ever on a real fire,
+    never on an idle heartbeat."""
+    from src.world_cup.scraper import scrape_wc_match_odds
+    odds = scrape_wc_match_odds(match_id)
+    result = {"match_id": match_id, "odds_status": odds.get("status"),
+              "remaining": odds.get("remaining")}
+    if odds.get("status") == "ok":
+        from src.world_cup.value_finder import find_wc_value_bets, save_wc_value_bets
+        vbs = find_wc_value_bets()
+        result["value_bets"] = save_wc_value_bets(vbs) if vbs else {"new": 0, "total": 0}
+    logger.info("Pre-match run for match %d → %s", match_id, result)
+    return result
 
 
 def _run_evening() -> dict:
