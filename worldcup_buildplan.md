@@ -1913,13 +1913,28 @@ unit-tested `research.build_lineup_impact()` + one thin escaped deep-dive render
   never guess).
 
 **Acceptance Criteria:**
-- [ ] `player_rates` computes sane goals-per-90 for known stars (Kane ≈ 1.1, Haaland
+- [x] `player_rates` computes sane goals-per-90 for known stars (Kane ≈ 1.1, Haaland
   ≈ 1.0, a defender ≈ 0.1) from local data — no new scraping, no Odds API cost.
-- [ ] Resolver maps the audit's star set (incl. "Vinicius Junior", "Bruno Fernandes")
+- [x] Resolver maps the audit's star set (incl. "Vinicius Junior", "Bruno Fernandes")
   to the correct `player_id`, and returns **None** (not a wrong match) on ambiguity.
-- [ ] Saudi/MLS players resolve with an **international-form fallback**, labelled.
-- [ ] Unit tests cover the resolver's exact-match, tiebreak, override, and
+- [x] Saudi/MLS players resolve with an **international-form fallback**, labelled.
+- [x] Unit tests cover the resolver's exact-match, tiebreak, override, and
   blank-on-ambiguity paths; capture change leaves `lineup_signal` tests green.
+
+**Result:** ✅ DONE (commit 14a7a67). `src/world_cup/player_rates.py` builds a
+compact committed cache (`data/world_cup/player_rates.csv.gz`, 29,809 players,
+~925 KB) from the local Transfermarkt files — recency-weighted goals-per-90
+(min-minutes guarded), yellows-per-90, penalty-taker flag, position, market value,
+international fallback. `resolve_player` = curated override → name+nation (+
+recency/position tiebreak) → unique name-only → **None** (blanks on ambiguity,
+never guesses; nation aliases verified vs the real TM country spellings). `WCLineup`
+gained additive nullable `full_name` + `espn_athlete_id` (captured from ESPN's
+feed; migration applied to Neon). Verified on real stars (Kane 1.15, Mbappé 0.92,
+van Dijk 0.12, Ronaldo 0.63 via international fallback; short-form/ambiguous names
+blank). 18 tests, 927/927. Gate 1 PASS 4/4, Gate 2 CLEAN (after dropping a dead
+`espn_id` resolver param the spec over-promised — TM has no ESPN ids), Gate 3
+APPROVED (after NaN-scrubbing string fields). predictor.py + value_finder.py ×2
+byte-for-byte unchanged. PNG on owner Desktop.
 
 #### WC-11A-02 — Lineup impact: display-only adjusted-λ (the core "A1")
 
