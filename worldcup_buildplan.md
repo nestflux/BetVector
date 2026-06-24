@@ -2,11 +2,12 @@
 
 Version 1.0 · June 2026
 
-> **MODULE STATUS: MVP + UX COMPLETE (28/28) · WC-09 (decision support + Bayesian R&D) IN PROGRESS** · June 23, 2026
+> **MODULE STATUS: MVP + UX COMPLETE (28/28) · WC-09 IN PROGRESS — 4/8 (tracks A+B done)** · June 23, 2026
 > WC-01 through WC-08 done (3-gate reviewed); dashboard is 4 tabs with flags + ET
-> times. **WC-09 (Option A)** adds a shadow CLV scorecard, a per-match research card,
-> a Bayesian hierarchical model (shadow only, Tier-2 approved), and a player-props
-> feasibility spike. Full test suite: 667/667 passing.
+> times. **WC-09 (Option A):** ✅ 09-01→04 done — shadow CLV scorecard + per-match
+> research card & review queue (decision-support tracks A+B, gated). ⏸ Remaining:
+> 09-05/06/07 Bayesian shadow model (Tier-2 approved) + 09-08 player-props spike.
+> Full test suite: 689/689 passing.
 
 ---
 
@@ -1031,7 +1032,7 @@ markets × regions per call — budget discipline required.
 
 ### Phase A — Shadow Scorecard (the measurement rig — build first)
 
-### WC-09-01 — Closing-Line Capture & CLV for WC Shadow Picks
+### WC-09-01 — Closing-Line Capture & CLV for WC Shadow Picks ✅ DONE
 
 **Type:** Pipeline / Data
 **Depends on:** WC-05-01 (value finder), WC-07-01 (pipeline)
@@ -1047,15 +1048,15 @@ can be computed.
 - Idempotent — set the closing line once per pick at/after kickoff, never overwrite.
 
 **Acceptance Criteria:**
-- [ ] Closing line captured for WC picks near kickoff
-- [ ] `WCValueBet.closing_odds` + `clv` populated after a match starts
-- [ ] CLV uses the same convention as the league system
-- [ ] Idempotent (closing line set once)
-- [ ] No new API cost beyond one near-kickoff snapshot per match day
+- [x] Closing line captured for WC picks near kickoff
+- [x] `WCValueBet.closing_odds` + `clv` populated after a match starts
+- [x] CLV uses the same convention as the league system
+- [x] Idempotent (closing line set once)
+- [x] No new API cost beyond one near-kickoff snapshot per match day
 
 ---
 
-### WC-09-02 — Shadow Scorecard Computation + Dashboard Panel
+### WC-09-02 — Shadow Scorecard Computation + Dashboard Panel ✅ DONE
 
 **Type:** UI / Analytics
 **Depends on:** WC-09-01
@@ -1070,17 +1071,17 @@ Compute and display the self-assessment scorecard on the dashboard.
 - Clearly labelled tracked/shadow, not realized money.
 
 **Acceptance Criteria:**
-- [ ] Scorecard shows mean CLV, % positive CLV, n picks
-- [ ] Calibration (predicted vs actual frequency) displayed
-- [ ] Flat-stake paper P&L shown
-- [ ] Low-sample state handled (<N picks → "insufficient data")
-- [ ] Clearly labelled shadow/tracked
+- [x] Scorecard shows mean CLV, % positive CLV, n picks
+- [x] Calibration (predicted vs actual frequency) displayed
+- [x] Flat-stake paper P&L shown
+- [x] Low-sample state handled (<N picks → "insufficient data")
+- [x] Clearly labelled shadow/tracked
 
 ---
 
 ### Phase B — Research Card (decision support)
 
-### WC-09-03 — Line-Movement & Best-Price Data Layer
+### WC-09-03 — Line-Movement & Best-Price Data Layer ✅ DONE
 
 **Type:** Analytics
 **Depends on:** WC-02-01 (odds), WC-05-01
@@ -1095,14 +1096,14 @@ Compute per-selection line movement and best price across books.
   the value finder already).
 
 **Acceptance Criteria:**
-- [ ] Line movement (open→current) computed per selection from odds history
-- [ ] Best price across books per selection
-- [ ] De-vigged market consensus + model diff exposed per match
-- [ ] Single-snapshot markets handled (no movement → "—")
+- [x] Line movement (open→current) computed per selection from odds history
+- [x] Best price across books per selection
+- [x] De-vigged market consensus + model diff exposed per match
+- [x] Single-snapshot markets handled (no movement → "—")
 
 ---
 
-### WC-09-04 — Research Card View + Review Queue
+### WC-09-04 — Research Card View + Review Queue ✅ DONE
 
 **Type:** UI
 **Depends on:** WC-09-03
@@ -1117,10 +1118,10 @@ Per-match decision card + a biggest-disagreements review queue.
 - xG form **deferred** (no reliable WC xG source) — clearly-marked placeholder only.
 
 **Acceptance Criteria:**
-- [ ] Research card shows model · market · edge · movement · best price for a match
-- [ ] Review queue lists the biggest model–market disagreements
-- [ ] Framed as "review / investigate", consistent with shadow discipline
-- [ ] Renders on desktop + mobile; no N+1
+- [x] Research card shows model · market · edge · movement · best price for a match
+- [x] Review queue lists the biggest model–market disagreements
+- [x] Framed as "review / investigate", consistent with shadow discipline
+- [x] Renders on desktop + mobile; no N+1
 
 ---
 

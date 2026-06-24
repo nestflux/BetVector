@@ -350,9 +350,9 @@ single-line expression.
 
 ## Current Status
 
-Last completed: WC-08 Dashboard UX Redesign ✅ — WC dashboard rebuilt into 4 tabs (Today & Bets / Groups / Knockouts / Model) with country flags, ET kickoff times, collapsible group reference, responsive (desktop+mobile). 7 issues, 3-gate reviewed, 667/667 tests. Earlier this session: WC model calibration (removed draw_boost, edge ceiling), PC-27 cloud cutover, WC split-brain fix.
-Currently working: Nothing on the critical path. League + WC modules feature-complete.
-Next up: (optional) WC model calibration round 2 / Bayesian model (Tier-2 proposal). Owner tasks: (1) reboot Streamlit Cloud to see the WC-08 redesign; (2) install WC launchd plists; (3) PC-27 7-day cloud soak.
+Last completed: WC-09 tracks A+B (09-01→04) ✅ — shadow CLV scorecard (Model tab) + per-match research card & review queue (Tab 1). CLV capture (closing line frozen on finish), de-vigged market consensus, best-price-across-books, line movement (opening_odds). 3-gate reviewed, 689/689 tests. Earlier: WC-08 tabbed redesign, model calibration, PC-27 cutover.
+Currently working: PAUSED at WC-09 checkpoint (owner rebooting cloud to see WC-08 + scorecard/research card). Tracks A+B done.
+Next up (WC-09 remaining): 09-05/06/07 Bayesian hierarchical shadow model (Tier-2 approved, adds PyMC, shadow-only until it beats Poisson on CLV); 09-08 player-props go/no-go spike (Odds API coverage confirmed: anytime scorer 10 books incl. Pinnacle). Owner tasks: install WC launchd plists; PC-27 7-day cloud soak.
 Hybrid cloud: DB is Neon Postgres (DATABASE_URL in .env / Streamlit Cloud secrets [database] connection_string); local SQLite kept as backup.
 
 E40 complete: All 10 issues done ✅ (TM datasets download, lineup/formation/manager backfill, manager features, injury club fix, minutes impact, recomputation, weekly refresh, integration test — 14,187 matches, 9,829 TM-mapped, 393K lineups, 42 tests)
