@@ -112,3 +112,27 @@ class TestResearchCardRedesign:
         src = _func_source("_research_bar_html")
         assert '"Model"' in src and '"Market"' in src
         assert "MARKET_GREY" in src
+
+
+class TestDisagreementsRedesign:
+    """DF-07: the 'Biggest disagreements' queue is now ranked verdict sentences
+    (✓ conviction vs ⚠ likely model error), replacing the flat dataframe."""
+
+    def test_disagreement_helper_present(self):
+        assert "_disagreement_row_html" in FUNCS
+
+    def test_card_uses_curated_queue_sentences(self):
+        src = _func_source("_render_research_card")
+        assert "build_disagreements(" in src
+        assert "_disagreement_row_html(" in src
+        # top_disagreements (the primitive) no longer drives the dashboard queue.
+        assert "top_disagreements(" not in src
+
+    def test_no_dataframe_left_in_research_card(self):
+        # DF-07 removes the last st.dataframe from the card — the queue is
+        # sentences now, and the main card is paired bars (DF-06).
+        assert "st.dataframe(" not in _func_source("_render_research_card")
+
+    def test_verdict_glyphs_present(self):
+        src = _func_source("_disagreement_row_html")
+        assert "✓" in src and "⚠" in src

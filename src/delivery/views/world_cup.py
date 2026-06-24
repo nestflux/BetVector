@@ -757,6 +757,28 @@ def _research_headline_html(h: dict) -> str:
     )
 
 
+def _disagreement_row_html(d: dict) -> str:
+    """One disagreement as a verdict-tagged, ranked sentence (DF-07): ✓ green
+    conviction (edge within the ceiling — a backable shadow lean) or ⚠ amber
+    likely-model-error (edge past the ceiling). The signed edge leads as a
+    scannable, colour-coded rank marker; the sentence carries the call."""
+    if d.get("trust") == "capped":
+        glyph, colour = "⚠", YELLOW
+    else:
+        glyph, colour = "✓", GREEN
+    edge = f'{d["edge"]:+.0%}'
+    return (
+        f'<div style="display:flex;gap:10px;align-items:baseline;padding:6px 0;'
+        f'border-bottom:1px solid {BORDER};">'
+        f'<span style="color:{colour};font-weight:700;flex-shrink:0;width:14px;">{glyph}</span>'
+        f'<span style="color:{colour};font-weight:700;font-family:JetBrains Mono,monospace;'
+        f'flex-shrink:0;width:46px;text-align:right;">{edge}</span>'
+        f'<span style="color:{TEXT};font-size:0.86rem;line-height:1.35;">'
+        f'{escape(d.get("text", ""))}</span>'
+        f'</div>'
+    )
+
+
 def _render_research_card() -> None:
     """Per-match decision support: model vs de-vigged market, edge, line movement,
     and best price across books. Where you disagree with the consensus — a thing
@@ -816,21 +838,27 @@ def _render_research_card() -> None:
     _render_lineup_flag(sel_id)
 
     # Review queue — biggest model-market disagreements across upcoming matches
+    # (DF-07). Each row is a ranked sentence with an explicit verdict: ✓ conviction
+    # (edge within the trust ceiling) vs ⚠ likely model error (past it), collapsed
+    # to the side the model favours and ordered so trustworthy calls lead.
     st.markdown("**Biggest disagreements to review**")
-    from src.world_cup.research import top_disagreements
-    disagreements = top_disagreements(limit=10)
+    from src.world_cup.research import build_disagreements
+    disagreements = build_disagreements(limit=10)
     if not disagreements:
-        st.caption("No disagreements to review yet (needs odds + predictions).")
+        st.caption(
+            "No notable disagreements right now — the model is broadly in line with "
+            "the market (or odds / predictions aren't in for these fixtures yet)."
+        )
         return
-    q_rows = [{
-        "Match": d["match"],
-        "Selection": d["selection"],
-        "Model": f"{d['model']:.0%}",
-        "Market": f"{d['market']:.0%}",
-        "Edge": f"{d['edge']:+.1%}",
-        "Best price": f"{d['best_odds']:.2f} ({d['best_book']})" if d["best_odds"] else "—",
-    } for d in disagreements]
-    st.dataframe(q_rows, use_container_width=True, hide_index=True)
+    st.markdown(
+        "".join(_disagreement_row_html(d) for d in disagreements),
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "✓ conviction = a model edge inside the trust range — a shadow lean to "
+        "investigate. ⚠ likely model error = a gap past the ceiling, too big to "
+        "trust. Ranked by trustworthy edge, convictions first. Not bets."
+    )
 
 
 # ============================================================================

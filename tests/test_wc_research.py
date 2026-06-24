@@ -10,7 +10,7 @@ from src.database.db import Base
 import src.world_cup.research as research
 from src.world_cup.research import (
     build_research_card, top_disagreements, _devig, _consensus,
-    summarize_card,
+    summarize_card, build_disagreements,
 )
 from src.world_cup.models import WCTeam, WCMatch, WCOdds, WCPrediction
 from src.world_cup.predictor import MODEL_NAME
@@ -322,3 +322,112 @@ def test_build_research_card_attaches_blocks_and_headline(session, monkeypatch):
     h = card["headline"]
     assert h["class"] == "value" and h["selection"] == "over_2.5"
     assert "Goals" in h["text"]
+
+
+# ---- DF-07: curated disagreements queue (verdict-tagged, ranked sentences) ----
+
+def _seed_disagreements(s):
+    """Alpha v Beta with even prices so the de-vigged market is exactly 50/50 per
+    two-way market and the h2h de-vigs in line with the model:
+      • h2h    — model == market → no disagreement (filtered)
+      • O/U2.5 — model Under 0.60 vs market 0.50 → +0.10 conviction (value)
+      • BTTS   — model Yes 0.70 vs market 0.50 → +0.20 likely model error (capped)
+    """
+    s.add_all([
+        WCTeam(id=1, name="Alpha", fifa_code="ALP", confederation="UEFA", group_letter="A"),
+        WCTeam(id=2, name="Beta", fifa_code="BET", confederation="UEFA", group_letter="A"),
+    ])
+    s.add(WCMatch(id=30, stage="group", group_letter="A", date="2026-06-28",
+                  kickoff_time="18:00", home_team_id=1, away_team_id=2, status="scheduled"))
+    s.add(WCPrediction(id=300, match_id=30, model_name=MODEL_NAME,
+                       home_win_prob=0.40, draw_prob=0.30, away_win_prob=0.30,
+                       home_expected_goals=1.0, away_expected_goals=1.0,
+                       over_25_prob=0.40, btts_prob=0.70))
+
+    def o(mtype, sel, dec, pt=None):
+        return WCOdds(match_id=30, bookmaker="Pinnacle", market_type=mtype, selection=sel,
+                      odds_decimal=dec, opening_odds=dec, point=pt,
+                      captured_at="2026-06-28T08:00")
+    s.add_all([
+        o("h2h", "Alpha", 2.50), o("h2h", "Draw", 3.3333), o("h2h", "Beta", 3.3333),
+        o("totals", "Over", 2.00, 2.5), o("totals", "Under", 2.00, 2.5),
+        o("btts", "Yes", 2.00), o("btts", "No", 2.00),
+    ])
+    s.commit()
+
+
+def test_build_disagreements_collapses_tags_and_ranks(session, monkeypatch):
+    _seed_disagreements(session)
+    _patch(session, monkeypatch)
+    dq = build_disagreements(limit=10)
+    # Collapsed to the model-favoured side: Under 2.5 + BTTS Yes only — NOT the
+    # mirror Over/No, and NOT h2h (model in line with the market).
+    assert [d["selection"] for d in dq] == ["under_2.5", "btts_yes"]
+    under, btts = dq
+    assert under["trust"] == "value" and under["edge"] == pytest.approx(0.10)
+    assert under["label"] == "Under 2.5" and under["best_odds"] == 2.00
+    assert btts["trust"] == "capped" and btts["edge"] == pytest.approx(0.20)
+    # The trustworthy conviction ranks ABOVE the bigger but untrustworthy gap.
+    assert under["edge"] < btts["edge"]
+    assert dq.index(under) < dq.index(btts)
+
+
+def test_build_disagreements_sentences(session, monkeypatch):
+    _seed_disagreements(session)
+    _patch(session, monkeypatch)
+    by = {d["selection"]: d for d in build_disagreements()}
+    assert by["under_2.5"]["text"] == (
+        "Back Under 2.5 in Alpha v Beta — model 60% vs market 50%, "
+        "best price 2.00 (Pinnacle).")
+    assert by["btts_yes"]["text"] == (
+        "Alpha v Beta: model rates BTTS Yes 70% vs market 50% — past the trust "
+        "ceiling, likely model error.")
+
+
+def test_build_disagreements_respects_limit(session, monkeypatch):
+    _seed_disagreements(session)
+    _patch(session, monkeypatch)
+    dq = build_disagreements(limit=1)
+    assert len(dq) == 1 and dq[0]["selection"] == "under_2.5"   # conviction leads
+
+
+def test_build_disagreements_empty_without_predictions(session, monkeypatch):
+    # Odds but no prediction → nothing for the model to disagree with.
+    session.add_all([
+        WCTeam(id=1, name="Alpha", fifa_code="ALP", confederation="UEFA", group_letter="A"),
+        WCTeam(id=2, name="Beta", fifa_code="BET", confederation="UEFA", group_letter="A"),
+    ])
+    session.add(WCMatch(id=31, stage="group", group_letter="A", date="2026-06-28",
+                        kickoff_time="18:00", home_team_id=1, away_team_id=2, status="scheduled"))
+    session.add_all([
+        WCOdds(match_id=31, bookmaker="Pinnacle", market_type="totals", selection="Over",
+               odds_decimal=2.0, opening_odds=2.0, point=2.5, captured_at="2026-06-28T08:00"),
+        WCOdds(match_id=31, bookmaker="Pinnacle", market_type="totals", selection="Under",
+               odds_decimal=2.0, opening_odds=2.0, point=2.5, captured_at="2026-06-28T08:00"),
+    ])
+    session.commit()
+    _patch(session, monkeypatch)
+    assert build_disagreements() == []
+
+
+def test_build_disagreements_skips_in_line_markets(session, monkeypatch):
+    # Model exactly matches the de-vigged market → no disagreement surfaces.
+    session.add_all([
+        WCTeam(id=1, name="Alpha", fifa_code="ALP", confederation="UEFA", group_letter="A"),
+        WCTeam(id=2, name="Beta", fifa_code="BET", confederation="UEFA", group_letter="A"),
+    ])
+    session.add(WCMatch(id=32, stage="group", group_letter="A", date="2026-06-28",
+                        kickoff_time="18:00", home_team_id=1, away_team_id=2, status="scheduled"))
+    session.add(WCPrediction(id=320, match_id=32, model_name=MODEL_NAME,
+                             home_win_prob=0.40, draw_prob=0.30, away_win_prob=0.30,
+                             home_expected_goals=1.0, away_expected_goals=1.0,
+                             over_25_prob=0.50, btts_prob=0.50))
+    session.add_all([
+        WCOdds(match_id=32, bookmaker="Pinnacle", market_type="totals", selection="Over",
+               odds_decimal=2.0, opening_odds=2.0, point=2.5, captured_at="2026-06-28T08:00"),
+        WCOdds(match_id=32, bookmaker="Pinnacle", market_type="totals", selection="Under",
+               odds_decimal=2.0, opening_odds=2.0, point=2.5, captured_at="2026-06-28T08:00"),
+    ])
+    session.commit()
+    _patch(session, monkeypatch)
+    assert build_disagreements() == []

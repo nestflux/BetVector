@@ -1669,10 +1669,25 @@ APPROVED. The "Biggest disagreements" queue is intentionally left for DF-07.
   (> ceiling) — direction obvious, ordered by trustworthy edge magnitude.
 
 **Acceptance Criteria:**
-- [ ] Each disagreement reads as a sentence with a clear verdict tag
-- [ ] Conviction vs likely-model-error split is explicit (edge ceiling)
-- [ ] Ranked by trustworthy edge; the point of each row is obvious
-- [ ] Empty/early state handled
+- [x] Each disagreement reads as a sentence with a clear verdict tag
+- [x] Conviction vs likely-model-error split is explicit (edge ceiling)
+- [x] Ranked by trustworthy edge; the point of each row is obvious
+- [x] Empty/early state handled
+
+**Result:** ✅ DONE. The "Biggest disagreements to review" queue is now ranked verdict
+sentences instead of a flat dataframe. New pure `research.build_disagreements(limit, cfg)`
+collapses each market to the side the MODEL favours (so a row is a clear directional call,
+not a mirror Over/Under pair), keeps it only when the edge clears the threshold (a real
+disagreement), and tags it against the SAME bounds the value finder stakes on (via the DF-06
+`_edge_trust` / `_trust_bounds`): `value` → ✓ conviction (a backable shadow lean, with best
+price), `capped` → ⚠ likely model error (gap past the ceiling, too big to trust). Rows sort
+`(conviction-before-capped, edge desc)` so the trustworthy calls lead even when a capped gap is
+numerically bigger (a +28% over-ceiling gap ranks below a +13% conviction). `_disagreement_sentence`
+(pure) writes the sentence; the view's `_disagreement_row_html` adds the ✓/⚠ colour-tiered tag +
+the signed edge as a scannable rank marker (all escaped). Empty/in-line/no-prediction states return
+`[]` → a neutral caption. The older `top_disagreements` is kept as the tested lower-level primitive.
+The value path (`value_finder.py`, `predictor.py`) is byte-for-byte unchanged — shadow only.
+831/831 (+9 tests); Gate 2 CLEAN, Gate 3 APPROVED. **This completes DF Phase A (main page).**
 
 ### DF-08 — WC Deep Dive: Scaffold + Heatmap + Model-vs-Books
 

@@ -435,3 +435,121 @@ def top_disagreements(limit: int = 10) -> list[dict]:
 
     out.sort(key=lambda x: -abs(x["edge"]))
     return out[:limit]
+
+
+# ============================================================================
+# DF-07 — Curated disagreements queue (verdict-tagged review sentences)
+# ============================================================================
+# top_disagreements (above) is the primitive: every priceable selection, sorted
+# by |edge|, both sides of each market. The review queue the dashboard shows is
+# curated on top of it: each market is collapsed to the ONE side the model
+# favours (so a row is a clear directional call, not a mirror pair), tagged with
+# a verdict against the SAME edge ceiling the value finder stakes on, and ranked
+# so trustworthy convictions lead. Shadow / decision-support only — nothing here
+# is staked; it's a queue of hypotheses to investigate.
+
+_RANK = {"value": 0, "capped": 1}      # convictions before likely-model-error
+
+
+def _queue_label(sel: str, home: str, away: str) -> str:
+    """Crisp subject for a 'Back X' / 'model rates X' disagreement sentence —
+    the team name for home/away, else the short market label."""
+    if sel == "home":
+        return home
+    if sel == "away":
+        return away
+    if sel == "draw":
+        return "the draw"
+    return _SHORT_LABELS.get(sel, sel)      # "Over 2.5", "BTTS Yes", …
+
+
+def _disagreement_sentence(d: dict) -> str:
+    """One plain-English review sentence for a disagreement. Conviction reads as
+    a backable lean (with the best price); a capped gap reads as a flagged
+    over-the-ceiling discrepancy — likely model error, never a call to back."""
+    m, k = d["model_prob"], d["market_prob"]
+    if d["trust"] == "capped":
+        return (f'{d["match"]}: model rates {d["label"]} {m:.0%} vs market '
+                f'{k:.0%} — past the trust ceiling, likely model error.')
+    if d.get("best_odds") and d.get("best_book"):
+        price = f', best price {d["best_odds"]:.2f} ({d["best_book"]})'
+    elif d.get("best_odds"):
+        price = f', best price {d["best_odds"]:.2f}'
+    else:
+        price = ''
+    return (f'Back {d["label"]} in {d["match"]} — model {m:.0%} vs '
+            f'market {k:.0%}{price}.')
+
+
+def build_disagreements(limit: int = 10, cfg: dict | None = None) -> list[dict]:
+    """DF-07 — the dashboard review queue: across upcoming matches, each market
+    collapsed to the side the MODEL most favours over the de-vigged market, kept
+    only when that edge clears the threshold (a real disagreement), tagged with a
+    verdict against the value finder's bounds:
+      ``value``  — edge in [threshold, ceiling]: ✓ conviction (a backable shadow
+                   lean to investigate).
+      ``capped`` — edge past the ceiling: ⚠ likely model error (too big to trust).
+    Convictions rank first (by edge), then likely-model-error rows (by edge), so
+    the trustworthy calls lead. One bulk query (no N+1). Read-only / shadow."""
+    threshold, ceiling = _trust_bounds(cfg)
+    out: list[dict] = []
+    with get_session() as session:
+        matches = session.execute(
+            select(WCMatch)
+            .where(WCMatch.status != "finished")
+            .options(
+                joinedload(WCMatch.home_team),
+                joinedload(WCMatch.away_team),
+                joinedload(WCMatch.odds),
+                joinedload(WCMatch.predictions),
+            )
+        ).unique().scalars().all()
+
+        for m in matches:
+            home = m.home_team.name if m.home_team else "?"
+            away = m.away_team.name if m.away_team else "?"
+            pred = next((p for p in m.predictions if p.model_name == MODEL_NAME), None)
+            if not pred:
+                continue
+            model = _model_probs(pred)
+            data = _collect(m.odds, home, away)
+            for group, sels in _GROUPS.items():
+                cur, _ = _consensus(data, sels)
+                if cur is None:
+                    continue
+                # The single side the model most favours over the market here.
+                best = None
+                for sel in sels:
+                    mp, kp = model.get(sel), cur.get(sel)
+                    if mp is None or kp is None:
+                        continue
+                    edge = mp - kp
+                    if best is None or edge > best[0]:
+                        best = (edge, sel, mp, kp)
+                if best is None:
+                    continue
+                edge, sel, mp, kp = best
+                if edge < threshold:        # model broadly in line — not a disagreement
+                    continue
+                d = data.get(sel) or {}
+                price, book = d.get("best", (0.0, ""))
+                row = {
+                    "match": f"{home} v {away}",
+                    "group": group,
+                    "selection": sel,
+                    "label": _queue_label(sel, home, away),
+                    "trust": _edge_trust(edge, threshold, ceiling),  # value | capped
+                    "edge": edge,
+                    "model_prob": mp,
+                    "market_prob": kp,
+                    "best_odds": price if price > 1.0 else None,
+                    "best_book": book or None,
+                }
+                out.append(row)
+
+    # Convictions first (largest edge first), then likely-model-error rows.
+    out.sort(key=lambda r: (_RANK.get(r["trust"], 2), -r["edge"]))
+    out = out[:limit]
+    for r in out:
+        r["text"] = _disagreement_sentence(r)
+    return out
