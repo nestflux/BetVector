@@ -350,9 +350,9 @@ single-line expression.
 
 ## Current Status
 
-Last completed: WC-09-05 ✅ — Hierarchical Bayesian Poisson (scipy MAP + Laplace, NOT PyMC — owner-approved approach change; llvmlite wouldn't build). src/world_cup/bayesian_model.py: latent per-team attack/defence, Gaussian shrinkage priors (hierarchical pooling), home_adv, Dixon-Coles ρ; fits 8,159 intl matches / 284 teams in <1s; Spain#1/Argentina#2/Brazil#3; 7×7 matrix (Rule-6 reuse); λ credible interval via Laplace. 3-gate (Gate 3 verified gradient+Hessian numerically). 9 tests, 698/698. Earlier A+B (09-01→04): scorecard + research card.
-Currently working: WC-09-06 — Bayesian shadow integration (model_name="wc_bayesian_v1", never staked; mirror Poisson's home/neutral convention for apples-to-apples scorecard).
-Next up (WC-09 remaining): 09-07 Bayesian validation harness + scorecard comparison; 09-08 player-props go/no-go spike (Odds API coverage confirmed: anytime scorer 10 books incl. Pinnacle). Owner tasks: install WC launchd plists; PC-27 7-day cloud soak.
+Last completed: WC-09-06 ✅ — Bayesian shadow integration. bayesian_model.predict_all_shadow() stores predictions under model_name="wc_bayesian_v1" (separate row per UniqueConstraint(match_id,model_name)); wired into pipeline step 5b after Poisson, _step-isolated, gated on _fitted. SHADOW ONLY: value_finder reads only Poisson name → no Bayesian value bets/staking; never overrides Poisson. _TEAM_ALIASES{USA→United States} for name alignment (40/40 WC matches on real Neon). 3-gate (Gate 3 verified DB-level idempotency + isolation). 5 tests (14 total bayesian), 703/703. Bayesian disagrees w/ Poisson on sparse teams (Portugal-Uzbekistan 84%→63%) — shrinkage pulls extremes in.
+Currently working: WC-09-07 — Bayesian validation harness + scorecard comparison (both models' CLV/calibration/Brier side-by-side; promotion bar documented; NO auto-promotion).
+Next up (WC-09 remaining): 09-08 player-props go/no-go spike (Odds API coverage confirmed: anytime scorer 10 books incl. Pinnacle). Owner tasks: install WC launchd plists; PC-27 7-day cloud soak.
 Hybrid cloud: DB is Neon Postgres (DATABASE_URL in .env / Streamlit Cloud secrets [database] connection_string); local SQLite kept as backup.
 
 E40 complete: All 10 issues done ✅ (TM datasets download, lineup/formation/manager backfill, manager features, injury club fix, minutes impact, recomputation, weekly refresh, integration test — 14,187 matches, 9,829 TM-mapped, 393K lineups, 42 tests)

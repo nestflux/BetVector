@@ -38,7 +38,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
 from src.database.db import get_session
-from src.world_cup.models import WCHistoricalMatch, WCMatch
+from src.world_cup.models import WCHistoricalMatch, WCMatch, WCPrediction
 from src.world_cup.predictor import WCPoissonPredictor
 
 logger = logging.getLogger(__name__)
@@ -48,6 +48,15 @@ MODEL_NAME_BAYES = "wc_bayesian_v1"
 
 _LAMBDA_CLAMP = (0.2, 4.0)   # same goal-rate clamp as the Poisson model
 _MU_HA_PRIOR_VAR = 25.0      # weak N(0, 5²) prior on the intercept + home advantage
+
+# WC squad names that differ from the historical international results dataset.
+# Without this the team can't be found in the training index and its matches are
+# skipped. Only the host differs today ("USA" vs the dataset's "United States");
+# all other 47 WC names align exactly. Extend here if future fixtures add a team
+# whose WCTeam.name doesn't match its historical name.
+_TEAM_ALIASES = {
+    "USA": "United States",
+}
 
 
 def _load_cfg() -> dict:
@@ -125,7 +134,8 @@ class BayesianPoissonModel:
         # Recency: weight relative to the most recent match (deterministic given data)
         ords = np.array([_to_ordinal(r[0]) or 0 for r in rows], dtype=float)
         ref = ords.max() if ords.size else 0.0
-        decay = np.log(2) / float(self.recency_halflife_days)
+        # Guard a nonsensical half-life of 0 (config error) → no decay rather than /0.
+        decay = np.log(2) / max(float(self.recency_halflife_days), 1.0)
         w = mw * np.exp(-decay * np.maximum(ref - ords, 0.0))
 
         var = float(self.prior_sd) ** 2
@@ -218,6 +228,8 @@ class BayesianPoissonModel:
     def predict(self, home_name: str, away_name: str) -> dict | None:
         if not self._fitted or self.params is None:
             return None
+        home_name = _TEAM_ALIASES.get(home_name, home_name)
+        away_name = _TEAM_ALIASES.get(away_name, away_name)
         hi, ai = self.team_idx.get(home_name), self.team_idx.get(away_name)
         if hi is None or ai is None:
             return None
@@ -253,3 +265,80 @@ class BayesianPoissonModel:
             "most_likely_score": probs["most_likely_score"],
             "matrix": matrix,
         }
+
+    # --------------------------------------------------------------- shadow
+    def predict_all_shadow(self) -> int:
+        """Store Bayesian predictions for every WC match under
+        ``MODEL_NAME_BAYES`` (``wc_bayesian_v1``) — **shadow only**.
+
+        This never creates value bets (the value finder reads only the Poisson
+        ``MODEL_NAME``) and never overrides the Poisson row; the
+        ``UniqueConstraint(match_id, model_name)`` keeps the two models' rows
+        side by side. We use the same home/away assignment as the fixture (and
+        thus as the Poisson), so the home-advantage term lands on the same side
+        in both models — keeping the scorecard comparison apples-to-apples.
+
+        A match is skipped (counted, logged) when either team isn't in the
+        training index — the Bayesian model can only rate teams it has seen
+        play. Returns the number of predictions stored.
+        """
+        if not self._fitted:
+            logger.error("Bayesian model not fitted — call fit() first")
+            return 0
+
+        stored = skipped = 0
+        try:
+            with get_session() as session:
+                matches = session.execute(
+                    select(WCMatch)
+                    .options(joinedload(WCMatch.home_team),
+                             joinedload(WCMatch.away_team))
+                    .order_by(WCMatch.date)
+                ).unique().scalars().all()
+
+                for match in matches:
+                    if not match.home_team or not match.away_team:
+                        continue
+                    pred = self.predict(match.home_team.name, match.away_team.name)
+                    if not pred:
+                        skipped += 1
+                        continue
+
+                    existing = session.execute(
+                        select(WCPrediction).where(
+                            WCPrediction.match_id == match.id,
+                            WCPrediction.model_name == MODEL_NAME_BAYES,
+                        )
+                    ).scalar_one_or_none()
+
+                    if existing:
+                        existing.home_win_prob = pred["home_win_prob"]
+                        existing.draw_prob = pred["draw_prob"]
+                        existing.away_win_prob = pred["away_win_prob"]
+                        existing.home_expected_goals = pred["lambda_home"]
+                        existing.away_expected_goals = pred["lambda_away"]
+                        existing.over_25_prob = pred["over_25_prob"]
+                        existing.btts_prob = pred["btts_prob"]
+                        existing.most_likely_score = pred["most_likely_score"]
+                    else:
+                        session.add(WCPrediction(
+                            match_id=match.id,
+                            model_name=MODEL_NAME_BAYES,
+                            home_win_prob=pred["home_win_prob"],
+                            draw_prob=pred["draw_prob"],
+                            away_win_prob=pred["away_win_prob"],
+                            home_expected_goals=pred["lambda_home"],
+                            away_expected_goals=pred["lambda_away"],
+                            over_25_prob=pred["over_25_prob"],
+                            btts_prob=pred["btts_prob"],
+                            most_likely_score=pred["most_likely_score"],
+                        ))
+                    stored += 1
+
+                session.commit()
+                logger.info("Bayesian shadow: stored %d, skipped %d (team not in index)",
+                            stored, skipped)
+                return stored
+        except Exception as e:
+            logger.error("predict_all_shadow failed: %s", e)
+            return 0

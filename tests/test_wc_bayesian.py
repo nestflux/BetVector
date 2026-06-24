@@ -12,13 +12,14 @@ from contextlib import contextmanager
 
 import numpy as np
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 from src.database.db import Base
 import src.world_cup.bayesian_model as bm
-from src.world_cup.bayesian_model import BayesianPoissonModel
-from src.world_cup.models import WCHistoricalMatch
+from src.world_cup.bayesian_model import BayesianPoissonModel, MODEL_NAME_BAYES
+from src.world_cup.models import WCHistoricalMatch, WCTeam, WCMatch, WCPrediction
+from src.world_cup.predictor import MODEL_NAME
 
 # Known generative parameters — the model should recover their ORDERING.
 TRUE_ATT = {"Alpha": 0.5, "Bravo": 0.05, "Charlie": -0.05, "Delta": -0.5}
@@ -133,3 +134,140 @@ def test_config_defaults_loaded():
     assert m.prior_sd == 0.35
     assert m.recency_halflife_days == 1825
     assert m.rho == -0.05
+
+
+def test_shadow_model_name_is_distinct_from_poisson():
+    # The shadow model MUST use a different model_name so the value finder
+    # (which reads only the Poisson MODEL_NAME) never picks up Bayesian rows.
+    assert MODEL_NAME_BAYES == "wc_bayesian_v1"
+    assert MODEL_NAME_BAYES != MODEL_NAME
+
+
+def test_predict_all_shadow_stores_and_skips(session, monkeypatch):
+    session.add_all(_synth_rows())
+    session.add_all([
+        WCTeam(id=1, name="Alpha", fifa_code="ALP", confederation="X", group_letter="A"),
+        WCTeam(id=2, name="Bravo", fifa_code="BRV", confederation="X", group_letter="A"),
+        WCTeam(id=3, name="Outsider", fifa_code="OUT", confederation="X", group_letter="A"),
+    ])
+    # match with both teams known to the model → stored
+    session.add(WCMatch(id=10, stage="group", group_letter="A", date="2026-06-20",
+                        kickoff_time="18:00", home_team_id=1, away_team_id=2, status="scheduled"))
+    # match with a team never seen in training → skipped
+    session.add(WCMatch(id=11, stage="group", group_letter="A", date="2026-06-21",
+                        kickoff_time="18:00", home_team_id=1, away_team_id=3, status="scheduled"))
+    session.commit()
+
+    from contextlib import contextmanager
+
+    @contextmanager
+    def fake():
+        yield session
+
+    monkeypatch.setattr(bm, "get_session", fake)
+    m = BayesianPoissonModel(recency_halflife_days=1e9)
+    m.fit()
+
+    stored = m.predict_all_shadow()
+    assert stored == 1   # match 10 stored; match 11 skipped (Outsider not in index)
+
+    rows = session.execute(
+        select(WCPrediction).where(WCPrediction.model_name == MODEL_NAME_BAYES)
+    ).scalars().all()
+    assert len(rows) == 1 and rows[0].match_id == 10
+    assert 0.0 < rows[0].home_win_prob < 1.0
+    assert rows[0].home_expected_goals > 0
+
+
+def test_usa_alias_resolves_to_historical_name(session, monkeypatch):
+    # The host's WCTeam.name is "USA" but the historical dataset says
+    # "United States" — the alias must bridge them so the host gets predictions.
+    rows = _synth_rows()
+    base = dt.date(2023, 1, 1)
+    for i in range(60):  # give "United States" enough matches to enter the index
+        rows.append(WCHistoricalMatch(
+            date=(base + dt.timedelta(days=i)).isoformat(),
+            home_team="United States", away_team="Alpha",
+            home_goals=int(i % 3), away_goals=int((i + 1) % 3),
+            match_weight=1.0, neutral_venue=0))
+    session.add_all(rows)
+    session.commit()
+
+    from contextlib import contextmanager
+
+    @contextmanager
+    def fake():
+        yield session
+
+    monkeypatch.setattr(bm, "get_session", fake)
+    m = BayesianPoissonModel(recency_halflife_days=1e9)
+    m.fit()
+    assert "United States" in m.team_idx and "USA" not in m.team_idx
+    p = m.predict("USA", "Alpha")          # alias → "United States"
+    assert p is not None and p["home_win_prob"] is not None
+
+
+def test_shadow_run_leaves_poisson_row_untouched(session, monkeypatch):
+    # The shadow must never overwrite the Poisson prediction for the same match.
+    session.add_all(_synth_rows())
+    session.add_all([
+        WCTeam(id=1, name="Alpha", fifa_code="ALP", confederation="X", group_letter="A"),
+        WCTeam(id=2, name="Bravo", fifa_code="BRV", confederation="X", group_letter="A"),
+    ])
+    session.add(WCMatch(id=10, stage="group", group_letter="A", date="2026-06-20",
+                        kickoff_time="18:00", home_team_id=1, away_team_id=2, status="scheduled"))
+    session.add(WCPrediction(id=99, match_id=10, model_name=MODEL_NAME,
+                             home_win_prob=0.11, draw_prob=0.22, away_win_prob=0.67,
+                             home_expected_goals=0.5, away_expected_goals=1.5, over_25_prob=0.40))
+    session.commit()
+
+    from contextlib import contextmanager
+
+    @contextmanager
+    def fake():
+        yield session
+
+    monkeypatch.setattr(bm, "get_session", fake)
+    m = BayesianPoissonModel(recency_halflife_days=1e9)
+    m.fit()
+    m.predict_all_shadow()
+
+    poisson = session.execute(
+        select(WCPrediction).where(WCPrediction.match_id == 10,
+                                   WCPrediction.model_name == MODEL_NAME)
+    ).scalar_one()
+    assert poisson.id == 99                       # same physical row
+    assert (poisson.home_win_prob, poisson.draw_prob, poisson.away_win_prob) == (0.11, 0.22, 0.67)
+    bayes = session.execute(
+        select(WCPrediction).where(WCPrediction.match_id == 10,
+                                   WCPrediction.model_name == MODEL_NAME_BAYES)
+    ).scalar_one()
+    assert bayes.id != 99                         # a distinct row, not an overwrite
+
+
+def test_predict_all_shadow_is_idempotent(session, monkeypatch):
+    session.add_all(_synth_rows())
+    session.add_all([
+        WCTeam(id=1, name="Alpha", fifa_code="ALP", confederation="X", group_letter="A"),
+        WCTeam(id=2, name="Bravo", fifa_code="BRV", confederation="X", group_letter="A"),
+    ])
+    session.add(WCMatch(id=10, stage="group", group_letter="A", date="2026-06-20",
+                        kickoff_time="18:00", home_team_id=1, away_team_id=2, status="scheduled"))
+    session.commit()
+
+    from contextlib import contextmanager
+
+    @contextmanager
+    def fake():
+        yield session
+
+    monkeypatch.setattr(bm, "get_session", fake)
+    m = BayesianPoissonModel(recency_halflife_days=1e9)
+    m.fit()
+
+    m.predict_all_shadow()
+    m.predict_all_shadow()   # second run must update, not duplicate (uq match_id+model_name)
+    rows = session.execute(
+        select(WCPrediction).where(WCPrediction.model_name == MODEL_NAME_BAYES)
+    ).scalars().all()
+    assert len(rows) == 1

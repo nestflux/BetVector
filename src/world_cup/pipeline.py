@@ -160,6 +160,21 @@ def _run_morning() -> dict:
         logger.warning("Model not fitted — skipping predictions")
         results["predictions"] = None
 
+    # 5b. Bayesian shadow model (WC-09-06) — runs alongside the Poisson, stored
+    # under model_name="wc_bayesian_v1". SHADOW ONLY: never staked, never
+    # overrides the Poisson, and generates no value bets (the value finder reads
+    # only the Poisson model_name). Tracked on the scorecard (WC-09-07) so we can
+    # see whether it earns promotion. Isolated by _step — a failure here never
+    # blocks the Poisson predictions, simulation, or value bets below.
+    from src.world_cup.bayesian_model import BayesianPoissonModel
+    bayes = BayesianPoissonModel()
+    results["bayes_fit"] = _step("Fit WC Bayesian (shadow)", bayes.fit)
+    if bayes._fitted:
+        results["bayes_predictions"] = _step(
+            "Generate Bayesian Shadow Predictions", bayes.predict_all_shadow)
+    else:
+        results["bayes_predictions"] = None
+
     # 6. Run tournament simulator
     from src.world_cup.simulator import simulate_tournament
     if predictor._is_fitted:

@@ -2,12 +2,12 @@
 
 Version 1.0 · June 2026
 
-> **MODULE STATUS: MVP + UX COMPLETE (28/28) · WC-09 IN PROGRESS — 5/8** · June 23, 2026
+> **MODULE STATUS: MVP + UX COMPLETE (28/28) · WC-09 IN PROGRESS — 6/8** · June 23, 2026
 > WC-01 through WC-08 done (3-gate reviewed); dashboard is 4 tabs with flags + ET
-> times. **WC-09 (Option A):** ✅ 09-01→04 (decision-support tracks A+B) + ✅ 09-05
-> (hierarchical Bayesian Poisson — scipy MAP+Laplace, fits 8,159 matches in <1s,
-> Spain#1/Argentina#2/Brazil#3). ⏸ Remaining: 09-06/07 Bayesian shadow integration
-> + validation, 09-08 player-props spike. Full test suite: 698/698 passing.
+> times. **WC-09 (Option A):** ✅ 09-01→04 (decision-support tracks A+B) + ✅ 09-05/06
+> (Bayesian shadow model — scipy MAP+Laplace, live in pipeline under wc_bayesian_v1,
+> 40/40 WC matches, never staked). ⏸ Remaining: 09-07 validation + scorecard
+> comparison, 09-08 player-props spike. Full test suite: 703/703 passing.
 
 ---
 
@@ -1164,7 +1164,7 @@ pooling for sparse data + posterior uncertainty), fast (seconds), no new heavy d
 
 ---
 
-### WC-09-06 — Bayesian Shadow Integration
+### WC-09-06 — Bayesian Shadow Integration ✅ DONE
 
 **Type:** Pipeline
 **Depends on:** WC-09-05, WC-07-01
@@ -1177,10 +1177,10 @@ Run the Bayesian model alongside the Poisson, shadow only.
 - **Never auto-stake; never overrides the Poisson.**
 
 **Acceptance Criteria:**
-- [ ] Bayesian predictions stored under a distinct `model_name`
-- [ ] No value bets / no staking from the Bayesian model
-- [ ] Pipeline runs both models without error
-- [ ] Existing Poisson behavior unchanged
+- [x] Bayesian predictions stored under a distinct `model_name`
+- [x] No value bets / no staking from the Bayesian model
+- [x] Pipeline runs both models without error
+- [x] Existing Poisson behavior unchanged
 
 ---
 
