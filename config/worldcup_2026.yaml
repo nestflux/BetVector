@@ -528,3 +528,15 @@ betting:
   markets:
     - h2h
     - totals
+
+# Hierarchical Bayesian Poisson (WC-09-05) — scipy MAP + Laplace. Shadow only.
+bayesian:
+  # SD of the Gaussian shrinkage prior on team attack/defence (log-rate units).
+  # This is the hierarchical pooling strength: smaller = more pooling toward the
+  # global mean (more shrinkage for sparse teams). 0.35 → teams span ~exp(±0.7).
+  prior_sd: 0.35
+  # Match weight halves every N days (recent international form matters more).
+  # 1825 = 5 years; combined multiplicatively with each match's importance weight.
+  recency_halflife_days: 1825
+  # Dixon-Coles low-score correction applied to the 7×7 matrix (same as Poisson).
+  rho: -0.05

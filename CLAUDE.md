@@ -350,9 +350,9 @@ single-line expression.
 
 ## Current Status
 
-Last completed: WC-09 tracks A+B (09-01→04) ✅ — shadow CLV scorecard (Model tab) + per-match research card & review queue (Tab 1). CLV capture (closing line frozen on finish), de-vigged market consensus, best-price-across-books, line movement (opening_odds). 3-gate reviewed, 689/689 tests. Earlier: WC-08 tabbed redesign, model calibration, PC-27 cutover.
-Currently working: PAUSED at WC-09 checkpoint (owner rebooting cloud to see WC-08 + scorecard/research card). Tracks A+B done.
-Next up (WC-09 remaining): 09-05/06/07 Bayesian hierarchical shadow model (Tier-2 approved, adds PyMC, shadow-only until it beats Poisson on CLV); 09-08 player-props go/no-go spike (Odds API coverage confirmed: anytime scorer 10 books incl. Pinnacle). Owner tasks: install WC launchd plists; PC-27 7-day cloud soak.
+Last completed: WC-09-05 ✅ — Hierarchical Bayesian Poisson (scipy MAP + Laplace, NOT PyMC — owner-approved approach change; llvmlite wouldn't build). src/world_cup/bayesian_model.py: latent per-team attack/defence, Gaussian shrinkage priors (hierarchical pooling), home_adv, Dixon-Coles ρ; fits 8,159 intl matches / 284 teams in <1s; Spain#1/Argentina#2/Brazil#3; 7×7 matrix (Rule-6 reuse); λ credible interval via Laplace. 3-gate (Gate 3 verified gradient+Hessian numerically). 9 tests, 698/698. Earlier A+B (09-01→04): scorecard + research card.
+Currently working: WC-09-06 — Bayesian shadow integration (model_name="wc_bayesian_v1", never staked; mirror Poisson's home/neutral convention for apples-to-apples scorecard).
+Next up (WC-09 remaining): 09-07 Bayesian validation harness + scorecard comparison; 09-08 player-props go/no-go spike (Odds API coverage confirmed: anytime scorer 10 books incl. Pinnacle). Owner tasks: install WC launchd plists; PC-27 7-day cloud soak.
 Hybrid cloud: DB is Neon Postgres (DATABASE_URL in .env / Streamlit Cloud secrets [database] connection_string); local SQLite kept as backup.
 
 E40 complete: All 10 issues done ✅ (TM datasets download, lineup/formation/manager backfill, manager features, injury club fix, minutes impact, recomputation, weekly refresh, integration test — 14,187 matches, 9,829 TM-mapped, 393K lineups, 42 tests)

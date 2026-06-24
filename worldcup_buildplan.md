@@ -2,12 +2,12 @@
 
 Version 1.0 · June 2026
 
-> **MODULE STATUS: MVP + UX COMPLETE (28/28) · WC-09 IN PROGRESS — 4/8 (tracks A+B done)** · June 23, 2026
+> **MODULE STATUS: MVP + UX COMPLETE (28/28) · WC-09 IN PROGRESS — 5/8** · June 23, 2026
 > WC-01 through WC-08 done (3-gate reviewed); dashboard is 4 tabs with flags + ET
-> times. **WC-09 (Option A):** ✅ 09-01→04 done — shadow CLV scorecard + per-match
-> research card & review queue (decision-support tracks A+B, gated). ⏸ Remaining:
-> 09-05/06/07 Bayesian shadow model (Tier-2 approved) + 09-08 player-props spike.
-> Full test suite: 689/689 passing.
+> times. **WC-09 (Option A):** ✅ 09-01→04 (decision-support tracks A+B) + ✅ 09-05
+> (hierarchical Bayesian Poisson — scipy MAP+Laplace, fits 8,159 matches in <1s,
+> Spain#1/Argentina#2/Brazil#3). ⏸ Remaining: 09-06/07 Bayesian shadow integration
+> + validation, 09-08 player-props spike. Full test suite: 698/698 passing.
 
 ---
 
@@ -1127,29 +1127,40 @@ Per-match decision card + a biggest-disagreements review queue.
 
 ### Phase C — Bayesian Shadow Model (parallel R&D)
 
-### WC-09-05 — PyMC Dependency + Bayesian Hierarchical Poisson
+### WC-09-05 — Hierarchical Bayesian Poisson (scipy MAP + Laplace) ✅ DONE
 
 **Type:** Model
-**Depends on:** WC-01 (data), WC-03 (features)
+**Depends on:** WC-01 (data)
 
-Add PyMC and implement the hierarchical Bayesian model.
+Implement the hierarchical Bayesian model. **Approach change (owner-approved
+2026-06-23):** PyMC would not install in this environment (llvmlite toolchain),
+and the project stack deliberately avoids heavy deps (Rule 2). So we use **scipy**
+— MAP estimation with hierarchical shrinkage priors + a Laplace approximation for
+uncertainty — instead of PyMC/MCMC. Delivers the two things that matter (partial
+pooling for sparse data + posterior uncertainty), fast (seconds), no new heavy dep.
 
 **Implementation Notes:**
-- Add `pymc` (+ `arviz`) to requirements.
 - `src/world_cup/bayesian_model.py`: hierarchical Poisson — latent per-team
-  attack/defence with priors pooled toward confederation/global means; home-advantage
-  parameter; low-score correlation parameter (Dixon-Coles-style or bivariate).
-- Fit on `wc_historical_matches` (recency/importance-weighted) + finished WC matches.
-  NUTS sampler; fall back to ADVI (variational) if too slow.
-- `predict()` → posterior-predictive **7×7 scoreline matrix** (same interface as the
-  Poisson — Rule 6, zero downstream changes).
+  attack/defence (`log λ = μ + home_adv + att[home] − def[away]`), Gaussian
+  shrinkage priors pooling team strengths toward 0 (the hierarchical effect), a
+  home-advantage parameter (off on neutral venues), and the Dixon-Coles low-score
+  correction on the matrix.
+- Fit on `wc_historical_matches` (recency × `match_weight`-weighted) + finished WC
+  matches, via `scipy.optimize.minimize` (L-BFGS-B, analytic gradient) on the
+  penalized negative log-posterior.
+- Uncertainty: Laplace approximation — Hessian at the mode → covariance → credible
+  interval on λ per prediction.
+- `predict()` → **7×7 scoreline matrix** reusing `WCPoissonPredictor`'s matrix
+  builder + `_derive_probabilities` (Rule 6, zero downstream changes).
+- Tuneables (shrinkage, recency half-life, ρ) in `config/worldcup_2026.yaml`.
 
 **Acceptance Criteria:**
-- [ ] `pymc` in requirements; `bayesian_model.py` present
-- [ ] Model fits with acceptable diagnostics (no/low divergences)
-- [ ] `predict()` returns a 7×7 matrix compatible with `derive_market_probabilities`
-- [ ] Training completes in a tolerable, documented time
-- [ ] Posterior uncertainty (e.g. credible interval on λ) exposed
+- [x] `bayesian_model.py` present; uses only scipy/numpy (no new heavy dep)
+- [x] MAP fit converges; Laplace Hessian is positive-definite (valid covariance)
+- [x] `predict()` returns a 7×7 matrix compatible with `derive_market_probabilities`
+- [x] Training completes in a tolerable, documented time (seconds)
+- [x] Posterior uncertainty (credible interval on λ) exposed
+- [x] Recovers known team strengths on synthetic data (validation test)
 
 ---
 
