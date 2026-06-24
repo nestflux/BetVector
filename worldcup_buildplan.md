@@ -2,12 +2,13 @@
 
 Version 1.0 · June 2026
 
-> **MODULE STATUS: MVP + UX COMPLETE (28/28) · WC-09 IN PROGRESS — 7/8** · June 23, 2026
-> WC-01 through WC-08 done (3-gate reviewed); dashboard is 4 tabs with flags + ET
-> times. **WC-09 (Option A):** ✅ 09-01→04 (decision-support A+B) + ✅ 09-05/06/07
-> (Bayesian shadow model + validation — scipy MAP+Laplace, holdout backtest vs
-> Poisson on the Model tab; competitive but not promoted, stays shadow). ⏸ Remaining:
-> 09-08 player-props go/no-go spike. Full test suite: 713/713 passing.
+> **MODULE STATUS: WC-09 COMPLETE (36/36) — full module done** · June 23, 2026
+> WC-01→08 done (3-gate); dashboard is 4 tabs with flags + ET times. **WC-09
+> (Option A) ✅ all 8:** 09-01→04 decision-support (shadow CLV scorecard + research
+> card / review queue); 09-05/06/07 Bayesian shadow model + validation (scipy
+> MAP+Laplace, holdout backtest vs Poisson on the Model tab — competitive but not
+> promoted, stays shadow); 09-08 player-props go/no-go spike (lean NO-GO, see
+> `worldcup_props_spike.md`). Full test suite: 713/713 passing.
 
 ---
 
@@ -1209,7 +1210,7 @@ Compare Bayesian vs Poisson and feed the scorecard.
 
 ### Phase D — Player-Props Feasibility Spike (go/no-go)
 
-### WC-09-08 — Player-Prop Data-Sourcing Spike
+### WC-09-08 — Player-Prop Data-Sourcing Spike ✅ DONE
 
 **Type:** Spike / Research (time-boxed ~half-day)
 **Depends on:** Nothing (uses the confirmed prop coverage)
@@ -1228,11 +1229,11 @@ build in this issue**.
 - Output: a go/no-go report + recommended WC-10 scope sketch.
 
 **Acceptance Criteria:**
-- [ ] Report on per-player WC data availability/quality (sources, gaps)
-- [ ] Prototype anytime-scorer estimate for one match vs the market
-- [ ] Prop-scrape budget plan (scope to stay within quota)
-- [ ] Clear go/no-go recommendation + WC-10 scope sketch
-- [ ] Time-boxed — no production prop pipeline built here
+- [x] Report on per-player WC data availability/quality (sources, gaps)
+- [x] Prototype anytime-scorer estimate for one match vs the market
+- [x] Prop-scrape budget plan (scope to stay within quota)
+- [x] Clear go/no-go recommendation + WC-10 scope sketch
+- [x] Time-boxed — no production prop pipeline built here
 
 ---
 

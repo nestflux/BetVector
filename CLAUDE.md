@@ -350,9 +350,9 @@ single-line expression.
 
 ## Current Status
 
-Last completed: WC-09-07 ✅ — Bayesian validation harness + scorecard comparison. src/world_cup/bayesian_validation.py: run_holdout_comparison (both models on 2022 WC, leak-free, same multi-class Brier), live_model_metrics (finished WC matches), PROMOTION_CRITERIA (manual only). bayesian_model.evaluate_holdout (fit()→_fit_on refactor for temporal train subset). Dashboard _render_model_comparison on Model tab (cached holdout behind expander, live tracker, honest n-counts + leakage caveat). RESULT: Bayesian competitive but doesn't beat Poisson (holdout Brier 0.602 vs 0.585) → stays shadow, no promotion. 3-gate all green. 10 tests, 713/713.
-Currently working: WC-09-08 — player-props go/no-go spike (TIME-BOXED research, NO production build). Per-player WC data sourcing assessment + 1-match anytime-scorer prototype vs market + scrape-budget plan + go/no-go report.
-Next up: WC-09 COMPLETE after 09-08 (last issue). Owner tasks: install WC launchd plists; PC-27 7-day cloud soak.
+Last completed: WC-09-08 ✅ — player-props go/no-go spike (TIME-BOXED research, NO production code; only worldcup_props_spike.md). Verdict: lean NO-GO for staking, conditional shadow-GO for decision-support. Transfermarkt appearances give per-player goals/min/cards (no shots); link by citizenship (current_national_team_id sparse for major nations); prototype produced market-accurate anytime-scorer (Kane 46.8% ≈ de-vigged market). Blockers: official squads/lineups, minutes uncertainty, budget (~live prop feed ≈ whole monthly Odds API quota). 3-gate all green (Gate 3 verified data+math against real files). → WC-09 COMPLETE (8/8); whole WC module 36/36.
+Currently working: NOTHING — WC-09 module COMPLETE. League system (242 issues) + WC module (36) all done. Awaiting owner direction.
+Next up: No queued issues. Owner tasks: (1) log in to cloud → verify Bayesian-vs-Poisson panel on Model tab; (2) install WC launchd plists; (3) PC-27 7-day cloud soak. Possible future: WC-10 player-props shadow build (gated on owner appetite + Bayesian proving the modelling beats market).
 Hybrid cloud: DB is Neon Postgres (DATABASE_URL in .env / Streamlit Cloud secrets [database] connection_string); local SQLite kept as backup.
 
 E40 complete: All 10 issues done ✅ (TM datasets download, lineup/formation/manager backfill, manager features, injury club fix, minutes impact, recomputation, weekly refresh, integration test — 14,187 matches, 9,829 TM-mapped, 393K lineups, 42 tests)
