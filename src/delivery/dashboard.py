@@ -46,6 +46,7 @@ Master Plan refs: MP §8 Design System, MP §3 Flow 4
 import sys
 import base64
 import os
+import logging
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -63,7 +64,6 @@ from dotenv import load_dotenv
 import streamlit as st
 
 from src.config import PROJECT_ROOT
-from src.world_cup.timeutil import wc_window_active
 from src.auth import (
     is_authenticated, set_session_user, get_session_user_id,
     get_session_user_role, get_user_by_email, verify_password,
@@ -567,7 +567,16 @@ def get_pages() -> list:
     # DF-02: during the WC tournament window (config: tournament.start/end_date),
     # the World Cup page takes over as the landing page and floats to the top of
     # the sidebar; it reverts to Fixtures automatically the day after the final.
-    _wc_active = wc_window_active()
+    # Lazy + guarded: the landing override is pure UX sugar, so a hiccup importing
+    # the World Cup module must degrade to the normal Fixtures landing — never
+    # crash the whole dashboard (it imports at startup otherwise).
+    try:
+        from src.world_cup.timeutil import wc_window_active
+        _wc_active = wc_window_active()
+    except Exception:
+        logging.getLogger(__name__).warning(
+            "World Cup landing check failed; defaulting to Fixtures", exc_info=True)
+        _wc_active = False
     pages = [
         st.Page(
             "views/fixtures.py",

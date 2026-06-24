@@ -45,14 +45,14 @@ def _sole_default(pages):
 
 
 def test_world_cup_is_landing_during_window(dash, monkeypatch):
-    monkeypatch.setattr(dash, "wc_window_active", lambda: True)
+    monkeypatch.setattr("src.world_cup.timeutil.wc_window_active", lambda: True)
     pages = dash.get_pages()
     assert pages[0].title == "World Cup"          # top of the sidebar
     assert _sole_default(pages) == "World Cup"    # the default landing page
 
 
 def test_fixtures_is_landing_outside_window(dash, monkeypatch):
-    monkeypatch.setattr(dash, "wc_window_active", lambda: False)
+    monkeypatch.setattr("src.world_cup.timeutil.wc_window_active", lambda: False)
     pages = dash.get_pages()
     assert pages[0].title == "Fixtures"           # unchanged ordering
     assert _sole_default(pages) == "Fixtures"
@@ -62,6 +62,18 @@ def test_all_pages_present_in_both_modes(dash, monkeypatch):
     expected = {"Fixtures", "Today's Picks", "World Cup", "Model Health",
                 "League Explorer", "Match Deep Dive"}
     for active in (True, False):
-        monkeypatch.setattr(dash, "wc_window_active", lambda a=active: a)
+        monkeypatch.setattr("src.world_cup.timeutil.wc_window_active", lambda a=active: a)
         titles = {p.title for p in dash.get_pages()}
         assert expected <= titles, f"missing pages when active={active}: {expected - titles}"
+
+
+def test_landing_check_failure_falls_back_to_fixtures(dash, monkeypatch):
+    # The landing override is pure UX sugar — if the window check raises, the
+    # dashboard must still load on Fixtures rather than crash (cloud hardening).
+    def boom():
+        raise RuntimeError("simulated World Cup module hiccup")
+
+    monkeypatch.setattr("src.world_cup.timeutil.wc_window_active", boom)
+    pages = dash.get_pages()
+    assert pages[0].title == "Fixtures"
+    assert _sole_default(pages) == "Fixtures"
