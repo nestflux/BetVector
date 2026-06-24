@@ -8,7 +8,7 @@
 > have), but the value case is weak for the same reason team bets are shadow-only
 > — the market is efficient and our player model would be cruder than our team
 > model — and a live prop-odds feed would roughly consume the monthly Odds API
-> quota. Defer a full WC-10 build; if pursued, scope it as shadow-only.
+> quota. Defer a full WC-11 build; if pursued, scope it as shadow-only.
 
 ---
 
@@ -105,7 +105,7 @@ the Odds API tier. This is a gating cost, not a footnote.
 
 ---
 
-## 4. WC-10 scope sketch (only if the owner opts in)
+## 4. WC-11 scope sketch (only if the owner opts in)
 
 Shadow-only, mirroring the team-model discipline (never staked until proven):
 
@@ -138,7 +138,7 @@ Effort: ~3–5 days. Hard dependency: **official squad + lineup data** (gap 1).
 - ❌ **Real costs/blockers:** official squad + lineup data (not in any dataset);
   no shots data without FBref; a live prop feed ≈ the whole monthly Odds API quota.
 
-**Recommendation:** **defer the full WC-10 build.** Revisit *only* if (a) the team
+**Recommendation:** **defer the full WC-11 build.** Revisit *only* if (a) the team
 Bayesian shadow first demonstrates the modelling approach can beat the market at
 all, and (b) the owner wants player estimates as **decision-support** (shown next
 to the market on the research card), explicitly **not** a staked product, and is

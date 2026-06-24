@@ -2,13 +2,12 @@
 
 Version 1.0 · June 2026
 
-> **MODULE STATUS: WC-09 COMPLETE (36/36) — full module done** · June 23, 2026
-> WC-01→08 done (3-gate); dashboard is 4 tabs with flags + ET times. **WC-09
-> (Option A) ✅ all 8:** 09-01→04 decision-support (shadow CLV scorecard + research
-> card / review queue); 09-05/06/07 Bayesian shadow model + validation (scipy
-> MAP+Laplace, holdout backtest vs Poisson on the Model tab — competitive but not
-> promoted, stays shadow); 09-08 player-props go/no-go spike (lean NO-GO, see
-> `worldcup_props_spike.md`). Full test suite: 713/713 passing.
+> **MODULE STATUS: WC-09 COMPLETE (36/36) · WC-10 (Live Ops) IN PROGRESS — 0/7** · June 23, 2026
+> WC-01→09 done (3-gate); dashboard is 4 tabs; decision-support + Bayesian shadow
+> model live. **WC-10 — Live Operations & Automation** (owner-confirmed): daily
+> automation (P1) → dynamic pre-kickoff closing-odds/CLV dispatcher (P2) → lineup
+> rotation flag (P3). Currently: WC-10-01 (diagnose & harden the odds refresh).
+> No model/staking change — WC stays shadow-only. Full test suite: 713/713 passing.
 
 ---
 
@@ -1234,6 +1233,196 @@ build in this issue**.
 - [x] Prop-scrape budget plan (scope to stay within quota)
 - [x] Clear go/no-go recommendation + WC-10 scope sketch
 - [x] Time-boxed — no production prop pipeline built here
+
+---
+
+## WC-10 — Live Operations & Automation (post-MVP)
+
+> **Added 2026-06-23, owner-confirmed.** Make the WC system run itself reliably
+> during the tournament: daily automation, a dynamic pre-kickoff closing-odds/CLV
+> dispatcher, and a lineup-based rotation flag for decision support. **No change to
+> the model or staking — WC bets remain shadow-only.**
+>
+> **Cost: $0 (free tiers).** Odds API ~130–200/mo of ~323 (1 region incl. Pinnacle,
+> 1 pull/match); API-Football ~5/day of 100 (lineups); Neon storage bounded (odds
+> are upsert — one row per match×book×market×selection); Neon compute safe (the
+> heartbeat reads a local fixture cache, not Neon, when idle); Streamlit Cloud
+> unaffected (read-only, auto-sleeps).
+>
+> **Why:** the WC pipeline is not scheduled today, so the board goes stale (odds
+> emptied to 0 while predictions remained). Matches span ~11 kickoff times
+> (1 PM–11 PM ET), 2–8/day, reshuffling each round — a static 2×/day schedule
+> misses kickoffs and mis-times results. Fix: a daily planning run + a dynamic
+> pre-kickoff dispatcher that adapts to any schedule.
+
+### Phase 1 — Operate
+
+### WC-10-01 — Diagnose & Harden the WC Odds Refresh
+
+**Type:** Bug / Hardening
+**Depends on:** WC-02 (odds scraper)
+
+The WC odds board emptied to 0 rows on Neon while predictions remained — odds aren't
+refreshing reliably. Find the cause and make the refresh safe before scheduling it.
+
+**Implementation Notes:**
+- Reproduce + root-cause the empty `wc_odds` (never-scraped vs. cleared-then-failed
+  vs. match-name mapping failure vs. Odds API auth/empty response). Document it.
+- Ensure a real scrape populates + persists odds for all upcoming matches.
+- Make the refresh fail-safe: a failed/empty Odds API response must **never** wipe
+  existing odds (no destructive delete before a confirmed successful fetch).
+- Add explicit logging of rows fetched / upserted / skipped per run.
+
+**Acceptance Criteria:**
+- [ ] Root cause of the empty board documented
+- [ ] A real scrape populates odds for upcoming matches and they persist
+- [ ] A failed/empty scrape leaves prior odds intact (verified)
+- [ ] Per-run logging of fetched/upserted/skipped counts
+
+### WC-10-02 — Daily Morning Automation (Retimed)
+
+**Type:** Pipeline / Ops
+**Depends on:** WC-07 (pipeline), WC-10-01
+
+Make the morning run the daily spine and schedule it to this tournament's clock.
+
+**Implementation Notes:**
+- Morning run at **~09:30 local (ET)** does: settle overnight results + CLV for any
+  matches finished since the last run, refresh the full board (1 odds pull covers
+  the day), predictions, Bayesian shadow, value bets, morning email.
+- Confirm the Mac's timezone so the plist hour maps to ET; retime
+  `com.betvector.wc_morning.plist` accordingly.
+- **Retire the 22:00 evening plist** — it fires mid-late-matches (10/11 PM ET games
+  still playing) and mis-captures results. Overnight results settle on the next
+  morning run instead (results aren't time-critical; pre-match odds are).
+- Install: `cp scripts/com.betvector.wc_morning.plist ~/Library/LaunchAgents/` +
+  `launchctl load`.
+
+**Acceptance Criteria:**
+- [ ] Morning plist installed and loaded (Mac TZ confirmed → 09:30 ET)
+- [ ] A scheduled run completes end-to-end (board, predictions, Bayesian, value bets, email)
+- [ ] Overnight results + CLV settle on the morning run
+- [ ] Evening plist retired/uninstalled; documented
+- [ ] System runs unattended across a 24h cycle
+
+### Phase 2 — Sharpen CLV (dynamic dispatcher)
+
+### WC-10-03 — Local Fixture Cache + Heartbeat Dispatcher
+
+**Type:** Pipeline
+**Depends on:** WC-10-02
+
+A schedule-proof trigger for pre-kickoff runs that costs almost nothing when idle.
+
+**Implementation Notes:**
+- The morning run writes the day's fixtures (match_id, kickoff UTC, status) to a
+  **local JSON cache** (e.g. `data/world_cup/today_fixtures.json`).
+- A dispatcher script + **one** launchd job runs every ~15 min, reads the LOCAL
+  cache (never Neon when idle), and finds matches entering the ~40-min pre-KO window
+  not yet prepped.
+- Persist prepped-state locally (set of prepped match_ids per day) so a restart
+  doesn't double-fire and a missed tick still catches the match.
+- Neon is touched only when a pre-match run actually fires (WC-10-04), so the DB
+  stays autosuspended between runs (free-tier compute discipline).
+
+**Acceptance Criteria:**
+- [ ] Idle heartbeat reads only the local cache — no Neon connection
+- [ ] Fires exactly once per match when it enters the pre-KO window
+- [ ] Prepped-state persists across restarts (no double-fire, no miss)
+- [ ] One launchd job; documented install
+
+### WC-10-04 — Pre-Kickoff Focused Run (Closing Line)
+
+**Type:** Pipeline
+**Depends on:** WC-10-03
+
+Capture the near-closing line for one match, budget-disciplined.
+
+**Implementation Notes:**
+- New pipeline mode `prematch` (takes a match_id / slot): **exactly one** Odds API
+  pull, **1 region** (incl. Pinnacle), upsert that match's odds (refreshes
+  `captured_at` → becomes the closing line on finish), recompute value/edge.
+- No full board refresh, no results, no Elo — focused and cheap.
+- Idempotent: re-running for the same match updates in place (no duplicate odds).
+
+**Acceptance Criteria:**
+- [ ] `prematch` mode issues exactly one Odds API call per invocation
+- [ ] Fresh odds persisted for the target match; value/edge recomputed
+- [ ] 1 region only; logged credit usage
+- [ ] Idempotent (no duplicate rows on re-run)
+
+### WC-10-05 — CLV Integrity End-to-End
+
+**Type:** Test / Validation
+**Depends on:** WC-10-04, WC-09-01
+
+Prove the scorecard's CLV is now anchored to a true closing line.
+
+**Implementation Notes:**
+- Verify the near-closing odds captured by the pre-match run are what
+  `capture_wc_closing_lines` reads when the match finishes (closing line = last
+  pre-match odds, not the morning line).
+- Tests for the prematch→finish→CLV path; validate on one real finished match.
+
+**Acceptance Criteria:**
+- [ ] A prepped → finished match yields CLV computed from the near-closing line
+- [ ] Tests cover the prematch→finish→CLV path
+- [ ] Scorecard reflects the true-close CLV
+
+### Phase 3 — Lineups (decision support)
+
+### WC-10-06 — WC Lineup Capture (API-Football)
+
+**Type:** Scraper
+**Depends on:** WC-10-04
+
+Pull official XIs in the pre-KO window using the integration we already have.
+
+**Implementation Notes:**
+- Reuse `src/scrapers/api_football.py` to fetch the lineups endpoint for a WC match
+  when the dispatcher fires (~30–40 min pre-KO, when the official XI drops).
+- Store in a new `wc_lineups` table (match_id, team_id, player_name, is_starter,
+  position); idempotent upsert.
+- Rate-limit aware (free 100/day; WC uses ~2–8/day); graceful no-op when the lineup
+  isn't published yet — never crash the dispatcher.
+
+**Acceptance Criteria:**
+- [ ] Official XIs fetched + stored for an upcoming match
+- [ ] Respects the API-Football free-tier rate limit
+- [ ] Early/missing lineup handled gracefully (no crash, retried next tick)
+- [ ] Idempotent storage (no duplicate lineup rows)
+
+### WC-10-07 — Rotation / Absence Flag on the Research Card
+
+**Type:** Feature / Dashboard
+**Depends on:** WC-10-06
+
+Turn the lineup into the decision-support signal you actually want.
+
+**Implementation Notes:**
+- Compute a rotation/absence signal: compare the announced XI to the team's
+  "regulars" (squad data / recent XIs) → "N starters rested", "key player X out".
+- Surface a ⚠️ flag on the research card (Tab 1) next to affected matches; framed as
+  a hypothesis flag ("XI confirms / heavy rotation — re-check this pick"), not a
+  model input.
+- **Decision-support only — no change to λ or value-bet generation.**
+
+**Acceptance Criteria:**
+- [ ] Rotation/absence flag computed from the announced XI vs regulars
+- [ ] Surfaced on the research card; absent before the XI is announced
+- [ ] Framed as decision support; no λ / value-bet change
+- [ ] Empty/early-lineup state handled
+
+### WC-10-08 — λ-Adjustment from Lineups — DEFERRED
+
+**Type:** Model (deferred)
+**Depends on:** WC-10-07
+
+Actually adjusting expected goals for missing players is **not built here.** Gated —
+like the player-props build (WC-11) — on (a) per-player WC contribution data of
+usable quality, and (b) the model first demonstrating it can beat the market at all
+(the team Bayesian is competitive but not promoted). Listed so the scope boundary is
+explicit; revisit only on owner opt-in.
 
 ---
 
