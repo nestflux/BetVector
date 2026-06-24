@@ -1,11 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  BetVector — WC Morning Pipeline (WC-07-02)
-  ===========================================
-  Runs at 08:00 local time daily during WC 2026 (June 11 - July 19).
-  Full pipeline: scrape → elo → odds → features → predict → simulate →
-  value bets → morning email.
+  BetVector — WC Morning Pipeline (WC-07-02; retimed + consolidated WC-10-02)
+  ===========================================================================
+  Runs at 09:30 ET daily during WC 2026 (Mac TZ = America/New_York). This is the
+  single daily spine — the 22:00 evening plist is retired (it fired mid-late-
+  matches and mis-captured results). The morning run settles overnight results +
+  CLV + model accuracy, then refreshes the board: scrape results → capture CLV →
+  elo → accuracy → odds → features → predict → Bayesian shadow → simulate →
+  value bets → morning email (now folds in yesterday's results).
 
   Install:  cp scripts/com.betvector.wc_morning.plist ~/Library/LaunchAgents/ && launchctl load ~/Library/LaunchAgents/com.betvector.wc_morning.plist
   Unload:   launchctl unload ~/Library/LaunchAgents/com.betvector.wc_morning.plist
@@ -24,13 +27,13 @@
     <key>WorkingDirectory</key>
     <string>/Users/kyng/Projects/BetVector</string>
 
-    <!-- Run at 08:00 local time every day -->
+    <!-- Run at 09:30 ET every day (a few hours before the first ~1 PM ET match) -->
     <key>StartCalendarInterval</key>
     <dict>
         <key>Hour</key>
-        <integer>8</integer>
+        <integer>9</integer>
         <key>Minute</key>
-        <integer>0</integer>
+        <integer>30</integer>
     </dict>
 
     <key>StandardOutPath</key>

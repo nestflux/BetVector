@@ -2,13 +2,14 @@
 
 Version 1.0 · June 2026
 
-> **MODULE STATUS: WC-09 COMPLETE (36/36) · WC-10 (Live Ops) IN PROGRESS — 1/7** · June 23, 2026
+> **MODULE STATUS: WC-09 COMPLETE (36/36) · WC-10 (Live Ops) IN PROGRESS — 2/7 (Phase 1 done)** · June 23, 2026
 > WC-01→09 done (3-gate); dashboard is 4 tabs; decision-support + Bayesian shadow
-> model live. **WC-10 — Live Operations & Automation** (owner-confirmed): daily
-> automation (P1) → dynamic pre-kickoff closing-odds/CLV dispatcher (P2) → lineup
-> rotation flag (P3). ✅ 10-01 (odds-refresh hardened: 12→2 credit scrape, loud
-> SQLite-fallback warning, Neon repopulated). Currently: WC-10-02 (retimed morning
-> automation). No model/staking change — WC stays shadow-only. Full suite: 719/719.
+> model live. **WC-10 — Live Operations & Automation** (owner-confirmed). ✅ Phase 1:
+> 10-01 (odds-refresh hardened: 12→2 credit scrape, loud SQLite-fallback warning,
+> Neon repopulated) + 10-02 (09:30 ET morning job installed + live; absorbs CLV +
+> accuracy; folds results into the morning email; evening retired). Next — Phase 2:
+> 10-03/04/05 dynamic pre-kickoff CLV dispatcher; Phase 3: 10-06/07 lineup flag.
+> No model/staking change — WC stays shadow-only. Full suite: 725/725 passing.
 
 ---
 
@@ -1293,12 +1294,21 @@ SQLite by earlier ad-hoc runs (`bayesian=0` on Neon) — repopulated to Neon (no
 - [x] A failed/empty scrape leaves prior odds intact (upsert-only; 2 tests)
 - [x] Per-run logging of fetched/upserted/skipped counts (summary log in `_load_odds_to_db`)
 
-### WC-10-02 — Daily Morning Automation (Retimed)
+### WC-10-02 — Daily Morning Automation (Retimed) ✅ DONE
 
 **Type:** Pipeline / Ops
 **Depends on:** WC-07 (pipeline), WC-10-01
 
 Make the morning run the daily spine and schedule it to this tournament's clock.
+
+**Result (2026-06-23):** `com.betvector.wc_morning` installed + loaded (Mac is EDT →
+09:30 ET); evening plist retired (marked DO-NOT-INSTALL, not loaded). The morning
+run now absorbs the evening's CLV-capture + accuracy steps and folds yesterday's
+results into the morning email (owner option 1). Verified end-to-end via the exact
+launchd path (`run_wc_pipeline.sh morning`): exit 0 in 80.4s — CLV captured 4,
+accuracy on 15 matches (Brier 0.493), odds at the 2-credit disciplined cost, 40
+predictions + 40 Bayesian shadow + 51 value bets, morning email sent. "Unattended
+24h" confirms on the first scheduled 09:30 ET fire (job loaded, path proven).
 
 **Implementation Notes:**
 - Morning run at **~09:30 local (ET)** does: settle overnight results + CLV for any
@@ -1313,11 +1323,11 @@ Make the morning run the daily spine and schedule it to this tournament's clock.
   `launchctl load`.
 
 **Acceptance Criteria:**
-- [ ] Morning plist installed and loaded (Mac TZ confirmed → 09:30 ET)
-- [ ] A scheduled run completes end-to-end (board, predictions, Bayesian, value bets, email)
-- [ ] Overnight results + CLV settle on the morning run
-- [ ] Evening plist retired/uninstalled; documented
-- [ ] System runs unattended across a 24h cycle
+- [x] Morning plist installed and loaded (Mac TZ confirmed → 09:30 ET)
+- [x] A scheduled run completes end-to-end (board, predictions, Bayesian, value bets, email)
+- [x] Overnight results + CLV settle on the morning run
+- [x] Evening plist retired/uninstalled; documented
+- [x] System runs unattended across a 24h cycle
 
 ### Phase 2 — Sharpen CLV (dynamic dispatcher)
 

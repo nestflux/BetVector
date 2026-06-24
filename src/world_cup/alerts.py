@@ -12,7 +12,7 @@ No email sent on days without WC matches.
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from sqlalchemy import select
 
@@ -42,6 +42,13 @@ MONO = "'JetBrains Mono', 'Fira Code', Consolas, monospace"
 
 def _get_today_str() -> str:
     return date.today().isoformat()
+
+
+def _previous_date(target_date: str | None) -> str:
+    """ISO date for the day before target_date (or before today). Used to fold
+    yesterday's results into the morning digest (WC-10-02)."""
+    base = datetime.strptime(target_date, "%Y-%m-%d").date() if target_date else date.today()
+    return (base - timedelta(days=1)).isoformat()
 
 
 def _get_todays_matches(target_date: str | None = None) -> list[dict]:
@@ -141,11 +148,44 @@ def _get_group_standings() -> dict[str, list[dict]]:
     return result
 
 
+def _render_results_section(finished: list[dict], title: str) -> str:
+    """Render a finished-matches results table (home score-score away + ✓/✗ vs the
+    model's pick). Returns "" when there are no scored matches. Used to fold
+    yesterday's results into the morning email (WC-10-02)."""
+    rows = ""
+    for m in finished:
+        if m.get("home_goals") is None:
+            continue
+        score = f'{m["home_goals"]}-{m["away_goals"]}'
+        if m["pred_h"] is not None:
+            icon = (f'<span style="color:{GREEN};">&#10003;</span>' if _is_prediction_correct(m)
+                    else f'<span style="color:{RED};">&#10007;</span>')
+        else:
+            icon = ""
+        rows += f'''
+        <tr>
+            <td style="padding:8px 12px;color:{TEXT};font-size:14px;border-bottom:1px solid {BORDER};">
+                <strong>{escape(m["home"])}</strong> {score} <strong>{escape(m["away"])}</strong>
+            </td>
+            <td style="padding:8px 12px;text-align:center;border-bottom:1px solid {BORDER};">{icon}</td>
+        </tr>'''
+    if not rows:
+        return ""
+    return f'''
+        <tr><td style="padding:16px 24px;background-color:{SURFACE};">
+            <h2 style="color:{TEXT};font-size:16px;margin:0 0 8px;">{escape(title)}</h2>
+            <table style="width:100%;border-collapse:collapse;">{rows}</table>
+        </td></tr>'''
+
+
 def _render_morning_html(
     matches: list[dict],
     value_bets: list,
     standings: dict,
     day_number: int,
+    recent_results: list[dict] | None = None,
+    recent_correct: int = 0,
+    recent_total: int = 0,
 ) -> str:
     """Build morning email HTML."""
     vb_count = len(value_bets)
@@ -251,6 +291,14 @@ def _render_morning_html(
             {standings_html}
         </td></tr>'''
 
+    # Yesterday's results folded into the morning digest (WC-10-02, owner option 1):
+    # one daily email covers today's picks + how the prior day's matches went.
+    results_section = (
+        _render_results_section(
+            recent_results, f"Yesterday's Results ({recent_correct}/{recent_total} correct)")
+        if recent_results else ""
+    )
+
     return f'''<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>BetVector WC Morning</title></head>
 <body style="margin:0;padding:0;background-color:{BG};font-family:{FONT};">
@@ -269,6 +317,7 @@ def _render_morning_html(
                 </table>
             </td></tr>
             {vb_section}
+            {results_section}
             {standings_section}
             <tr><td style="padding:16px 24px;background-color:{SURFACE};border-radius:0 0 8px 8px;border-top:1px solid {BORDER};">
                 <p style="margin:0;color:{TEXT_DIM};font-size:11px;">
@@ -421,7 +470,20 @@ def send_wc_morning_email(user_id: int = 1, target_date: str | None = None) -> b
     standings = _get_group_standings()
     day_number = _compute_day_number(target_date)
 
-    html = _render_morning_html(matches, value_bets, standings, day_number)
+    # Fold yesterday's results into the morning digest (WC-10-02, owner option 1):
+    # the morning run now settles overnight results, so one daily email covers
+    # today's picks + how the prior day's matches went (the evening run is retired).
+    prev_matches = _get_todays_matches(_previous_date(target_date))
+    # Only scored finished matches: keeps the X/Y count coherent with what's
+    # rendered and guards _is_prediction_correct against a NULL-goals dereference.
+    recent_finished = [m for m in prev_matches
+                       if m["status"] == "finished" and m["home_goals"] is not None]
+    recent_correct = sum(1 for m in recent_finished
+                         if m["pred_h"] is not None and _is_prediction_correct(m))
+    recent_total = len(recent_finished)
+
+    html = _render_morning_html(matches, value_bets, standings, day_number,
+                                recent_finished, recent_correct, recent_total)
     vb_count = len(value_bets)
     subject = f"\U0001F3C6 WC Day {day_number}: {vb_count} value bet{'s' if vb_count != 1 else ''} for today"
 

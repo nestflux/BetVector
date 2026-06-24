@@ -1,14 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  BetVector — WC Evening Pipeline (WC-07-02)
-  ===========================================
-  Runs at 22:00 local time daily during WC 2026 (June 11 - July 19).
-  Results pipeline: scrape results → elo update → accuracy metrics →
-  evening review email.
+  BetVector — WC Evening Pipeline (WC-07-02)  [RETIRED — WC-10-02]
+  ================================================================
+  *** DO NOT INSTALL. *** Retired 2026-06-23: 22:00 ET fired while the 10/11 PM ET
+  matches were still being played, so it mis-captured results. Its duties (results,
+  CLV capture, model accuracy) are now absorbed by the morning run (09:30 ET), which
+  is the single daily spine. The `evening` pipeline mode itself still works for a
+  manual "settle results now" run; only the *schedule* is retired.
 
-  Install:  cp scripts/com.betvector.wc_evening.plist ~/Library/LaunchAgents/ && launchctl load ~/Library/LaunchAgents/com.betvector.wc_evening.plist
-  Unload:   launchctl unload ~/Library/LaunchAgents/com.betvector.wc_evening.plist
+  Manual run (optional):  scripts/run_wc_pipeline.sh evening
 -->
 <plist version="1.0">
 <dict>

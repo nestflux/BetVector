@@ -138,9 +138,20 @@ def _run_morning() -> dict:
     from src.world_cup.scraper import scrape_wc_results
     results["scrape_results"] = _step("Scrape WC Results", scrape_wc_results)
 
+    # 1b. Capture closing lines (CLV) for matches that just finished — WC-10-02.
+    # The morning run is now the daily spine (the 22:00 evening run is retired), so
+    # it must settle CLV on overnight completions, not just refresh today's board.
+    from src.world_cup.value_finder import capture_wc_closing_lines
+    results["closing_lines"] = _step("Capture Closing Lines (CLV)", capture_wc_closing_lines)
+
     # 2. Update Elo from any newly finished matches
     from src.world_cup.calibration import update_tournament_elo
     results["elo_update"] = _step("Update Tournament Elo", update_tournament_elo)
+
+    # 2b. Recompute model accuracy on settled matches (WC-10-02 — absorbed from the
+    # retired evening run) so Model Health and the morning email stay current.
+    from src.world_cup.calibration import compute_model_accuracy
+    results["accuracy"] = _step("Compute Model Accuracy", compute_model_accuracy)
 
     # 3. Fetch fresh odds
     from src.world_cup.scraper import scrape_wc_odds
