@@ -62,3 +62,7 @@ build/
 .pytest_cache/
 htmlcov/
 .coverage
+
+# WC dispatcher runtime state (WC-10-03)
+data/world_cup/today_fixtures.json
+data/world_cup/dispatcher_state.json

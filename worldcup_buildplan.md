@@ -2,14 +2,14 @@
 
 Version 1.0 · June 2026
 
-> **MODULE STATUS: WC-09 COMPLETE (36/36) · WC-10 (Live Ops) IN PROGRESS — 2/7 (Phase 1 done)** · June 23, 2026
-> WC-01→09 done (3-gate); dashboard is 4 tabs; decision-support + Bayesian shadow
-> model live. **WC-10 — Live Operations & Automation** (owner-confirmed). ✅ Phase 1:
-> 10-01 (odds-refresh hardened: 12→2 credit scrape, loud SQLite-fallback warning,
-> Neon repopulated) + 10-02 (09:30 ET morning job installed + live; absorbs CLV +
-> accuracy; folds results into the morning email; evening retired). Next — Phase 2:
-> 10-03/04/05 dynamic pre-kickoff CLV dispatcher; Phase 3: 10-06/07 lineup flag.
-> No model/staking change — WC stays shadow-only. Full suite: 725/725 passing.
+> **MODULE STATUS: WC-09 COMPLETE (36/36) · WC-10 (Live Ops) IN PROGRESS — 3/7** · June 24, 2026
+> WC-01→09 done (3-gate); decision-support + Bayesian shadow model live. **WC-10 —
+> Live Operations & Automation** (owner-confirmed). ✅ Phase 1: 10-01 (odds 12→2
+> credits, loud SQLite-fallback warning) + 10-02 (09:30 ET morning job live; CLV +
+> accuracy + folded email). ✅ Phase 2 started: 10-03 (heartbeat dispatcher — local
+> fixture cache, fires once ~40min pre-KO, idle = no Neon). Next: 10-04 (real
+> prematch closing-line run) → install dispatcher → 10-05 (CLV integrity); Phase 3
+> 10-06/07 lineup flag. WC stays shadow-only. Full suite: 733/733 passing.
 
 ---
 
@@ -1331,7 +1331,7 @@ predictions + 40 Bayesian shadow + 51 value bets, morning email sent. "Unattende
 
 ### Phase 2 — Sharpen CLV (dynamic dispatcher)
 
-### WC-10-03 — Local Fixture Cache + Heartbeat Dispatcher
+### WC-10-03 — Local Fixture Cache + Heartbeat Dispatcher ✅ DONE
 
 **Type:** Pipeline
 **Depends on:** WC-10-02
@@ -1350,10 +1350,10 @@ A schedule-proof trigger for pre-kickoff runs that costs almost nothing when idl
   stays autosuspended between runs (free-tier compute discipline).
 
 **Acceptance Criteria:**
-- [ ] Idle heartbeat reads only the local cache — no Neon connection
-- [ ] Fires exactly once per match when it enters the pre-KO window
-- [ ] Prepped-state persists across restarts (no double-fire, no miss)
-- [ ] One launchd job; documented install
+- [x] Idle heartbeat reads only the local cache — no Neon connection
+- [x] Fires exactly once per match when it enters the pre-KO window
+- [x] Prepped-state persists across restarts (no double-fire, no miss)
+- [x] One launchd job; documented install
 
 ### WC-10-04 — Pre-Kickoff Focused Run (Closing Line)
 

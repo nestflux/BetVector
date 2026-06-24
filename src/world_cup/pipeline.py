@@ -204,11 +204,26 @@ def _run_morning() -> dict:
     else:
         results["value_bets"] = {"new": 0, "total": 0}
 
+    # 7b. Write today's fixtures to the local cache for the pre-kickoff dispatcher
+    # (WC-10-03) — lets the 15-min heartbeat find imminent matches without Neon.
+    from src.world_cup.dispatcher import write_fixture_cache
+    results["fixture_cache"] = _step("Write Fixture Cache", write_fixture_cache)
+
     # 8. Send morning email
     from src.world_cup.alerts import send_wc_morning_email
     results["email"] = _step("Send Morning Email", send_wc_morning_email)
 
     return results
+
+
+def run_prematch(match_id: int) -> dict:
+    """Focused pre-kickoff run for ONE match, fired by the dispatcher ~40 min
+    before kickoff (WC-10-03 hook). WC-10-04 implements the real action: exactly
+    one Odds-API pull (1 region) to capture the near-closing line + re-derive
+    value/edge for this match. WC-10-03 placeholder — logs only, no DB/API."""
+    logger.info("Pre-match run for match %d — placeholder (WC-10-04 fills this in)",
+                match_id)
+    return {"match_id": match_id, "status": "placeholder"}
 
 
 def _run_evening() -> dict:

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  BetVector — WC Pre-Kickoff Dispatcher (WC-10-03)
+  ================================================
+  Runs every 15 minutes (StartInterval 900s). Reads the LOCAL fixture cache
+  (written by the 09:30 ET morning run) and fires a per-match prematch run
+  (WC-10-04) ~40 min before kickoff — once per match. Idle ticks read only local
+  json (no Neon connection), so the heartbeat is cheap and doesn't burn Neon
+  free-tier compute across ~96 daily wake-ups.
+
+  Install:  cp scripts/com.betvector.wc_dispatcher.plist ~/Library/LaunchAgents/ && launchctl load ~/Library/LaunchAgents/com.betvector.wc_dispatcher.plist
+  Unload:   launchctl unload ~/Library/LaunchAgents/com.betvector.wc_dispatcher.plist
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.betvector.wc_dispatcher</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/kyng/Projects/BetVector/scripts/run_wc_dispatcher.sh</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/kyng/Projects/BetVector</string>
+
+    <!-- Every 15 minutes -->
+    <key>StartInterval</key>
+    <integer>900</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/kyng/Projects/BetVector/data/logs/launchd_wc_dispatcher_stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/kyng/Projects/BetVector/data/logs/launchd_wc_dispatcher_stderr.log</string>
+</dict>
+</plist>
