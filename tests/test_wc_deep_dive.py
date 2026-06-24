@@ -1,14 +1,18 @@
-"""DF-08 / DF-09 — WC deep-dive view structural integration test.
+"""DF-08 / DF-09 / DF-10 — WC deep-dive view structural integration test.
 
 The deep-dive page module resolves the match id and renders at import time
 (same pattern as match_detail.py / world_cup.py), so we verify its structure via
 AST rather than executing it. The pure data layer it draws — model-vs-every-book
 (``build_book_comparison``), the 7x7 matrix (``scoreline_matrix_from_lambdas``),
-and line movement (``build_movement``) — is unit-tested with real data in
-test_wc_research.py. Here we confirm the view is wired: the section renderers
-exist, the match id is resolved from session_state + query param, the heatmap /
-model-vs-books / movement / lineups sections are present, dynamic HTML is escaped,
-empty states are handled, and the WC hub + nav route into this page.
+line movement (``build_movement``), group/qualification context
+(``build_group_context``) and the per-match Bayes-vs-Poisson read
+(``build_model_comparison``) — is unit-tested with real data in
+test_wc_research.py, and the whole flow is exercised end-to-end in
+test_wc_deep_dive_integration.py. Here we confirm the view is wired: the section
+renderers exist, the match id is resolved from session_state + query param, every
+section (heatmap / model-vs-books / movement / lineups / group context / model
+comparison / glossary) is present, dynamic HTML is escaped, empty states are
+handled, and the WC hub + nav route into this page.
 """
 
 import ast
@@ -167,6 +171,81 @@ class TestLineups:
 
     def test_wired_into_deep_dive(self):
         assert "_render_lineups(" in _func_src(DD_TREE, DD_SRC, "_render_deep_dive")
+
+
+class TestGroupContext:
+    def test_group_renderers_present(self):
+        expected = {"_render_group_context", "_standings_table_html",
+                    "_scenario_row_html", "_scenarios_table_html", "_qual_chip_html"}
+        assert expected <= DD_FUNCS, f"missing: {expected - DD_FUNCS}"
+
+    def test_build_group_context_imported(self):
+        # The view draws the unit-tested pure layer, not its own standings math.
+        assert "build_group_context" in DD_IMPORTS
+
+    def test_standings_and_scenarios_escaped(self):
+        # Team names + scenario labels flow into HTML — they must be escaped.
+        assert "escape(" in _func_src(DD_TREE, DD_SRC, "_standings_table_html")
+        assert "escape(" in _func_src(DD_TREE, DD_SRC, "_scenario_row_html")
+
+    def test_qual_status_chips_cover_all_three(self):
+        # clinched / eliminated / contention each map to a chip.
+        chip = _func_src(DD_TREE, DD_SRC, "_qual_chip_html")
+        assert "_QUAL_CHIP" in chip
+        assert all(k in DD_SRC for k in ("clinched", "eliminated", "contention"))
+
+    def test_knockout_and_empty_state(self):
+        # Knockout ties / missing context fall back to st.info, not a crash.
+        assert "st.info(" in _func_src(DD_TREE, DD_SRC, "_render_group_context")
+
+    def test_wired_into_deep_dive(self):
+        assert "_render_group_context(" in _func_src(DD_TREE, DD_SRC, "_render_deep_dive")
+
+
+class TestModelCompare:
+    def test_model_compare_renderers_present(self):
+        expected = {"_render_model_compare", "_model_compare_table_html",
+                    "_model_cell_html", "_delta_html"}
+        assert expected <= DD_FUNCS, f"missing: {expected - DD_FUNCS}"
+
+    def test_build_model_comparison_imported(self):
+        # Reads the STORED Bayesian shadow prediction — never recomputed here.
+        assert "build_model_comparison" in DD_IMPORTS
+
+    def test_shadow_framing(self):
+        # The Bayesian is shadow / never staked / manual promotion — say so.
+        src = _func_src(DD_TREE, DD_SRC, "_render_model_compare")
+        assert "shadow" in src.lower()
+        assert "manual" in src.lower()
+
+    def test_table_escaped(self):
+        assert "escape(" in _func_src(DD_TREE, DD_SRC, "_model_compare_table_html")
+
+    def test_empty_state_when_no_prediction(self):
+        assert "st.info(" in _func_src(DD_TREE, DD_SRC, "_render_model_compare")
+
+    def test_wired_into_deep_dive(self):
+        assert "_render_model_compare(" in _func_src(DD_TREE, DD_SRC, "_render_deep_dive")
+
+
+class TestGlossary:
+    def test_glossary_renderers_present(self):
+        assert {"_glossary_html", "_render_glossary"} <= DD_FUNCS
+
+    def test_covers_new_deep_dive_terms(self):
+        # The glossary must define the terms the deep dive introduces (DF-10 AC).
+        for term in ("CLV", "Line movement", "De-vig", "Scoreline matrix",
+                     "Rotation flag", "Bayesian"):
+            assert term in DD_SRC, f"glossary missing term: {term}"
+
+    def test_glossary_escaped(self):
+        assert "escape(" in _func_src(DD_TREE, DD_SRC, "_glossary_html")
+
+    def test_uses_expander(self):
+        assert "st.expander(" in _func_src(DD_TREE, DD_SRC, "_render_glossary")
+
+    def test_wired_into_deep_dive(self):
+        assert "_render_glossary(" in _func_src(DD_TREE, DD_SRC, "_render_deep_dive")
 
 
 def _func_src(tree: ast.AST, source: str, name: str) -> str:

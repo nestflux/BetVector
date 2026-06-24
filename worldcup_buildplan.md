@@ -1773,10 +1773,49 @@ this same page** (qualification impact + Bayesian read + glossary + nav/integrat
 - Bayesian-vs-Poisson read for this match (shadow). Nav registration + glossary.
 
 **Acceptance Criteria:**
-- [ ] Qualification/standings impact shown for the match
-- [ ] Per-match Bayesian-vs-Poisson read rendered (shadow framing)
-- [ ] Glossary covers the new deep-dive terms
-- [ ] Page registered in nav; integration test for the deep-dive flow
+- [x] Qualification/standings impact shown for the match
+- [x] Per-match Bayesian-vs-Poisson read rendered (shadow framing)
+- [x] Glossary covers the new deep-dive terms
+- [x] Page registered in nav; integration test for the deep-dive flow
+
+**Result:** ✅ DONE. Three sections added to the read-only deep-dive page
+(`src/delivery/views/wc_deep_dive.py`), fed by two new pure, unit-tested,
+streamlit-free data layers in `src/world_cup/research.py`. The value/staking path
+(`value_finder.py` ×2) and `predictor.py` are byte-for-byte unchanged — the WC
+system stays shadow / decision-support.
+
+- **Group & qualification impact** — `build_group_context(match_id)` builds the
+  match's group table from finished results (same 3/1/0 + GD/GF logic as the WC
+  hub), flags the two teams in the tie, and computes the qualification impact of
+  each result. The status read (`_qual_status`) is points-only and deliberately
+  conservative: "through" (clinched top 2) and "out" (eliminated from top 2) are
+  shown only when mathematically certain — ties and head-to-head are assumed
+  against the team, and the 8-best-third-place race (which depends on other
+  groups) honestly stays "in contention". A knockout tie has no table to move, so
+  the section says exactly that. The view renders an escaped group table +
+  per-result scenario chips (or the realised standing once played).
+- **Bayesian vs Poisson — this match** — `build_model_comparison(match_id)` lines
+  up the two STORED predictions (staked Poisson `MODEL_NAME` + shadow Bayesian
+  `MODEL_NAME_BAYES`) per market with the gap (Δ = Bayesian − Poisson) and an
+  agreement read. It reads stored rows only — nothing is recomputed or staked;
+  the Bayesian stays display-only with explicit "promotion is manual" framing.
+- **Glossary** — a pure `_glossary_html()` defines the new deep-dive terms
+  (scoreline matrix, de-vig, edge, line movement, CLV, rotation flag,
+  qualification status, Bayesian shadow), styled like the league deep dive's.
+- **Integration test** — `tests/test_wc_deep_dive_integration.py` is a real
+  end-to-end test: it seeds an in-memory DB (a full Group C + both model
+  predictions + odds + shadow value bets + lineups) and exercises every per-match
+  data layer (`build_book_comparison`, `scoreline_matrix_from_lambdas`,
+  `build_movement`, `build_group_context`, `build_model_comparison`,
+  `lineup_signal`) plus an AST-exec render of the view's pure HTML helpers over
+  that real data, including an XSS-escaping probe.
+
+902/902 tests (+34). Gate 1 PASS 4/4, Gate 2 CLEAN (no drift; `_qual_status`
+verified sound; field names match `models.py`), Gate 3 APPROVED (the reviewer
+brute-forced `_qual_status` over 25,270 group states — zero false
+clinched/eliminated — and ran an explicit XSS test). Real context + Bayesian +
+glossary PNG on the owner's Desktop. **This completes the DF (Decision-First UX)
+epic — all 10 issues DONE.**
 
 ---
 

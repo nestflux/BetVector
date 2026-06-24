@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
 from src.database.db import get_session
-from src.world_cup.models import WCMatch
+from src.world_cup.models import WCMatch, WCTeam
 from src.world_cup.predictor import MODEL_NAME, derive_markets_from_lambdas
 from src.world_cup.value_finder import _canonical_selection, _load_betting_config
 
@@ -835,4 +835,275 @@ def build_movement(match_id: int) -> dict | None:
     selections.sort(key=lambda s: (s["clv"] is None, -(s["clv"] or 0.0)))
     info["selections"] = selections
     info["has_movement"] = any(len(s["points"]) >= 2 for s in selections)
+    return info
+
+
+# ============================================================================
+# DF-10 — group/qualification context + per-match model comparison
+# ============================================================================
+# Two read-only layers for the deep dive's final sections. Both stay shadow /
+# decision-support: the qualification read is points-only context, and the model
+# comparison reads the STORED Bayesian shadow prediction (never recomputed, never
+# staked).
+
+# FIFA 2026: 4 teams per group, 3 group games each; top 2 advance plus the 8 best
+# third-placed teams across all 12 groups.
+_GROUP_SLOTS = 3
+
+
+def _ordinal(n: int) -> str:
+    """1 -> '1st', 2 -> '2nd', 3 -> '3rd', 4 -> '4th' (group tables only need 1–4)."""
+    return {1: "1st", 2: "2nd", 3: "3rd", 4: "4th"}.get(n, f"{n}th")
+
+
+def _team_rank(table: list[dict], team_id: int) -> int:
+    """Current table position (1-based) of a team, or 0 if absent (defensive)."""
+    for row in table:
+        if row["id"] == team_id:
+            return row["rank"]
+    return 0
+
+
+def _qual_status(pts: int, rem: int, others: list[tuple[int, int]]) -> str:
+    """Conservative top-2 qualification read for one team, points-only. ``others``
+    is ``[(current_points, remaining_matches), ...]`` for the rest of the group.
+
+    Returns ``'clinched'`` (mathematically guaranteed a top-2 finish, whatever
+    happens), ``'eliminated'`` (cannot reach top 2 even winning out), or
+    ``'contention'``. Ties and head-to-head are assumed to break AGAINST the team
+    so we never over-claim — a 'clinched'/'eliminated' label is always safe, and
+    the genuinely uncertain best-third-place race (which depends on other groups)
+    is left under 'contention' rather than guessed at."""
+    team_max = pts + 3 * max(rem, 0)
+    # Guaranteed top 2: at most one other team can even reach our current floor
+    # (the points we already hold and can't lose), so at most one finishes above us.
+    can_reach_floor = sum(1 for opts, orem in others
+                          if opts + 3 * max(orem, 0) >= pts)
+    if can_reach_floor <= 1:
+        return "clinched"
+    # Eliminated from top 2: two or more others already sit above our ceiling
+    # (more points now than we could reach even by winning every remaining game).
+    already_above = sum(1 for opts, _ in others if opts > team_max)
+    if already_above >= 2:
+        return "eliminated"
+    return "contention"
+
+
+def build_group_context(match_id: int) -> dict | None:
+    """DF-10 — what this match means for the group. Read-only over stored teams +
+    finished group results. For a group match: the current group table (both teams
+    in the tie flagged) plus the qualification impact of each result — or the
+    realised impact once it's played. For a knockout tie there is no table to move
+    (single elimination), so we say exactly that. Returns ``None`` if the match
+    doesn't exist. Pure context — nothing here is a bet or a model input."""
+    with get_session() as session:
+        m = session.execute(
+            select(WCMatch)
+            .where(WCMatch.id == match_id)
+            .options(joinedload(WCMatch.home_team), joinedload(WCMatch.away_team))
+        ).unique().scalar_one_or_none()
+        if not m:
+            return None
+
+        home = m.home_team.name if m.home_team else "?"
+        away = m.away_team.name if m.away_team else "?"
+        info = {
+            "match_id": match_id,
+            "home": home, "away": away,
+            "home_fifa": m.home_team.fifa_code if m.home_team else None,
+            "away_fifa": m.away_team.fifa_code if m.away_team else None,
+            "home_id": m.home_team_id, "away_id": m.away_team_id,
+            "stage": m.stage, "group_letter": m.group_letter, "status": m.status,
+            "home_goals": m.home_goals, "away_goals": m.away_goals,
+            "is_group": False, "table": [], "scenarios": [], "realized": None,
+        }
+        group = m.group_letter
+        if m.stage != "group" or not group:
+            info["headline"] = (
+                "Knockout tie — win or out. There's no group table to move here; "
+                "the stake is a place in the next round.")
+            return info
+
+        group_teams = session.execute(
+            select(WCTeam).where(WCTeam.group_letter == group)
+        ).scalars().all()
+        finished = session.execute(
+            select(WCMatch).where(
+                WCMatch.stage == "group",
+                WCMatch.group_letter == group,
+                WCMatch.status == "finished",
+            )
+        ).scalars().all()
+        team_rows = [(t.id, t.name, t.fifa_code) for t in group_teams]
+        results = [(mm.home_team_id, mm.away_team_id, mm.home_goals, mm.away_goals)
+                   for mm in finished if mm.home_goals is not None]
+
+    info["is_group"] = True
+    home_id, away_id = info["home_id"], info["away_id"]
+
+    # Standings from finished group results — same point logic as the WC hub.
+    stats = {tid: {"id": tid, "name": nm, "fifa_code": fc, "played": 0, "won": 0,
+                   "drawn": 0, "lost": 0, "gf": 0, "ga": 0, "gd": 0, "points": 0}
+             for tid, nm, fc in team_rows}
+    for hid, aid, hg, ag in results:
+        for tid, gf, ga in ((hid, hg, ag), (aid, ag, hg)):
+            s = stats.get(tid)
+            if not s:
+                continue
+            s["played"] += 1
+            s["gf"] += gf
+            s["ga"] += ga
+            s["gd"] = s["gf"] - s["ga"]
+            if gf > ga:
+                s["won"] += 1
+                s["points"] += 3
+            elif gf == ga:
+                s["drawn"] += 1
+                s["points"] += 1
+            else:
+                s["lost"] += 1
+
+    ordered = sorted(stats.values(),
+                     key=lambda x: (-x["points"], -x["gd"], -x["gf"]))
+    table = []
+    for rank, s in enumerate(ordered, start=1):
+        row = dict(s)
+        row["rank"] = rank
+        row["is_match_team"] = s["id"] in (home_id, away_id)
+        table.append(row)
+    info["table"] = table
+
+    def _status_after(home_delta: int, away_delta: int) -> dict:
+        """Points + qualification status for both match teams after a hypothetical
+        result (the two play this game, everyone else's remaining games stand)."""
+        snap = {}
+        for tid, s in stats.items():
+            rem = max(_GROUP_SLOTS - s["played"], 0)
+            pts = s["points"]
+            if tid == home_id:
+                pts += home_delta
+                rem = max(rem - 1, 0)
+            elif tid == away_id:
+                pts += away_delta
+                rem = max(rem - 1, 0)
+            snap[tid] = (pts, rem)
+        out = {}
+        for tid in (home_id, away_id):
+            pts, rem = snap[tid]
+            others = [snap[o] for o in snap if o != tid]
+            out[tid] = (pts, _qual_status(pts, rem, others))
+        return out
+
+    if info["status"] == "finished":
+        # The result is in: read each team's standing straight from the table.
+        for tid in (home_id, away_id):
+            s = stats.get(tid)
+            if not s:
+                continue
+            rem = max(_GROUP_SLOTS - s["played"], 0)
+            others = [(stats[o]["points"], max(_GROUP_SLOTS - stats[o]["played"], 0))
+                      for o in stats if o != tid]
+            stats[tid]["_status"] = _qual_status(s["points"], rem, others)
+        info["realized"] = {
+            "home_pts": stats.get(home_id, {}).get("points"),
+            "home_status": stats.get(home_id, {}).get("_status", "contention"),
+            "away_pts": stats.get(away_id, {}).get("points"),
+            "away_status": stats.get(away_id, {}).get("_status", "contention"),
+        }
+        info["headline"] = (
+            f"Group {group}: result in. {home} are {_ordinal(_team_rank(table, home_id))} "
+            f"on {stats.get(home_id, {}).get('points', 0)}, {away} "
+            f"{_ordinal(_team_rank(table, away_id))} on "
+            f"{stats.get(away_id, {}).get('points', 0)}. Top 2 advance, plus the 8 "
+            f"best third-placed teams.")
+    else:
+        for label, hd, ad in (
+            (f"If {home} win", 3, 0),
+            ("If they draw", 1, 1),
+            (f"If {away} win", 0, 3),
+        ):
+            after = _status_after(hd, ad)
+            hp, hs = after[home_id]
+            ap, as_ = after[away_id]
+            info["scenarios"].append({
+                "label": label,
+                "home_pts": hp, "home_status": hs,
+                "away_pts": ap, "away_status": as_,
+            })
+        info["headline"] = (
+            f"Group {group}: {home} are {_ordinal(_team_rank(table, home_id))} on "
+            f"{stats.get(home_id, {}).get('points', 0)}, {away} "
+            f"{_ordinal(_team_rank(table, away_id))} on "
+            f"{stats.get(away_id, {}).get('points', 0)}. Top 2 advance, plus the 8 "
+            f"best third-placed teams — here's what each result does.")
+    return info
+
+
+# Metrics we line the two models up on (both stored on every WCPrediction row).
+_MODEL_METRICS = [
+    ("home_win_prob", "Home win", "pct"),
+    ("draw_prob", "Draw", "pct"),
+    ("away_win_prob", "Away win", "pct"),
+    ("over_25_prob", "Over 2.5 goals", "pct"),
+    ("btts_prob", "Both teams to score", "pct"),
+    ("home_expected_goals", "Home xG", "num"),
+    ("away_expected_goals", "Away xG", "num"),
+]
+
+
+def build_model_comparison(match_id: int) -> dict | None:
+    """DF-10 — per-match Bayesian-vs-Poisson read (shadow). Lines up the two
+    STORED predictions for this match: the staked Poisson (model_name=MODEL_NAME)
+    and the shadow Bayesian (model_name=MODEL_NAME_BAYES). Reads stored rows only —
+    nothing is recomputed and nothing here places a bet; the Bayesian stays shadow
+    / display-only, promotion is manual. Returns ``None`` if the match doesn't
+    exist; per-metric rows are present only when the Poisson prediction exists, and
+    the ``bayesian`` column is ``None`` until the shadow model has run."""
+    from src.world_cup.bayesian_model import MODEL_NAME_BAYES  # lazy: pulls scipy
+    with get_session() as session:
+        m = session.execute(
+            select(WCMatch)
+            .where(WCMatch.id == match_id)
+            .options(joinedload(WCMatch.home_team),
+                     joinedload(WCMatch.away_team),
+                     joinedload(WCMatch.predictions))
+        ).unique().scalar_one_or_none()
+        if not m:
+            return None
+        home = m.home_team.name if m.home_team else "?"
+        away = m.away_team.name if m.away_team else "?"
+        preds = {p.model_name: {k: getattr(p, k) for k, _, _ in _MODEL_METRICS}
+                 for p in m.predictions}
+
+    poisson = preds.get(MODEL_NAME)
+    bayes = preds.get(MODEL_NAME_BAYES)
+    info = {
+        "match_id": match_id, "home": home, "away": away,
+        "has_poisson": poisson is not None,
+        "has_bayesian": bayes is not None,
+        "rows": [], "agreement": None,
+    }
+    if not poisson:
+        return info
+
+    for key, label, kind in _MODEL_METRICS:
+        pv = poisson.get(key)
+        bv = bayes.get(key) if bayes else None
+        delta = (bv - pv) if (pv is not None and bv is not None) else None
+        info["rows"].append({"metric": label, "kind": kind,
+                             "poisson": pv, "bayesian": bv, "delta": delta})
+
+    # Do the two models agree on the most likely 1X2 outcome?
+    if bayes:
+        def _fav(p: dict) -> str:
+            trio = {"home": p.get("home_win_prob"), "draw": p.get("draw_prob"),
+                    "away": p.get("away_win_prob")}
+            return max(trio, key=lambda k: trio[k] if trio[k] is not None else -1.0)
+
+        label = {"home": f"a {home} win", "draw": "a draw", "away": f"an {away} win"}
+        pf, bf = _fav(poisson), _fav(bayes)
+        info["agreement"] = (
+            f"Both models lean to {label[pf]}." if pf == bf
+            else f"The models disagree on the lean — Poisson favours {label[pf]}, "
+                 f"the Bayesian shadow favours {label[bf]}.")
     return info

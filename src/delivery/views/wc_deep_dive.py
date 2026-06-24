@@ -19,10 +19,15 @@ Sections:
    entry and close marked, plus the stored CLV (did we beat the close?).
 5. Confirmed lineups (DF-09) — both XIs + formations + the rotation flag, reusing
    the same lineup_signal that powers the research card.
+6. Group & qualification impact (DF-10) — the current group table with this tie
+   highlighted, plus what each result does to qualification (points-only,
+   conservative). Knockout ties say "win or out" instead.
+7. Bayesian vs Poisson (DF-10) — the staked Poisson beside the stored Bayesian
+   shadow prediction for THIS match (display-only; the Bayesian never stakes).
+8. Glossary (DF-10) — plain-English definitions for the deep-dive terms.
 
-DF-10 adds qualification impact + the Bayesian shadow read. The World Cup model
-is SHADOW / decision-support only — nothing here changes the model or any value
-bet.
+The World Cup model is SHADOW / decision-support only — nothing here changes the
+model or any value bet.
 """
 
 from html import escape
@@ -38,7 +43,10 @@ from src.world_cup.flags import render_flag
 from src.world_cup.lineups import lineup_signal
 from src.world_cup.models import WCMatch, WCTeam
 from src.world_cup.predictor import scoreline_matrix_from_lambdas
-from src.world_cup.research import build_book_comparison, build_movement
+from src.world_cup.research import (
+    build_book_comparison, build_group_context, build_model_comparison,
+    build_movement,
+)
 from src.world_cup.timeutil import format_kickoff_et
 
 # Design system (CLAUDE.md Rule 5) — defined locally; the WC hub page runs main()
@@ -473,6 +481,260 @@ def _render_lineups(match_id: int) -> None:
 
 
 # ============================================================================
+# Section 6 — Group & qualification impact (DF-10)
+# ============================================================================
+# What this match does to the group table, from build_group_context. The
+# qualification reads are points-only and deliberately conservative — a
+# "through"/"out" label is always mathematically safe, and the 8-best-third-place
+# race (which hinges on other groups) stays "in contention". Context, not a bet.
+
+_QUAL_CHIP = {
+    "clinched": (GREEN, "✓ through (top 2)"),
+    "eliminated": (RED, "✗ out of top 2"),
+    "contention": (YELLOW, "… in contention"),
+}
+
+
+def _qual_chip_html(status: str) -> str:
+    """Small coloured qualification chip for a status string."""
+    colour, label = _QUAL_CHIP.get(status, (TEXT_DIM, "…"))
+    return (f'<span style="color:{colour};font-weight:700;font-size:0.78rem;'
+            f'font-family:JetBrains Mono,monospace;">{label}</span>')
+
+
+def _standings_table_html(ctx: dict) -> str:
+    """Pure HTML group table; the two teams in this tie are highlighted. Team
+    names are escaped; render_flag returns a sanitised <img>."""
+    rows = []
+    for r in ctx["table"]:
+        hi = r["is_match_team"]
+        name = (f'{render_flag(r["fifa_code"])} '
+                f'<span style="color:{TEXT if hi else TEXT_DIM};'
+                f'font-weight:{"700" if hi else "400"};">{escape(r["name"])}</span>')
+        bg = "rgba(88,166,255,0.08)" if hi else "transparent"
+        rows.append(
+            f'<tr style="background:{bg};">'
+            f'<td style="padding:4px 8px;color:{TEXT_DIM};">{r["rank"]}</td>'
+            f'<td style="padding:4px 8px;">{name}</td>'
+            f'<td style="text-align:center;padding:4px 8px;color:{TEXT_DIM};">{r["played"]}</td>'
+            f'<td style="text-align:center;padding:4px 8px;color:{TEXT_DIM};">{r["gd"]:+d}</td>'
+            f'<td style="text-align:center;padding:4px 8px;color:{TEXT};font-weight:700;'
+            f'font-family:JetBrains Mono,monospace;">{r["points"]}</td></tr>'
+        )
+    return (
+        f'<div style="border:1px solid {BORDER};border-radius:8px;overflow:hidden;'
+        f'margin-bottom:10px;"><table style="width:100%;border-collapse:collapse;'
+        f'font-size:0.84rem;">'
+        f'<thead><tr style="color:{TEXT_DIM};border-bottom:1px solid {BORDER};">'
+        f'<th style="text-align:left;padding:5px 8px;">#</th>'
+        f'<th style="text-align:left;padding:5px 8px;">Team</th>'
+        f'<th style="padding:5px 8px;">P</th><th style="padding:5px 8px;">GD</th>'
+        f'<th style="padding:5px 8px;">Pts</th></tr></thead>'
+        f'<tbody>{"".join(rows)}</tbody></table></div>'
+    )
+
+
+def _scenario_row_html(ctx: dict, sc: dict) -> str:
+    """One 'if this happens' row: each team's resulting points + qualification chip."""
+    return (
+        f'<tr><td style="padding:5px 8px;color:{TEXT};font-size:0.84rem;'
+        f'border-bottom:1px solid {BORDER};">{escape(sc["label"])}</td>'
+        f'<td style="padding:5px 8px;border-bottom:1px solid {BORDER};">'
+        f'<span style="font-family:JetBrains Mono,monospace;color:{TEXT};">'
+        f'{escape(ctx["home"])} {sc["home_pts"]}</span> '
+        f'{_qual_chip_html(sc["home_status"])}</td>'
+        f'<td style="padding:5px 8px;border-bottom:1px solid {BORDER};">'
+        f'<span style="font-family:JetBrains Mono,monospace;color:{TEXT};">'
+        f'{escape(ctx["away"])} {sc["away_pts"]}</span> '
+        f'{_qual_chip_html(sc["away_status"])}</td></tr>'
+    )
+
+
+def _scenarios_table_html(ctx: dict) -> str:
+    """Pure HTML: the three group-result scenarios and what each does to the two
+    teams' qualification."""
+    rows = "".join(_scenario_row_html(ctx, sc) for sc in ctx["scenarios"])
+    return (
+        f'<div style="border:1px solid {BORDER};border-radius:8px;overflow:auto;">'
+        f'<table style="width:100%;border-collapse:collapse;">'
+        f'<thead><tr style="color:{TEXT_DIM};">'
+        f'<th style="text-align:left;padding:6px 8px;font-size:0.78rem;">Result</th>'
+        f'<th style="text-align:left;padding:6px 8px;font-size:0.78rem;">{escape(ctx["home"])}</th>'
+        f'<th style="text-align:left;padding:6px 8px;font-size:0.78rem;">{escape(ctx["away"])}</th>'
+        f'</tr></thead><tbody>{rows}</tbody></table></div>'
+    )
+
+
+def _render_group_context(match_id: int) -> None:
+    st.markdown(
+        '<div class="bv-section-header">Group &amp; qualification impact</div>',
+        unsafe_allow_html=True,
+    )
+    ctx = build_group_context(match_id)
+    if not ctx:
+        st.info("No group context for this match.")
+        return
+    if not ctx["is_group"]:
+        # Knockout tie — single elimination, there's no table to move.
+        st.info(ctx["headline"])
+        return
+    st.caption(ctx["headline"])
+    st.markdown(_standings_table_html(ctx), unsafe_allow_html=True)
+    if ctx["status"] == "finished" and ctx["realized"]:
+        r = ctx["realized"]
+        st.markdown(
+            f'<div style="font-size:0.86rem;color:{TEXT};margin-top:2px;">'
+            f'After this result: <b>{escape(ctx["home"])}</b> {r["home_pts"]} '
+            f'{_qual_chip_html(r["home_status"])} · <b>{escape(ctx["away"])}</b> '
+            f'{r["away_pts"]} {_qual_chip_html(r["away_status"])}</div>',
+            unsafe_allow_html=True,
+        )
+    elif ctx["scenarios"]:
+        st.markdown(_scenarios_table_html(ctx), unsafe_allow_html=True)
+        st.caption(
+            "Qualification reads are points-only and deliberately cautious: "
+            "“through”/“out” shows only when it's mathematically certain, and the "
+            "8-best-third-place race (which hinges on other groups) stays “in "
+            "contention”. Context, not a bet."
+        )
+
+
+# ============================================================================
+# Section 7 — Bayesian vs Poisson (per-match shadow read, DF-10)
+# ============================================================================
+# The two STORED predictions side by side — the staked Poisson and the Bayesian
+# shadow — for THIS match. Display-only: the Bayesian never stakes and promotion
+# is manual (src/world_cup/bayesian_validation.py). This is a divergence read, not
+# a second bet.
+
+def _model_cell_html(value, kind: str, strong: bool = False) -> str:
+    """One model's number for a metric ('pct' as a percent, 'num' to 2dp)."""
+    if value is None:
+        body = "—"
+    else:
+        body = f"{value:.0%}" if kind == "pct" else f"{value:.2f}"
+    weight = "700" if strong else "400"
+    return (f'<td style="text-align:center;padding:5px 8px;color:{TEXT};'
+            f'font-weight:{weight};font-family:JetBrains Mono,monospace;'
+            f'font-size:0.84rem;border-bottom:1px solid {BORDER};">{body}</td>')
+
+
+def _delta_html(delta, kind: str) -> str:
+    """Signed gap (Bayesian − Poisson). Neutral colour — neither model is 'right'
+    here; this is a divergence read, not an edge."""
+    if delta is None:
+        return (f'<td style="text-align:center;padding:5px 8px;color:{TEXT_DIM};'
+                f'border-bottom:1px solid {BORDER};">—</td>')
+    txt = f"{delta:+.0%}" if kind == "pct" else f"{delta:+.2f}"
+    return (f'<td style="text-align:center;padding:5px 8px;color:{TEXT_DIM};'
+            f'font-family:JetBrains Mono,monospace;font-size:0.82rem;'
+            f'border-bottom:1px solid {BORDER};">{txt}</td>')
+
+
+def _model_compare_table_html(data: dict) -> str:
+    """Pure HTML: per-metric Poisson vs Bayesian (shadow) + the gap. Returned (not
+    drawn) so it stays testable + renderable."""
+    rows = []
+    for r in data["rows"]:
+        rows.append(
+            f'<tr><td style="padding:5px 8px;color:{TEXT};font-size:0.84rem;'
+            f'border-bottom:1px solid {BORDER};">{escape(r["metric"])}</td>'
+            f'{_model_cell_html(r["poisson"], r["kind"], strong=True)}'
+            f'{_model_cell_html(r["bayesian"], r["kind"])}'
+            f'{_delta_html(r["delta"], r["kind"])}</tr>'
+        )
+    return (
+        f'<div style="border:1px solid {BORDER};border-radius:8px;overflow:auto;'
+        f'margin-bottom:8px;"><table style="width:100%;border-collapse:collapse;">'
+        f'<thead><tr style="color:{TEXT_DIM};">'
+        f'<th style="text-align:left;padding:6px 8px;font-size:0.78rem;">Market</th>'
+        f'<th style="padding:6px 8px;font-size:0.78rem;">Poisson{_MODEL_BADGE}</th>'
+        f'<th style="padding:6px 8px;font-size:0.78rem;">Bayesian (shadow)</th>'
+        f'<th style="padding:6px 8px;font-size:0.78rem;">Δ</th></tr></thead>'
+        f'<tbody>{"".join(rows)}</tbody></table></div>'
+    )
+
+
+def _render_model_compare(match_id: int) -> None:
+    st.markdown(
+        '<div class="bv-section-header">Bayesian vs Poisson — this match</div>',
+        unsafe_allow_html=True,
+    )
+    data = build_model_comparison(match_id)
+    if not data or not data["has_poisson"]:
+        st.info(
+            "No model prediction for this match yet — the comparison appears once the "
+            "WC pipeline has run for this fixture."
+        )
+        return
+    if not data["has_bayesian"]:
+        st.info(
+            "The Bayesian shadow model hasn't scored this match yet — only the staked "
+            "Poisson is shown. The shadow read fills in after the next pipeline run."
+        )
+    st.caption(
+        "The staked Poisson beside the Bayesian shadow model for THIS match. The "
+        "Bayesian runs in shadow — it never stakes and promotion is manual; read this "
+        "as a divergence check, not a second bet. Δ is Bayesian − Poisson."
+    )
+    st.markdown(_model_compare_table_html(data), unsafe_allow_html=True)
+    if data.get("agreement"):
+        st.caption(data["agreement"])
+
+
+# ============================================================================
+# Section 8 — Glossary (DF-10)
+# ============================================================================
+# Short, plain-English definitions for the deep-dive terms (the owner is learning,
+# MP §12). Built by a pure helper so it stays testable.
+
+_GLOSSARY = [
+    ("Scoreline matrix", "The model's 7×7 grid of P(home goals, away goals). Every "
+     "market probability on this page is derived from it."),
+    ("De-vig", "Stripping the bookmaker's margin (the “overround”) from their odds so "
+     "their implied probabilities sum to 100% — a fair comparison against the model."),
+    ("Edge", "Model probability minus the de-vigged market probability. Positive means "
+     "the model rates a selection higher than the market does."),
+    ("Line movement", "How a price changes over time. We hold a few real snapshots "
+     "(open → entry → current → close), not a tick-by-tick history."),
+    ("CLV", "Closing-Line Value — the entry price versus the closing price. Beating the "
+     "close (positive CLV) is the single best sign a bet was struck at value."),
+    ("Rotation flag", "Raised when a confirmed XI changes heavily from the team's last "
+     "one — a hypothesis to re-check, never a model input."),
+    ("Qualification status", "“Through”/“out” shows only when it's mathematically "
+     "certain (top 2). The 8-best-third-place race depends on other groups, so it "
+     "stays “in contention”."),
+    ("Bayesian (shadow)", "A second model run alongside the staked Poisson for "
+     "comparison only. It never places a bet; promotion to staking is a manual "
+     "decision."),
+]
+
+
+def _glossary_html() -> str:
+    """Pure HTML for the deep-dive glossary (escaped term + definition rows),
+    styled to match the league deep dive's glossary (match_detail.py)."""
+    rows = "".join(
+        f'<div class="gloss-row"><span class="gloss-term">{escape(term)}</span>'
+        f'<span class="gloss-def">{escape(defn)}</span></div>'
+        for term, defn in _GLOSSARY
+    )
+    return (
+        '<style>'
+        '.gloss-row{display:flex;gap:8px;margin-bottom:8px;line-height:1.45;}'
+        '.gloss-term{font-family:"JetBrains Mono",monospace;font-size:12px;'
+        'font-weight:600;color:#E6EDF3;min-width:150px;flex-shrink:0;}'
+        '.gloss-def{font-family:Inter,sans-serif;font-size:12px;color:#8B949E;}'
+        '</style>'
+        f'<div class="gloss-section">{rows}</div>'
+    )
+
+
+def _render_glossary() -> None:
+    with st.expander("Glossary — deep-dive terms", expanded=False):
+        st.markdown(_glossary_html(), unsafe_allow_html=True)
+
+
+# ============================================================================
 # Section 1 — Header
 # ============================================================================
 
@@ -575,6 +837,12 @@ def _render_deep_dive(match_id: int) -> None:
     _render_movement(match_id)
     st.divider()
     _render_lineups(match_id)
+    st.divider()
+    _render_group_context(match_id)
+    st.divider()
+    _render_model_compare(match_id)
+    st.divider()
+    _render_glossary()
 
 
 # ============================================================================

@@ -1,6 +1,6 @@
 # BetVector — Masterplan
 
-Version 1.4 · June 2026
+Version 1.5 · June 2026
 
 ---
 
@@ -1568,3 +1568,5 @@ This changelog originally recorded one narrative subsection per epic (13.1–13.
 - **Build plans** — `betvector_buildplan.md` (league system) and `worldcup_buildplan.md` (the time-boxed World Cup 2026 add-on module — isolated `wc_`-prefixed tables and `src/world_cup/` code, complete and self-contained).
 
 Rationale: the project accumulated four overlapping status records (this section, CLAUDE.md, the build plans, primer.md), and §13 drifted because it was the most effortful copy to maintain. Collapsing to a single source of truth — CLAUDE.md + the build plans — prevents recurrence. Architectural changes from later epics that affect the core system (e.g. the E33 SQLite→Neon migration) are folded directly into the relevant sections above (§5, §6) as they occur, per Rule 8 Tier 1.
+
+**Latest completed WC-module epic — DF (Decision-First UX), June 2026 (v1.5).** A 10-issue epic that reorganised the dashboard around the *decision* rather than the data: verdict-led fixtures (WC + leagues), a digestible research card with model-vs-market market blocks, and a read-only WC match deep dive (`src/delivery/views/wc_deep_dive.py`) covering the scoreline matrix, model-vs-every-book line shopping, line movement + CLV, confirmed lineups + rotation flag, group/qualification impact, and a per-match Bayesian-vs-Poisson read with a glossary. **Entirely read-only / shadow: no new tables, columns, data sources, or model changes** — the value/staking path (`value_finder.py`) and `predictor.py` were held byte-for-byte unchanged across all 10 issues, and the Bayesian read is display-only (promotion stays manual, §11). Full detail in `worldcup_buildplan.md` §DF-01..DF-10; outcome ledger in `CLAUDE.md`.

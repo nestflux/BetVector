@@ -11,9 +11,11 @@ import src.world_cup.research as research
 from src.world_cup.research import (
     build_research_card, top_disagreements, _devig, _consensus,
     summarize_card, build_disagreements, build_book_comparison, build_movement,
+    build_group_context, build_model_comparison, _qual_status,
 )
 from src.world_cup.models import WCTeam, WCMatch, WCOdds, WCPrediction, WCValueBet
 from src.world_cup.predictor import MODEL_NAME
+from src.world_cup.bayesian_model import MODEL_NAME_BAYES
 
 
 def test_devig_sums_to_one():
@@ -633,3 +635,137 @@ def test_build_movement_awaiting_close(session, monkeypatch):
 def test_build_movement_missing_match(session, monkeypatch):
     _patch(session, monkeypatch)
     assert build_movement(99999) is None
+
+
+# ---------------------------------------------------------------------------
+# DF-10 — group/qualification context + per-match Bayes-vs-Poisson (shadow)
+# ---------------------------------------------------------------------------
+
+def _seed_group(s):
+    """Group C, two rounds played; round 3 Brazil v Scotland (id=50) scheduled,
+    with both a Poisson and a Bayesian shadow prediction. After two rounds:
+    Brazil 6, Scotland 3 (GD +1), Switzerland 3 (GD 0), Cameroon 0."""
+    s.add_all([
+        WCTeam(id=1, name="Brazil", fifa_code="BRA", confederation="CONMEBOL", group_letter="C"),
+        WCTeam(id=2, name="Scotland", fifa_code="SCO", confederation="UEFA", group_letter="C"),
+        WCTeam(id=3, name="Switzerland", fifa_code="SUI", confederation="UEFA", group_letter="C"),
+        WCTeam(id=4, name="Cameroon", fifa_code="CMR", confederation="CAF", group_letter="C"),
+    ])
+    s.add_all([
+        WCMatch(id=1, stage="group", group_letter="C", date="2026-06-15",
+                home_team_id=1, away_team_id=4, status="finished", home_goals=2, away_goals=0),
+        WCMatch(id=2, stage="group", group_letter="C", date="2026-06-15",
+                home_team_id=3, away_team_id=2, status="finished", home_goals=1, away_goals=0),
+        WCMatch(id=3, stage="group", group_letter="C", date="2026-06-19",
+                home_team_id=1, away_team_id=3, status="finished", home_goals=1, away_goals=0),
+        WCMatch(id=4, stage="group", group_letter="C", date="2026-06-19",
+                home_team_id=2, away_team_id=4, status="finished", home_goals=3, away_goals=1),
+    ])
+    s.add(WCMatch(id=50, stage="group", group_letter="C", date="2026-06-25",
+                  kickoff_time="18:00", home_team_id=1, away_team_id=2, status="scheduled"))
+    s.add(WCPrediction(id=500, match_id=50, model_name=MODEL_NAME,
+                       home_win_prob=0.62, draw_prob=0.22, away_win_prob=0.16,
+                       home_expected_goals=2.0, away_expected_goals=0.7,
+                       over_25_prob=0.55, btts_prob=0.40))
+    s.add(WCPrediction(id=501, match_id=50, model_name=MODEL_NAME_BAYES,
+                       home_win_prob=0.58, draw_prob=0.25, away_win_prob=0.17,
+                       home_expected_goals=1.8, away_expected_goals=0.8,
+                       over_25_prob=0.52, btts_prob=0.44))
+    s.commit()
+
+
+def test_qual_status_clinched_eliminated_contention():
+    # On 6 with one rival able to reach 6 and the rest far back → guaranteed top 2.
+    assert _qual_status(6, 0, [(6, 0), (3, 0), (0, 0)]) == "clinched"
+    # On 0 with no games left and two rivals already above the ceiling → out.
+    assert _qual_status(0, 0, [(6, 0), (6, 0), (3, 0)]) == "eliminated"
+    # On 3 with two rivals still able to overtake → genuinely alive.
+    assert _qual_status(3, 1, [(6, 1), (4, 1), (3, 1)]) == "contention"
+
+
+def test_group_context_scheduled_scenarios(session, monkeypatch):
+    _seed_group(session)
+    _patch(session, monkeypatch)
+    ctx = build_group_context(50)
+    assert ctx["is_group"] is True
+    # Full sorted table (Scotland edges Switzerland on GD), both teams flagged.
+    assert [r["name"] for r in ctx["table"]] == \
+        ["Brazil", "Scotland", "Switzerland", "Cameroon"]
+    assert {r["name"] for r in ctx["table"] if r["is_match_team"]} == {"Brazil", "Scotland"}
+    # Three result scenarios; a Brazil win takes them to 9 and clinches top 2.
+    assert [sc["label"] for sc in ctx["scenarios"]] == \
+        ["If Brazil win", "If they draw", "If Scotland win"]
+    win = ctx["scenarios"][0]
+    assert win["home_pts"] == 9 and win["home_status"] == "clinched"
+    assert ctx["realized"] is None
+
+
+def test_group_context_finished_realized(session, monkeypatch):
+    _seed_group(session)
+    m = session.get(WCMatch, 50)            # play it: Brazil 2-0 Scotland
+    m.status, m.home_goals, m.away_goals = "finished", 2, 0
+    session.commit()
+    _patch(session, monkeypatch)
+    ctx = build_group_context(50)
+    assert ctx["scenarios"] == []           # no hypotheticals once it's played
+    assert ctx["realized"] is not None
+    assert ctx["realized"]["home_pts"] == 9
+    assert ctx["realized"]["home_status"] == "clinched"
+
+
+def test_group_context_knockout(session, monkeypatch):
+    session.add_all([
+        WCTeam(id=1, name="Brazil", fifa_code="BRA", confederation="CONMEBOL", group_letter="C"),
+        WCTeam(id=3, name="Switzerland", fifa_code="SUI", confederation="UEFA", group_letter="A"),
+    ])
+    session.add(WCMatch(id=90, stage="round_of_32", group_letter=None, date="2026-07-01",
+                        home_team_id=1, away_team_id=3, status="scheduled"))
+    session.commit()
+    _patch(session, monkeypatch)
+    ctx = build_group_context(90)
+    assert ctx["is_group"] is False
+    assert ctx["table"] == [] and ctx["scenarios"] == []
+    assert "Knockout" in ctx["headline"]
+
+
+def test_group_context_missing(session, monkeypatch):
+    _patch(session, monkeypatch)
+    assert build_group_context(99999) is None
+
+
+def test_model_comparison_both_models(session, monkeypatch):
+    _seed_group(session)
+    _patch(session, monkeypatch)
+    cmp = build_model_comparison(50)
+    assert cmp["has_poisson"] and cmp["has_bayesian"]
+    assert len(cmp["rows"]) == 7
+    hw = next(r for r in cmp["rows"] if r["metric"] == "Home win")
+    assert hw["poisson"] == 0.62 and hw["bayesian"] == 0.58
+    assert abs(hw["delta"] - (0.58 - 0.62)) < 1e-9
+    assert "lean" in cmp["agreement"].lower()   # both still favour the home win
+
+
+def test_model_comparison_no_bayesian(session, monkeypatch):
+    _seed_group(session)
+    session.delete(session.get(WCPrediction, 501))   # drop the shadow row
+    session.commit()
+    _patch(session, monkeypatch)
+    cmp = build_model_comparison(50)
+    assert cmp["has_poisson"] is True and cmp["has_bayesian"] is False
+    assert all(r["bayesian"] is None and r["delta"] is None for r in cmp["rows"])
+    assert cmp["agreement"] is None
+
+
+def test_model_comparison_disagreement(session, monkeypatch):
+    _seed_group(session)
+    b = session.get(WCPrediction, 501)               # make Bayesian favour the draw
+    b.home_win_prob, b.draw_prob, b.away_win_prob = 0.30, 0.45, 0.25
+    session.commit()
+    _patch(session, monkeypatch)
+    cmp = build_model_comparison(50)
+    assert "disagree" in cmp["agreement"].lower()
+
+
+def test_model_comparison_missing(session, monkeypatch):
+    _patch(session, monkeypatch)
+    assert build_model_comparison(99999) is None
