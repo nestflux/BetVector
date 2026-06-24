@@ -1819,6 +1819,176 @@ epic — all 10 issues DONE.**
 
 ---
 
+## WC-11A — Player Insight (display-only, shadow) · PROPOSED 2026-06-24
+
+**Status:** SPEC / awaiting owner go-ahead to build. This is the **display-only
+subset of WC-11** (the deferred player-props epic) — the "A1" slice agreed with
+the owner: turn the confirmed lineups we already capture into decision-support
+about *which players carry the goals and how a changed XI shifts the picture*,
+**without** building a staked product and **without** the prop-odds budget the full
+WC-11 needs (see `worldcup_props_spike.md` §3, ≈ the whole monthly Odds API quota).
+
+**Hard discipline (same as DF):** everything here is **presentation over data we
+already hold**. The model and the value/staking path are untouched — `predictor.py`
+and `value_finder.py` ×2 stay byte-for-byte unchanged, asserted by an empty
+`git diff --stat` + a grep guard in CI. The model's stored λ (expected goals) is
+**read, never rewritten**; any "adjusted λ" is a display-only what-if computed at
+render time and never persisted to `WCPrediction`. WC stays "track", never "bet".
+
+**Why this is safe AND useful:** the team model already isn't sharp enough vs the
+market to stake (that's why WC is shadow), and a player model would be cruder — so
+we deliberately do **not** chase a betting edge here. We surface *the model's own
+view of the XI* (who's likely to score, what a rotation costs) as a learning /
+decision-support layer, exactly like the DF deep dive.
+
+### Data sources (researched 2026-06-24 — three parallel audits)
+
+**1. ESPN confirmed lineups** (`site.api.espn.com/.../soccer/fifa.world`, free,
+key-less, GET-only — already wired in `src/world_cup/lineups.py`):
+- ✅ Confirmed starting XI for **both** teams (gated: stored only when each side has
+  ≥11 starters), **granular position** per player (role-level: `CF`/`RW`/`DM`/`CD-L`,
+  not just FWD/MID/DEF), **formation**, jersey, and the full bench.
+- ✅ Already feeds `lineup_signal()` (the rotation flag the research card + deep dive
+  share) — WC-11A **reuses** it, never re-queries.
+- ❌ No expected minutes, no per-player xG, no season/career stats (only a live
+  single-match stats block, empty pre-KO), no injury reason. → any λ-adjust is a
+  **heuristic from goal-shares + who's in/out**, framed as decision-support, never a
+  data-grade minutes model.
+- ⚠️ **Timing:** the XI posts only **~1 h before kickoff** (dispatcher retries every
+  ~15 min in `[KO-60, KO)`); before that the feature shows a clean "🔒 XI not
+  announced yet" state.
+- ⚠️ **Name capture fix needed:** the feed carries both `displayName` (short, e.g.
+  "Vinicius Jr") and `fullName` ("Vinicius Junior"); we currently store the **short**
+  form (`lineups.py:125`), which zero-matches Transfermarkt. WC-11A-01 fixes this.
+
+**2. Transfermarkt** (local `data/raw/transfermarkt/datasets/`, **current through
+2026-05-24** — the 2025/26 season is present; 1.88 M appearance rows, 47.7 K players):
+- ✅ Per-player **goals-per-90 + minutes** (`appearances.csv.gz`; the appearances↔
+  players join is **100 %** clean), **cards**, `position`/`sub_position`, market
+  value, `country_of_citizenship`, `international_goals/caps`, and **penalty-taker**
+  signal (`game_events.csv.gz`, 21,874 penalty goals → top takers resolve to Ronaldo,
+  Kane, Messi).
+- ⚠️ **The make-or-break: the ESPN-name → TM-player join.** Verified solvable
+  **without ML**: (a) capture ESPN **`fullName`** (fixes the "Vini Jr"/"Leo Messi"
+  zero-match class); (b) resolve on **normalised name + nation** (the team's WC nation
+  is a free, strong disambiguator), tiebreak on **most-recent `last_season`** (picks
+  active over retired — the "Rodri trap") **+ position**; (c) a small **curated
+  `(name, squad) → player_id` override map** for the handful of ambiguous stars per
+  tournament (mirrors the existing `_ESPN_NAME_MAP`); (d) **blank ("—") on residual
+  ambiguity — never show a guessed player's stats.** Collision rate falls 2.0 %
+  (name) → 1.4 % (name+nation) → 0.6 % (+position); the override map + blank-on-doubt
+  closes the rest.
+- ⚠️ **Coverage:** top-5-league starters are rich; Saudi/MLS players (Ronaldo,
+  Benzema, Neymar) have **0 recent club minutes** → fall back to `international_goals`,
+  **clearly labelled "international form"**, not club form.
+
+**3. Integration / shadow safety** (verified against `predictor.py`, `research.py`,
+`value_finder.py` ×2): the team λ is computed once from **team-level features only**
+(no player input anywhere) and stored on `WCPrediction.home/away_expected_goals`. A
+display-only adjusted-λ is a **new pure function reading that stored λ** — zero change
+to the model or value path. Pattern mirrors DF-08/09/10: a pure, streamlit-free,
+unit-tested `research.build_lineup_impact()` + one thin escaped deep-dive renderer.
+
+### Issues
+
+#### WC-11A-01 — Player rate engine + name resolver (the data foundation)
+
+**Type:** Data
+**Depends on:** WC-10-06 (ESPN capture)
+
+**Implementation Notes:**
+- Capture ESPN **`fullName`** for join accuracy. Recommended: add **nullable**
+  `full_name` + `espn_athlete_id` columns to `WCLineup` (additive, `wc_`-only
+  migration; keeps `player_name`/`displayName` so the rotation signal is undisturbed)
+  and store `athlete.id` (the clean, stable join key the feed already returns).
+- New streamlit-free `src/world_cup/player_rates.py`: from the local Transfermarkt
+  files, build a cached per-player lookup — recency-weighted **goals-per-90**,
+  minutes, **cards-per-90**, **penalty-taker** flag, `position`/`sub_position`,
+  market value, and an `international_goals/caps` fallback. Pure, unit-tested.
+- New resolver `resolve_player(name, nation, position=None, espn_id=None) → player_id
+  | None`: `espn_id` exact-match first; else normalised(name)+nation, tiebreak
+  max `last_season` + position; else a curated override map; else **None** (blank).
+
+**Acceptance Criteria:**
+- [ ] `player_rates` computes sane goals-per-90 for known stars (Kane ≈ 1.1, Haaland
+  ≈ 1.0, a defender ≈ 0.1) from local data — no new scraping, no Odds API cost.
+- [ ] Resolver maps the audit's star set (incl. "Vinicius Junior", "Bruno Fernandes")
+  to the correct `player_id`, and returns **None** (not a wrong match) on ambiguity.
+- [ ] Saudi/MLS players resolve with an **international-form fallback**, labelled.
+- [ ] Unit tests cover the resolver's exact-match, tiebreak, override, and
+  blank-on-ambiguity paths; capture change leaves `lineup_signal` tests green.
+
+#### WC-11A-02 — Lineup impact: display-only adjusted-λ (the core "A1")
+
+**Type:** UI
+**Depends on:** WC-11A-01
+
+**Implementation Notes:**
+- New pure `research.build_lineup_impact(match_id, rate_lookup)`: reuse
+  `lineup_signal` for the XIs, read the **stored** λ off `WCPrediction`, and per team
+  return `{status, lambda_model, lambda_adjusted, delta, formation, heavy_rotation,
+  scorers:[{player,in_xi,share,exp_goals}], missing:[...]}`. `lambda_adjusted =
+  lambda_model × (Σ in-XI goal-share ÷ Σ baseline-XI goal-share)` — **read-only, never
+  written back.**
+- New `_render_lineup_impact(match_id)` deep-dive section after `_render_lineups`
+  (`st.divider()`), with the model-λ-vs-adjusted-λ read + the standard shadow caption
+  ("a display-only what-if from the confirmed XI — never changes the model or a bet")
+  and the not-announced state. Optional one-line echo on the research card (same
+  `build_lineup_impact`, so the surfaces can't disagree).
+
+**Acceptance Criteria:**
+- [ ] Adjusted-λ shown beside the model's λ when the XI is confirmed; clean
+  not-announced state otherwise.
+- [ ] A rotated-out high-share striker visibly lowers adjusted-λ; the `delta` is
+  presented **neutrally** (not as an edge).
+- [ ] `predictor.py` + `value_finder.py` ×2 byte-for-byte unchanged (empty diff +
+  grep guard); `build_lineup_impact` is read-only (no `add`/`commit`).
+- [ ] Pure layer unit-tested; view AST-tested; glossary gains "Adjusted xG" /
+  "Goal-share".
+
+#### WC-11A-03 — "Who's likely to score" board + penalty-taker flag
+
+**Type:** UI
+**Depends on:** WC-11A-02
+
+**Implementation Notes:**
+- Per-player anytime estimate `P = 1 − exp(−player_λ)`, `player_λ = goal-share ×
+  team λ` (minutes held flat — the spike's honest framing; position-weight when club
+  data is missing). **Display-only, NO odds pull** → no budget hit; we show *the
+  model's* "who scores" ranking, not a market comparison.
+- Flag the **designated penalty taker** (real anytime bump) from the TM penalty data.
+
+**Acceptance Criteria:**
+- [ ] Ranked anytime-scorer table for the confirmed XI (Kane-type ≈ 45–50 %,
+  defenders low), with the penalty-taker flagged; international-fallback labelled.
+- [ ] No Odds API credits spent; shadow caption ("the model's view, not a market
+  line; not a bet").
+
+#### WC-11A-04 — Player watch extras (optional polish)
+
+**Type:** UI
+**Depends on:** WC-11A-03
+
+**Implementation Notes:** small display add-ons off the same data — a **booking-risk**
+note (high cards-per-90 starters), a **star-absence callout** (the `missing` list,
+"Brazil without Vinícius Júnior"), and **form/milestone** notes (recent scoring run;
+approaching a caps/goals milestone). All display-only, escaped, no new cost.
+
+**Acceptance Criteria:**
+- [ ] At least the booking-risk + star-absence callouts render from real data with
+  graceful empty states; no model/value change.
+
+### Deferred / gated add-on (NOT in WC-11A)
+
+**Model-vs-market prop comparison** — comparing our anytime numbers to the
+**de-vigged** bookmaker line needs a **day-of prop-odds pull** (`player_goal_scorer_
+anytime`, 1 market × 1 region), which the spike costs at ≈ the whole monthly Odds API
+quota. Kept **OFF** and **gated on owner opt-in + budget**, exactly per
+`worldcup_props_spike.md` §3/§5. WC-11A delivers the model's view for free; the market
+overlay is a separate, funded decision.
+
+---
+
 ## Appendix A — Feature Reference
 
 ### Full Feature Vector (30 features)
