@@ -1703,10 +1703,29 @@ The value path (`value_finder.py`, `predictor.py`) is byte-for-byte unchanged �
   switch).
 
 **Acceptance Criteria:**
-- [ ] Clicking a fixture / research card opens that match's deep dive
-- [ ] Scoreline heatmap renders the model's 7×7
-- [ ] Model vs every pulled book shown per market with the visual comparison
-- [ ] Empty/missing-data states handled
+- [x] Clicking a fixture / research card opens that match's deep dive
+- [x] Scoreline heatmap renders the model's 7×7
+- [x] Model vs every pulled book shown per market with the visual comparison
+- [x] Empty/missing-data states handled
+
+**Result:** ✅ DONE — New read-only page `src/delivery/views/wc_deep_dive.py` (Phase B
+start), mirroring `match_detail.py` against the WC tables. Three pure additions feed it
+(value path byte-for-byte unchanged — shadow): (1) `predictor.scoreline_matrix_from_lambdas`
+rebuilds the 7×7 Dixon-Coles grid from the stored expected goals (wc_predictions persists λ,
+not the matrix); (2) `research.build_book_comparison` returns, per market (1X2 + O/U
+1.5/2.5/3.5 + BTTS), the model prob + de-vigged median consensus + **every** pulled book's
+own de-vigged line (via new `_collect_by_book`), each tagged with the model edge and the
+DF-06 trust class against the SAME config bounds the value finder stakes on (`_trust_bounds`/
+`_edge_trust`, not hardcoded); (3) the view's pure `_market_table_html` renders the model row
+over the consensus row over one row per book, edge-tinted (green = value vs that book, amber =
+past the ceiling / likely model error), softest-book-first, with ★ on the best price across
+books (line shopping). Entry: the WC hub's fixtures strip (per-row expander button) and the
+research card both set `st.session_state["wc_deep_dive_match_id"]` + `st.switch_page`; the page
+resolves session-state (one-shot pop) → `?wc_match_id`, registered in `dashboard.py` nav, with
+a picker fallback. Empty/missing states: no prediction → no heatmap (`st.info`); no odds → no
+comparison; match not found → `st.error` + back. 851/851 (+20), Gate 2 CLEAN / Gate 3 APPROVED.
+Real heatmap + model-vs-books PNG on owner Desktop. **DF-09/DF-10 extend this same page**
+(movement + lineups; qualification impact + Bayesian read).
 
 ### DF-09 — WC Deep Dive: Movement + Lineups
 

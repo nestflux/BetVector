@@ -553,3 +553,155 @@ def build_disagreements(limit: int = 10, cfg: dict | None = None) -> list[dict]:
     for r in out:
         r["text"] = _disagreement_sentence(r)
     return out
+
+
+# ============================================================================
+# DF-08 — Model-vs-every-book comparison (deep dive)
+# ============================================================================
+# The research card collapses every book into one de-vigged consensus. The deep
+# dive opens that up: for each market it lays the model probability beside EVERY
+# pulled book's own de-vigged line, so you can see who's softest on the side the
+# model favours (line shopping) and how wide the book-to-book spread is. Same
+# read-only data + same de-vig as the card — no model/value change (shadow).
+
+# (display key, friendly title, the canonical selections that de-vig together)
+_BOOK_MARKETS = (
+    ("h2h", "Match result", ["home", "draw", "away"]),
+    ("ou15", "Over / Under 1.5 goals", ["over_1.5", "under_1.5"]),
+    ("ou25", "Over / Under 2.5 goals", ["over_2.5", "under_2.5"]),
+    ("ou35", "Over / Under 3.5 goals", ["over_3.5", "under_3.5"]),
+    ("btts", "Both teams to score", ["btts_yes", "btts_no"]),
+)
+
+
+def _collect_by_book(odds, home_name: str, away_name: str) -> dict:
+    """bookmaker → {canonical_sel: odds_decimal}. Per-book prices for the
+    model-vs-every-book deep-dive comparison. When a book quotes the same line
+    twice (e.g. once under ``totals`` and once under ``alternate_totals``) we keep
+    the better price for the bettor, mirroring the card's best-price handling."""
+    books: dict = {}
+    for o in odds:
+        canon = _canon(o.market_type, o.selection, home_name, away_name, o.point)
+        if not canon:
+            continue
+        b = books.setdefault(o.bookmaker, {})
+        if canon not in b or o.odds_decimal > b[canon]:
+            b[canon] = o.odds_decimal
+    return books
+
+
+def build_book_comparison(match_id: int, cfg: dict | None = None) -> dict | None:
+    """DF-08 — per-market model-vs-EVERY-book comparison for the WC deep dive.
+
+    For each market (Match result / O/U 1.5·2.5·3.5 / BTTS) returns the model
+    probability per selection, the de-vigged median market consensus, and — for
+    every bookmaker that quotes a complete set of that market's selections — that
+    book's own de-vigged probability, raw price, and the model edge
+    (model − de-vigged book). Books are ordered by where the model sees the most
+    value. Each selection also carries the single best price across all books for
+    a line-shopping cue. Read-only over stored odds + the stored prediction
+    (shadow); no new API cost. Returns ``None`` if the match doesn't exist."""
+    threshold, ceiling = _trust_bounds(cfg)
+    with get_session() as session:
+        m = session.execute(
+            select(WCMatch)
+            .where(WCMatch.id == match_id)
+            .options(
+                joinedload(WCMatch.home_team),
+                joinedload(WCMatch.away_team),
+                joinedload(WCMatch.odds),
+                joinedload(WCMatch.predictions),
+            )
+        ).unique().scalar_one_or_none()
+        if not m:
+            return None
+
+        home = m.home_team.name if m.home_team else "?"
+        away = m.away_team.name if m.away_team else "?"
+        info = {
+            "match_id": match_id,
+            "home": home,
+            "away": away,
+            "home_fifa": m.home_team.fifa_code if m.home_team else None,
+            "away_fifa": m.away_team.fifa_code if m.away_team else None,
+            "date": m.date,
+            "kickoff_time": m.kickoff_time,
+            "stage": m.stage,
+            "status": m.status,
+            "home_goals": m.home_goals,
+            "away_goals": m.away_goals,
+        }
+        pred = next((p for p in m.predictions if p.model_name == MODEL_NAME), None)
+        data = _collect(m.odds, home, away)
+        by_book = _collect_by_book(m.odds, home, away)
+
+    model = _model_probs(pred)
+    info["has_prediction"] = pred is not None
+    info["lambda_home"] = pred.home_expected_goals if pred else None
+    info["lambda_away"] = pred.away_expected_goals if pred else None
+    info["most_likely_score"] = pred.most_likely_score if pred else None
+
+    # h2h carries the team name; everything else its short label.
+    labels = dict(_SHORT_LABELS)
+    labels["home"] = f"Home ({home})"
+    labels["away"] = f"Away ({away})"
+
+    markets = []
+    for key, title, sels in _BOOK_MARKETS:
+        consensus, _ = _consensus(data, sels)        # de-vigged median across books
+
+        books = []
+        for book, prices in by_book.items():
+            implied, complete = {}, True
+            for sel in sels:
+                dec = prices.get(sel)
+                if not dec or dec <= 1.0:
+                    complete = False
+                    break
+                implied[sel] = 1.0 / dec
+            if not complete:                          # book must quote every side
+                continue
+            fair = _devig(implied)
+            edges, trust = {}, {}
+            for sel in sels:
+                mp = model.get(sel)
+                e = (mp - fair[sel]) if mp is not None else None
+                edges[sel] = e
+                trust[sel] = _edge_trust(e, threshold, ceiling)
+            valid_edges = [e for e in edges.values() if e is not None]
+            books.append({
+                "book": book,
+                "probs": fair,
+                "raw": {sel: prices[sel] for sel in sels},
+                "edges": edges,
+                "trust": trust,
+                "best_edge": max(valid_edges) if valid_edges else None,
+            })
+
+        if consensus is None and not books:
+            continue                                  # market not priced → skip
+
+        # Best price + book per selection (line-shopping cue).
+        best = {}
+        for sel in sels:
+            d = data.get(sel) or {}
+            bo, bk = d.get("best", (0.0, ""))
+            best[sel] = {"odds": bo, "book": bk} if bo > 1.0 else None
+
+        # Softest book first: where the model sees the most value.
+        books.sort(key=lambda b: (b["best_edge"] is None, -(b["best_edge"] or 0.0)))
+
+        markets.append({
+            "key": key,
+            "title": title,
+            "selections": sels,
+            "labels": {sel: labels.get(sel, sel) for sel in sels},
+            "model": {sel: model.get(sel) for sel in sels},
+            "consensus": consensus or {},
+            "best": best,
+            "books": books,
+            "n_books": len(books),
+        })
+
+    info["markets"] = markets
+    return info

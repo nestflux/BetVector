@@ -10,7 +10,7 @@ from src.database.db import Base
 import src.world_cup.research as research
 from src.world_cup.research import (
     build_research_card, top_disagreements, _devig, _consensus,
-    summarize_card, build_disagreements,
+    summarize_card, build_disagreements, build_book_comparison,
 )
 from src.world_cup.models import WCTeam, WCMatch, WCOdds, WCPrediction
 from src.world_cup.predictor import MODEL_NAME
@@ -431,3 +431,92 @@ def test_build_disagreements_skips_in_line_markets(session, monkeypatch):
     session.commit()
     _patch(session, monkeypatch)
     assert build_disagreements() == []
+
+
+# ---- DF-08: scoreline matrix helper + model-vs-every-book comparison ----
+
+def test_scoreline_matrix_from_lambdas():
+    import numpy as np
+    from src.world_cup.predictor import scoreline_matrix_from_lambdas
+
+    mtx = scoreline_matrix_from_lambdas(2.2, 0.6)
+    assert len(mtx) == 7 and all(len(r) == 7 for r in mtx)          # 7x7 grid
+    assert abs(sum(sum(r) for r in mtx) - 1.0) < 1e-9               # a distribution
+    # matrix[h][a] = P(home h, away a): a home-heavy lambda peaks with home > away.
+    h, a = np.unravel_index(np.argmax(np.array(mtx)), (7, 7))
+    assert h > a
+    assert scoreline_matrix_from_lambdas(None, 1.0) == []           # graceful on missing
+
+
+def test_build_book_comparison_basic(session, monkeypatch):
+    # Seed = match 20: h2h on TWO books (Pinnacle + FanDuel), O/U 2.5 on ONE.
+    _seed(session)
+    _patch(session, monkeypatch)
+    comp = build_book_comparison(20)
+
+    assert comp["home"] == "Brazil" and comp["away"] == "Scotland"
+    assert comp["has_prediction"] is True
+    assert comp["lambda_home"] == 2.2 and comp["lambda_away"] == 0.6
+
+    markets = {mk["key"]: mk for mk in comp["markets"]}
+    # Only the priced markets appear — no empty O/U 1.5 / 3.5 / BTTS blocks.
+    assert set(markets) == {"h2h", "ou25"}
+
+    h2h = markets["h2h"]
+    assert h2h["n_books"] == 2                                      # both books quote 1X2
+    assert {b["book"] for b in h2h["books"]} == {"Pinnacle", "FanDuel"}
+    assert h2h["model"]["home"] == 0.70
+    for b in h2h["books"]:                                          # each book de-vigs to 1
+        assert abs(sum(b["probs"].values()) - 1.0) < 1e-9
+
+    ou25 = markets["ou25"]
+    assert ou25["n_books"] == 1                                     # only Pinnacle priced O/U 2.5
+    assert ou25["model"]["over_2.5"] == 0.55
+    # Even 1.90/1.90 → de-vigged consensus is 50/50; model 0.55 → +0.05 value edge.
+    book = ou25["books"][0]
+    assert book["probs"]["over_2.5"] == pytest.approx(0.50)
+    assert book["edges"]["over_2.5"] == pytest.approx(0.05)
+    assert book["trust"]["over_2.5"] == "value"
+    assert ou25["best"]["over_2.5"]["odds"] == 1.90                 # best price cue
+
+
+def test_build_book_comparison_ranks_softest_book_first(session, monkeypatch):
+    # Two books on h2h; FanDuel is longer on Brazil (the model's pick), so it is
+    # the softest line — it must sort first (largest model edge).
+    _seed(session)
+    _patch(session, monkeypatch)
+    h2h = {mk["key"]: mk for mk in build_book_comparison(20)["markets"]}["h2h"]
+    # FanDuel Brazil 1.32 > Pinnacle 1.30 → lower implied → larger model edge on home.
+    assert h2h["books"][0]["book"] == "FanDuel"
+    assert h2h["books"][0]["best_edge"] >= h2h["books"][1]["best_edge"]
+
+
+def test_build_book_comparison_no_prediction(session, monkeypatch):
+    # Odds present but no model prediction → books still compared, model side blank.
+    session.add_all([
+        WCTeam(id=1, name="Alpha", fifa_code="ALP", confederation="UEFA", group_letter="A"),
+        WCTeam(id=2, name="Beta", fifa_code="BET", confederation="UEFA", group_letter="A"),
+    ])
+    session.add(WCMatch(id=40, stage="group", group_letter="A", date="2026-06-28",
+                        kickoff_time="18:00", home_team_id=1, away_team_id=2, status="scheduled"))
+    session.add_all([
+        WCOdds(match_id=40, bookmaker="Pinnacle", market_type="totals", selection="Over",
+               odds_decimal=2.0, opening_odds=2.0, point=2.5, captured_at="2026-06-28T08:00"),
+        WCOdds(match_id=40, bookmaker="Pinnacle", market_type="totals", selection="Under",
+               odds_decimal=2.0, opening_odds=2.0, point=2.5, captured_at="2026-06-28T08:00"),
+    ])
+    session.commit()
+    _patch(session, monkeypatch)
+    comp = build_book_comparison(40)
+    assert comp["has_prediction"] is False
+    assert comp["lambda_home"] is None
+    ou25 = {mk["key"]: mk for mk in comp["markets"]}["ou25"]
+    assert ou25["model"]["over_2.5"] is None
+    assert ou25["n_books"] == 1
+    assert ou25["books"][0]["edges"]["over_2.5"] is None            # no model → no edge
+    assert ou25["books"][0]["trust"]["over_2.5"] == "na"
+
+
+def test_build_book_comparison_missing_match(session, monkeypatch):
+    _patch(session, monkeypatch)
+    assert build_book_comparison(99999) is None

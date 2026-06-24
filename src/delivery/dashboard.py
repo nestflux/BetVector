@@ -633,6 +633,15 @@ def get_pages() -> list:
             title="Match Deep Dive",
             icon="🔍",
         ),
+        # DF-08: World Cup deep dive — reached from the WC hub's fixtures strip
+        # and research card (session-state + switch_page). Registered always (like
+        # Match Deep Dive) so the nav switch resolves; it shows a picker when no
+        # match is selected.
+        st.Page(
+            "views/wc_deep_dive.py",
+            title="WC Deep Dive",
+            icon="🔬",
+        ),
     ]
 
     # DF-02: during the tournament window, surface the World Cup page first so it

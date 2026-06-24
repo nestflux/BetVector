@@ -629,6 +629,25 @@ def derive_markets_from_lambdas(
     return WCPoissonPredictor._derive_probabilities(matrix)
 
 
+def scoreline_matrix_from_lambdas(
+    lambda_home: float | None, lambda_away: float | None, rho: float = _DEFAULT_RHO,
+) -> list[list[float]]:
+    """The 7x7 Dixon-Coles-corrected scoreline probability matrix rebuilt from a
+    stored prediction's expected goals — the universal model interface (MP §5).
+
+    ``wc_predictions`` persists the expected goals (lambda) but not the matrix
+    itself, so the deep-dive heatmap (DF-08) reconstructs the grid here rather
+    than re-running the model. ``matrix[h][a]`` = P(home scores h, away scores a),
+    summing to 1 across the 7x7 (goals 0..6). Returns ``[]`` on missing input so
+    the view can fall back to an empty state. The default rho matches the model's
+    prior; the sub-0.5pp difference vs a per-fit rho is immaterial for this
+    read-only decision-support view."""
+    if lambda_home is None or lambda_away is None:
+        return []
+    return WCPoissonPredictor._build_scoreline_matrix(
+        float(lambda_home), float(lambda_away), rho)
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     from src.database.db import init_db

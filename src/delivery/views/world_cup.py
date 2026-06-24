@@ -235,6 +235,12 @@ def _render_todays_matches() -> None:
                     _verdict_detail_html(pred, verdict, home_name, away_name),
                     unsafe_allow_html=True,
                 )
+                # DF-08: open the full read-only deep dive (heatmap + model-vs-books)
+                # for this fixture. Lives in the expander so the strip stays clean.
+                if st.button("🔍 Open full deep dive", key=f"wc_dd_fx_{m.id}",
+                             use_container_width=True):
+                    st.session_state["wc_deep_dive_match_id"] = m.id
+                    st.switch_page("views/wc_deep_dive.py")
 
 
 # ============================================================================
@@ -809,6 +815,12 @@ def _render_research_card() -> None:
 
     sel_id = st.selectbox("Match", options=list(labels.keys()),
                           format_func=lambda x: labels[x], key="research_match")
+
+    # DF-08: the research card's primary entry to the full deep dive — heatmap +
+    # model-vs-every-book for the match selected above (session-state + nav switch).
+    if st.button("🔍 Open full deep dive", key="wc_dd_research"):
+        st.session_state["wc_deep_dive_match_id"] = sel_id
+        st.switch_page("views/wc_deep_dive.py")
 
     from src.world_cup.research import build_research_card
     card = build_research_card(sel_id)
