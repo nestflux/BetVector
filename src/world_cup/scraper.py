@@ -87,7 +87,10 @@ def _get_odds_scrape_cfg() -> dict:
     with open(_CONFIG_PATH) as f:
         data = yaml.safe_load(f) or {}
     cfg = data.get("odds_scrape", {})
-    return {"markets": cfg.get("markets", "h2h,totals"),
+    lean = cfg.get("markets", "h2h,totals")
+    return {"markets": lean,
+            # Richer board pull (DF-01); falls back to the lean set if unset.
+            "board_markets": cfg.get("board_markets", lean),
             "regions": cfg.get("regions", "eu")}
 
 
@@ -98,8 +101,11 @@ def scrape_wc_odds(
     # Default to the disciplined, budget-safe scrape params from config (Rule 6).
     # Old hardcoded default was 3 markets × 4 regions = 12 credits/call incl.
     # unused spreads; config default is h2h,totals × eu = 2 credits (WC-10-01).
+    # The board pull uses the richer board_markets set (DF-01): cost is markets ×
+    # regions PER REQUEST and one request covers every match, so the extra markets
+    # add ~+2 credits/day total. The focused per-event pull stays lean (CLV).
     cfg = _get_odds_scrape_cfg()
-    markets = markets or cfg["markets"]
+    markets = markets or cfg["board_markets"]
     regions = regions or cfg["regions"]
 
     api_key = _get_api_key()
@@ -180,6 +186,14 @@ def _load_odds_to_db(events: list[dict[str, Any]]) -> int:
                         point = outcome.get("point")
                         if not price or price <= 1.0:
                             continue
+
+                        # alternate_totals quotes many O/U lines under the same
+                        # "Over"/"Under" name; bake the line into the selection so
+                        # each line is its own row under the (match, book, market,
+                        # selection) unique key — stores every line with NO schema
+                        # change (DF-01). The research layer keys off ``point``.
+                        if market_type == "alternate_totals" and point is not None:
+                            selection = f"{selection} {point}"
 
                         implied_prob = round(1.0 / price, 4) if price > 0 else None
 

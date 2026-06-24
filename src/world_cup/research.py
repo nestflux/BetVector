@@ -20,35 +20,104 @@ from sqlalchemy.orm import joinedload
 
 from src.database.db import get_session
 from src.world_cup.models import WCMatch
-from src.world_cup.predictor import MODEL_NAME
+from src.world_cup.predictor import MODEL_NAME, derive_markets_from_lambdas
 from src.world_cup.value_finder import _canonical_selection
 
 logger = logging.getLogger(__name__)
 
-# Market groups whose selections must de-vig together (sum to 1).
+# Research-layer market groups: each group's canonical selections de-vig together
+# (their de-vigged probabilities sum to 1). Keys are point-encoded so the three
+# O/U lines stay distinct. This DISPLAY mapping is deliberately separate from
+# value_finder._canonical_selection (which stays 2.5-only) — value bets are
+# unchanged; this only widens what the research card / deep dive compare (DF-01).
 _GROUPS = {
-    "h2h": ["home", "draw", "away"],
-    "totals": ["over", "under"],
+    "h2h":  ["home", "draw", "away"],
+    "ou15": ["over_1.5", "under_1.5"],
+    "ou25": ["over_2.5", "under_2.5"],
+    "ou35": ["over_3.5", "under_3.5"],
+    "btts": ["btts_yes", "btts_no"],
 }
 
+# Totals lines we surface; any other point is ignored (no model line for it).
+_OU_POINTS = ("1.5", "2.5", "3.5")
 
 _SHORT_LABELS = {
-    ("h2h", "home"): "Home", ("h2h", "draw"): "Draw", ("h2h", "away"): "Away",
-    ("totals", "over"): "Over 2.5", ("totals", "under"): "Under 2.5",
+    "home": "Home", "draw": "Draw", "away": "Away",
+    "over_1.5": "Over 1.5", "under_1.5": "Under 1.5",
+    "over_2.5": "Over 2.5", "under_2.5": "Under 2.5",
+    "over_3.5": "Over 3.5", "under_3.5": "Under 3.5",
+    "btts_yes": "BTTS Yes", "btts_no": "BTTS No",
 }
+
+
+def _line_str(point) -> str | None:
+    """Map a totals ``point`` to one of our display lines ("1.5"/"2.5"/"3.5"),
+    or None for any line we don't surface."""
+    if point is None:
+        return None
+    try:
+        p = float(point)
+    except (TypeError, ValueError):
+        return None
+    for s in _OU_POINTS:
+        if abs(p - float(s)) < 1e-9:
+            return s
+    return None
+
+
+def _canon(market_type, selection, home_name, away_name, point) -> str | None:
+    """Research-layer canonical selection key (point-aware, multi-line). Reuses
+    value_finder's logic for h2h/btts without altering it, and handles totals +
+    alternate_totals here so every O/U line is kept distinct."""
+    if market_type in ("totals", "alternate_totals"):
+        line = _line_str(point)
+        if line is None:
+            return None
+        low = (selection or "").strip().lower()
+        if low.startswith("over"):
+            return f"over_{line}"
+        if low.startswith("under"):
+            return f"under_{line}"
+        return None
+    base = _canonical_selection(market_type, selection, home_name, away_name, point)
+    if base in ("home", "draw", "away"):
+        return base
+    if base in ("yes", "no"):
+        return f"btts_{base}"
+    return None
+
+
+def _comp(p):
+    """Complement 1 - p, or None when p is None."""
+    return (1.0 - p) if p is not None else None
 
 
 def _model_probs(pred) -> dict:
-    """Model probability per canonical selection, or {} when no prediction."""
+    """Model probability per canonical selection, or {} when no prediction.
+
+    1X2, O/U 2.5 and BTTS come straight from the stored prediction (exact). The
+    extra O/U lines (1.5, 3.5) the model computes but doesn't persist are rebuilt
+    from the stored expected goals via the scoreline matrix (DF-01)."""
     if not pred:
         return {}
-    over = pred.over_25_prob
+    o25 = pred.over_25_prob
+    btts = pred.btts_prob
+    derived = derive_markets_from_lambdas(
+        pred.home_expected_goals, pred.away_expected_goals)
+    o15 = derived.get("over_15")
+    o35 = derived.get("over_35")
+    if o25 is None:                       # stored missing → fall back to derived
+        o25 = derived.get("over_25")
+    if btts is None:
+        btts = derived.get("btts")
     return {
-        ("h2h", "home"): pred.home_win_prob,
-        ("h2h", "draw"): pred.draw_prob,
-        ("h2h", "away"): pred.away_win_prob,
-        ("totals", "over"): over,
-        ("totals", "under"): (1.0 - over) if over is not None else None,
+        "home": pred.home_win_prob,
+        "draw": pred.draw_prob,
+        "away": pred.away_win_prob,
+        "over_1.5": o15, "under_1.5": _comp(o15),
+        "over_2.5": o25, "under_2.5": _comp(o25),
+        "over_3.5": o35, "under_3.5": _comp(o35),
+        "btts_yes": btts, "btts_no": _comp(btts),
     }
 
 
@@ -58,13 +127,16 @@ def _devig(implied: dict) -> dict:
 
 
 def _collect(odds, home_name: str, away_name: str) -> dict:
-    """(market, canonical_sel) → {cur: [prices], open: [prices], best: (odds, book)}."""
+    """canonical_sel → {cur: [prices], open: [prices], best: (odds, book)}.
+
+    Keyed by the point-encoded canonical selection, so the same line quoted under
+    both ``totals`` and ``alternate_totals`` merges into one price pool."""
     data: dict = {}
     for o in odds:
-        canon = _canonical_selection(o.market_type, o.selection, home_name, away_name, o.point)
+        canon = _canon(o.market_type, o.selection, home_name, away_name, o.point)
         if not canon:
             continue
-        d = data.setdefault((o.market_type, canon), {"cur": [], "open": [], "best": (0.0, "")})
+        d = data.setdefault(canon, {"cur": [], "open": [], "best": (0.0, "")})
         d["cur"].append(o.odds_decimal)
         if o.opening_odds:
             d["open"].append(o.opening_odds)
@@ -73,12 +145,12 @@ def _collect(odds, home_name: str, away_name: str) -> dict:
     return data
 
 
-def _consensus(data: dict, market: str, sels: list[str]):
+def _consensus(data: dict, sels: list[str]):
     """De-vigged current + opening consensus prob per selection, or (None, None)
-    when the market group is incomplete (can't de-vig)."""
+    when the group is incomplete (a missing side means we can't de-vig)."""
     implied_cur, implied_open = {}, {}
     for sel in sels:
-        d = data.get((market, sel))
+        d = data.get(sel)
         if not d or not d["cur"]:
             return None, None
         implied_cur[sel] = 1.0 / median(d["cur"])
@@ -117,29 +189,26 @@ def build_research_card(match_id: int) -> dict | None:
 
     model = _model_probs(pred)
 
-    labels = {
-        ("h2h", "home"): f"Home ({home})",
-        ("h2h", "draw"): "Draw",
-        ("h2h", "away"): f"Away ({away})",
-        ("totals", "over"): "Over 2.5",
-        ("totals", "under"): "Under 2.5",
-    }
+    # h2h labels carry the team name; every other selection uses its short label.
+    labels = dict(_SHORT_LABELS)
+    labels["home"] = f"Home ({home})"
+    labels["away"] = f"Away ({away})"
 
     selections = []
-    for market, sels in _GROUPS.items():
-        cur, opn = _consensus(data, market, sels)
+    for group, sels in _GROUPS.items():
+        cur, opn = _consensus(data, sels)
         if cur is None:
             continue
         for sel in sels:
-            d = data.get((market, sel)) or {}
+            d = data.get(sel) or {}
             best_odds, best_book = d.get("best", (0.0, ""))
             mkt_prob = cur.get(sel)
-            mdl_prob = model.get((market, sel))
+            mdl_prob = model.get(sel)
             move = (cur[sel] - opn[sel]) if (opn and sel in opn) else None
             selections.append({
-                "market": market,
+                "market": group,
                 "selection": sel,
-                "label": labels.get((market, sel), sel),
+                "label": labels.get(sel, sel),
                 "model_prob": mdl_prob,
                 "market_prob": mkt_prob,
                 "edge": (mdl_prob - mkt_prob) if (mdl_prob is not None and mkt_prob is not None) else None,
@@ -186,19 +255,19 @@ def top_disagreements(limit: int = 10) -> list[dict]:
                 continue
             model = _model_probs(pred)
             data = _collect(m.odds, home, away)
-            for market, sels in _GROUPS.items():
-                cur, _ = _consensus(data, market, sels)
+            for group, sels in _GROUPS.items():
+                cur, _ = _consensus(data, sels)
                 if cur is None:
                     continue
                 for sel in sels:
-                    mp, kp = model.get((market, sel)), cur.get(sel)
+                    mp, kp = model.get(sel), cur.get(sel)
                     if mp is None or kp is None:
                         continue
-                    d = data.get((market, sel)) or {}
+                    d = data.get(sel) or {}
                     best, book = d.get("best", (0.0, ""))
                     out.append({
                         "match": f"{home} v {away}",
-                        "selection": _SHORT_LABELS.get((market, sel), sel),
+                        "selection": _SHORT_LABELS.get(sel, sel),
                         "edge": mp - kp,
                         "model": mp,
                         "market": kp,

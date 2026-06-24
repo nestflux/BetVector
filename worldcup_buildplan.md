@@ -1493,7 +1493,7 @@ focused near-kickoff per-event pull stays lean (h2h + totals) to protect in-play
 
 **Sequence:** Phase A (main page) before Phase B (deep dive). DF-02 lands first.
 
-### DF-01 — Market Expansion (odds + model surfacing)
+### DF-01 — Market Expansion (odds + model surfacing) ✅ DONE
 
 **Type:** Data / Config
 **Depends on:** none
@@ -1506,10 +1506,10 @@ focused near-kickoff per-event pull stays lean (h2h + totals) to protect in-play
 - Surface model + de-vigged market probs for all markets in `research.py`.
 
 **Acceptance Criteria:**
-- [ ] Morning board pull includes btts + alternate_totals; per-event pull unchanged (CLV-safe)
-- [ ] Model probs for 1X2, O/U 1.5/2.5/3.5, BTTS available per upcoming match (all via the matrix)
-- [ ] De-vigged market probs for the same markets where books price them; graceful when a book doesn't
-- [ ] Odds-credit budget impact documented; net ≈ +2 credits/day
+- [x] Morning board pull includes btts + alternate_totals; per-event pull unchanged (CLV-safe)
+- [x] Model probs for 1X2, O/U 1.5/2.5/3.5, BTTS available per upcoming match (all via the matrix)
+- [x] De-vigged market probs for the same markets where books price them; graceful when a book doesn't
+- [x] Odds-credit budget impact documented; net ≈ +2 credits/day
 
 ### DF-02 — World Cup as the Login Landing Page (tournament window) ✅ DONE
 

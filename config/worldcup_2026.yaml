@@ -562,5 +562,13 @@ lineups:
 # totals; spreads are deferred) = 2 credits/call, vs the old 12 (4 regions × 3
 # markets incl. unused spreads). Override per-call only when genuinely needed.
 odds_scrape:
+  # Lean per-event pull (scrape_wc_match_odds, near kickoff) — protects the CLV
+  # closing line: just the primary markets at minimal cost (markets × regions).
   markets: "h2h,totals"
+  # Richer once-daily board pull (scrape_wc_odds, morning). Cost = markets × regions
+  # PER REQUEST, and one board request returns every match — so the extra markets
+  # cost ~+2 credits/day total, not per match (DF-01). These feed the research card
+  # + deep dive comparison (1X2 + O/U 1.5/2.5/3.5 + BTTS); alternate_totals carries
+  # the non-2.5 O/U lines, btts the both-teams-to-score market.
+  board_markets: "h2h,totals,btts,alternate_totals"
   regions: "eu"

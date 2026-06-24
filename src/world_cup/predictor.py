@@ -552,6 +552,10 @@ class WCPoissonPredictor:
         draw /= total
         away_win /= total
 
+        over_15 = sum(
+            matrix[h][a] for h in range(MAX_GOALS) for a in range(MAX_GOALS)
+            if h + a > 1
+        )
         over_25 = sum(
             matrix[h][a] for h in range(MAX_GOALS) for a in range(MAX_GOALS)
             if h + a > 2
@@ -577,6 +581,7 @@ class WCPoissonPredictor:
             "home_win": round(home_win, 4),
             "draw": round(draw, 4),
             "away_win": round(away_win, 4),
+            "over_15": round(over_15, 4),
             "over_25": round(over_25, 4),
             "over_35": round(over_35, 4),
             "btts": round(btts, 4),
@@ -597,6 +602,31 @@ def _tau(h: int, a: int, lh: float, la: float, rho: float) -> float:
     else:
         return 1.0
     return max(tau, 1e-10)
+
+
+# Model's default Dixon-Coles prior (matches WCPoissonPredictor.__init__). Used to
+# rebuild the scoreline matrix for the research card / deep dive when the per-fit
+# rho isn't persisted; the difference vs the fitted rho is sub-0.5pp and immaterial
+# for a directional decision-support view (DF-01).
+_DEFAULT_RHO = -0.05
+
+
+def derive_markets_from_lambdas(
+    lambda_home: float | None, lambda_away: float | None, rho: float = _DEFAULT_RHO,
+) -> dict:
+    """All market probabilities (1X2, O/U 1.5/2.5/3.5, BTTS, most-likely score)
+    rebuilt from a stored prediction's expected goals via the 7x7 scoreline matrix.
+
+    Decision-support helper for the research card + deep dive (DF-01): the WC model
+    computes these lines but only persists 1X2 / O/U 2.5 / BTTS, so the extra O/U
+    lines are reconstructed here. The scoreline matrix is the universal interface
+    (MP §5) — markets are never derived any other way. Returns {} on missing input.
+    """
+    if lambda_home is None or lambda_away is None:
+        return {}
+    matrix = WCPoissonPredictor._build_scoreline_matrix(
+        float(lambda_home), float(lambda_away), rho)
+    return WCPoissonPredictor._derive_probabilities(matrix)
 
 
 if __name__ == "__main__":
