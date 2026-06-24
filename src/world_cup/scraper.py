@@ -79,10 +79,28 @@ def _load_venue_data() -> dict[str, dict]:
 # WC-02-01: Odds Scraper
 # ============================================================================
 
+def _get_odds_scrape_cfg() -> dict:
+    """Disciplined Odds API scrape params — config-driven (Rule 6, WC-10-01).
+    Cost = markets × regions per call, so this is kept minimal to protect the
+    free-tier budget; override per-call only when genuinely needed."""
+    with open(_CONFIG_PATH) as f:
+        data = yaml.safe_load(f) or {}
+    cfg = data.get("odds_scrape", {})
+    return {"markets": cfg.get("markets", "h2h,totals"),
+            "regions": cfg.get("regions", "eu")}
+
+
 def scrape_wc_odds(
-    markets: str = "h2h,spreads,totals",
-    regions: str = "us,uk,eu,au",
+    markets: str | None = None,
+    regions: str | None = None,
 ) -> int:
+    # Default to the disciplined, budget-safe scrape params from config (Rule 6).
+    # Old hardcoded default was 3 markets × 4 regions = 12 credits/call incl.
+    # unused spreads; config default is h2h,totals × eu = 2 credits (WC-10-01).
+    cfg = _get_odds_scrape_cfg()
+    markets = markets or cfg["markets"]
+    regions = regions or cfg["regions"]
+
     api_key = _get_api_key()
     if not api_key:
         logger.error("THE_ODDS_API_KEY not set")
@@ -120,6 +138,7 @@ def scrape_wc_odds(
 
 def _load_odds_to_db(events: list[dict[str, Any]]) -> int:
     loaded = 0
+    matched = skipped_team = skipped_match = inserted = updated = 0
 
     with get_session() as session:
         for event in events:
@@ -129,6 +148,7 @@ def _load_odds_to_db(events: list[dict[str, Any]]) -> int:
             away_team = _get_team_by_name(session, away_name)
 
             if not home_team or not away_team:
+                skipped_team += 1
                 logger.warning(
                     "Team not found: %s vs %s (skipping odds)", home_name, away_name
                 )
@@ -142,11 +162,13 @@ def _load_odds_to_db(events: list[dict[str, Any]]) -> int:
             ).scalar_one_or_none()
 
             if not match:
+                skipped_match += 1
                 logger.debug(
                     "No match record for %s vs %s (skipping odds)", home_name, away_name
                 )
                 continue
 
+            matched += 1
             for bookmaker in event.get("bookmakers", []):
                 bookie_name = bookmaker.get("title", bookmaker.get("key", "unknown"))
                 for market in bookmaker.get("markets", []):
@@ -174,6 +196,7 @@ def _load_odds_to_db(events: list[dict[str, Any]]) -> int:
                             existing.implied_prob = implied_prob
                             existing.point = point
                             existing.captured_at = datetime.utcnow().isoformat()
+                            updated += 1
                         else:
                             odds = WCOdds(
                                 match_id=match.id,
@@ -187,9 +210,16 @@ def _load_odds_to_db(events: list[dict[str, Any]]) -> int:
                                 source="odds_api",
                             )
                             session.add(odds)
+                            inserted += 1
                         loaded += 1
 
-    logger.info("Loaded %d WC odds entries", loaded)
+    # Per-run health summary (WC-10-01): makes name-mapping gaps visible — e.g. a
+    # spike in "skipped (no team)" means the odds_api_name_map needs an entry.
+    logger.info(
+        "WC odds scrape: %d events fetched, %d matched, %d skipped(no-team), "
+        "%d skipped(no-match) — %d odds upserted (%d new, %d updated)",
+        len(events), matched, skipped_team, skipped_match, loaded, inserted, updated,
+    )
     return loaded
 
 

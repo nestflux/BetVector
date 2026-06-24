@@ -2,12 +2,13 @@
 
 Version 1.0 · June 2026
 
-> **MODULE STATUS: WC-09 COMPLETE (36/36) · WC-10 (Live Ops) IN PROGRESS — 0/7** · June 23, 2026
+> **MODULE STATUS: WC-09 COMPLETE (36/36) · WC-10 (Live Ops) IN PROGRESS — 1/7** · June 23, 2026
 > WC-01→09 done (3-gate); dashboard is 4 tabs; decision-support + Bayesian shadow
 > model live. **WC-10 — Live Operations & Automation** (owner-confirmed): daily
 > automation (P1) → dynamic pre-kickoff closing-odds/CLV dispatcher (P2) → lineup
-> rotation flag (P3). Currently: WC-10-01 (diagnose & harden the odds refresh).
-> No model/staking change — WC stays shadow-only. Full test suite: 713/713 passing.
+> rotation flag (P3). ✅ 10-01 (odds-refresh hardened: 12→2 credit scrape, loud
+> SQLite-fallback warning, Neon repopulated). Currently: WC-10-02 (retimed morning
+> automation). No model/staking change — WC stays shadow-only. Full suite: 719/719.
 
 ---
 
@@ -1257,13 +1258,26 @@ build in this issue**.
 
 ### Phase 1 — Operate
 
-### WC-10-01 — Diagnose & Harden the WC Odds Refresh
+### WC-10-01 — Diagnose & Harden the WC Odds Refresh ✅ DONE
 
 **Type:** Bug / Hardening
 **Depends on:** WC-02 (odds scraper)
 
 The WC odds board emptied to 0 rows on Neon while predictions remained — odds aren't
 refreshing reliably. Find the cause and make the refresh safe before scheduling it.
+
+**Result (root cause — 2026-06-23):** The "0 odds on Neon" was a **diagnostic-tooling
+artifact, not a production bug.** Ad-hoc scripts that call bare `load_dotenv()` from
+outside the project dir (e.g. `/tmp`) fail to find `.env`, so `db.py` silently falls
+back to **local SQLite** (resolution order: `DATABASE_URL` → Streamlit secrets →
+SQLite). Those scripts were reading SQLite (which had 0 odds), while **production was
+consistent and never empty** — the pipeline `source`s `.env` → Neon, the dashboard
+reads Neon via Streamlit secrets, and Neon held 6,627 odds throughout. Two real
+issues were found and fixed in passing: (a) the scrape default cost **12 credits/call**
+(`h2h,spreads,totals` × `us,uk,eu,au`, incl. unused spreads) — now config-driven
+`h2h,totals` × `eu` = **2 credits**; (b) the SQLite fallback was **silent** — now a
+loud WARNING. Also surfaced + fixed: the Bayesian shadow preds had been written to
+SQLite by earlier ad-hoc runs (`bayesian=0` on Neon) — repopulated to Neon (now 40).
 
 **Implementation Notes:**
 - Reproduce + root-cause the empty `wc_odds` (never-scraped vs. cleared-then-failed
@@ -1274,10 +1288,10 @@ refreshing reliably. Find the cause and make the refresh safe before scheduling 
 - Add explicit logging of rows fetched / upserted / skipped per run.
 
 **Acceptance Criteria:**
-- [ ] Root cause of the empty board documented
-- [ ] A real scrape populates odds for upcoming matches and they persist
-- [ ] A failed/empty scrape leaves prior odds intact (verified)
-- [ ] Per-run logging of fetched/upserted/skipped counts
+- [x] Root cause of the empty board documented (tooling SQLite fallback; prod never empty)
+- [x] A real scrape populates odds for upcoming matches and they persist (Neon: 6,781, 2 credits)
+- [x] A failed/empty scrape leaves prior odds intact (upsert-only; 2 tests)
+- [x] Per-run logging of fetched/upserted/skipped counts (summary log in `_load_odds_to_db`)
 
 ### WC-10-02 — Daily Morning Automation (Retimed)
 

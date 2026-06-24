@@ -104,9 +104,20 @@ def _build_connection_url() -> str:
         # Not running in Streamlit context (CLI pipeline, tests, etc.)
         pass
 
-    # Priority 3: Fall back to config file (local SQLite)
+    # Priority 3: Fall back to config file (local SQLite).
+    # LOUD warning (WC-10-01): reaching here means neither DATABASE_URL nor
+    # Streamlit secrets were available. For a pipeline/production run that's a
+    # split-brain risk — the cloud (Neon) DB will NOT be updated, and the
+    # dashboard (which reads Neon) silently diverges. Ad-hoc scripts that call
+    # load_dotenv() from outside the project dir hit this without noticing.
     db_path = config.settings.database.path
     full_path = (PROJECT_ROOT / db_path).resolve()
+    logger.warning(
+        "No DATABASE_URL and no Streamlit secrets — falling back to LOCAL SQLite "
+        "(%s). If this is a pipeline/production run, the cloud DB will NOT be "
+        "updated (split-brain risk).",
+        full_path,
+    )
     return f"sqlite:///{full_path}"
 
 

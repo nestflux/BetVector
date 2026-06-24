@@ -540,3 +540,13 @@ bayesian:
   recency_halflife_days: 1825
   # Dixon-Coles low-score correction applied to the 7×7 matrix (same as Poisson).
   rho: -0.05
+
+# Odds API scrape discipline (WC-10-01). Cost = markets × regions per call.
+# Default is deliberately minimal to protect the free-tier budget during the
+# tournament: 1 region (eu — verified to include Pinnacle + 24 books, enough for
+# a de-vigged consensus and best-price) × 2 markets (the model only uses h2h +
+# totals; spreads are deferred) = 2 credits/call, vs the old 12 (4 regions × 3
+# markets incl. unused spreads). Override per-call only when genuinely needed.
+odds_scrape:
+  markets: "h2h,totals"
+  regions: "eu"
