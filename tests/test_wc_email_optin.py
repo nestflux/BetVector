@@ -110,3 +110,30 @@ def test_settings_exposes_and_persists_the_toggle():
     assert '"notify_wc": user.notify_wc' in src            # surfaced in load_current_user
     assert 'save_user_setting(user_data["id"], "notify_wc"' in src   # persisted on change
     assert "World Cup Digest" in src
+
+
+# --- all email types opt-in (default off) ------------------------------------
+
+def test_all_notification_flags_default_off(session):
+    # A brand-new user is unsubscribed from EVERY email type by default.
+    u = _user(session, email="new@x.com")
+    assert (u.notify_morning, u.notify_evening, u.notify_weekly, u.notify_wc) == (0, 0, 0, 0)
+
+
+def test_settings_league_toggles_are_functional_and_opt_in():
+    src = (ROOT / "src" / "delivery" / "views" / "settings.py").read_text()
+    # load_current_user surfaces all four flags so the toggles can reflect state
+    for f in ("notify_morning", "notify_evening", "notify_weekly", "notify_wc"):
+        assert f'"{f}": user.{f}' in src
+    # each league toggle now PERSISTS (functional), not a hardcoded placeholder
+    for f in ("notify_morning", "notify_evening", "notify_weekly"):
+        assert f'"{f}", 1 if' in src
+    assert 'value=True,\n            key="notif_morning"' not in src   # placeholder gone
+
+
+def test_onboarding_notification_toggles_default_off():
+    src = (ROOT / "src" / "delivery" / "views" / "onboarding.py").read_text()
+    for key in ("ob_notif_morning", "ob_notif_evening", "ob_notif_weekly"):
+        idx = src.index(f'key="{key}"')
+        assert "value=False" in src[idx - 120:idx], f"{key} should default off"
+    assert 'st.session_state.get("ob_notif_morning", False)' in src

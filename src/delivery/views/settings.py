@@ -98,6 +98,9 @@ def load_current_user(user_id: int = 1) -> Optional[Dict]:
             "kelly_fraction": user.kelly_fraction,
             "edge_threshold": user.edge_threshold,
             "is_active": user.is_active,
+            "notify_morning": user.notify_morning,
+            "notify_evening": user.notify_evening,
+            "notify_weekly": user.notify_weekly,
             "notify_wc": user.notify_wc,
         }
 
@@ -614,31 +617,34 @@ else:
         if save_user_setting(user_data["id"], "email", new_email if new_email else None):
             st.toast("Email address updated", icon="✅")
 
-    # Notification toggles — these are informational for now (E11 will
-    # wire them to the actual email sender).  We store a simple note
-    # that the UI is ready.
+    # Notification toggles — all OPT-IN (default off). Each reads the user's stored
+    # preference and persists changes immediately, so a user receives an email type
+    # only after turning it on here (or during onboarding).
     notif_cols = st.columns(3)
     with notif_cols[0]:
-        st.toggle(
-            "Morning Picks",
-            value=True,
-            key="notif_morning",
-            help="Daily email with today's value bets (sent at 06:00 UTC).",
-        )
+        _m = bool(user_data.get("notify_morning", 0))
+        _m_new = st.toggle(
+            "Morning Picks", value=_m, key="notif_morning",
+            help="Daily email with today's value bets (sent at 06:00 UTC).")
+        if _m_new != _m and save_user_setting(
+                user_data["id"], "notify_morning", 1 if _m_new else 0):
+            st.toast(f"Morning Picks {'enabled' if _m_new else 'disabled'}", icon="✅")
     with notif_cols[1]:
-        st.toggle(
-            "Evening Review",
-            value=True,
-            key="notif_evening",
-            help="Daily email with results and P&L (sent at 22:00 UTC).",
-        )
+        _e = bool(user_data.get("notify_evening", 0))
+        _e_new = st.toggle(
+            "Evening Review", value=_e, key="notif_evening",
+            help="Daily email with results and P&L (sent at 22:00 UTC).")
+        if _e_new != _e and save_user_setting(
+                user_data["id"], "notify_evening", 1 if _e_new else 0):
+            st.toast(f"Evening Review {'enabled' if _e_new else 'disabled'}", icon="✅")
     with notif_cols[2]:
-        st.toggle(
-            "Weekly Summary",
-            value=True,
-            key="notif_weekly",
-            help="Weekly performance summary (sent Sunday 20:00 UTC).",
-        )
+        _w = bool(user_data.get("notify_weekly", 0))
+        _w_new = st.toggle(
+            "Weekly Summary", value=_w, key="notif_weekly",
+            help="Weekly performance summary (sent Sunday 20:00 UTC).")
+        if _w_new != _w and save_user_setting(
+                user_data["id"], "notify_weekly", 1 if _w_new else 0):
+            st.toast(f"Weekly Summary {'enabled' if _w_new else 'disabled'}", icon="✅")
 
     # World Cup digest — a REAL, persisted opt-in (the three toggles above are
     # display-only placeholders). Off by default; the WC pipeline emails only users
@@ -660,8 +666,8 @@ else:
     st.markdown(
         f'<p style="font-family: Inter, sans-serif; font-size: 12px; '
         f'color: {COLOURS["text_secondary"]}; margin-top: 4px;">'
-        f'Email delivery will be configured in E11 (Email Notifications). '
-        f'Toggles saved as defaults.'
+        f'All email types are off by default — switch on the ones you want above and '
+        f'they save instantly. A valid email address is required to receive them.'
         f'</p>',
         unsafe_allow_html=True,
     )

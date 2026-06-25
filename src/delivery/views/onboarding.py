@@ -363,21 +363,21 @@ def render_step_5_notifications() -> None:
     with notif_cols[0]:
         st.toggle(
             "Morning Picks",
-            value=True,
+            value=False,
             key="ob_notif_morning",
             help="Daily email with today's value bets (06:00 UTC).",
         )
     with notif_cols[1]:
         st.toggle(
             "Evening Review",
-            value=True,
+            value=False,
             key="ob_notif_evening",
             help="Daily email with results and P&L (22:00 UTC).",
         )
     with notif_cols[2]:
         st.toggle(
             "Weekly Summary",
-            value=True,
+            value=False,
             key="ob_notif_weekly",
             help="Weekly performance summary (Sunday 20:00 UTC).",
         )
@@ -481,9 +481,9 @@ def render_onboarding() -> None:
                     "kelly_fraction": st.session_state.get("ob_kelly", 25) / 100.0,
                     "edge_threshold": st.session_state.get("ob_edge", 5) / 100.0,
                     "email": st.session_state.get("ob_email", ""),
-                    "notify_morning": st.session_state.get("ob_notif_morning", True),
-                    "notify_evening": st.session_state.get("ob_notif_evening", True),
-                    "notify_weekly": st.session_state.get("ob_notif_weekly", True),
+                    "notify_morning": st.session_state.get("ob_notif_morning", False),
+                    "notify_evening": st.session_state.get("ob_notif_evening", False),
+                    "notify_weekly": st.session_state.get("ob_notif_weekly", False),
                 }
 
                 # Save all settings to DB

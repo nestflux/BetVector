@@ -10006,3 +10006,18 @@ pre-existing display-only placeholders). 8 tests; **1076/1076**. Gate 3 APPROVED
 default verified, per-user isolation + `_step` double-guard, migration idempotent on both
 backends, value/predictor untouched). NOTE: the owner (user 1) is `notify_wc=0` and must
 toggle the digest ON in Settings to receive it.
+
+## EMAIL-OPTIN — all email types opt-in (default off)  ✅ DONE (June 2026)
+
+Owner follow-up: make the LEAGUE emails opt-in too, so every email type is off by default
+and turned on only when the user wants it. `models.py` — all four `notify_*` columns now
+carry `default=0, server_default="0"`; the Python-side `default=0` is what makes NEW users
+off **on the already-deployed databases** (the league columns predate this and keep a
+DB-level `DEFAULT 1`, which `server_default` alone wouldn't override — verified with a
+rolled-back probe user on the existing-schema local DB). No schema migration (columns
+exist). `onboarding.py` — the three wizard toggles and their session_state fallbacks now
+default to `False`. `settings.py` — the three league toggles are now **functional** (read
+the stored pref + persist via `save_user_setting`, like the WC toggle); `load_current_user`
+exposes all four flags; the stale "informational/E11" note is replaced. **Existing users'
+prefs are untouched** — only the default for NEW users flips (the owner keeps league=1,1,1
+/ wc=0 and can self-toggle). 3 new tests; **1079/1079**.

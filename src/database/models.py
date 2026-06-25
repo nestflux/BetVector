@@ -92,14 +92,18 @@ class User(Base):
     has_onboarded = Column(Integer, nullable=False, server_default="0")
     # Notification preferences: 1 = enabled, 0 = disabled
     # Controls which email types this user receives.
-    notify_morning = Column(Integer, nullable=False, server_default="1")
-    notify_evening = Column(Integer, nullable=False, server_default="1")
-    notify_weekly = Column(Integer, nullable=False, server_default="1")
-    # notify_wc: World Cup daily digest — opt-IN (default 0/off, unlike the league
-    # notifications above which default on). Users enable it via Settings; the WC
-    # pipeline emails only those who opted in. Added post-deployment, so it also has
-    # an entry in db._apply_schema_migrations for the live Neon schema.
-    notify_wc = Column(Integer, nullable=False, server_default="0")
+    # All four notification preferences are OPT-IN (default 0/off): a user receives a
+    # given email type only after enabling it in Settings or onboarding. ``default=0``
+    # is the Python-side ORM default, so NEW users are off even on the already-deployed
+    # databases (whose league columns predate this and carry a DB-level DEFAULT of 1);
+    # ``server_default="0"`` covers freshly-created schemas (tests, new deployments).
+    # Existing rows keep whatever they were set to.
+    notify_morning = Column(Integer, nullable=False, default=0, server_default="0")
+    notify_evening = Column(Integer, nullable=False, default=0, server_default="0")
+    notify_weekly = Column(Integer, nullable=False, default=0, server_default="0")
+    # notify_wc: World Cup daily digest. Column added post-deployment (see
+    # db._apply_schema_migrations); same opt-in treatment as the league flags.
+    notify_wc = Column(Integer, nullable=False, default=0, server_default="0")
     is_active = Column(Integer, nullable=False, server_default="1")
     created_at = Column(
         String, nullable=False, server_default=func.now(),
