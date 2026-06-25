@@ -36,6 +36,9 @@ _CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "worldcup_2026.y
 _ESPN_NAME_MAP = {
     "Congo DR": "DR Congo",
     "United States": "USA",
+    "Bosnia-Herzegovina": "Bosnia and Herzegovina",
+    "Czechia": "Czech Republic",
+    "Türkiye": "Turkey",
 }
 
 

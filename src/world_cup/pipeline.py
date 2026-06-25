@@ -138,6 +138,12 @@ def _run_morning() -> dict:
     from src.world_cup.scraper import scrape_wc_results
     results["scrape_results"] = _step("Scrape WC Results", scrape_wc_results)
 
+    # 1a. Self-heal: sweep recent ESPN results for any GROUP match the Odds API's
+    # 3-day /scores window missed, so standings can't silently fall behind. ESPN is
+    # free with no lookback limit; results-only (never invents fixtures); idempotent.
+    from src.world_cup.results_espn import self_heal_wc_results
+    results["espn_self_heal"] = _step("ESPN Results Self-Heal", self_heal_wc_results)
+
     # 1b. Capture closing lines (CLV) for matches that just finished — WC-10-02.
     # The morning run is now the daily spine (the 22:00 evening run is retired), so
     # it must settle CLV on overnight completions, not just refresh today's board.
@@ -248,6 +254,11 @@ def _run_evening() -> dict:
     # 1. Scrape today's results
     from src.world_cup.scraper import scrape_wc_results
     results["scrape_results"] = _step("Scrape WC Results", scrape_wc_results)
+
+    # 1a. Self-heal: same ESPN gap-fill as the morning run, so an evening match the
+    # Odds API hasn't settled yet still lands tonight (free, results-only, idempotent).
+    from src.world_cup.results_espn import self_heal_wc_results
+    results["espn_self_heal"] = _step("ESPN Results Self-Heal", self_heal_wc_results)
 
     # 1b. Freeze closing lines + CLV for picks whose match just finished (WC-09-01)
     from src.world_cup.value_finder import capture_wc_closing_lines
