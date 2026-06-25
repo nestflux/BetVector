@@ -961,6 +961,20 @@ class Pipeline:
             for err in errors:
                 print(f"    - {err}")
 
+        # --- DH-04: read-only data-health check → email the owner on any issue ---
+        # Runs AFTER the pipeline is finalised so it sees this run's fresh data, and is
+        # fully guarded: a check or email failure must never break the pipeline (Rule 6).
+        try:
+            from src.monitoring.health_alert import run_and_alert
+            hc = run_and_alert()
+            if hc.get("alerted"):
+                print(f"  Data health: {hc['overall'].upper()} — owner alerted "
+                      f"({hc['n_fail']} fail, {hc['n_warn']} warn)")
+            else:
+                print(f"  Data health: {hc['overall'].upper()}")
+        except Exception as e:
+            logger.warning("Data-health check failed (non-fatal): %s", e)
+
         return result
 
     def run_midday(self) -> PipelineResult:

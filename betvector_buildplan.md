@@ -9965,13 +9965,22 @@ write primitives in the view); **1059/1059**. Read-only / additive: only the new
 the nav line. Real PNG on owner Desktop (amber "Needs attention" with the live 2-stub
 warning + off-season N/A sources).
 
-#### DH-04 — Morning-pipeline FAIL-alert + integration test (closes the epic)  ← NEXT
+#### DH-04 — Morning-pipeline alert + integration test (closes the epic)  ✅ DONE
 
-#### DH-04 — Morning-pipeline FAIL-alert + integration test (closes the epic)
-
-Run the engine at the end of the morning pipeline; on any FAIL append a health section to
-the morning email/alert. Real integration test seeding stale stubs + missing odds and
-asserting the checks catch them. Then Rule-8 Tier-1 masterplan update (§13.x + version bump).
+New `src/monitoring/health_alert.py`: `run_and_alert()` runs the read-only engine and emails
+the owner (via the existing `email_alerts.send_alert`) when the overall verdict is at/above
+`health.alert.min_status` — **default "warn"** (the live standings issue registers as WARN,
+so a fail-only default would silently miss the very thing this epic targets; tunable to
+"fail"). `build_alert_body_html` lists the failing/warning checks, every field escaped.
+`run_and_alert` NEVER raises (Rule 6). A tiny **guarded** hook at the end of `run_morning()`
+(after `_complete_run`, just before `return result`) calls it inside try/except so a check or
+email failure can't touch the run. 9 tests: an **integration scenario** (seed past-dated
+stubs + a missing-odds fixture + a finished-NULL-goals match → assert the engine catches each
+and overall=FAIL) + the alert wrapper (threshold, escaping, sends-on-warn, quiet-on-ok,
+fail-only override, never-raises-on-send-failure, owner fallback) + source-level hook wiring.
+**1067/1067**. Gate 3 APPROVED (pipeline-safe: double-guarded, runs post-finalise so it can't
+affect run status/data; read-only; every email field escaped; value_finder.py ×2 + predictor.py
+untouched). **→ DH EPIC COMPLETE (4/4); masterplan §13.x + version 1.7 → 1.8.**
 
 ### DH Critical Path
 

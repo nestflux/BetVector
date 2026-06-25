@@ -380,6 +380,9 @@ health:
   pipeline:
     morning_overdue_hours: 26   # WARN if the last morning run is older than this
     stuck_running_hours: 3      # a run still 'running' past this is treated as stuck ⇒ FAIL
+  alert:
+    min_status: warn            # morning pipeline emails the owner at this severity or worse
+                                # (warn = include stale-stub etc. warnings; fail = failures only)
 
 # ---------------------------------------------------------------------------
 # Enum Definitions  (MP §6 — used for validation throughout the codebase)

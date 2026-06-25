@@ -139,6 +139,10 @@ HEALTH_DEFAULTS = {
     },
     # Reused from scraping.the_odds_api in settings.yaml; defaults mirror that block.
     "odds_api": {"warn_remaining": 100, "fail_remaining": 30},
+    # Morning-pipeline alert: email the owner when the overall verdict is at least this
+    # bad. Default "warn" so genuine issues (e.g. stale standings stubs, which register
+    # as WARN) reach the owner; set to "fail" for failures only.
+    "alert": {"min_status": "warn"},
 }
 
 # Ingestion API keys → the source they unlock. Missing key ⇒ that source can't run.
@@ -212,6 +216,8 @@ def resolve_config(override: Optional[dict] = None) -> dict:
         cfg["odds_api"]["fail_remaining"] = _get(
             s, ("scraping", "the_odds_api", "hard_stop_threshold"),
             cfg["odds_api"]["fail_remaining"])
+        cfg["alert"]["min_status"] = _get(
+            s, ("health", "alert", "min_status"), cfg["alert"]["min_status"])
     if override:
         _deep_merge(cfg, override)
     return cfg
