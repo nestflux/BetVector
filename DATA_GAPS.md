@@ -55,10 +55,16 @@ it over. Owner-approved remediation applied (caching deferred):
    preview / ad-hoc analysis run should set `BETVECTOR_FORCE_LOCAL_DB=1` (or
    simply not source `.env`) so it never burns Neon transfer. Production
    (pipelines, Streamlit Cloud) leaves the flag UNSET → Neon as before.
-3. **DEFERRED (owner did not take):** dashboard read-caching (`@st.cache_data`)
-   + a date filter on the WC landing page. The dashboard caches almost nothing,
-   so every rerun re-pulls medium tables (WC page worst). This is the remaining
-   chronic per-user drain — revisit once Neon is back online to redeploy.
+3. **DONE (3480a80):** dashboard read-caching. Wrapped the GLOBAL,
+   pipeline-updated loaders in `@st.cache_data` (config-driven TTLs in
+   `settings.yaml dashboard:` via `src/delivery/_cache.py`) — model_health (8,
+   incl. the 6,451-row live-Brier scan), fixtures, picks, my_bets fixtures,
+   WC group standings — and date-windowed the WC upcoming-matches query (~10
+   rows vs ~104). Per-user loaders (a user's own bets/bankroll) stay UNCACHED
+   on purpose (cross-session cache + user data = leak / stale-bet risk; a test
+   guards this). Verified live on the local mirror; 1166/1166 tests. This was
+   the remaining chronic per-user drain — now collapsed (one read per TTL
+   serves all users). Effect is live once the cloud app redeploys.
 
 ---
 
