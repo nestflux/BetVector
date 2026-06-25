@@ -9865,7 +9865,32 @@ so losses stop accumulating; level staking is the honest per-unit ROI (losers lo
 winners better). CAVEAT: this used a UNIFORM 5% threshold, NOT the tuned per-league
 configs behind the documented tier CIs, so the documented ROI baselines are NOT yet
 regenerated under level (Brier is staking-independent — unaffected). leagues.yaml
-untouched. OPEN: regenerate the tuned per-league ROI baselines under level.] The
+untouched.
+
+FULL REGEN DONE (owner approved, 2026-06-25): ran each league's TUNED config (per-league
+edge + sharp_only from leagues.yaml) on current data under level staking, with 2000-sample
+bootstrap CIs on per-bet returns (read-only, no DB writes):
+
+  League        bets  level ROI   95% CI (level)   tier(new)   old compound  Brier   documented
+  EPL           1229    -8.08%   [-17.6,  +1.8]   🟡 crosses   -12.70%       0.603   🟡 (E37 .578/+2.78%)
+  Championship   731   +13.16%   [ +3.4, +23.2]   🟢          +10.48%       0.634   🟢 +10.5%/731VBs/[3.5,23.0]
+  LaLiga          16   +42.19%   [-38.4,+137.8]   🟡 (thin!)  +39.54%       0.565   🟡 +18.1%/110VBs/[-9.2,50.3]
+  Ligue1          55    +2.33%   [-31.8, +43.5]   🟡 (thin)    +0.39%       0.580   🔴 -21.8%
+  Bundesliga     245   -21.35%   [-34.9,  -7.0]   🔴          -21.43%       0.593   🔴/🟡 [-4.1,23.3]
+  SerieA         240   -18.73%   [-32.4,  -4.5]   🔴          -18.45%       0.574   🔴 [-32.4,-4.2]
+
+CONCLUSION 1 — STAKING SWITCH IS DEFINITIVELY TIER-SAFE: the tier CIs are a bootstrap on
+PER-BET returns, which are STAKING-INVARIANT; Championship reproduces its documented CI
+EXACTLY (731 bets = doc 731; CI [3.4,23.2] vs doc [3.5,23.0]; compound +10.48% ≈ doc
++10.5%). So level-vs-compounding only shifts the cosmetic point ROI (a few pp), never the
+CI-based tier. CONCLUSION 2 — DATA DRIFT (separate issue): on current data the sharp_only
+leagues lost Pinnacle coverage (LaLiga 110→16 bets, CI uselessly wide; Ligue1→55), EPL
+degraded (Brier .578→.603, heavy λ-clamp), Bundesliga drifted to clearly 🔴; Championship +
+SerieA STABLE. Did NOT overwrite leagues.yaml/masterplan numbers — the staking switch leaves
+the tiers unchanged, and the current numbers are drift-contaminated/thin, so re-baselining now
+would bake in unrelated drift. OPEN (flagged, separate): investigate the data drift —
+Pinnacle-coverage collapse for sharp_only LaLiga/Ligue1 + EPL λ-clamping (off-season = no live
+impact; matters when leagues resume).] The
 edge lesson uses the raw 1/odds basis (consistent with the HC-03 fix). 3 new tests
 (concept integrity + the edge-example arithmetic + AST/escaping). 1002/1002. Gate 1
 PASS · Gate 2 CLEAN (after the drawdown + flat-staking fixes) · Gate 3 APPROVED. Real
