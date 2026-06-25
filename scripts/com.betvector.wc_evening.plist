@@ -1,15 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  BetVector — WC Evening Pipeline (WC-07-02)  [RETIRED — WC-10-02]
-  ================================================================
-  *** DO NOT INSTALL. *** Retired 2026-06-23: 22:00 ET fired while the 10/11 PM ET
-  matches were still being played, so it mis-captured results. Its duties (results,
-  CLV capture, model accuracy) are now absorbed by the morning run (09:30 ET), which
-  is the single daily spine. The `evening` pipeline mode itself still works for a
-  manual "settle results now" run; only the *schedule* is retired.
+  BetVector — WC Evening Results Refresh (WC-07-02; re-enabled + retimed 2026-06-25)
+  =================================================================================
+  A LIGHT same-day results settle so evening matches show up that night instead of
+  waiting for the 09:30 ET morning run. Runs `run_wc_pipeline.sh evening`, i.e. the
+  pipeline's evening mode: scrape results -> capture closing-line value (CLV) ->
+  update Elo -> compute model accuracy -> evening email. It does NOT re-pull odds,
+  re-predict, or scan for value bets (that's the morning run's job) — so it's light.
 
-  Manual run (optional):  scripts/run_wc_pipeline.sh evening
+  RETIMED to 23:30 ET (was 22:00 ET): the old 22:00 slot fired while the late 10/11
+  PM ET matches were still in play and mis-captured them. 23:30 ET runs after the
+  day's matches have finished; the 09:30 ET morning run still backstops any rare late
+  finisher (it pulls the last 3 days of scores).
+
+  Install:  cp scripts/com.betvector.wc_evening.plist ~/Library/LaunchAgents/ && launchctl load ~/Library/LaunchAgents/com.betvector.wc_evening.plist
+  Unload:   launchctl unload ~/Library/LaunchAgents/com.betvector.wc_evening.plist
+  Manual:   scripts/run_wc_pipeline.sh evening
 -->
 <plist version="1.0">
 <dict>
@@ -25,13 +32,13 @@
     <key>WorkingDirectory</key>
     <string>/Users/kyng/Projects/BetVector</string>
 
-    <!-- Run at 22:00 local time every day -->
+    <!-- Run at 23:30 ET every day — after the day's matches have finished -->
     <key>StartCalendarInterval</key>
     <dict>
         <key>Hour</key>
-        <integer>22</integer>
+        <integer>23</integer>
         <key>Minute</key>
-        <integer>0</integer>
+        <integer>30</integer>
     </dict>
 
     <key>StandardOutPath</key>
