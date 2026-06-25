@@ -30,6 +30,12 @@
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "8504", "--directory", "/tmp"],
       "port": 8504
+    },
+    {
+      "name": "dashboard_scan",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "DASHBOARD_PASSWORD='' exec venv/bin/streamlit run src/delivery/dashboard.py --server.port 8506 --server.headless true --server.runOnSave false"],
+      "port": 8506
     }
   ]
 }
