@@ -9951,10 +9951,21 @@ JSON-serialisable dict, exit-code matrix, `main()` text/json/strict via monkeypa
 **1051/1051**. Verified live: `make health` against Neon prints the grouped report (exit 0
 on WARN), `--json` parses, `--strict` exits 1.
 
-#### DH-03 — Data Health dashboard page  ← NEXT
+#### DH-03 — Data Health dashboard page  ✅ DONE
 
-`src/delivery/views/health.py` (🩺 Data Health, owner-scoped) — green/amber/red cards from
-the same engine, registered in nav, with empty/error states; AST-tested + escaped.
+`src/delivery/views/data_health.py` (🩺 Data Health) — runs the SAME read-only engine
+(`report_to_dict(run_health_checks())`, cached 60s + a manual ↻ Refresh) and renders an
+overall green/amber/red banner + per-group cards via pure escaped helpers (`_status_meta`
+/ `_dh_css` / `_check_row_html` / `_group_section_html` / `_overall_banner_html`, all
+AST-tested; design tokens). Registered in `dashboard.py` nav right after Model Health
+(additive one-`st.Page` edit — "Model Health watches the model, Data Health watches the
+plumbing"). Error/empty state guarded. 8 tests (AST render of every helper + hostile-input
+escaping + source-level: nav registration + engine wiring + a read-only guard asserting no
+write primitives in the view); **1059/1059**. Read-only / additive: only the new view +
+the nav line. Real PNG on owner Desktop (amber "Needs attention" with the live 2-stub
+warning + off-season N/A sources).
+
+#### DH-04 — Morning-pipeline FAIL-alert + integration test (closes the epic)  ← NEXT
 
 #### DH-04 — Morning-pipeline FAIL-alert + integration test (closes the epic)
 

@@ -641,6 +641,15 @@ def get_pages() -> list:
             title="Model Health",
             icon="🔬",
         ),
+        # DH-03: Data Health — a read-only check that the data is landing where it
+        # should (source freshness, fixture coverage, standings-fill / stale stubs,
+        # last pipeline run). Sits next to Model Health: that watches the model's
+        # accuracy, this watches the data plumbing feeding it.
+        st.Page(
+            "views/data_health.py",
+            title="Data Health",
+            icon="🩺",
+        ),
         st.Page(
             "views/bankroll.py",
             title="Bankroll Manager",
