@@ -12,6 +12,7 @@ touches the model/value/bet path. The pure HTML helpers are escaped and AST-test
 """
 
 from html import escape
+from typing import Optional
 
 import streamlit as st
 
@@ -77,6 +78,50 @@ def _group_section_html(group: str, checks: list) -> str:
             f'{rows}</div>')
 
 
+def _neon_usage_html(usage: Optional[dict], warn_pct: float = 0.80) -> str:
+    """One card showing Neon cloud data-transfer usage vs the plan allowance.
+
+    ``usage`` is the dict from ``neon_usage.fetch_neon_usage`` — or ``None`` when
+    no API key is set / the API is unreachable, which renders a muted
+    'unavailable' note rather than an error.  Colour: green below ``warn_pct``,
+    amber from there up to the allowance, red at/over it.  All dynamic text
+    escaped.  Streamlit-free so it is AST-testable."""
+    if not usage:
+        return (
+            '<div class="dh-row"><div class="dh-row-head">'
+            '<span class="dh-pill" style="background:#8B949E1f;color:#8B949E;'
+            'border:1px solid #8B949E55;">· N/A</span>'
+            '<span class="dh-name">Neon data transfer</span></div>'
+            '<div class="dh-detail">Usage unavailable — set NEON_API_KEY (env or '
+            'Streamlit secrets) to show cloud data-transfer headroom.</div></div>'
+        )
+    pct = usage.get("pct") or 0.0
+    if pct >= 1.0:
+        colour, glyph, label = "#F85149", "✗", "OVER"
+    elif pct >= warn_pct:
+        colour, glyph, label = "#D29922", "⚠", "HIGH"
+    else:
+        colour, glyph, label = "#3FB950", "✓", "OK"
+    used_gb = usage.get("used_gb", 0.0) or 0.0
+    limit_gb = usage.get("limit_gb", 5.0) or 5.0
+    reset = usage.get("reset_date") or "—"
+    days = usage.get("days_until_reset")
+    days_txt = f" ({days} days)" if isinstance(days, int) else ""
+    bar_w = max(0.0, min(pct, 1.0)) * 100
+    pill = (f'<span class="dh-pill" style="background:{colour}1f;color:{colour};'
+            f'border:1px solid {colour}55;">{glyph} {escape(label)}</span>')
+    bar = (f'<div style="background:#21262D;border-radius:5px;height:7px;'
+           f'margin:8px 0 2px;overflow:hidden;">'
+           f'<div style="width:{bar_w:.0f}%;height:100%;background:{colour};"></div></div>')
+    detail = (f"{used_gb:.2f} / {limit_gb:.0f} GB ({pct * 100:.0f}%) · "
+              f"resets {reset}{days_txt}")
+    return (
+        '<div class="dh-row"><div class="dh-row-head">'
+        f'{pill}<span class="dh-name">Neon data transfer</span></div>'
+        f'{bar}<div class="dh-detail">{escape(detail)}</div></div>'
+    )
+
+
 def _overall_banner_html(overall: str, summary: dict, backend: str,
                          generated_at: str) -> str:
     colour, glyph, _ = _status_meta(overall)
@@ -119,6 +164,30 @@ def _load_report() -> dict:
     return report_to_dict(run_health_checks())
 
 
+@st.cache_data(ttl=600, show_spinner=False)
+def _load_neon_usage() -> Optional[dict]:
+    """Neon data-transfer usage via the control-plane API (cached 10 min).
+
+    Returns None if no NEON_API_KEY is configured or the API is unreachable. The
+    control-plane call does NOT count against the data-transfer quota it reports."""
+    from src.config import config
+    from src.monitoring.neon_usage import fetch_neon_usage
+    try:
+        limit = float(config.settings.health.neon.transfer_limit_gb)
+    except Exception:
+        limit = 5.0
+    return fetch_neon_usage(limit_gb=limit)
+
+
+def _neon_warn_pct() -> float:
+    """Amber threshold (fraction of the allowance) from config, default 0.80."""
+    try:
+        from src.config import config
+        return float(config.settings.health.neon.warn_pct)
+    except Exception:
+        return 0.80
+
+
 # RBAC: owner-only page. It's hidden from the nav for viewers (dashboard.get_pages);
 # this in-page gate is defence in depth in case the page is reached directly.
 from src.auth import get_session_user_role  # noqa: E402
@@ -144,6 +213,15 @@ with _right:
 try:
     _data = _load_report()
     _render_report(_data)
+    # Cloud database (Neon) data-transfer headroom. The control-plane API call
+    # does not count against the quota it reports, and degrades to an
+    # 'unavailable' note if no NEON_API_KEY is configured.
+    st.markdown(
+        '<div class="dh-group"><div class="dh-group-title">Cloud Database</div>'
+        + _neon_usage_html(_load_neon_usage(), _neon_warn_pct())
+        + '</div>',
+        unsafe_allow_html=True,
+    )
     st.caption(
         "Amber = worth a look, red = needs action; “N/A” means a check doesn't apply "
         "right now (e.g. league sources are quiet in the off-season). The same check "

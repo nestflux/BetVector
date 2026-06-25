@@ -383,6 +383,12 @@ health:
   alert:
     min_status: warn            # morning pipeline emails the owner at this severity or worse
                                 # (warn = include stale-stub etc. warnings; fail = failures only)
+  neon:
+    # Cloud-DB (Neon) data-transfer headroom shown on the Data Health page. The
+    # control-plane API reports usage; this is the plan allowance to compare it
+    # against. Free plan = 5 GB / consumption period.
+    transfer_limit_gb: 5
+    warn_pct: 0.80              # amber once usage crosses this fraction of the allowance
 
 # ---------------------------------------------------------------------------
 # Dashboard  (Streamlit read-caching — Neon data-transfer control)
