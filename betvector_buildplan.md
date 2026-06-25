@@ -9845,8 +9845,27 @@ the app's own Settings/onboarding copy (which still says 30% / starting-bankroll
 `bankroll.py` so flat sizes off the **starting** bankroll (true level staking, distinct
 from percentage), and aligned every copy source (help_content, Settings, onboarding,
 bankroll view) to "starting"; new `tests/test_flat_level_staking.py`. The drawdown 25%
-fix stood. The backtester's own current-based "flat" was left as-is — flagged for owner
-sign-off since changing it would shift documented backtest baselines.] The
+fix stood. The backtester's own current-based "flat" was ALSO aligned to level staking
+(owner approved "Choice B done safely"): new `_level_or_pct_stake` helper +
+`tests/test_backtester_level_staking.py`. SAFETY CHECK (read-only, 6-league replay — one
+Poisson backtest/league at a uniform 5% edge, then replay each realised bet sequence
+under compounding vs level):
+
+  League        bets   ROI compound   ROI level   delta(pp)
+  EPL           1229      -12.70%      -17.82%       -5.12
+  Championship   940       +7.09%       +9.37%       +2.28
+  LaLiga         310       +9.08%      +11.61%       +2.53
+  Ligue1         413      -27.44%      -36.98%       -9.54
+  Bundesliga     245      -21.43%      -22.92%       -1.49
+  SerieA         240      -18.45%      -17.67%       +0.78
+
+NO league sign-flipped (winners stay +, losers −). KEY FINDING: compounding "flat"
+FLATTERED the losing leagues — as the bankroll death-spirals toward $0 the stakes shrink
+so losses stop accumulating; level staking is the honest per-unit ROI (losers look worse,
+winners better). CAVEAT: this used a UNIFORM 5% threshold, NOT the tuned per-league
+configs behind the documented tier CIs, so the documented ROI baselines are NOT yet
+regenerated under level (Brier is staking-independent — unaffected). leagues.yaml
+untouched. OPEN: regenerate the tuned per-league ROI baselines under level.] The
 edge lesson uses the raw 1/odds basis (consistent with the HC-03 fix). 3 new tests
 (concept integrity + the edge-example arithmetic + AST/escaping). 1002/1002. Gate 1
 PASS · Gate 2 CLEAN (after the drawdown + flat-staking fixes) · Gate 3 APPROVED. Real

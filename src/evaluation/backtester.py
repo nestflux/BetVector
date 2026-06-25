@@ -93,6 +93,21 @@ class BacktestResult:
 # Walk-Forward Backtester
 # ============================================================================
 
+def _level_or_pct_stake(
+    method: str, bankroll: float, starting_bankroll: float, stake_percentage: float
+) -> float:
+    """Stake for the non-Kelly methods, capped at 5% of the CURRENT balance.
+
+    ``flat`` is LEVEL staking — a fixed amount off the STARTING bankroll, so the stake
+    never moves with the running balance.  This measures the model's edge per unit
+    without compounding distorting it by the *order* of wins and losses.  ``percentage``
+    sizes off the CURRENT bankroll, so it compounds.  Mirrors the live BankrollManager
+    (reconciled 2026-06-25 — flat used to be current-based, identical to percentage).
+    """
+    base = starting_bankroll if method == "flat" else bankroll
+    return min(base * stake_percentage, bankroll * 0.05)
+
+
 def run_backtest(
     league_id: int,
     season: str,
@@ -381,8 +396,13 @@ def run_backtest(
                     )
                     stake = min(raw_kelly, bankroll * 0.05)
                 else:
-                    stake = bankroll * stake_percentage
-                    stake = min(stake, bankroll * 0.05)
+                    # Flat = LEVEL staking off the STARTING bankroll (constant);
+                    # percentage = a % of the CURRENT running bankroll (compounds).
+                    # The 5% cap is on the current balance either way. (Reconcile
+                    # 2026-06-25: flat was previously current-based — identical to
+                    # percentage; now matches the live BankrollManager.)
+                    stake = _level_or_pct_stake(
+                        staking_method, bankroll, starting_bankroll, stake_percentage)
 
                 stake = round(max(0.0, stake), 2)
                 if stake == 0:
