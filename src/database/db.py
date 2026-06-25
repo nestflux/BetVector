@@ -81,6 +81,24 @@ def _build_connection_url() -> str:
     For PostgreSQL it returns the connection string as-is (e.g.
     ``postgresql://user:pass@host/dbname?sslmode=require``).
     """
+    # Priority 0: explicit LOCAL-DB override for analytics / previews / ad-hoc
+    # scripts. When BETVECTOR_FORCE_LOCAL_DB is truthy we use the local SQLite
+    # mirror REGARDLESS of DATABASE_URL or Streamlit secrets — so backtests,
+    # preview servers, and one-off analysis scripts never burn Neon's
+    # data-transfer quota (Neon free-tier egress is a recurring blocker — see
+    # PC-13 and DATA_GAPS.md). Production (pipelines, cloud) leaves this UNSET
+    # and resolves Neon via DATABASE_URL / secrets below, so it is unaffected.
+    if os.environ.get("BETVECTOR_FORCE_LOCAL_DB", "").strip().lower() in (
+        "1", "true", "yes", "on",
+    ):
+        db_path = config.settings.database.path
+        full_path = (PROJECT_ROOT / db_path).resolve()
+        logger.info(
+            "BETVECTOR_FORCE_LOCAL_DB set — using LOCAL SQLite (%s), ignoring "
+            "any DATABASE_URL / Streamlit secrets.", full_path,
+        )
+        return f"sqlite:///{full_path}"
+
     # Priority 1: DATABASE_URL env var (GitHub Actions, Docker, any cloud)
     database_url = os.environ.get("DATABASE_URL")
     if database_url:

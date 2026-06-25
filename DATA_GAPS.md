@@ -32,6 +32,36 @@ per-bet returns = staking-invariant (Championship reproduced exactly). Full anal
 
 ---
 
+## ⚙️ Neon data-transfer reduction (2026-06-25) — OPS NOTE
+
+Neon (cloud Postgres) hit its free-tier **data-transfer** quota — same wall as
+PC-13. Investigation found the chronic drains were (1) the **off-season league
+pipelines** still firing 3×/day against Neon and (2) the **uncached dashboard**;
+a burst from this session's full-history backtests + Neon-sourced previews tipped
+it over. Owner-approved remediation applied (caching deferred):
+
+1. **League crons PAUSED for the off-season.** `com.betvector.morning` (07:00),
+   `com.betvector.midday` (12:00), `com.betvector.evening` (21:00) were
+   `launchctl unload -w`'d (disabled across reboots). They did NO useful work
+   off-season (no new matches until ~Aug) yet re-scraped + re-loaded all 6
+   leagues against Neon every run. The WC jobs (`wc_morning` 09:30, `wc_evening`
+   23:30, `wc_dispatcher` /15min) remain LOADED — WC is live.
+   **RE-ENABLE when leagues resume (~Aug 22):**
+   `for j in morning midday evening; do launchctl load -w ~/Library/LaunchAgents/com.betvector.$j.plist; done`
+2. **Analytics/previews forced LOCAL.** New env override
+   **`BETVECTOR_FORCE_LOCAL_DB=1`** (db.py `_build_connection_url`, Priority 0)
+   returns the local SQLite mirror even when DATABASE_URL/secrets point at Neon.
+   The `wc_preview` launch config now sets it. **Convention:** any backtest /
+   preview / ad-hoc analysis run should set `BETVECTOR_FORCE_LOCAL_DB=1` (or
+   simply not source `.env`) so it never burns Neon transfer. Production
+   (pipelines, Streamlit Cloud) leaves the flag UNSET → Neon as before.
+3. **DEFERRED (owner did not take):** dashboard read-caching (`@st.cache_data`)
+   + a date filter on the WC landing page. The dashboard caches almost nothing,
+   so every rerun re-pulls medium tables (WC page worst). This is the remaining
+   chronic per-user drain — revisit once Neon is back online to redeploy.
+
+---
+
 ## 1. Championship xG / Advanced Stats
 
 **Affected league:** Championship (league_id=2)

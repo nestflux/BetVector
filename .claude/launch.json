@@ -39,8 +39,9 @@
     },
     {
       "name": "wc_preview",
+      "comment": "Sources .env for API keys but forces the LOCAL SQLite DB (BETVECTOR_FORCE_LOCAL_DB=1) so UI previews never burn Neon data-transfer. NOTE: local WC data can be staler than Neon. To preview against live Neon data, drop BETVECTOR_FORCE_LOCAL_DB.",
       "runtimeExecutable": "bash",
-      "runtimeArgs": ["-c", "set -a; . ./.env; set +a; DASHBOARD_PASSWORD='' exec venv/bin/streamlit run src/delivery/dashboard.py --server.port 8507 --server.headless true --server.runOnSave false"],
+      "runtimeArgs": ["-c", "set -a; . ./.env; set +a; BETVECTOR_FORCE_LOCAL_DB=1 DASHBOARD_PASSWORD='' exec venv/bin/streamlit run src/delivery/dashboard.py --server.port 8507 --server.headless true --server.runOnSave false"],
       "port": 8507
     }
   ]
