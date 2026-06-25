@@ -9788,12 +9788,25 @@ hostile-input escaping + nav registration); 989/989. Gate 1 PASS · Gate 2 CLEAN
 adding the missing “Squad value” term the docstring had promised) · Gate 3 APPROVED.
 Real PNG on owner Desktop (Start-here orientation + a live “drawdown” glossary search).
 
-#### HC-02 — Screen-by-screen tour cards + colour/badge decoder  ← NEXT
+#### HC-02 — Screen-by-screen tour cards + colour/badge decoder  ✅ DONE
 
-One friendly tour card per page (what it's for · the 3 things to look at first · every
-colour/badge decoded), authored in `help_content.py`, rendered as a new Help tab.
+`TOUR` in `help_content.py` — one card per page (11: every primary nav page + both
+deep dives), each `{icon, page, what, first:[3], decode:[(badge, meaning)]}`. Rendered
+as a new "🗺️ Screen tour" tab in `views/help.py` via pure escaped helpers
+(`_tour_card_html` / `_tour_html`; `.tour-*` CSS; decode rows reuse the `.gloss-*`
+classes; the Settings card carries an empty decode → no badge block). Gate 2 caught
+**six faithfulness errors** (a manual that misdescribes the UI is worse than none) —
+all fixed after reading the real views: WC "🟢🟡🔴 trust mark" → group-qualification
+dots (the WC strip uses ✓/⚠/— verdicts, not a trust mark); Match Deep Dive "★ best
+price" → the FanDuel/Best-Edge/All toggle (no ★ marker there); Today's Picks "✅/❌ +
+P&L" → an "FT score" badge (no per-pick P&L); Fixtures chip reworded as the league
+trust tier; League Explorer form order ("most recent on the right"); Bankroll "green/red
+months" → the real monthly-breakdown columns. 5 new tests (tour integrity + key-badge
+coverage + empty-decode omission + hostile-field escaping). 994/994. Gate 1 PASS · Gate
+2 CLEAN (after the six fixes) · Gate 3 APPROVED. Real PNG on owner Desktop. Only
+help_content.py + views/help.py + test changed (dashboard/other views untouched).
 
-#### HC-03 — FAQ + on-page “How to read this page” deep-links
+#### HC-03 — FAQ + on-page “How to read this page” deep-links  ← NEXT
 
 An FAQ tab, plus an additive “❓ How to read this page” affordance on every main page
 that deep-links into the relevant Help section (session-state + `switch_page`; no page

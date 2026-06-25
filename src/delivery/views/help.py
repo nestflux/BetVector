@@ -29,6 +29,7 @@ from src.delivery.help_content import (
     DAILY_LOOP,
     GOOD_TO_KNOW,
     START_HERE_INTRO,
+    TOUR,
     filter_glossary,
     term_count,
 )
@@ -73,6 +74,18 @@ def _help_css() -> str:
         "color:#E6EDF3;margin-bottom:2px;}"
         ".help-note-body{font-family:Inter,sans-serif;font-size:13px;color:#8B949E;"
         "line-height:1.5;}"
+        ".tour-card{background:#161B22;border:1px solid #30363D;border-radius:8px;"
+        "padding:14px 16px;margin-bottom:14px;}"
+        ".tour-head{font-family:Inter,sans-serif;font-size:15px;font-weight:700;"
+        "color:#E6EDF3;margin-bottom:4px;}"
+        ".tour-icon{margin-right:8px;}"
+        ".tour-what{font-family:Inter,sans-serif;font-size:13px;color:#8B949E;"
+        "line-height:1.5;margin-bottom:6px;}"
+        ".tour-sub{font-family:Inter,sans-serif;font-size:11px;font-weight:700;"
+        "color:#3FB950;text-transform:uppercase;letter-spacing:0.5px;margin:12px 0 6px;}"
+        ".tour-first{margin:0;padding-left:18px;}"
+        ".tour-first li{font-family:Inter,sans-serif;font-size:13px;color:#E6EDF3;"
+        "line-height:1.5;margin-bottom:4px;}"
         "</style>"
     )
 
@@ -113,6 +126,37 @@ def _glossary_group_html(group: str, blurb: str, terms: list) -> str:
     )
 
 
+def _tour_card_html(entry: dict) -> str:
+    """One page's tour card: icon + name, what it's for, the three things to look at
+    first, and — when the page has any — its colours/badges decoded. All escaped."""
+    icon = escape(str(entry.get("icon", "")))
+    page = escape(str(entry.get("page", "")))
+    what = escape(str(entry.get("what", "")))
+    firsts = "".join(f"<li>{escape(str(x))}</li>" for x in entry.get("first", []))
+    decode = entry.get("decode") or []
+    decode_html = ""
+    if decode:
+        rows = "".join(
+            f'<div class="gloss-row"><span class="gloss-term">{escape(str(label))}</span>'
+            f'<span class="gloss-def">{escape(str(meaning))}</span></div>'
+            for label, meaning in decode
+        )
+        decode_html = f'<div class="tour-sub">Colours &amp; badges</div>{rows}'
+    return (
+        f'<div class="tour-card">'
+        f'<div class="tour-head"><span class="tour-icon">{icon}</span>{page}</div>'
+        f'<div class="tour-what">{what}</div>'
+        f'<div class="tour-sub">Look at first</div>'
+        f'<ol class="tour-first">{firsts}</ol>'
+        f'{decode_html}</div>'
+    )
+
+
+def _tour_html(tour: list) -> str:
+    """All page tour cards, in sidebar order."""
+    return "".join(_tour_card_html(e) for e in tour)
+
+
 def _glossary_html(groups: list) -> str:
     """The full (possibly filtered) glossary, or a friendly empty state when a search
     matches nothing."""
@@ -139,14 +183,23 @@ st.markdown(
 st.markdown(_help_css(), unsafe_allow_html=True)
 st.divider()
 
-_tab_start, _tab_gloss = st.tabs(["📖 Start here", "🔤 Glossary"])
+_tab_start, _tab_tour, _tab_gloss = st.tabs(
+    ["📖 Start here", "🗺️ Screen tour", "🔤 Glossary"]
+)
 
 with _tab_start:
     st.markdown(_start_here_html(), unsafe_allow_html=True)
     st.caption(
-        "More is coming to this page — a screen-by-screen tour, Betting 101 with "
-        "worked examples, and interactive tools."
+        "More is coming to this page — Betting 101 with worked examples, and "
+        "interactive tools."
     )
+
+with _tab_tour:
+    st.caption(
+        "A quick guide to each screen — what it's for, what to look at first, and what "
+        "every colour and badge means."
+    )
+    st.markdown(_tour_html(TOUR), unsafe_allow_html=True)
 
 with _tab_gloss:
     _query = st.text_input(

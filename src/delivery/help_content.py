@@ -304,6 +304,197 @@ GLOSSARY_GROUPS = [
 
 
 # ---------------------------------------------------------------------------
+# Screen tour (HC-02) — one friendly card per page: what it's for, the three things
+# to look at first, and the colours/badges decoded. Authored from the real dashboard
+# (every page in dashboard.get_pages). Each entry:
+#   {icon, page, what, first: [..], decode: [(label, meaning), ..]}
+# ``decode`` may be empty (a page with no special badges renders without that block).
+# ---------------------------------------------------------------------------
+
+TOUR = [
+    {
+        "icon": "📅", "page": "Fixtures",
+        "what": "Every upcoming match across your active leagues, with a colour-coded "
+                "read on where the model sees value. This is your usual landing page.",
+        "first": [
+            "The Top Value Picks banner at the top — the few strongest edges right now.",
+            "The market badges on each row (1X2, O/U, BTTS) — green means a real edge.",
+            "The edge-threshold slider — drag it for fewer, stronger picks or more, "
+            "looser ones.",
+        ],
+        "decode": [
+            ("Green double ring + glow", "A genuine value bet — the edge clears your "
+             "threshold."),
+            ("Blue ring", "The model's best guess for the match, but the edge is below "
+             "your threshold."),
+            ("★ before a badge", "The model's single best selection in that match."),
+            ("Green card border", "This fixture has a backable value bet."),
+            ("Green / red border (Recent Results)", "A settled value bet that won / lost."),
+            ("🟢 🟡 🔴 league trust chip", "The league's trust tier — how proven it is: "
+             "proven / promising / unproven."),
+        ],
+    },
+    {
+        "icon": "🎯", "page": "Today's Picks",
+        "what": "The model's actionable value bets — the bets it would make — as cards "
+                "you can browse by date.",
+        "first": [
+            "The summary row — how many value bets, the average edge, how many are "
+            "high-confidence.",
+            "Each card's Edge and Suggested Stake — the opportunity and how much to risk.",
+            "Slide the date range back to see how past picks actually resolved.",
+        ],
+        "decode": [
+            ("HIGH / MEDIUM / LOW", "The model's confidence — green / yellow / muted."),
+            ("🌧️ Weather", "Extreme match-day conditions that tend to lower scoring."),
+            ("Squad value", "One squad is worth far more than the other (a talent gap)."),
+            ("FT score (past picks)", "A finished pick shows the final score and whether "
+             "the pick won or lost."),
+        ],
+    },
+    {
+        "icon": "📋", "page": "My Bets",
+        "what": "Your personal bet log and a slip builder — record what you actually "
+                "backed so the app can track your real results.",
+        "first": [
+            "The fixture browser — tap the odds buttons to add selections to your slip.",
+            "The slip builder — set your stake and log everything in one go.",
+            "Your bet history, with a status and P&L for each bet.",
+        ],
+        "decode": [
+            ("🟡 Pending", "The match hasn't finished yet."),
+            ("🟢 Won / 🔴 Lost / ⚪ Void", "The settled outcome of a bet."),
+            ("🎯 N in slip (sidebar)", "How many selections are queued in your slip."),
+        ],
+    },
+    {
+        "icon": "📈", "page": "Performance Tracker",
+        "what": "How you're doing over time — profit, ROI, win rate, and the bets "
+                "behind them.",
+        "first": [
+            "The four metric cards — Total P&L, ROI, total bets, win rate.",
+            "The cumulative P&L line — the trajectory matters more than daily swings.",
+            "The Bet Type filter — System Pick (the model's record) vs User Placed (yours).",
+        ],
+        "decode": [
+            ("Green / red numbers", "Profit / loss."),
+            ("System Pick vs User Placed", "The model's auto-logged bets vs the ones "
+             "you confirmed yourself."),
+        ],
+    },
+    {
+        "icon": "🏟️", "page": "League Explorer",
+        "what": "Standings, form, and quality metrics for any one of your active leagues.",
+        "first": [
+            "The standings table for the league you pick.",
+            "Each team's last-five form strip.",
+            "The NPxG table — who actually creates and concedes the best chances.",
+        ],
+        "decode": [
+            ("W / D / L form badges", "A team's last five results, most recent on the right."),
+            ("NPxG Diff", "Chances created minus conceded — the best one-number quality "
+             "read."),
+        ],
+    },
+    {
+        "icon": "🏆", "page": "World Cup",
+        "what": "The tournament hub — today's matches, group tables, value bets, and who "
+                "is winning it. During the World Cup this becomes your landing page.",
+        "first": [
+            "Today's fixtures with the verdict chip — value / re-check / no edge.",
+            "The group standings and who is qualifying.",
+            "The winner-probability bar and the model's tournament record.",
+        ],
+        "decode": [
+            ("✓ green verdict", "A backable model edge on that fixture."),
+            ("⚠ amber verdict", "An edge so big it's likely model noise — re-check."),
+            ("— muted verdict", "No model edge."),
+            ("🟢 🟡 🔴 group dots", "A team's qualification position in the group table — "
+             "top two through (green), third in the play-off race (yellow), bottom out "
+             "(red)."),
+            ("🔒 lineups", "XIs aren't announced yet (they post about an hour before "
+             "kickoff)."),
+        ],
+    },
+    {
+        "icon": "🔬", "page": "Model Health",
+        "what": "Whether the model can be trusted — calibration, accuracy (Brier), CLV, "
+                "and where it has actually been profitable.",
+        "first": [
+            "The Brier score and calibration plot — are the probabilities honest?",
+            "The CLV trend — is the model beating the closing line?",
+            "The market edge map — which leagues × markets actually profit.",
+        ],
+        "decode": [
+            ("Calibration points on the diagonal", "Well-calibrated — 70% calls really "
+             "win about 70%."),
+            ("Edge map green / yellow / red", "Profitable / promising / unprofitable by "
+             "league × market."),
+        ],
+    },
+    {
+        "icon": "💰", "page": "Bankroll Manager",
+        "what": "Your capital, your staking method, and the safety rails that keep a bad "
+                "run from becoming a disaster.",
+        "first": [
+            "Current vs peak bankroll, and the drawdown number.",
+            "Your staking method and stake size.",
+            "The safety-limit traffic lights.",
+        ],
+        "decode": [
+            ("🟢 OK / 🟡 APPROACHING / 🔴 TRIGGERED", "A safety limit's status — "
+             "TRIGGERED pauses suggestions."),
+            ("Monthly breakdown", "Bets, wins, losses, P&L and ROI for each month."),
+        ],
+    },
+    {
+        "icon": "⚙️", "page": "Settings",
+        "what": "Your preferences — staking method, edge threshold, which leagues are "
+                "active, and your email digests.",
+        "first": [
+            "Your staking method and stake %.",
+            "The edge threshold that filters every pick across the app.",
+            "Which leagues are active (they drive the filters everywhere).",
+        ],
+        "decode": [],
+    },
+    {
+        "icon": "🔍", "page": "Match Deep Dive",
+        "what": "The full picture for one league match — open it from any fixture or pick.",
+        "first": [
+            "The scoreline heatmap — the model's most likely scores.",
+            "Model probability beside each bookmaker, with the edge highlighted.",
+            "Team form, head-to-head, and the advanced stats.",
+        ],
+        "decode": [
+            ("MODEL badge", "This number is the model's, not a bookmaker's."),
+            ("Green highlight + edge", "The model rates this selection above the "
+             "market — value."),
+            ("FanDuel / Best Edge / All toggle", "Switch which bookmaker's price the "
+             "model is compared against."),
+        ],
+    },
+    {
+        "icon": "🔬", "page": "WC Deep Dive",
+        "what": "The same full match analysis for a World Cup fixture, plus lineups and "
+                "player insight.",
+        "first": [
+            "Model vs every book, with line movement and CLV.",
+            "Confirmed lineups, the adjusted-xG what-if, and the anytime-scorer board.",
+            "Player watch — booking risk, star absences, and milestones.",
+        ],
+        "decode": [
+            ("MODEL badge", "A model number, not a market line."),
+            ("Green value / amber capped", "A backable edge vs an edge too big to trust."),
+            ("Adjusted xG / Anytime % (grey)", "Display-only model estimates — never bets."),
+            ("⚠ rotation flag", "The XI changed heavily from last time — a hypothesis to "
+             "re-check."),
+        ],
+    },
+]
+
+
+# ---------------------------------------------------------------------------
 # Pure helpers (no Streamlit) — used by the view, the tests, and (later) the export.
 # ---------------------------------------------------------------------------
 

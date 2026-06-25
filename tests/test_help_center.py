@@ -24,6 +24,7 @@ from src.delivery.help_content import (
     GLOSSARY_GROUPS,
     GOOD_TO_KNOW,
     START_HERE_INTRO,
+    TOUR,
     all_terms,
     filter_glossary,
     term_count,
@@ -92,6 +93,31 @@ def test_start_here_orientation_is_present():
 
 
 # ---------------------------------------------------------------------------
+# 1b. screen tour (HC-02)
+# ---------------------------------------------------------------------------
+
+def test_tour_is_well_formed_and_covers_the_pages():
+    pages = {e["page"] for e in TOUR}
+    # every primary nav page + both deep dives has a card
+    for must in ("Fixtures", "Today's Picks", "My Bets", "Performance Tracker",
+                 "League Explorer", "World Cup", "Model Health", "Bankroll Manager",
+                 "Settings", "Match Deep Dive", "WC Deep Dive"):
+        assert must in pages, f"tour missing a card for {must}"
+    for e in TOUR:
+        assert e["icon"] and e["what"].strip()
+        assert len(e["first"]) >= 2 and all(s.strip() for s in e["first"])
+        for pair in e.get("decode", []):
+            assert len(pair) == 2 and pair[0].strip() and pair[1].strip()
+
+
+def test_tour_decode_explains_the_key_badges():
+    """The decoder must cover the colour/badge vocabulary a newcomer trips on."""
+    labels = " ".join(lbl for e in TOUR for (lbl, _) in e.get("decode", [])).lower()
+    for token in ("ring", "verdict", "model badge", "pending", "trust"):
+        assert token in labels, f"tour decoder never mentions “{token}”"
+
+
+# ---------------------------------------------------------------------------
 # 2. the pure search filter
 # ---------------------------------------------------------------------------
 
@@ -135,7 +161,8 @@ def test_filter_preserves_group_shape():
 # 3. data -> render: AST-exec the view's pure HTML helpers
 # ---------------------------------------------------------------------------
 
-_PURE_FUNCS = {"_help_css", "_start_here_html", "_glossary_group_html", "_glossary_html"}
+_PURE_FUNCS = {"_help_css", "_start_here_html", "_glossary_group_html", "_glossary_html",
+               "_tour_card_html", "_tour_html"}
 
 
 def _view_namespace():
@@ -188,7 +215,36 @@ def test_view_help_css_is_a_style_block():
     ns = _view_namespace()
     css = ns["_help_css"]()
     assert css.startswith("<style>") and css.endswith("</style>")
-    assert ".gloss-term" in css and ".help-step" in css
+    assert ".gloss-term" in css and ".help-step" in css and ".tour-card" in css
+
+
+def test_view_renders_tour_cards_from_real_content():
+    ns = _view_namespace()
+    html = ns["_tour_html"](TOUR)
+    assert "Fixtures" in html and "World Cup" in html
+    assert "Look at first" in html and "Colours &amp; badges" in html
+    # a real decoded badge + the page intro both land
+    assert "value bet" in html.lower() and "verdict" in html.lower()
+
+
+def test_view_tour_card_omits_decode_block_when_empty():
+    ns = _view_namespace()
+    card = ns["_tour_card_html"](
+        {"icon": "⚙️", "page": "Settings", "what": "Your preferences.",
+         "first": ["a", "b"], "decode": []}
+    )
+    assert "Look at first" in card and "Colours" not in card
+
+
+def test_view_tour_escapes_hostile_fields():
+    ns = _view_namespace()
+    card = ns["_tour_card_html"](
+        {"icon": "x", "page": "<b>P</b>", "what": "<i>w</i>",
+         "first": ["<script>alert(1)</script>"],
+         "decode": [("<img src=x onerror=1>", "<u>m</u>")]}
+    )
+    assert "<script>" not in card and "<img src=x" not in card and "<b>P" not in card
+    assert "&lt;script&gt;" in card and "&lt;img" in card
 
 
 def test_view_escapes_hostile_term_and_definition():
