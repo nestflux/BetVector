@@ -6,7 +6,7 @@ PYTHON := $(VENV)/bin/python
 PIP := $(VENV)/bin/pip
 STREAMLIT := $(VENV)/bin/streamlit
 
-.PHONY: install test run lint clean
+.PHONY: install test run lint clean health
 
 # --- Create venv and install all dependencies ---
 install:
@@ -28,6 +28,11 @@ run:
 # --- Lint with flake8 (install separately if needed) ---
 lint:
 	$(PYTHON) -m flake8 src/ --max-line-length 120 --ignore E501,W503
+
+# --- Read-only data-health check (DH epic) ---
+# Prints a grouped PASS/WARN/FAIL report; exits non-zero on any FAIL.
+health:
+	$(PYTHON) scripts/health_check.py
 
 # --- Remove compiled files and caches ---
 clean:

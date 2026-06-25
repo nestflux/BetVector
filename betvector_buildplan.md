@@ -9940,12 +9940,18 @@ config-driven; purely additive). **Live smoke vs Neon caught the real issue: 2 l
 stale scheduled stubs right now** (the owner's standings concern, confirmed), with off-season
 league sources correctly SKIP'd.
 
-#### DH-02 — CLI (`make health`)  ← NEXT
+#### DH-02 — CLI (`make health`)  ✅ DONE
 
-`scripts/health_check.py` + a Makefile target: run the engine, print a grouped
-PASS/WARN/FAIL report, exit non-zero on any FAIL (so it can gate). Pure formatter, unit-tested.
+`src/monitoring/health_cli.py` — a pure `format_report(report, color)` (grouped, aligned,
+glyph + ANSI), `report_to_dict()` (for `--json`), and `exit_code()` (1 on FAIL; `--strict`
+also fails on WARN). `main()` loads `.env` (so it reaches Neon, not local SQLite), runs the
+read-only engine, prints text or `--json`, and returns the exit code. Thin shim
+`scripts/health_check.py` + a `make health` target. 7 tests (formatter plain/colour,
+JSON-serialisable dict, exit-code matrix, `main()` text/json/strict via monkeypatch);
+**1051/1051**. Verified live: `make health` against Neon prints the grouped report (exit 0
+on WARN), `--json` parses, `--strict` exits 1.
 
-#### DH-03 — Data Health dashboard page
+#### DH-03 — Data Health dashboard page  ← NEXT
 
 `src/delivery/views/health.py` (🩺 Data Health, owner-scoped) — green/amber/red cards from
 the same engine, registered in nav, with empty/error states; AST-tested + escaped.
