@@ -32,6 +32,8 @@ from src.delivery.help_content import (
     GOOD_TO_KNOW,
     START_HERE_INTRO,
     TOUR,
+    build_manual_html,
+    build_manual_markdown,
     edge_pp,
     filter_glossary,
     flat_stake,
@@ -113,6 +115,8 @@ def _help_css() -> str:
         ".concept-eg b{color:#3FB950;font-weight:600;}"
         ".tool-h{font-family:Inter,sans-serif;font-size:13px;font-weight:700;color:#3FB950;"
         "text-transform:uppercase;letter-spacing:0.5px;margin:16px 0 8px;}"
+        ".help-dl-head{font-family:Inter,sans-serif;font-size:15px;font-weight:700;"
+        "color:#E6EDF3;margin:6px 0 4px;}"
         ".tool-out{background:#161B22;border:1px solid #30363D;border-radius:8px;"
         "padding:10px 14px;font-family:Inter,sans-serif;}"
         ".tool-row{display:flex;justify-content:space-between;gap:12px;font-size:13px;"
@@ -347,8 +351,38 @@ with _tab_start:
     st.markdown(_start_here_html(), unsafe_allow_html=True)
     st.caption(
         "Tip: the tabs above cover the screen tour, Betting 101 with worked examples, "
-        "an FAQ, and a searchable glossary. Interactive tools are coming next."
+        "interactive tools, an FAQ, and a searchable glossary."
     )
+    # Downloadable manual — the whole Help Center as one document, built from the same
+    # content shown here (so it never drifts). Markdown opens anywhere; the print-friendly
+    # HTML can be saved as a PDF from the browser's Print dialog. No new dependency.
+    st.divider()
+    st.markdown(
+        '<div class="help-dl-head">📘 Take the manual with you</div>',
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "The full guide — Start here, the screen tour, Betting 101, the FAQ and the "
+        "glossary — as one document. Markdown opens anywhere; open the HTML and use your "
+        "browser's Print → Save as PDF for a PDF copy."
+    )
+    _dl_md, _dl_html = st.columns(2)
+    with _dl_md:
+        st.download_button(
+            "⬇ Download the manual (Markdown)",
+            data=build_manual_markdown(),
+            file_name="betvector_manual.md",
+            mime="text/markdown",
+            use_container_width=True,
+        )
+    with _dl_html:
+        st.download_button(
+            "⬇ Download the manual (HTML / print to PDF)",
+            data=build_manual_html(),
+            file_name="betvector_manual.html",
+            mime="text/html",
+            use_container_width=True,
+        )
 
 with _tab_tour:
     st.caption(

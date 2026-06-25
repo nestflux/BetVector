@@ -229,17 +229,25 @@ class TestModelCompare:
 
 
 class TestGlossary:
-    def test_glossary_renderers_present(self):
-        assert {"_glossary_html", "_render_glossary"} <= DD_FUNCS
+    def test_glossary_renderer_present(self):
+        assert "_render_glossary" in DD_FUNCS
+
+    def test_reads_from_shared_help_content(self):
+        # HC-06: the definitions now come from the single Help Center source
+        # (help_content.PAGE_GLOSSARIES), not a local _GLOSSARY list, so the local
+        # _glossary_html helper is gone and the renderer calls the shared helper.
+        assert "_glossary_html" not in DD_FUNCS
+        assert "glossary_sections_html" in DD_IMPORTS
+        assert 'glossary_sections_html("WC Deep Dive")' in _func_src(
+            DD_TREE, DD_SRC, "_render_glossary")
 
     def test_covers_new_deep_dive_terms(self):
-        # The glossary must define the terms the deep dive introduces (DF-10 AC).
+        # The shared page glossary must still define the terms the deep dive introduces.
+        from src.delivery.help_content import glossary_sections_html
+        html = glossary_sections_html("WC Deep Dive")
         for term in ("CLV", "Line movement", "De-vig", "Scoreline matrix",
                      "Rotation flag", "Bayesian"):
-            assert term in DD_SRC, f"glossary missing term: {term}"
-
-    def test_glossary_escaped(self):
-        assert "escape(" in _func_src(DD_TREE, DD_SRC, "_glossary_html")
+            assert term in html, f"glossary missing term: {term}"
 
     def test_uses_expander(self):
         assert "st.expander(" in _func_src(DD_TREE, DD_SRC, "_render_glossary")

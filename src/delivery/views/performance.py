@@ -37,6 +37,7 @@ from src.auth import get_session_user_id
 from src.database.db import get_session
 from src.database.models import BetLog, Match
 from src.delivery.views._badge_helper import render_badge_only
+from src.delivery.help_content import glossary_sections_html
 
 
 # ============================================================================
@@ -700,100 +701,7 @@ with st.expander("Glossary — What do these terms mean?", expanded=False):
         unsafe_allow_html=True,
     )
 
-    # --- Key Metrics ---
     st.markdown(
-        '<div class="gloss-section">'
-        '<div class="gloss-title">Key Metrics</div>'
-        '<div class="gloss-row">'
-        '  <span class="gloss-term">Total P&amp;L</span>'
-        '  <span class="gloss-def">Profit and Loss — total dollars gained or lost across '
-        'all resolved bets. Positive (green) = net profit. Negative (red) = net loss.</span>'
-        '</div>'
-        '<div class="gloss-row">'
-        '  <span class="gloss-term">ROI %</span>'
-        '  <span class="gloss-def">Return on Investment — profit divided by total amount staked, '
-        'as a percentage. ROI of +5% means you earned $5 for every $100 wagered. '
-        'Professional bettors target +2% to +5% long-term.</span>'
-        '</div>'
-        '<div class="gloss-row">'
-        '  <span class="gloss-term">Win Rate</span>'
-        '  <span class="gloss-def">Percentage of bets that won. Note: win rate alone '
-        'doesn\'t indicate profitability — a 40% win rate at high odds can be profitable, '
-        'while 60% at low odds might lose money.</span>'
-        '</div>'
-        '<div class="gloss-row">'
-        '  <span class="gloss-term">Total Staked</span>'
-        '  <span class="gloss-def">The sum of all stake amounts placed. '
-        'Used as the denominator when calculating ROI.</span>'
-        '</div>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-    # --- Charts ---
-    st.markdown(
-        '<div class="gloss-section">'
-        '<div class="gloss-title">Charts</div>'
-        '<div class="gloss-row">'
-        '  <span class="gloss-term">Cumulative P&amp;L</span>'
-        '  <span class="gloss-def">A running total of profit/loss over time. '
-        'An upward trend = growing profits. A flat line = breakeven. '
-        'Dips are normal — look at the overall trajectory, not individual swings.</span>'
-        '</div>'
-        '<div class="gloss-row">'
-        '  <span class="gloss-term">Monthly P&amp;L</span>'
-        '  <span class="gloss-def">Bar chart showing profit or loss per month. '
-        'Green bars = profitable months, red bars = losing months. '
-        'Even a profitable model will have red months.</span>'
-        '</div>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-    # --- Markets ---
-    st.markdown(
-        '<div class="gloss-section">'
-        '<div class="gloss-title">Market Types</div>'
-        '<div class="gloss-row">'
-        '  <span class="gloss-term">Match Result</span>'
-        '  <span class="gloss-def">1X2 market: Home Win, Draw, or Away Win.</span>'
-        '</div>'
-        '<div class="gloss-row">'
-        '  <span class="gloss-term">O/U 1.5 / 2.5</span>'
-        '  <span class="gloss-def">Over/Under goals markets. O/U 1.5 = will there be 2+ goals? '
-        'O/U 2.5 = will there be 3+ goals?</span>'
-        '</div>'
-        '<div class="gloss-row">'
-        '  <span class="gloss-term">BTTS</span>'
-        '  <span class="gloss-def">Both Teams to Score — will each team net at least one goal?</span>'
-        '</div>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-    # --- Bet Types & Outcomes ---
-    st.markdown(
-        '<div class="gloss-section">'
-        '<div class="gloss-title">Bet Types &amp; Outcomes</div>'
-        '<div class="gloss-row">'
-        '  <span class="gloss-term">System Pick</span>'
-        '  <span class="gloss-def">A bet automatically logged by the model when it finds value. '
-        'Tracks model performance independently of whether you actually placed the bet.</span>'
-        '</div>'
-        '<div class="gloss-row">'
-        '  <span class="gloss-term">User Placed</span>'
-        '  <span class="gloss-def">A bet you manually confirmed as placed on your sportsbook. '
-        'Tracks your actual betting performance and bankroll.</span>'
-        '</div>'
-        '<div class="gloss-row">'
-        '  <span class="gloss-term">Won / Lost</span>'
-        '  <span class="gloss-def">Resolved outcomes. Won = P&amp;L is stake \u00D7 (odds \u2212 1). '
-        'Lost = P&amp;L is \u2212stake.</span>'
-        '</div>'
-        '<div class="gloss-row">'
-        '  <span class="gloss-term">Pending</span>'
-        '  <span class="gloss-def">Match hasn\'t finished yet — result is not known.</span>'
-        '</div>'
-        '</div>',
+        glossary_sections_html("Performance Tracker"),
         unsafe_allow_html=True,
     )

@@ -198,7 +198,7 @@ _PURE_FUNCS = {
     "_pct", "_qual_chip_html", "_standings_table_html", "_scenario_row_html",
     "_scenarios_table_html", "_model_cell_html", "_delta_html",
     "_model_compare_table_html", "_price_td", "_clv_td", "_movement_table_html",
-    "_lineup_card_html", "_glossary_html", "_book_cell_html", "_market_table_html",
+    "_lineup_card_html", "_book_cell_html", "_market_table_html",
 }
 
 
@@ -244,7 +244,9 @@ def test_view_helpers_render_every_section_from_real_data(seeded):
     bra = next(t for t in sig["teams"] if t["team"] == "Brazil")
     card = ns["_lineup_card_html"](bra)
     assert "Brazil" in card and "Formation" in card
-    glossary = ns["_glossary_html"]()
+    # Glossary now renders from the shared Help Center source (HC-06).
+    from src.delivery.help_content import glossary_sections_html
+    glossary = glossary_sections_html("WC Deep Dive")
     for term in ("CLV", "De-vig", "Scoreline matrix", "Bayesian"):
         assert term in glossary
 

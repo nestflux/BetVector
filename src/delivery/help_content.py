@@ -29,6 +29,8 @@ are authored fresh here.
 
 from __future__ import annotations
 
+from html import escape
+
 # ---------------------------------------------------------------------------
 # Start here — a two-minute orientation (structured so the doc export and the
 # page can both render it; plain text, emphasis comes from the layout).
@@ -218,8 +220,8 @@ GLOSSARY_GROUPS = [
              "recent goals per 90 minutes. Used to split a team's expected goals across "
              "its XI."),
             ("Anytime scorer %", "The model's estimate that a player scores at least "
-             "once: P = 1 − e^(−λ), where his λ is his goal-share of the team's expected "
-             "goals. It is the model's own ranking, not a market line."),
+             "once: P = 1 − e^(−λ), where his λ is his goal-share of the team's adjusted "
+             "expected goals. It is the model's own ranking, not a market line."),
             ("Penalty taker", "The team's designated penalty taker. His spot-kicks are "
              "already counted in his goals per 90, so the flag just marks who takes them "
              "— it does not add an extra bump (that would double-count)."),
@@ -764,3 +766,414 @@ def filter_glossary(query: str) -> list:
         if hits:
             out.append({"group": grp["group"], "blurb": grp["blurb"], "terms": hits})
     return out
+
+
+# ---------------------------------------------------------------------------
+# Per-page glossaries (HC-06) — the five dashboard pages that used to carry their
+# own inline glossaries (Today's Picks, Performance Tracker, Bankroll Manager,
+# Match Deep Dive, WC Deep Dive) now read their DEFINITIONS from here, so every
+# shared term is written exactly once and the page glossaries can never drift from
+# the master above. Each page keeps its own term selection, section layout and
+# display labels (behaviour-preserving); only the definition text is centralised.
+#
+# ``GLOSSARY_BY_TERM`` is the single lookup (term -> definition) built from the
+# master groups. In the page specs, ``_T["Master term"]`` pulls a shared definition;
+# rows that are page-only presentation (raw stats, UI labels, confidence tiers,
+# traffic-light states) keep a local definition string because they appear on one
+# page only and so cannot drift. A row is ``(label, definition)`` or
+# ``(label, definition, colour_hex)`` — the optional colour tints the term label
+# (used for the HIGH/MEDIUM/LOW tiers and the OK/APPROACHING/TRIGGERED states).
+# ---------------------------------------------------------------------------
+
+GLOSSARY_BY_TERM = {term: defn for grp in GLOSSARY_GROUPS for (term, defn) in grp["terms"]}
+
+
+def glossary_def(term: str) -> str:
+    """The single authoritative definition for a master glossary term. Raises
+    ``KeyError`` if the term isn't in the master glossary — so a typo in a page spec
+    fails loudly at import (and in the tests) rather than rendering a blank row."""
+    return GLOSSARY_BY_TERM[term]
+
+
+_T = GLOSSARY_BY_TERM  # local alias for the page specs below
+
+# Design-system colours for tinted term labels (kept here so the page specs are
+# self-contained; the view supplies the rest of the chrome).
+_GL_GREEN = "#3FB950"
+_GL_YELLOW = "#D29922"
+_GL_RED = "#F85149"
+_GL_MUTED = "#8B949E"
+
+PAGE_GLOSSARIES = {
+    # --- Today's Picks (picks.py) ------------------------------------------------
+    "Today's Picks": [
+        ("The Pick Card", [
+            ("Value Bet", _T["Value bet"]),
+            ("Market", _T["Market"]),
+            ("Selection", _T["Selection"]),
+        ]),
+        ("Key Numbers", [
+            ("Model Prob", "The model's estimated probability of this outcome actually "
+             "happening, based on team form, xG, venue, and other features. E.g. 62% means "
+             "the model thinks this happens roughly 6 times out of 10."),
+            ("Odds", _T["Odds (decimal)"]),
+            ("Edge", _T["Edge"]),
+            ("Suggested Stake", _T["Suggested stake"]),
+        ]),
+        ("Confidence Levels", [
+            ("HIGH", "Large edge with strong model certainty. These are the bets the model "
+             "is most confident about.", _GL_GREEN),
+            ("MEDIUM", "Moderate edge. Worth considering but less conviction than "
+             "high-confidence picks.", _GL_YELLOW),
+            ("LOW", "Marginal edge. The model sees slight value but the signal is weaker. "
+             "Proceed with caution.", _GL_MUTED),
+        ]),
+        ("Context Badges", [
+            ("🌧️ Weather", "Appears when match-day conditions are extreme (heavy rain, "
+             "strong wind, snow). Bad weather typically reduces goal-scoring and favours "
+             "defensive teams."),
+            ("Squad Value", _T["Squad value"]),
+        ]),
+        ("Summary Metrics (Top of Page)", [
+            ("Value Bets", "Total number of value bets found above your edge threshold. "
+             "More isn't always better — quality matters."),
+            ("Avg Edge", "The average edge across all picks shown. Higher average edge "
+             "means the model sees stronger overall opportunities today."),
+            ("High Confidence", "How many of today's picks the model is most certain about. "
+             "These are your best bets to focus on."),
+        ]),
+        ("Filters & Controls", [
+            ("Date Range", "Slide forward to see future matchday picks, or backward to "
+             "review recent picks and their results. Defaults to today ± 3 days."),
+            ("Edge Threshold", _T["Edge threshold"]),
+            ("Best Bookmaker", "Each pick shows the bookmaker offering the highest edge. "
+             "Different bookmakers price the same outcome differently."),
+            ("Alt. Bookmakers", "How many additional bookmakers also offer value for this "
+             "selection. Shown as \"X other bookmakers also offer value\" on each card."),
+        ]),
+    ],
+    # --- Performance Tracker (performance.py) ------------------------------------
+    "Performance Tracker": [
+        ("Key Metrics", [
+            ("Total P&L", _T["P&L (Profit and Loss)"]),
+            ("ROI %", _T["ROI (Return on Investment)"]),
+            ("Win Rate", _T["Win rate"]),
+            ("Total Staked", _T["Total staked"]),
+        ]),
+        ("Charts", [
+            ("Cumulative P&L", _T["Cumulative P&L"]),
+            ("Monthly P&L", _T["Monthly P&L"]),
+        ]),
+        ("Market Types", [
+            ("Match Result", _T["1X2 (Match Result)"]),
+            ("O/U 1.5 / 2.5", "Over/Under goals markets. O/U 1.5 = will there be 2+ goals? "
+             "O/U 2.5 = will there be 3+ goals?"),
+            ("BTTS", _T["BTTS (Both Teams to Score)"]),
+        ]),
+        ("Bet Types & Outcomes", [
+            ("System Pick", "A bet automatically logged by the model when it finds value. "
+             "Tracks model performance independently of whether you actually placed the bet."),
+            ("User Placed", "A bet you manually confirmed as placed on your sportsbook. "
+             "Tracks your actual betting performance and bankroll."),
+            ("Won / Lost", "Resolved outcomes. Won = P&L is stake × (odds − 1). "
+             "Lost = P&L is −stake."),
+            ("Pending", "Match hasn't finished yet — result is not known."),
+        ]),
+    ],
+    # --- Bankroll Manager (bankroll.py) ------------------------------------------
+    "Bankroll Manager": [
+        ("Bankroll Basics", [
+            ("Current Bankroll", _T["Current bankroll"]),
+            ("Starting Bankroll", _T["Starting bankroll"]),
+            ("Peak Bankroll", _T["Peak bankroll"]),
+            ("Drawdown", _T["Drawdown"]),
+        ]),
+        ("Staking Methods", [
+            ("Flat Staking", _T["Flat staking"]),
+            ("Percentage Staking", _T["Percentage staking"]),
+            ("Kelly Criterion", _T["Kelly Criterion"]),
+            ("Stake %", _T["Stake %"]),
+        ]),
+        ("Safety Limits", [
+            ("Daily Loss Limit", "Maximum amount you can lose in one day before the system "
+             "stops suggesting bets. Prevents catastrophic single-day losses."),
+            ("Drawdown Alert", "Warning triggered when your bankroll falls a certain "
+             "percentage below its peak. A signal to review strategy or reduce stakes."),
+            ("Minimum Bankroll", "The floor below which all betting stops. If your bankroll "
+             "drops to this level, the system pauses until you add funds or reassess your "
+             "strategy."),
+            ("OK", "Safety limit is not close to being triggered. Normal operation.", _GL_GREEN),
+            ("APPROACHING", "Safety limit is within range. Consider reducing stakes or "
+             "pausing.", _GL_YELLOW),
+            ("TRIGGERED", "Safety limit has been reached. Betting is paused until the "
+             "condition clears.", _GL_RED),
+        ]),
+        ("Bet History", [
+            ("Market Codes", _T["Market codes"]),
+            ("P&L", _T["P&L (per bet)"]),
+            ("Monthly ROI", _T["ROI (Return on Investment)"]),
+        ]),
+    ],
+    # --- Match Deep Dive (match_detail.py) ---------------------------------------
+    "Match Deep Dive": [
+        ("Form & Performance", [
+            ("Form (5 / 10)", "Points per game (PPG) over the last 5 or 10 matches. "
+             "3.0 = won every game, 0.0 = lost every game. A gap of 0.5+ PPG is significant."),
+            ("Goals Scored", "Average goals scored per match in the rolling window. "
+             "Higher = more attacking output."),
+            ("Goals Conceded", "Average goals allowed per match. Lower = better defensive "
+             "record."),
+            ("Rest Days", "Days since the team's last competitive match. A gap of 2+ days "
+             "between teams gives the rested side an edge."),
+        ]),
+        ("Expected Goals (xG)", [
+            ("xG", _T["xG (Expected Goals)"]),
+            ("xGA", _T["xGA (Expected Goals Against)"]),
+            ("NPxG", _T["NPxG (Non-Penalty xG)"]),
+            ("NPxGA", _T["NPxGA (Non-Penalty xGA)"]),
+            ("NPxG Diff", _T["NPxG Diff"]),
+        ]),
+        ("Pressing & Penetration", [
+            ("PPDA", _T["PPDA"]),
+            ("PPDA Allowed", "The reverse: how many passes this team makes before the "
+             "opponent wins it back. Reflects how much pressing this team faces."),
+            ("Deep Comps", _T["Deep completions"]),
+            ("Deep Allowed", "How many deep completions the opponent achieves against this "
+             "team. Lower = better at keeping opponents away from the box."),
+        ]),
+        ("Model & Predictions", [
+            ("Poisson Model", _T["Poisson model"]),
+            ("Lambda (λ)", _T["Lambda (λ)"]),
+            ("Scoreline Matrix", _T["Scoreline matrix"]),
+        ]),
+        ("Market Probabilities", [
+            ("Model-Generated", "All probabilities in this section come from the BetVector "
+             "Poisson model, NOT from bookmaker odds. The model predicts each scoreline "
+             "independently and derives all market probabilities (1X2, O/U, BTTS) from the "
+             "7×7 scoreline matrix. Compare these to bookmaker implied probabilities in the "
+             "Value Bets section below."),
+            ("1X2", _T["1X2 (Match Result)"]),
+            ("Over / Under 1.5", _T["Over / Under 1.5"]),
+            ("Over / Under 2.5", _T["Over / Under 2.5"]),
+            ("BTTS", _T["BTTS (Both Teams to Score)"]),
+            ("Asian Handicap", _T["Asian handicap"]),
+        ]),
+        ("Value Betting", [
+            ("Value Bet", _T["Value bet"]),
+            ("Edge", _T["Edge"]),
+            ("Implied Probability", _T["Implied probability"]),
+            ("Model vs Implied", "Shows the model's probability alongside the bookmaker's "
+             "implied probability. The gap between them is the edge."),
+            ("Confidence", _T["Confidence"]),
+            ("Bookmaker Toggle", "Switch between FanDuel odds (default), the highest-edge "
+             "bookmaker, or expand all bookmakers. Different bookmakers price the same "
+             "outcome differently — the toggle lets you compare."),
+            ("Other Bookmakers", "How many additional bookmakers also offer value for this "
+             "selection. More bookmakers = more confidence the value is real."),
+            ("Overround", _T["Overround (vig / margin)"]),
+            ("Expected Value (EV)", _T["Expected value (EV)"]),
+        ]),
+        ("Squad & Context", [
+            ("Squad Value", _T["Squad value"]),
+            ("H2H Record", "Head-to-Head — historical results between these two teams. Some "
+             "teams consistently struggle against specific opponents regardless of form."),
+            ("Venue Form", "A team's record specifically at home or away, which can differ "
+             "significantly from their overall form. Some teams are \"fortress\" at home but "
+             "weak on the road."),
+            ("Weather Impact", "Heavy rain, strong wind, or snow can reduce passing accuracy "
+             "and goal-scoring. The model flags these as contextual factors when conditions "
+             "are extreme."),
+        ]),
+        ("Analysis Icons", [
+            ("▲ Green", "Factor supports the model's prediction (e.g. strong form for the "
+             "favoured team).", _GL_GREEN),
+            ("▼ Red", "Factor works against the prediction (e.g. poor away form for the team "
+             "expected to win).", _GL_RED),
+            ("— Grey", "Neutral context — worth knowing but doesn't clearly favour either "
+             "side (e.g. even H2H record).", _GL_MUTED),
+        ]),
+    ],
+    # --- WC Deep Dive (wc_deep_dive.py) ------------------------------------------
+    # One untitled section (the deep dive renders a flat list). Every term maps to a
+    # master entry — these were authored straight into the master glossary.
+    "WC Deep Dive": [
+        (None, [
+            ("Scoreline matrix", _T["Scoreline matrix"]),
+            ("De-vig", _T["De-vig"]),
+            ("Edge", _T["Edge"]),
+            ("Line movement", _T["Line movement"]),
+            ("CLV", _T["CLV (Closing-Line Value)"]),
+            ("Rotation flag", _T["Rotation flag"]),
+            ("Qualification status", _T["Qualification status"]),
+            ("Bayesian (shadow)", _T["Bayesian (shadow)"]),
+            ("Adjusted xG", _T["Adjusted xG"]),
+            ("Goal-share", _T["Goal-share"]),
+            ("Anytime scorer %", _T["Anytime scorer %"]),
+            ("Penalty taker", _T["Penalty taker"]),
+            ("Booking risk", _T["Booking risk"]),
+            ("Star absence", _T["Star absence"]),
+        ]),
+    ],
+}
+
+PAGE_GLOSSARY_KEYS = list(PAGE_GLOSSARIES)
+
+
+def glossary_sections_html(page_key: str) -> str:
+    """Escaped HTML body (``.gloss-section`` / ``.gloss-title`` / ``.gloss-row``) for a
+    page's glossary, built from ``PAGE_GLOSSARIES``. No ``<style>`` and no Streamlit —
+    the view supplies the expander and the CSS chrome, so this stays pure and unit-
+    testable. Every dynamic string (term, definition, section title) is HTML-escaped;
+    the only un-escaped value is the colour hex, which comes from the fixed module
+    constants above. Returns ``""`` for an unknown page key."""
+    sections = PAGE_GLOSSARIES.get(page_key, [])
+    out = []
+    for title, rows in sections:
+        parts = ['<div class="gloss-section">']
+        if title:
+            parts.append(f'<div class="gloss-title">{escape(title)}</div>')
+        for row in rows:
+            term, defn = row[0], row[1]
+            colour = row[2] if len(row) > 2 else None
+            style = f' style="color: {colour};"' if colour else ""
+            parts.append(
+                f'<div class="gloss-row">'
+                f'<span class="gloss-term"{style}>{escape(term)}</span>'
+                f'<span class="gloss-def">{escape(defn)}</span>'
+                f'</div>'
+            )
+        parts.append("</div>")
+        out.append("".join(parts))
+    return "".join(out)
+
+
+# ---------------------------------------------------------------------------
+# Downloadable manual (HC-06) — render the whole Help Center to a single document
+# from the same content constants, so the download can never drift from the in-app
+# page. ``build_manual_markdown`` is the primary export (universal, opens anywhere);
+# ``build_manual_html`` is a print-friendly variant the browser can save as a PDF.
+# Both are pure string builders — no new dependency, no I/O.
+# ---------------------------------------------------------------------------
+
+_MANUAL_INTRO = (
+    "Your in-app guide to reading the dashboard, the betting concepts behind it, and "
+    "every term it shows. Generated from the Help Center, so it always matches the app."
+)
+
+
+def build_manual_markdown() -> str:
+    """The full manual as one Markdown string: Start here, the screen tour, Betting 101,
+    the FAQ, and the master glossary — assembled from the same constants the in-app Help
+    page renders. Deterministic (no timestamp) so it's easy to unit-test."""
+    out = ["# BetVector — User Manual", "", f"_{_MANUAL_INTRO}_", ""]
+
+    out += ["## Start here", "", START_HERE_INTRO, "", "### Your daily loop", ""]
+    for i, (label, text) in enumerate(DAILY_LOOP, 1):
+        out.append(f"{i}. **{label}** — {text}")
+    out += ["", "### Good to know", ""]
+    for title, text in GOOD_TO_KNOW:
+        out.append(f"- **{title}** — {text}")
+    out.append("")
+
+    out += ["## Screen tour", ""]
+    for card in TOUR:
+        out += [f"### {card['icon']} {card['page']}", "", card["what"], "",
+                "**Look at first**", ""]
+        out += [f"- {item}" for item in card["first"]]
+        out.append("")
+        if card["decode"]:
+            out += ["**Badges & colours**", ""]
+            out += [f"- **{label}** — {meaning}" for label, meaning in card["decode"]]
+            out.append("")
+
+    out += ["## Betting 101", ""]
+    for c in CONCEPTS:
+        out += [f"### {c['title']}", "", c["body"], "", f"> **Example.** {c['example']}", ""]
+
+    out += ["## FAQ", ""]
+    for question, answer in FAQ:
+        out += [f"**{question}**", "", answer, ""]
+
+    out += ["## Glossary", ""]
+    for grp in GLOSSARY_GROUPS:
+        out += [f"### {grp['group']}", "", f"_{grp['blurb']}_", ""]
+        out += [f"- **{term}** — {defn}" for term, defn in grp["terms"]]
+        out.append("")
+
+    return "\n".join(out).rstrip() + "\n"
+
+
+def build_manual_html() -> str:
+    """The full manual as a self-contained, print-friendly HTML document (light theme,
+    a small print stylesheet) — the browser's Print → Save as PDF turns it into a PDF
+    with no extra dependency. Same content as ``build_manual_markdown``; every dynamic
+    string is HTML-escaped."""
+    def esc(value) -> str:
+        return escape(str(value))
+
+    out = [
+        "<!DOCTYPE html>",
+        '<html lang="en"><head><meta charset="utf-8">',
+        "<title>BetVector — User Manual</title>",
+        "<style>",
+        "body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif;"
+        "max-width:820px;margin:40px auto;padding:0 22px;color:#1b1f24;line-height:1.55;}",
+        "h1{font-size:28px;margin-bottom:4px;}",
+        "h2{margin-top:34px;border-bottom:2px solid #d0d7de;padding-bottom:5px;}",
+        "h3{margin-top:24px;margin-bottom:6px;}",
+        ".blurb{color:#57606a;font-style:italic;}",
+        ".example{background:#f3faf4;border-left:3px solid #2da44e;padding:8px 12px;"
+        "margin:8px 0 14px;}",
+        "dl{margin:6px 0 14px;} dt{font-weight:700;color:#1b1f24;}",
+        "dd{margin:0 0 8px 0;color:#3a4149;}",
+        "ul{margin:6px 0 14px;}",
+        "@media print{body{margin:0;max-width:none;}}",
+        "</style></head><body>",
+        f"<h1>BetVector — User Manual</h1>",
+        f'<p class="blurb">{esc(_MANUAL_INTRO)}</p>',
+    ]
+
+    out.append("<h2>Start here</h2>")
+    out.append(f"<p>{esc(START_HERE_INTRO)}</p>")
+    out.append("<h3>Your daily loop</h3><ol>")
+    out += [f"<li><strong>{esc(label)}</strong> — {esc(text)}</li>"
+            for label, text in DAILY_LOOP]
+    out.append("</ol>")
+    out.append("<h3>Good to know</h3><ul>")
+    out += [f"<li><strong>{esc(title)}</strong> — {esc(text)}</li>"
+            for title, text in GOOD_TO_KNOW]
+    out.append("</ul>")
+
+    out.append("<h2>Screen tour</h2>")
+    for card in TOUR:
+        out.append(f"<h3>{esc(card['icon'])} {esc(card['page'])}</h3>")
+        out.append(f"<p>{esc(card['what'])}</p>")
+        out.append("<p><strong>Look at first</strong></p><ul>")
+        out += [f"<li>{esc(item)}</li>" for item in card["first"]]
+        out.append("</ul>")
+        if card["decode"]:
+            out.append("<p><strong>Badges &amp; colours</strong></p><dl>")
+            for label, meaning in card["decode"]:
+                out.append(f"<dt>{esc(label)}</dt><dd>{esc(meaning)}</dd>")
+            out.append("</dl>")
+
+    out.append("<h2>Betting 101</h2>")
+    for c in CONCEPTS:
+        out.append(f"<h3>{esc(c['title'])}</h3>")
+        out.append(f"<p>{esc(c['body'])}</p>")
+        out.append(f'<div class="example"><strong>Example.</strong> {esc(c["example"])}</div>')
+
+    out.append("<h2>FAQ</h2>")
+    for question, answer in FAQ:
+        out.append(f"<p><strong>{esc(question)}</strong><br>{esc(answer)}</p>")
+
+    out.append("<h2>Glossary</h2>")
+    for grp in GLOSSARY_GROUPS:
+        out.append(f"<h3>{esc(grp['group'])}</h3>")
+        out.append(f'<p class="blurb">{esc(grp["blurb"])}</p><dl>')
+        for term, defn in grp["terms"]:
+            out.append(f"<dt>{esc(term)}</dt><dd>{esc(defn)}</dd>")
+        out.append("</dl>")
+
+    out.append("</body></html>")
+    return "".join(out)

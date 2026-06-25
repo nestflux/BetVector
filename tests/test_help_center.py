@@ -410,3 +410,152 @@ def test_view_escapes_hostile_term_and_definition():
     )
     assert "<img src=x" not in html and "<script>" not in html
     assert "&lt;img" in html and "&lt;script&gt;" in html
+
+
+# ---------------------------------------------------------------------------
+# 4. HC-06 — per-page glossaries (single source) + downloadable manual
+# ---------------------------------------------------------------------------
+
+_ALLOWED_GLOSS_COLOURS = {"#3FB950", "#D29922", "#F85149", "#8B949E"}
+
+# (view file, the PAGE_GLOSSARIES key it now renders from)
+_MIGRATED_VIEWS = [
+    ("picks.py", "Today's Picks"),
+    ("performance.py", "Performance Tracker"),
+    ("bankroll.py", "Bankroll Manager"),
+    ("match_detail.py", "Match Deep Dive"),
+    ("wc_deep_dive.py", "WC Deep Dive"),
+]
+
+
+def _page_rows(page_key):
+    """Flat list of every row across a page's glossary sections."""
+    return [row for _title, rows in help_content.PAGE_GLOSSARIES[page_key] for row in rows]
+
+
+def _page_def(page_key, label):
+    """The definition rendered for a given term label on a page (or None)."""
+    for term, defn, *_rest in _page_rows(page_key):
+        if term == label:
+            return defn
+    return None
+
+
+def test_glossary_by_term_covers_every_master_term():
+    # The lookup is exactly the master glossary, keyed by term — nothing added, nothing lost.
+    assert len(help_content.GLOSSARY_BY_TERM) == term_count()
+    for term, defn in all_terms():
+        assert help_content.GLOSSARY_BY_TERM[term] == defn
+    # glossary_def() is the same lookup and raises on an unknown term (so page typos fail).
+    assert help_content.glossary_def("Edge") == help_content.GLOSSARY_BY_TERM["Edge"]
+    try:
+        help_content.glossary_def("not-a-real-term")
+        assert False, "glossary_def should KeyError on an unknown term"
+    except KeyError:
+        pass
+
+
+def test_page_glossaries_are_well_formed():
+    assert set(help_content.PAGE_GLOSSARY_KEYS) == {k for _f, k in _MIGRATED_VIEWS}
+    for key in help_content.PAGE_GLOSSARY_KEYS:
+        sections = help_content.PAGE_GLOSSARIES[key]
+        assert sections, f"{key}: no sections"
+        for title, rows in sections:
+            assert title is None or (isinstance(title, str) and title.strip())
+            assert rows, f"{key}: empty section {title!r}"
+            for row in rows:
+                assert len(row) in (2, 3), f"{key}: bad row {row!r}"
+                label, defn = row[0], row[1]
+                assert label.strip() and len(defn) > 15, f"{key}: thin row {label!r}"
+                if len(row) == 3:
+                    assert row[2] in _ALLOWED_GLOSS_COLOURS, f"{key}: bad colour {row[2]}"
+
+
+def test_page_glossaries_pull_shared_definitions_from_the_master():
+    # Shared betting concepts are written once: the page row reuses the master definition
+    # verbatim (this is what stops the page glossaries drifting from the Help page).
+    cases = [
+        ("Today's Picks", "Edge", "Edge"),
+        ("Today's Picks", "Odds", "Odds (decimal)"),
+        ("Performance Tracker", "Total P&L", "P&L (Profit and Loss)"),
+        ("Bankroll Manager", "Drawdown", "Drawdown"),
+        ("Bankroll Manager", "Flat Staking", "Flat staking"),
+        ("Match Deep Dive", "xG", "xG (Expected Goals)"),
+        ("Match Deep Dive", "Confidence", "Confidence"),
+        ("WC Deep Dive", "CLV", "CLV (Closing-Line Value)"),
+    ]
+    for page_key, label, master_term in cases:
+        assert _page_def(page_key, label) == help_content.GLOSSARY_BY_TERM[master_term], (
+            f"{page_key}:{label} should reuse the master '{master_term}' definition")
+
+
+def test_migration_propagates_the_hc04_fixes_to_the_page_glossaries():
+    # HC-04 corrected the master source; migrating must carry those fixes onto the pages.
+    bank = help_content.glossary_sections_html("Bankroll Manager")
+    assert "25%" in bank and "30%" not in bank          # drawdown alert is 25%, not 30%
+    flat = _page_def("Bankroll Manager", "Flat Staking")
+    assert "current-bankroll" in flat                   # flat reads CURRENT bankroll …
+    assert "starting bankroll" not in flat.lower()      # … not the starting bankroll
+
+
+def test_glossary_sections_html_renders_escaped_for_every_page():
+    for _file, key in _MIGRATED_VIEWS:
+        html = help_content.glossary_sections_html(key)
+        assert html and html.count('class="gloss-row"') == len(_page_rows(key))
+    # Unknown page → empty (graceful), never an error.
+    assert help_content.glossary_sections_html("Nope") == ""
+    # Ampersands in labels/titles are HTML-escaped (no raw, unescaped markup).
+    picks = help_content.glossary_sections_html("Today's Picks")
+    assert "Filters &amp; Controls" in picks and "Filters & Controls" not in picks
+    perf = help_content.glossary_sections_html("Performance Tracker")
+    assert "Total P&amp;L" in perf
+    # Tinted tier labels carry an inline colour from the allowed design tokens.
+    assert 'style="color: #3FB950;"' in picks            # HIGH confidence is green
+
+
+def test_build_manual_markdown_has_every_section_and_no_html():
+    md = help_content.build_manual_markdown()
+    for heading in ("# BetVector — User Manual", "## Start here", "## Screen tour",
+                    "## Betting 101", "## FAQ", "## Glossary"):
+        assert heading in md, f"missing heading: {heading}"
+    assert "### 🎯 Today's Picks" in md                  # a tour card
+    assert "**Value bet**" in md                          # a glossary term
+    assert "> **Example.**" in md                         # a Betting 101 worked example
+    assert FAQ[0][0] in md                                # a verbatim FAQ question
+    assert DAILY_LOOP[0][0] in md                         # a daily-loop step label
+    # It is Markdown, not HTML — no view markup leaks into the document.
+    for leak in ("<span", "</div>", "unsafe_allow_html", "<script", "&amp;"):
+        assert leak not in md, f"HTML leaked into the manual: {leak}"
+
+
+def test_build_manual_markdown_is_complete():
+    # Every master glossary term appears in the downloadable manual.
+    md = help_content.build_manual_markdown()
+    for term, _defn in all_terms():
+        assert f"**{term}**" in md, f"manual missing glossary term: {term}"
+
+
+def test_build_manual_html_is_an_escaped_document():
+    html = help_content.build_manual_html()
+    assert html.startswith("<!DOCTYPE html>") and html.rstrip().endswith("</body></html>")
+    assert "<h1>BetVector — User Manual</h1>" in html and "<h2>Glossary</h2>" in html
+    assert "Performance &amp; bankroll" in html          # group name escaped in the HTML
+    assert "<dt>Value bet</dt>" in html                  # a glossary term as a definition
+    for leak in ("unsafe_allow_html", "<script"):
+        assert leak not in html
+
+
+def test_every_migrated_view_renders_from_the_shared_source():
+    views_dir = Path(__file__).resolve().parents[1] / "src" / "delivery" / "views"
+    for file_name, key in _MIGRATED_VIEWS:
+        src = (views_dir / file_name).read_text()
+        assert "from src.delivery.help_content import glossary_sections_html" in src, file_name
+        assert f'glossary_sections_html("{key}")' in src, file_name
+        # the old inline definitions are gone (no duplicate term source on the page)
+        assert 'gloss-title">The Pick Card' not in src
+        assert 'gloss-title">Bankroll Basics' not in src
+        assert 'gloss-title">Form &amp; Performance' not in src
+    # the specific HC-04 wrong wording no longer lives in the bankroll view source
+    bank_src = (views_dir / "bankroll.py").read_text()
+    assert "above 30% triggers" not in bank_src
+    assert "starting bankroll, regardless" not in bank_src

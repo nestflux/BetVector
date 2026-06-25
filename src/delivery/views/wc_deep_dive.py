@@ -59,6 +59,7 @@ from src.world_cup.research import (
     build_model_comparison, build_movement, build_player_watch, build_scorer_board,
 )
 from src.world_cup.timeutil import format_kickoff_et
+from src.delivery.help_content import glossary_sections_html
 
 # Design system (CLAUDE.md Rule 5) — defined locally; the WC hub page runs main()
 # at import, so we never import tokens from it.
@@ -1074,69 +1075,26 @@ def _render_model_compare(match_id: int) -> None:
 # Short, plain-English definitions for the deep-dive terms (the owner is learning,
 # MP §12). Built by a pure helper so it stays testable.
 
-_GLOSSARY = [
-    ("Scoreline matrix", "The model's 7×7 grid of P(home goals, away goals). Every "
-     "market probability on this page is derived from it."),
-    ("De-vig", "Stripping the bookmaker's margin (the “overround”) from their odds so "
-     "their implied probabilities sum to 100% — a fair comparison against the model."),
-    ("Edge", "Model probability minus the de-vigged market probability. Positive means "
-     "the model rates a selection higher than the market does."),
-    ("Line movement", "How a price changes over time. We hold a few real snapshots "
-     "(open → entry → current → close), not a tick-by-tick history."),
-    ("CLV", "Closing-Line Value — the entry price versus the closing price. Beating the "
-     "close (positive CLV) is the single best sign a bet was struck at value."),
-    ("Rotation flag", "Raised when a confirmed XI changes heavily from the team's last "
-     "one — a hypothesis to re-check, never a model input."),
-    ("Qualification status", "“Through”/“out” shows only when it's mathematically "
-     "certain (top 2). The 8-best-third-place race depends on other groups, so it "
-     "stays “in contention”."),
-    ("Bayesian (shadow)", "A second model run alongside the staked Poisson for "
-     "comparison only. It never places a bet; promotion to staking is a manual "
-     "decision."),
-    ("Adjusted xG", "A display-only what-if: the model's expected goals (λ) rescaled "
-     "by how the confirmed XI's attacking firepower compares to the team's last XI. "
-     "It never changes the model or a bet — the value finder still uses the model's "
-     "own xG."),
-    ("Goal-share", "A player's share of his team's attacking output, from his recent "
-     "goals-per-90. Used to split the expected goals across the XI and to weigh how "
-     "much a rotation moves the adjusted-xG what-if."),
-    ("Anytime scorer %", "The model's chance a player scores at least once: P = 1 − "
-     "e^(−λ), where his λ is his goal-share of the team's adjusted expected goals. "
-     "The model's own ranking — not a market line, not a bet."),
-    ("Penalty taker", "The team's designated penalty taker. His spot-kicks are already "
-     "counted in his goals-per-90, so the flag marks who takes them — it doesn't add "
-     "an extra bump (that would double-count)."),
-    ("Booking risk", "A starter whose recent club yellow-card rate is high (yellows per "
-     "90 minutes). A heads-up that he's card-prone — it's not a tournament caution "
-     "count, and never a model input."),
-    ("Star absence", "A high-value or high-scoring player who started the team's "
-     "previous XI but isn't in this one — rotated out or unavailable. Matchup context, "
-     "not a bet signal."),
-]
-
-
-def _glossary_html() -> str:
-    """Pure HTML for the deep-dive glossary (escaped term + definition rows),
-    styled to match the league deep dive's glossary (match_detail.py)."""
-    rows = "".join(
-        f'<div class="gloss-row"><span class="gloss-term">{escape(term)}</span>'
-        f'<span class="gloss-def">{escape(defn)}</span></div>'
-        for term, defn in _GLOSSARY
-    )
-    return (
-        '<style>'
-        '.gloss-row{display:flex;gap:8px;margin-bottom:8px;line-height:1.45;}'
-        '.gloss-term{font-family:"JetBrains Mono",monospace;font-size:12px;'
-        'font-weight:600;color:#E6EDF3;min-width:150px;flex-shrink:0;}'
-        '.gloss-def{font-family:Inter,sans-serif;font-size:12px;color:#8B949E;}'
-        '</style>'
-        f'<div class="gloss-section">{rows}</div>'
-    )
+# The deep-dive glossary reads its definitions from the shared Help Center source
+# (help_content.PAGE_GLOSSARIES["WC Deep Dive"]) so every term is written exactly
+# once (HC-06). The CSS chrome stays local; the escaped rows come from the shared
+# renderer (glossary_sections_html).
+_GLOSSARY_CSS = (
+    '<style>'
+    '.gloss-row{display:flex;gap:8px;margin-bottom:8px;line-height:1.45;}'
+    '.gloss-term{font-family:"JetBrains Mono",monospace;font-size:12px;'
+    'font-weight:600;color:#E6EDF3;min-width:150px;flex-shrink:0;}'
+    '.gloss-def{font-family:Inter,sans-serif;font-size:12px;color:#8B949E;}'
+    '</style>'
+)
 
 
 def _render_glossary() -> None:
     with st.expander("Glossary — deep-dive terms", expanded=False):
-        st.markdown(_glossary_html(), unsafe_allow_html=True)
+        st.markdown(
+            _GLOSSARY_CSS + glossary_sections_html("WC Deep Dive"),
+            unsafe_allow_html=True,
+        )
 
 
 # ============================================================================

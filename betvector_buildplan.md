@@ -9867,14 +9867,33 @@ value_finder/bankroll/base_model + config) · Gate 3 APPROVED (crash-safe: tab u
 division guards, no import cycle). Real PNG on owner Desktop. Only help_content.py +
 views/help.py + test changed.
 
-#### HC-06 — Downloadable doc export + migrate the 5 page glossaries to the shared source  ← NEXT
+#### HC-06 — Downloadable doc export + migrate the 5 page glossaries to the shared source  ✅ DONE (CLOSES THE EPIC)
 
-#### HC-06 — Downloadable doc export + migrate the 5 page glossaries to the shared source
-
-Generate a downloadable Markdown + print-friendly HTML manual from `help_content` (via
-`st.download_button`) so it never drifts; migrate the five page glossaries to read from
-the shared source (behaviour-preserving). Closes the epic → Rule 8 Tier-1 masterplan
-update (§13.x + version bump).
+Two parts, both reading the single source `help_content.py`. **(a) Downloadable manual:**
+new pure `build_manual_markdown()` renders START_HERE + TOUR + CONCEPTS + FAQ +
+GLOSSARY_GROUPS into one Markdown string, and `build_manual_html()` produces a
+self-contained, print-friendly (light-theme, escaped) HTML doc the browser can Print →
+Save as PDF — **no new dependency**. The Help view's Start-here tab gains two
+`st.download_button`s (`betvector_manual.md` / `.html`). **(b) Glossary migration:** new
+`GLOSSARY_BY_TERM` (the 69-term master lookup) + `PAGE_GLOSSARIES` (each page's sections
+and display labels; shared betting concepts pull their definition from the master via
+`_T[...]`, page-only stat/UI labels keep a local def) + a pure escaped
+`glossary_sections_html(page_key)` renderer. The five views (picks / performance /
+bankroll / match_detail / wc_deep_dive) each drop their inline-HTML glossary for one
+`glossary_sections_html("<page>")` call (keeping their own CSS + expander) — **net −634
+lines**, behaviour-preserving (same terms, sections, labels), and the HC-04 corrections
+(drawdown **25%** not 30%, flat staking off the **current** bankroll) now propagate to the
+page glossaries from the master source. Importing `help_content` `KeyError`s on any
+mistyped master term — a built-in single-source guard. **Read-only / $0:** only
+`help_content.py` + the 6 view files + 3 tests changed; `value_finder.py` ×2 and
+`predictor.py` byte-for-byte unchanged. 11 new tests (lookup == master, behaviour
+preservation, the propagated HC-04 fixes, renderer escaping, both doc builders +
+completeness, source-level wiring for all 5 views); **1017/1017**. Gate 1 PASS · Gate 2
+CLEAN (every migrated definition re-verified vs code/config — one minor precision fix:
+"Anytime scorer %" now reads "adjusted expected goals" to match the scorer-board λ) ·
+Gate 3 APPROVED (escaping + single-source + import-cycle-free verified). Real PNGs on
+owner Desktop (the print-friendly manual + a migrated Bankroll glossary showing the 25% /
+current-bankroll fixes). **→ HC EPIC COMPLETE (6/6); masterplan §13.16 + version 1.6 → 1.7.**
 
 ### HC Critical Path
 

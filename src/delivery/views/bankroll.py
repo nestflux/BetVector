@@ -32,6 +32,7 @@ from src.auth import get_session_user_id
 from src.database.db import get_session
 from src.database.models import BetLog, Match, User
 from src.delivery.views._badge_helper import render_badge_only
+from src.delivery.help_content import glossary_sections_html
 
 
 # ============================================================================
@@ -824,125 +825,7 @@ with st.expander("Glossary — What do these terms mean?", expanded=False):
         unsafe_allow_html=True,
     )
 
-    # --- Bankroll Basics ---
     st.markdown(
-        '<div class="gloss-section">'
-        '<div class="gloss-title">Bankroll Basics</div>'
-        '<div class="gloss-row">'
-        '  <span class="gloss-term">Current Bankroll</span>'
-        '  <span class="gloss-def">Your total betting capital right now — starting amount '
-        'plus all profits, minus all losses. This is the money available for future bets.</span>'
-        '</div>'
-        '<div class="gloss-row">'
-        '  <span class="gloss-term">Starting Bankroll</span>'
-        '  <span class="gloss-def">The initial capital you allocated to betting. '
-        'Shown as a reference line on the bankroll chart.</span>'
-        '</div>'
-        '<div class="gloss-row">'
-        '  <span class="gloss-term">Peak Bankroll</span>'
-        '  <span class="gloss-def">The highest your bankroll has ever reached. '
-        'Used to calculate drawdown (how far you\'ve fallen from the peak).</span>'
-        '</div>'
-        '<div class="gloss-row">'
-        '  <span class="gloss-term">Drawdown</span>'
-        '  <span class="gloss-def">The percentage decline from your peak bankroll to current level. '
-        'E.g. peak was $1,100, now $990 = 10% drawdown. '
-        'Drawdowns of 10\u201320% are normal; above 30% triggers a safety alert.</span>'
-        '</div>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-    # --- Staking Methods ---
-    st.markdown(
-        '<div class="gloss-section">'
-        '<div class="gloss-title">Staking Methods</div>'
-        '<div class="gloss-row">'
-        '  <span class="gloss-term">Flat Staking</span>'
-        '  <span class="gloss-def">Bet a fixed percentage of your starting bankroll on every bet, '
-        'regardless of current bankroll. Simple and conservative. '
-        'E.g. 2% of $1,000 = $20 per bet, always.</span>'
-        '</div>'
-        '<div class="gloss-row">'
-        '  <span class="gloss-term">Percentage Staking</span>'
-        '  <span class="gloss-def">Bet a fixed percentage of your current bankroll. '
-        'Stakes grow when winning and shrink when losing — '
-        'automatic bankroll protection.</span>'
-        '</div>'
-        '<div class="gloss-row">'
-        '  <span class="gloss-term">Kelly Criterion</span>'
-        '  <span class="gloss-def">A mathematical formula that sizes bets proportional to edge '
-        'and odds. Maximises long-term growth but can be volatile. '
-        'BetVector uses "fractional Kelly" (e.g. quarter-Kelly) for safety.</span>'
-        '</div>'
-        '<div class="gloss-row">'
-        '  <span class="gloss-term">Stake %</span>'
-        '  <span class="gloss-def">The percentage of your bankroll wagered per bet. '
-        'Lower = more conservative. Professional bettors typically use 1\u20133%.</span>'
-        '</div>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-    # --- Safety Limits ---
-    st.markdown(
-        '<div class="gloss-section">'
-        '<div class="gloss-title">Safety Limits</div>'
-        '<div class="gloss-row">'
-        '  <span class="gloss-term">Daily Loss Limit</span>'
-        '  <span class="gloss-def">Maximum amount you can lose in one day before the system '
-        'stops suggesting bets. Prevents catastrophic single-day losses.</span>'
-        '</div>'
-        '<div class="gloss-row">'
-        '  <span class="gloss-term">Drawdown Alert</span>'
-        '  <span class="gloss-def">Warning triggered when your bankroll falls a certain '
-        'percentage below its peak. A signal to review strategy or reduce stakes.</span>'
-        '</div>'
-        '<div class="gloss-row">'
-        '  <span class="gloss-term">Minimum Bankroll</span>'
-        '  <span class="gloss-def">The floor below which all betting stops. '
-        'If your bankroll drops to this level, the system pauses until you add funds '
-        'or reassess your strategy.</span>'
-        '</div>'
-        '<div class="gloss-row">'
-        '  <span class="gloss-term" style="color: #3FB950;">OK</span>'
-        '  <span class="gloss-def">Safety limit is not close to being triggered. '
-        'Normal operation.</span>'
-        '</div>'
-        '<div class="gloss-row">'
-        '  <span class="gloss-term" style="color: #D29922;">APPROACHING</span>'
-        '  <span class="gloss-def">Safety limit is within range. '
-        'Consider reducing stakes or pausing.</span>'
-        '</div>'
-        '<div class="gloss-row">'
-        '  <span class="gloss-term" style="color: #F85149;">TRIGGERED</span>'
-        '  <span class="gloss-def">Safety limit has been reached. '
-        'Betting is paused until the condition clears.</span>'
-        '</div>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-    # --- Bet History ---
-    st.markdown(
-        '<div class="gloss-section">'
-        '<div class="gloss-title">Bet History</div>'
-        '<div class="gloss-row">'
-        '  <span class="gloss-term">Market Codes</span>'
-        '  <span class="gloss-def">1X2 = Match Result, OU15 = O/U 1.5 Goals, '
-        'OU25 = O/U 2.5 Goals, BTTS = Both Teams to Score.</span>'
-        '</div>'
-        '<div class="gloss-row">'
-        '  <span class="gloss-term">P&amp;L</span>'
-        '  <span class="gloss-def">Profit/Loss for a single bet. '
-        'Won: stake \u00D7 (odds \u2212 1). Lost: \u2212stake. '
-        'E.g. $20 at 2.50 odds: Won = +$30, Lost = \u2212$20.</span>'
-        '</div>'
-        '<div class="gloss-row">'
-        '  <span class="gloss-term">Monthly ROI</span>'
-        '  <span class="gloss-def">Return on Investment for that calendar month. '
-        'Profit divided by total staked in the month, as a percentage.</span>'
-        '</div>'
-        '</div>',
+        glossary_sections_html("Bankroll Manager"),
         unsafe_allow_html=True,
     )
