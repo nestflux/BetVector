@@ -36,6 +36,12 @@
       "runtimeExecutable": "bash",
       "runtimeArgs": ["-c", "DASHBOARD_PASSWORD='' exec venv/bin/streamlit run src/delivery/dashboard.py --server.port 8506 --server.headless true --server.runOnSave false"],
       "port": 8506
+    },
+    {
+      "name": "wc_preview",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "set -a; . ./.env; set +a; DASHBOARD_PASSWORD='' exec venv/bin/streamlit run src/delivery/dashboard.py --server.port 8507 --server.headless true --server.runOnSave false"],
+      "port": 8507
     }
   ]
 }

@@ -1337,23 +1337,203 @@ def _render_projected_bracket_html(matchups: list[dict], probs: dict) -> None:
 
 
 # ============================================================================
+# Section 8 — Results (completed matches + model scorecard)  [Results tab]
+# ============================================================================
+# What happened, most recent first, with the model's ✓/✗ on every game it had a
+# pre-match call for. Pure helpers below (outcome / pick / row HTML) are escaped and
+# Streamlit-free so they can be unit-tested; _render_results does the DB read + chrome.
+
+_OUTCOME_WORD = {"H": "home win", "D": "draw", "A": "away win"}
+
+
+def _result_outcome(home_goals, away_goals):
+    """Final-score 1X2 outcome: 'H' home win, 'A' away win, 'D' draw (None if unscored)."""
+    if home_goals is None or away_goals is None:
+        return None
+    if home_goals > away_goals:
+        return "H"
+    if away_goals > home_goals:
+        return "A"
+    return "D"
+
+
+def _model_pick(pred):
+    """The side the model rated most likely pre-match (argmax of its 1X2 probs), as
+    'H'/'D'/'A'. None when there's no stored prediction — e.g. matches that finished
+    before the model was running (the backfilled 11-19 Jun history)."""
+    if pred is None:
+        return None
+    probs = {
+        "H": pred.home_win_prob or 0.0,
+        "D": pred.draw_prob or 0.0,
+        "A": pred.away_win_prob or 0.0,
+    }
+    return max(probs, key=probs.get)
+
+
+def _pick_conf(pred, pick):
+    """The model's probability for the outcome it favoured (None when no call)."""
+    if pred is None or pick is None:
+        return None
+    return {"H": pred.home_win_prob, "D": pred.draw_prob, "A": pred.away_win_prob}.get(pick)
+
+
+def _short_date(iso):
+    """'2026-06-19' → '19 Jun' for a compact row label; passthrough on bad input."""
+    try:
+        return datetime.strptime((iso or "")[:10], "%Y-%m-%d").strftime("%d %b")
+    except (ValueError, TypeError):
+        return iso or ""
+
+
+def _result_row_html(date_label, home_name, away_name, home_flag, away_flag,
+                     home_goals, away_goals, model_pick, model_conf):
+    """One completed-match row: date · teams + score (winner emboldened) · the model's
+    ✓/✗, the outcome it favoured, and its confidence in that call. We show the
+    favoured-OUTCOME probability (not the modal scoreline, which for Poisson is often a
+    draw even when a win is likeliest — that pairing reads as contradictory). All
+    dynamic text escaped; flags are trusted markup."""
+    actual = _result_outcome(home_goals, away_goals)
+    home_weight = "700" if actual == "H" else "400"
+    away_weight = "700" if actual == "A" else "400"
+    if actual is None:
+        score = "—"
+    else:
+        score = f'{int(home_goals)}<span style="color:{TEXT_DIM};">–</span>{int(away_goals)}'
+
+    if model_pick is None:
+        chip = f'<span style="color:{TEXT_DIM};font-size:0.72rem;">no model call</span>'
+    else:
+        correct = model_pick == actual
+        colour = GREEN if correct else RED
+        glyph = "✓" if correct else "✗"
+        called = _OUTCOME_WORD.get(model_pick, "?")
+        conf = f' · {model_conf:.0%}' if model_conf is not None else ""
+        chip = (
+            f'<span style="color:{colour};font-weight:700;">Model {glyph}</span> '
+            f'<span style="color:{TEXT_DIM};font-size:0.72rem;">called {escape(called)}{conf}</span>'
+        )
+
+    return (
+        f'<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;'
+        f'padding:6px 10px;margin-bottom:2px;background:transparent;'
+        f'border-left:3px solid {BORDER};border-radius:4px;font-size:0.85rem;">'
+        f'<span style="color:{TEXT_DIM};min-width:64px;font-size:0.72rem;">{escape(date_label)}</span>'
+        f'<span style="flex:1;min-width:200px;">{home_flag} '
+        f'<span style="font-weight:{home_weight};">{escape(home_name)}</span> '
+        f'<span style="color:{TEXT};font-weight:700;margin:0 4px;">{score}</span> '
+        f'<span style="font-weight:{away_weight};">{escape(away_name)}</span> {away_flag}</span>'
+        f'<span style="flex:1;min-width:170px;text-align:right;">{chip}</span>'
+        f'</div>'
+    )
+
+
+def _render_results() -> None:
+    """Completed matches, most recent first, with a ✓/✗ on every game the model
+    called and a mini hit-rate scorecard. A group filter narrows the list; a picker
+    opens any match's full deep dive. Read-only (no model/value/pipeline writes)."""
+    _section_header("Results")
+
+    with get_session() as session:
+        matches = session.execute(
+            select(WCMatch)
+            .options(
+                joinedload(WCMatch.home_team),
+                joinedload(WCMatch.away_team),
+                joinedload(WCMatch.predictions),
+            )
+            .where(WCMatch.status == "finished")
+            .order_by(WCMatch.date.desc(), WCMatch.kickoff_time.desc())
+        ).unique().scalars().all()
+
+        if not matches:
+            st.info("No completed World Cup matches yet — results appear here as games finish.")
+            return
+
+        # One pass: collect render data + the model hit-rate over CALLED games.
+        rows, groups_present = [], set()
+        called = correct = 0
+        for m in matches:
+            if m.group_letter:
+                groups_present.add(m.group_letter)
+            pred = next((p for p in m.predictions if p.model_name == MODEL_NAME), None)
+            pick = _model_pick(pred)
+            actual = _result_outcome(m.home_goals, m.away_goals)
+            if pick is not None and actual is not None:
+                called += 1
+                correct += int(pick == actual)
+            rows.append((m, pred, pick))
+
+        opts = ["All groups"] + [f"Group {g}" for g in sorted(groups_present)]
+        choice = st.selectbox("Filter by group", opts, key="wc_results_group",
+                              label_visibility="collapsed")
+        sel_group = None if choice == "All groups" else choice.split()[-1]
+
+        hit = f"{correct}/{called} ({correct / called:.0%})" if called else "—"
+        st.caption(
+            f"{len(matches)} matches played · model called {hit} correct where it had a "
+            "pre-match read (earlier backfilled games have no model call) · dates ET · newest first"
+        )
+
+        label_to_id = {}
+        shown = 0
+        for m, pred, pick in rows:
+            if sel_group and m.group_letter != sel_group:
+                continue
+            shown += 1
+            home, away = m.home_team, m.away_team
+            home_name = home.name if home else "?"
+            away_name = away.name if away else "?"
+            home_flag = render_flag(home.fifa_code) if home else ""
+            away_flag = render_flag(away.fifa_code) if away else ""
+            st.markdown(
+                _result_row_html(
+                    _short_date(m.date), home_name, away_name, home_flag, away_flag,
+                    m.home_goals, m.away_goals, pick, _pick_conf(pred, pick)),
+                unsafe_allow_html=True,
+            )
+            label_to_id[f"{home_name} {m.home_goals}–{m.away_goals} {away_name} · "
+                        f"{_short_date(m.date)}"] = m.id
+
+        if sel_group and shown == 0:
+            st.info("No completed matches in this group yet.")
+            return
+
+        # Drill-down without a button per row: pick a match, open its deep dive.
+        st.markdown(
+            f'<div style="color:{TEXT_DIM};font-size:0.78rem;margin-top:0.5rem;">'
+            'Open a match for the full breakdown (heatmap, model vs books, line movement, '
+            'lineups):</div>', unsafe_allow_html=True)
+        sel = st.selectbox("Match", ["—"] + list(label_to_id), key="wc_results_dd_sel",
+                           label_visibility="collapsed")
+        if st.button("🔍 Open full deep dive", key="wc_results_dd_btn",
+                     disabled=(sel == "—"), use_container_width=True):
+            st.session_state["wc_deep_dive_match_id"] = label_to_id[sel]
+            st.switch_page("views/wc_deep_dive.py")
+
+
+# ============================================================================
 # Page Entry Point
 # ============================================================================
 
 def main() -> None:
     _render_header()
 
-    # Four tabs replace the former single 6,500px scroll. The actionable
-    # content (fixtures + value bets) is the default landing tab; reference
-    # material is one click away, not a long scroll down (WC-08-03).
-    tab_bets, tab_groups, tab_ko, tab_model = st.tabs(
-        ["📋 Today & Bets", "📊 Groups", "🏆 Knockouts", "📈 Model"]
+    # Tabs replace the former single 6,500px scroll. The actionable content
+    # (fixtures + value bets) is the default landing tab; "Results" is the
+    # completed-match history beside it; reference material is one click away,
+    # not a long scroll down (WC-08-03; Results tab added 2026-06-25).
+    tab_bets, tab_results, tab_groups, tab_ko, tab_model = st.tabs(
+        ["📋 Today & Bets", "✅ Results", "📊 Groups", "🏆 Knockouts", "📈 Model"]
     )
 
     with tab_bets:
         _render_todays_matches()
         _render_value_bets()
         _render_research_card()
+
+    with tab_results:
+        _render_results()
 
     with tab_groups:
         # Collapsed by default so the tab opens compact — expand what you need.
