@@ -9806,13 +9806,26 @@ coverage + empty-decode omission + hostile-field escaping). 994/994. Gate 1 PASS
 2 CLEAN (after the six fixes) · Gate 3 APPROVED. Real PNG on owner Desktop. Only
 help_content.py + views/help.py + test changed (dashboard/other views untouched).
 
-#### HC-03 — FAQ + on-page “How to read this page” deep-links  ← NEXT
+#### HC-03 — FAQ + on-page “How to read this page” deep-links  ✅ DONE
 
-An FAQ tab, plus an additive “❓ How to read this page” affordance on every main page
-that deep-links into the relevant Help section (session-state + `switch_page`; no page
-logic change).
+`FAQ` (8 Q&A) + `tour_for_page()` in `help_content.py`; a "❓ FAQ" tab + a deep-link
+**focus panel** in `views/help.py` (pops `help_focus_page` from session-state and
+surfaces that page's tour card on top). The per-page link is wired CENTRALLY in
+`dashboard.py` — `render_help_link(nav.title)` after `st.navigation()` shows a small
+"❓ Page guide" button on any page with a tour card (sets `help_focus_page` +
+`st.switch_page("views/help.py")`) — so all 11 pages get the link without editing a
+single view. Gate 2 caught a **real factual error**: the help system (FAQ #4 **and**
+the HC-01 glossary "Edge" entry) claimed picks flag against a **de-vigged** price, but
+the value finder flags on the **raw** implied probability (`value_finder.py`:
+`implied = 1/odds` "INCLUDES the margin (vig)", `edge = model − implied`). De-vig is a
+deep-dive DISPLAY refinement only — corrected the FAQ, the Edge glossary entry, and the
+authoring docstring. 5 new tests (FAQ integrity + `tour_for_page` mapping + FAQ AST/
+escaping + source-level deep-link wiring for dashboard + help). 999/999. Gate 1 PASS ·
+Gate 2 CLEAN (after the de-vig fixes) · Gate 3 APPROVED (the hot-path `dashboard` edit
+reviewed: additive, guarded, title↔TOUR map exact). Real PNG on owner Desktop. Only
+help_content.py + views/help.py + dashboard.py (one call) + test changed — no other view.
 
-#### HC-04 — Betting 101 concept cards (worked examples)
+#### HC-04 — Betting 101 concept cards (worked examples)  ← NEXT
 
 Plain-English lessons with worked examples (odds ↔ implied probability, value/edge,
 de-vig, CLV, bankroll & staking, Poisson + reading the scoreline heatmap,

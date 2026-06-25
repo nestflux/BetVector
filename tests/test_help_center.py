@@ -21,6 +21,7 @@ from pathlib import Path
 from src.delivery import help_content
 from src.delivery.help_content import (
     DAILY_LOOP,
+    FAQ,
     GLOSSARY_GROUPS,
     GOOD_TO_KNOW,
     START_HERE_INTRO,
@@ -28,6 +29,7 @@ from src.delivery.help_content import (
     all_terms,
     filter_glossary,
     term_count,
+    tour_for_page,
 )
 
 HELP_VIEW = (
@@ -79,11 +81,13 @@ def test_squad_value_reconciles_the_threshold_drift():
     assert "1.5" in sv and "2" in sv
 
 
-def test_edge_definition_kept_the_devig_precision():
-    """Drift resolution: Edge adopts the de-vigged-probability wording (the most
-    correct of the three page versions), not the looser 'implied probability' one."""
-    edge = next(d for (t, d) in all_terms() if t == "Edge")
-    assert "de-vig" in edge.lower()
+def test_edge_definition_matches_how_the_value_finder_flags():
+    """The value finder flags on the RAW implied probability (1 ÷ odds, vig included);
+    de-vig is only a deep-dive display refinement. The glossary must describe edge that
+    way — not claim it's computed against a de-vigged price (the HC-03 correction)."""
+    edge = next(d for (t, d) in all_terms() if t == "Edge").lower()
+    assert "implied probability" in edge and "1 ÷" in edge   # raw 1/odds basis
+    assert "de-vig" in edge                                   # noted as the deep-dive refinement
 
 
 def test_start_here_orientation_is_present():
@@ -115,6 +119,28 @@ def test_tour_decode_explains_the_key_badges():
     labels = " ".join(lbl for e in TOUR for (lbl, _) in e.get("decode", [])).lower()
     for token in ("ring", "verdict", "model badge", "pending", "trust"):
         assert token in labels, f"tour decoder never mentions “{token}”"
+
+
+def test_tour_for_page_maps_real_pages_and_blanks_the_rest():
+    assert tour_for_page("Fixtures")["page"] == "Fixtures"
+    assert tour_for_page("WC Deep Dive")["icon"]
+    # pages with no tour card (the Help page itself, owner-only Admin) → None
+    for none_page in ("Help", "Admin", "", "Nonsense"):
+        assert tour_for_page(none_page) is None
+
+
+# ---------------------------------------------------------------------------
+# 1c. FAQ (HC-03)
+# ---------------------------------------------------------------------------
+
+def test_faq_is_well_formed():
+    assert len(FAQ) >= 5
+    for q, a in FAQ:
+        assert q.strip().endswith("?")
+        assert len(a) >= 30
+    blob = " ".join(q + " " + a for q, a in FAQ).lower()
+    for topic in ("system pick", "edge", "no odds", "shadow"):
+        assert topic in blob, f"FAQ never covers “{topic}”"
 
 
 # ---------------------------------------------------------------------------
@@ -162,7 +188,7 @@ def test_filter_preserves_group_shape():
 # ---------------------------------------------------------------------------
 
 _PURE_FUNCS = {"_help_css", "_start_here_html", "_glossary_group_html", "_glossary_html",
-               "_tour_card_html", "_tour_html"}
+               "_tour_card_html", "_tour_html", "_faq_html"}
 
 
 def _view_namespace():
@@ -245,6 +271,34 @@ def test_view_tour_escapes_hostile_fields():
     )
     assert "<script>" not in card and "<img src=x" not in card and "<b>P" not in card
     assert "&lt;script&gt;" in card and "&lt;img" in card
+
+
+def test_view_renders_faq_and_escapes():
+    ns = _view_namespace()
+    html = ns["_faq_html"](FAQ)
+    assert "System Pick" in html and "?" in html        # a real Q/A rendered
+    hostile = ns["_faq_html"]([("<script>q</script>", "<img src=x onerror=1>")])
+    assert "<script>" not in hostile and "<img src=x" not in hostile
+    assert "&lt;script&gt;" in hostile and "&lt;img" in hostile
+
+
+# ---------------------------------------------------------------------------
+# 3b. deep-link wiring (HC-03) — verified at source level (no Streamlit import)
+# ---------------------------------------------------------------------------
+
+def test_help_view_consumes_focus_and_has_faq_tab():
+    src = HELP_VIEW.read_text()
+    assert 'st.session_state.pop("help_focus_page"' in src   # focus consumed (and cleared)
+    assert "tour_for_page(" in src                            # focus → that page's card
+    assert "❓ FAQ" in src and "_faq_html(FAQ)" in src
+
+
+def test_dashboard_wires_per_page_help_link():
+    dash = (Path(__file__).resolve().parents[1] / "src" / "delivery" / "dashboard.py").read_text()
+    assert "def render_help_link(" in dash
+    assert 'st.session_state["help_focus_page"]' in dash      # link sets the focus
+    assert 'st.switch_page("views/help.py")' in dash          # … and jumps to Help
+    assert "render_help_link(" in dash                        # actually called in main()
 
 
 def test_view_escapes_hostile_term_and_definition():

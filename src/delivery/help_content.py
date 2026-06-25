@@ -13,8 +13,11 @@ every surface reads one definition and nothing drifts:
 The glossary below consolidates the five page-level glossaries that existed
 before the Help Center. Where the same term was defined differently across pages
 (drift), the clearest/most-correct wording was chosen and the conflict resolved:
-  * **Edge** — adopt the "de-vigged market probability" precision (the most
-    technically correct), kept the plain "+8%" example.
+  * **Edge** — defined against the bookmaker's RAW implied probability (1 ÷ odds),
+    which is exactly what the value finder flags on (value_finder.py: implied =
+    1/odds, edge = model − implied). De-vig is a deep-dive DISPLAY refinement only,
+    not the flagging basis — an earlier draft wrongly said edge used the de-vigged
+    price (corrected in HC-03). Kept the plain "+8%" example.
   * **BTTS** — "score at least one goal" (one consistent verb).
   * **Confidence** — all three tiers (HIGH / MEDIUM / LOW); match_detail had
     dropped MEDIUM.
@@ -84,10 +87,12 @@ GLOSSARY_GROUPS = [
              "than the bookmaker's price implies — the price looks too generous, and "
              "that gap is the opportunity. Backing value consistently is how the model "
              "aims to profit over time."),
-            ("Edge", "The model's probability minus the de-vigged (margin-removed) "
-             "market probability. A positive edge means the model rates the selection "
-             "higher than the market does, so the bet looks underpriced. E.g. +8% is an "
-             "8 percentage-point advantage over the bookmaker's fair price."),
+            ("Edge", "The model's probability minus the bookmaker's implied probability "
+             "(1 ÷ the odds). A positive edge means the model rates the selection higher "
+             "than the price implies, so the bet looks underpriced — e.g. +8% is an "
+             "8 percentage-point advantage over the bookmaker's price. (On the deep dive "
+             "the prices are also de-vigged for a fair side-by-side comparison; the value "
+             "finder itself flags on the raw price.)"),
             ("Edge threshold", "The minimum edge a pick needs before it is shown. A "
              "higher threshold means fewer but stronger picks; adjust it to match your "
              "risk appetite (Settings, or the slider on Fixtures)."),
@@ -495,8 +500,62 @@ TOUR = [
 
 
 # ---------------------------------------------------------------------------
+# FAQ (HC-03) — the common "why is this happening?" questions, in plain English.
+# Each entry: (question, answer). Kept short; deep concepts live in Betting 101 (HC-04).
+# ---------------------------------------------------------------------------
+
+FAQ = [
+    ("Why does a fixture say “No odds” or “No pred”?",
+     "Odds and predictions are produced by separate pipeline steps. “No odds” means no "
+     "bookmaker price has been pulled for that match yet; “No pred” means the model "
+     "hasn't scored it yet (often because a feature it needs, like recent form, isn't "
+     "in place). Both fill in as the daily pipeline runs."),
+    ("What's the difference between a System Pick and one of my bets?",
+     "A System Pick is logged automatically whenever the model finds value — it tracks "
+     "how the model itself would do, independently of you. A bet you add on My Bets is "
+     "a User Placed bet — it tracks your actual results and moves your bankroll."),
+    ("Why did the model's number change since I last looked?",
+     "Predictions refresh as new data lands — updated prices, team news, and results "
+     "from other matches. The model re-runs each pipeline cycle, so a probability or "
+     "edge can shift right up to kickoff."),
+    ("Where do the picks actually come from?",
+     "For each match the model builds a 7×7 grid of likely scorelines (the scoreline "
+     "matrix), derives every market probability from it, and flags any selection whose "
+     "model probability beats the bookmaker's implied price (1 ÷ the odds) by more than "
+     "your edge threshold. (On the deep dive it also de-vigs the prices for a fair "
+     "side-by-side comparison.)"),
+    ("Why did a bet with a positive edge still lose?",
+     "Edge is a long-run advantage, not a guarantee. A +8% edge means you'd expect to "
+     "profit over many bets like it — any single one can still lose. Variance is "
+     "normal; judge the model over hundreds of bets, not one. (More in Betting 101.)"),
+    ("Why are some leagues marked 🟢 / 🟡 / 🔴?",
+     "Those are trust tiers — how proven a league's edge is on out-of-sample data. "
+     "🟢 proven leagues get full stakes, 🟡 promising ones are tracked at standard "
+     "size, and 🔴 unproven ones are kept small until they earn trust."),
+    ("Is the World Cup model the same as the league model?",
+     "No — it's a separate model with its own data, and it runs in shadow: it shows "
+     "you its view (and a Bayesian comparison) but never places a bet. Promoting it to "
+     "real staking is a manual decision."),
+    ("Do I have to bet what the model says?",
+     "No. BetVector is decision-support — it surfaces where the value is and the "
+     "reasoning behind it. You decide what, if anything, to back, and you log it "
+     "yourself."),
+]
+
+
+# ---------------------------------------------------------------------------
 # Pure helpers (no Streamlit) — used by the view, the tests, and (later) the export.
 # ---------------------------------------------------------------------------
+
+_TOUR_BY_PAGE = {entry["page"]: entry for entry in TOUR}
+
+
+def tour_for_page(page: str):
+    """The tour entry for a page title (as registered in dashboard.get_pages), or
+    ``None`` when that page has no tour card (the Help page itself, Admin, onboarding).
+    Lets the per-page “How to read this page” link know whether to show, and the Help
+    page surface a focused card. Pure — no Streamlit."""
+    return _TOUR_BY_PAGE.get(page)
 
 def all_terms() -> list:
     """Flat ``[(term, definition), ...]`` across every group, in order. Used by the

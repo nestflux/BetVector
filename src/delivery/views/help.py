@@ -27,11 +27,13 @@ import streamlit as st
 
 from src.delivery.help_content import (
     DAILY_LOOP,
+    FAQ,
     GOOD_TO_KNOW,
     START_HERE_INTRO,
     TOUR,
     filter_glossary,
     term_count,
+    tour_for_page,
 )
 
 
@@ -86,6 +88,13 @@ def _help_css() -> str:
         ".tour-first{margin:0;padding-left:18px;}"
         ".tour-first li{font-family:Inter,sans-serif;font-size:13px;color:#E6EDF3;"
         "line-height:1.5;margin-bottom:4px;}"
+        ".faq-item{border-bottom:1px solid #21262D;padding:12px 0;}"
+        ".faq-q{font-family:Inter,sans-serif;font-size:14px;font-weight:600;"
+        "color:#E6EDF3;margin-bottom:4px;}"
+        ".faq-a{font-family:Inter,sans-serif;font-size:13px;color:#8B949E;"
+        "line-height:1.55;}"
+        ".help-focus-head{font-family:Inter,sans-serif;font-size:12px;font-weight:700;"
+        "color:#3FB950;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;}"
         "</style>"
     )
 
@@ -157,6 +166,15 @@ def _tour_html(tour: list) -> str:
     return "".join(_tour_card_html(e) for e in tour)
 
 
+def _faq_html(faq: list) -> str:
+    """The FAQ as escaped question/answer rows."""
+    return "".join(
+        f'<div class="faq-item"><div class="faq-q">{escape(str(q))}</div>'
+        f'<div class="faq-a">{escape(str(a))}</div></div>'
+        for q, a in faq
+    )
+
+
 def _glossary_html(groups: list) -> str:
     """The full (possibly filtered) glossary, or a friendly empty state when a search
     matches nothing."""
@@ -181,10 +199,24 @@ st.markdown(
     unsafe_allow_html=True,
 )
 st.markdown(_help_css(), unsafe_allow_html=True)
+
+# Deep-link focus (HC-03): a page's "How to read this page" link drops you here with
+# that page's tour card surfaced at the top. Pop it so it clears on the next action.
+_focus = st.session_state.pop("help_focus_page", None)
+_focus_card = tour_for_page(_focus) if _focus else None
+if _focus_card:
+    st.markdown('<div class="help-focus-head">How to read this page</div>',
+                unsafe_allow_html=True)
+    st.markdown(_tour_card_html(_focus_card), unsafe_allow_html=True)
+    st.caption(
+        "That's the quick guide for the page you came from. The full tour, FAQ and "
+        "glossary are in the tabs below."
+    )
+
 st.divider()
 
-_tab_start, _tab_tour, _tab_gloss = st.tabs(
-    ["📖 Start here", "🗺️ Screen tour", "🔤 Glossary"]
+_tab_start, _tab_tour, _tab_faq, _tab_gloss = st.tabs(
+    ["📖 Start here", "🗺️ Screen tour", "❓ FAQ", "🔤 Glossary"]
 )
 
 with _tab_start:
@@ -200,6 +232,10 @@ with _tab_tour:
         "every colour and badge means."
     )
     st.markdown(_tour_html(TOUR), unsafe_allow_html=True)
+
+with _tab_faq:
+    st.caption("Quick answers to the questions that come up most.")
+    st.markdown(_faq_html(FAQ), unsafe_allow_html=True)
 
 with _tab_gloss:
     _query = st.text_input(

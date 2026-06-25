@@ -114,6 +114,29 @@ def render_page_logo(width: int = 200) -> None:
     )
 
 
+def render_help_link(page_title: str) -> None:
+    """HC-03: a small right-aligned "How to read this page" link at the top of every
+    page that has a tour card. Clicking it stores the page in session state and jumps
+    to the Help page, which surfaces that page's tour card. Additive and read-only —
+    it has no effect on the page's own content, and pages with no tour card (the Help
+    page itself, Admin) render nothing.
+    """
+    from src.delivery.help_content import tour_for_page
+
+    if tour_for_page(page_title) is None:
+        return
+    _, _right = st.columns([6, 1.4])
+    with _right:
+        if st.button(
+            "❓ Page guide",
+            key=f"help_link_{page_title}",
+            help="How to read this page — opens the manual",
+            use_container_width=True,
+        ):
+            st.session_state["help_focus_page"] = page_title
+            st.switch_page("views/help.py")
+
+
 # ============================================================================
 # Page Config — must be first Streamlit call
 # ============================================================================
@@ -799,6 +822,9 @@ def main() -> None:
     # Set up navigation
     pages = get_pages()
     nav = st.navigation(pages)
+    # HC-03: a per-page "How to read this page" deep-link into the Help center,
+    # shown above the page content for any page that has a tour card.
+    render_help_link(getattr(nav, "title", ""))
     nav.run()
 
 

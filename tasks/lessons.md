@@ -1,3 +1,7 @@
 # BetVector — Lessons Learned
 # Format: [date] | what went wrong | rule to follow next time
 # Read at session start. Auto-promoted to gates after 3 occurrences.
+
+[2026-06-24] | HC-02 screen-tour: 6 of 11 cards described a badge/colour/control the page doesn't render (WC "trust mark" was really qualification dots; Match Deep Dive had no "★ best price"; Today's Picks showed no "✅/❌ + P&L"). | When authoring any text that describes the UI (a manual, tooltip, glossary, caption), cross-check EACH badge/colour/control claim against the real view file before shipping. For documentation issues, Gate 2 faithfulness is the load-bearing gate — open the views and grep for the actual marker, never assume from memory.
+
+[2026-06-24] | HC-03/HC-01: the help FAQ AND the glossary "Edge" entry said value picks are flagged against a DE-VIGGED price, but value_finder.py flags on the RAW implied prob (implied=1/odds, vig included; edge=model−implied). De-vig is only a deep-dive DISPLAY refinement. The HC-01 glossary audit had picked the "de-vigged" wording for being "technically cleanest" without checking what the value finder actually does. | When documenting a core mechanic (how edge/picks/stakes are computed), verify against the ACTUAL code path that does it (value_finder.py / predictor.py), not just internal doc consistency or which wording sounds most correct. "Cleanest concept" ≠ "what the code does".
