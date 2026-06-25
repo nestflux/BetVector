@@ -641,15 +641,6 @@ def get_pages() -> list:
             title="Model Health",
             icon="🔬",
         ),
-        # DH-03: Data Health — a read-only check that the data is landing where it
-        # should (source freshness, fixture coverage, standings-fill / stale stubs,
-        # last pipeline run). Sits next to Model Health: that watches the model's
-        # accuracy, this watches the data plumbing feeding it.
-        st.Page(
-            "views/data_health.py",
-            title="Data Health",
-            icon="🩺",
-        ),
         st.Page(
             "views/bankroll.py",
             title="Bankroll Manager",
@@ -692,9 +683,19 @@ def get_pages() -> list:
         pages.remove(wc_page)
         pages.insert(0, wc_page)
 
-    # E34-05: Admin page — owners only.  Not rendered for viewer role so
-    # the page never appears in the sidebar navigation.
+    # RBAC: owner-only operational pages — never added to the nav for viewers/testers,
+    # so they don't appear in the sidebar and can't be reached directly. Each page also
+    # enforces the role gate in-page (defence in depth).
     if get_session_user_role() == "owner":
+        # Data Health (🩺) is an ops/infra view (DB backend, API-key presence, pipeline
+        # internals) — owner-only. Insert it next to Model Health for logical grouping.
+        dh_page = st.Page("views/data_health.py", title="Data Health", icon="🩺")
+        try:
+            _mh_idx = next(i for i, p in enumerate(pages) if p.title == "Model Health")
+            pages.insert(_mh_idx + 1, dh_page)
+        except StopIteration:
+            pages.append(dh_page)
+        # E34-05: Admin page — owners only.
         pages.append(
             st.Page(
                 "views/admin.py",

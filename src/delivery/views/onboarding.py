@@ -20,7 +20,7 @@ from datetime import datetime
 
 import streamlit as st
 
-from src.auth import get_session_user_id
+from src.auth import get_session_user_id, get_session_user_role
 from src.database.db import get_session
 from src.database.models import League, User
 
@@ -306,11 +306,25 @@ def render_step_3_edge() -> None:
 
 
 def render_step_4_leagues() -> None:
-    """Step 4 — Leagues: checkboxes for available leagues."""
+    """Step 4 — Leagues. League activation is GLOBAL (it drives the shared data
+    pipeline), so only the owner edits it; testers simply follow the active leagues."""
     st.markdown(
         f'<div class="bv-section-header">Choose your leagues</div>',
         unsafe_allow_html=True,
     )
+
+    # RBAC: leagues are an owner/system setting. A tester can't change which leagues
+    # are active (that would affect everyone's pipeline) — they inherit the owner's set.
+    if get_session_user_role() != "owner":
+        st.markdown(
+            f'<p style="font-family: Inter, sans-serif; font-size: 14px; '
+            f'color: {COLOURS["text_secondary"]}; margin-bottom: 16px;">'
+            f'The leagues you follow are managed by your account owner — you\'ll '
+            f'automatically see picks for every active league. Nothing to set here.</p>',
+            unsafe_allow_html=True,
+        )
+        return
+
     st.markdown(
         f'<p style="font-family: Inter, sans-serif; font-size: 14px; '
         f'color: {COLOURS["text_secondary"]}; margin-bottom: 16px;">'
@@ -489,10 +503,12 @@ def render_onboarding() -> None:
                 # Save all settings to DB
                 save_onboarding_settings(user_data["id"], settings)
 
-                # Save league selections
-                league_selections = st.session_state.get("ob_leagues", {})
-                if league_selections:
-                    save_league_selections(league_selections)
+                # Save league selections — OWNER ONLY (league activation is global;
+                # a tester must never change which leagues the shared pipeline runs).
+                if get_session_user_role() == "owner":
+                    league_selections = st.session_state.get("ob_leagues", {})
+                    if league_selections:
+                        save_league_selections(league_selections)
 
                 # Mark onboarding complete
                 complete_onboarding(user_data["id"])

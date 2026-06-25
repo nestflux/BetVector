@@ -119,6 +119,14 @@ def _load_report() -> dict:
     return report_to_dict(run_health_checks())
 
 
+# RBAC: owner-only page. It's hidden from the nav for viewers (dashboard.get_pages);
+# this in-page gate is defence in depth in case the page is reached directly.
+from src.auth import get_session_user_role  # noqa: E402
+
+if get_session_user_role() != "owner":
+    st.error("🔒 Data Health is restricted to the account owner.")
+    st.stop()
+
 st.markdown('<div class="bv-page-title">🩺 Data Health</div>', unsafe_allow_html=True)
 st.caption(
     "A read-only check that the data is landing where it should — sources fresh, "
