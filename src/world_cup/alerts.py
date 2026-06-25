@@ -450,6 +450,54 @@ def _compute_day_number(target_date: str | None = None) -> int:
         return 1
 
 
+def _wc_notifiable_user_ids(session=None) -> list[int]:
+    """User ids opted in to the World Cup digest: active, with an email, and
+    ``notify_wc == 1``. The WC digest is opt-IN (``notify_wc`` defaults to 0),
+    unlike the league emails. ``session`` is injectable for testing."""
+    from src.database.db import get_session
+    from src.database.models import User
+
+    def _query(s) -> list[int]:
+        rows = (s.query(User.id)
+                .filter(User.is_active == 1, User.email.isnot(None),
+                        User.email != "", User.notify_wc == 1)
+                .all())
+        return [r[0] for r in rows]
+
+    if session is not None:
+        return _query(session)
+    with get_session() as s:
+        return _query(s)
+
+
+def send_wc_morning_email_to_all(target_date: str | None = None) -> int:
+    """Send the morning WC digest to every opted-in user (``notify_wc == 1``).
+    Per-user try/except so one failure never blocks the rest. Returns the number
+    sent. This is the entry point the WC pipeline calls."""
+    sent = 0
+    for uid in _wc_notifiable_user_ids():
+        try:
+            if send_wc_morning_email(uid, target_date):
+                sent += 1
+        except Exception:
+            logger.exception("WC morning email failed for user %d", uid)
+    logger.info("WC morning digest: sent to %d opted-in user(s)", sent)
+    return sent
+
+
+def send_wc_evening_email_to_all(target_date: str | None = None) -> int:
+    """Send the evening WC review to every opted-in user (``notify_wc == 1``)."""
+    sent = 0
+    for uid in _wc_notifiable_user_ids():
+        try:
+            if send_wc_evening_email(uid, target_date):
+                sent += 1
+        except Exception:
+            logger.exception("WC evening email failed for user %d", uid)
+    logger.info("WC evening digest: sent to %d opted-in user(s)", sent)
+    return sent
+
+
 def send_wc_morning_email(user_id: int = 1, target_date: str | None = None) -> bool:
     """Send morning WC email with predictions and value bets.
 

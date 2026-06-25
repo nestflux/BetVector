@@ -9987,3 +9987,22 @@ untouched). **→ DH EPIC COMPLETE (4/4); masterplan §13.x + version 1.7 → 1.
 ```
 DH-01 (engine + config)  →  DH-02 (CLI)  →  DH-03 (dashboard page)  →  DH-04 (pipeline alert + close)
 ```
+
+---
+
+## WC-EMAIL — Opt-in multi-user World Cup emails  ✅ DONE (June 2026)
+
+Owner-requested before onboarding testers. The league emails were already multi-user, but
+the World Cup digest was hardcoded to the owner (`send_wc_morning_email(user_id=1)`). Made it
+a per-user **opt-in**: new `User.notify_wc` column (`server_default="0"` — OFF by default,
+unlike the league `notify_*` flags) + a migration (`("users","notify_wc","INTEGER NOT NULL
+DEFAULT 0")`, applied to local SQLite **and** Neon; the owner starts at 0). `world_cup/alerts.py`
+gains `_wc_notifiable_user_ids()` (active + email set + `notify_wc=1`) and
+`send_wc_morning_email_to_all()` / `send_wc_evening_email_to_all()` (loop, per-user try/except,
+count real sends); the single-user senders are unchanged. The WC pipeline now calls the
+`_to_all` dispatchers. Settings gains a **real** "🏆 World Cup Digest" toggle (reads/persists
+`notify_wc` via `save_user_setting`; the existing morning/evening/weekly toggles remain
+pre-existing display-only placeholders). 8 tests; **1076/1076**. Gate 3 APPROVED (opt-in
+default verified, per-user isolation + `_step` double-guard, migration idempotent on both
+backends, value/predictor untouched). NOTE: the owner (user 1) is `notify_wc=0` and must
+toggle the digest ON in Settings to receive it.

@@ -344,6 +344,11 @@ def _apply_schema_migrations(engine: Engine) -> None:
         # Both nullable — older rows simply carry NULL until re-captured.
         ("wc_lineups", "full_name", "VARCHAR" if is_postgres else "TEXT"),
         ("wc_lineups", "espn_athlete_id", "VARCHAR" if is_postgres else "TEXT"),
+        # WC-EMAIL (June 2026): per-user opt-in for the World Cup digest. Default 0
+        # (off) so existing users — including the owner — start unsubscribed and opt
+        # in via Settings. INTEGER NOT NULL DEFAULT 0 is valid on both Postgres and
+        # SQLite (SQLite requires the DEFAULT when adding a NOT NULL column).
+        ("users", "notify_wc", "INTEGER NOT NULL DEFAULT 0"),
     ]
 
     with engine.begin() as conn:

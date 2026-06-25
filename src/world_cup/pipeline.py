@@ -209,9 +209,9 @@ def _run_morning() -> dict:
     from src.world_cup.dispatcher import write_fixture_cache
     results["fixture_cache"] = _step("Write Fixture Cache", write_fixture_cache)
 
-    # 8. Send morning email
-    from src.world_cup.alerts import send_wc_morning_email
-    results["email"] = _step("Send Morning Email", send_wc_morning_email)
+    # 8. Send morning email to every opted-in user (notify_wc=1; opt-in default off)
+    from src.world_cup.alerts import send_wc_morning_email_to_all
+    results["email"] = _step("Send Morning Email", send_wc_morning_email_to_all)
 
     return results
 
@@ -261,9 +261,9 @@ def _run_evening() -> dict:
     from src.world_cup.calibration import compute_model_accuracy
     results["accuracy"] = _step("Compute Model Accuracy", compute_model_accuracy)
 
-    # 5. Send evening email
-    from src.world_cup.alerts import send_wc_evening_email
-    results["email"] = _step("Send Evening Email", send_wc_evening_email)
+    # 5. Send evening email to every opted-in user (notify_wc=1; opt-in default off)
+    from src.world_cup.alerts import send_wc_evening_email_to_all
+    results["email"] = _step("Send Evening Email", send_wc_evening_email_to_all)
 
     return results
 

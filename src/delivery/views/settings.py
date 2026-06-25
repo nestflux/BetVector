@@ -98,6 +98,7 @@ def load_current_user(user_id: int = 1) -> Optional[Dict]:
             "kelly_fraction": user.kelly_fraction,
             "edge_threshold": user.edge_threshold,
             "is_active": user.is_active,
+            "notify_wc": user.notify_wc,
         }
 
 
@@ -638,6 +639,23 @@ else:
             key="notif_weekly",
             help="Weekly performance summary (sent Sunday 20:00 UTC).",
         )
+
+    # World Cup digest — a REAL, persisted opt-in (the three toggles above are
+    # display-only placeholders). Off by default; the WC pipeline emails only users
+    # who turn this on (notify_wc=1).
+    _wc_on = bool(user_data.get("notify_wc", 0))
+    wc_toggle = st.toggle(
+        "🏆 World Cup Digest",
+        value=_wc_on,
+        key="notif_wc",
+        help="Opt in to the daily World Cup email — today's predictions, value bets, "
+             "and how yesterday's matches went. Off by default.",
+    )
+    if wc_toggle != _wc_on:
+        if save_user_setting(user_data["id"], "notify_wc", 1 if wc_toggle else 0):
+            st.toast(
+                f"World Cup digest {'enabled' if wc_toggle else 'disabled'}",
+                icon="✅")
 
     st.markdown(
         f'<p style="font-family: Inter, sans-serif; font-size: 12px; '

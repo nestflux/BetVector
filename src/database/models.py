@@ -95,6 +95,11 @@ class User(Base):
     notify_morning = Column(Integer, nullable=False, server_default="1")
     notify_evening = Column(Integer, nullable=False, server_default="1")
     notify_weekly = Column(Integer, nullable=False, server_default="1")
+    # notify_wc: World Cup daily digest — opt-IN (default 0/off, unlike the league
+    # notifications above which default on). Users enable it via Settings; the WC
+    # pipeline emails only those who opted in. Added post-deployment, so it also has
+    # an entry in db._apply_schema_migrations for the live Neon schema.
+    notify_wc = Column(Integer, nullable=False, server_default="0")
     is_active = Column(Integer, nullable=False, server_default="1")
     created_at = Column(
         String, nullable=False, server_default=func.now(),
