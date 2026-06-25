@@ -188,6 +188,15 @@ def run_dispatcher(now: _dt.datetime | None = None,
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    # Load .env via python-dotenv BEFORE any DB access. The launchd runner does
+    # `set -a; source .env`, but the Neon URL contains an unquoted '&'
+    # (...&channel_binding=require), which bash treats as a background operator,
+    # so DATABASE_URL silently ends up UNSET and db.py falls back to local SQLite
+    # — a split-brain where captured lineups land in the backup, not Neon.
+    # python-dotenv parses '&' correctly. This loads env vars only (no DB
+    # connection), so the idle path stays Neon-free.
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parents[2] / ".env")
     run_dispatcher()
 
 
