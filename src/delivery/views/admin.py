@@ -122,6 +122,7 @@ def create_user_with_password(
     email: str,
     password: str,
     role: str = "viewer",
+    force_password_change: bool = True,
 ) -> Optional[int]:
     """Create a new user account with a hashed password.
 
@@ -140,6 +141,11 @@ def create_user_with_password(
     role : str
         ``"viewer"`` (default) or ``"owner"``.  Additional owners are
         rare; the UI defaults to viewer.
+    force_password_change : bool
+        When True (default) the user must replace this password on first login
+        (``must_change_password=1``), so the owner never permanently holds it.
+        Set False to make it a permanent owner-set password (the Admin "skip
+        the first-login change" option) — simpler for trusted testing.
 
     Returns
     -------
@@ -163,9 +169,11 @@ def create_user_with_password(
                 edge_threshold=0.05,
                 is_active=1,
                 has_onboarded=0,
-                # Owner-assigned password is temporary — force the user to set
-                # their own on first login (the owner knows this one).
-                must_change_password=1,
+                # By default the owner-assigned password is temporary — the user
+                # is forced to set their own on first login (the owner then never
+                # holds it). force_password_change=False (the Admin "skip" option)
+                # keeps it as a permanent owner-set password instead.
+                must_change_password=1 if force_password_change else 0,
                 created_at=datetime.utcnow().isoformat(),
                 updated_at=datetime.utcnow().isoformat(),
             )
@@ -471,6 +479,15 @@ with st.form("create_user_form", border=False):
             help="Viewer: sees picks, tracks own bankroll. Owner: full admin access.",
         )
 
+    skip_change = st.checkbox(
+        "Set as a permanent password (skip the first-login change)",
+        value=False,
+        key="admin_skip_change",
+        help="By default the user must choose their own password on first login. "
+             "Tick this to let them keep the password you set — simpler for "
+             "testing, but then you know their password.",
+    )
+
     create_submitted = st.form_submit_button(
         "Create User",
         type="primary",
@@ -491,14 +508,22 @@ if create_submitted:
             email=new_email.strip(),
             password=new_password,
             role=new_role,
+            force_password_change=not skip_change,
         )
         if new_id:
-            st.success(
-                f"✅ Created **{new_name.strip()}** (ID: {new_id}) as **{new_role}**. "
-                f"They log in with email `{new_email.strip().lower()}` and the "
-                f"temporary password you set, then they'll be asked to choose their "
-                f"own password before the dashboard loads."
-            )
+            if skip_change:
+                st.success(
+                    f"✅ Created **{new_name.strip()}** (ID: {new_id}) as **{new_role}**. "
+                    f"They log in with email `{new_email.strip().lower()}` and the "
+                    f"password you set — they will NOT be asked to change it."
+                )
+            else:
+                st.success(
+                    f"✅ Created **{new_name.strip()}** (ID: {new_id}) as **{new_role}**. "
+                    f"They log in with email `{new_email.strip().lower()}` and the "
+                    f"temporary password you set, then they'll be asked to choose their "
+                    f"own password before the dashboard loads."
+                )
             st.rerun()
         else:
             st.error(

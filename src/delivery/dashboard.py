@@ -60,6 +60,8 @@ _repo_root = Path(__file__).resolve().parents[2]
 if str(_repo_root) not in sys.path:
     sys.path.insert(0, str(_repo_root))
 
+import html
+
 from dotenv import load_dotenv
 import streamlit as st
 
@@ -67,6 +69,7 @@ from src.config import PROJECT_ROOT
 from src.auth import (
     is_authenticated, set_session_user, get_session_user_id,
     get_session_user_role, get_user_by_email, verify_password,
+    clear_session_user,
 )
 
 # Load .env file so DASHBOARD_PASSWORD and other secrets are available
@@ -711,6 +714,41 @@ def get_pages() -> list:
 # Sidebar
 # ============================================================================
 
+def _render_sidebar_identity() -> None:
+    """Show who is signed in (name + role) plus a Log out button.
+
+    Lets a user confirm they're in their OWN account — important now the app is
+    multi-user — and lets testers switch accounts. The display name is
+    user-supplied, so it is HTML-escaped. Reads a single row by primary key
+    (negligible cost); degrades silently if the lookup fails."""
+    from src.database.db import get_session
+    from src.database.models import User
+    name = None
+    try:
+        with get_session() as session:
+            user = session.get(User, get_session_user_id())
+            if user is not None:
+                name = user.name
+    except Exception:
+        name = None
+    role = get_session_user_role()
+    display = html.escape(name) if name else "Signed in"
+    role_label = "Owner" if role == "owner" else "Viewer"
+    st.markdown(
+        f'<div style="font-family: Inter, sans-serif; font-size: 11px; '
+        f'color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px; '
+        f'margin-bottom: 2px;">Signed in as</div>'
+        f'<div style="font-family: Inter, sans-serif; margin-bottom: 8px;">'
+        f'<span style="color: #E6EDF3; font-size: 14px; font-weight: 600;">'
+        f'{display}</span> '
+        f'<span style="color: #8B949E; font-size: 11px;">· {role_label}</span></div>',
+        unsafe_allow_html=True,
+    )
+    if st.button("Log out", key="sidebar_logout", use_container_width=True):
+        clear_session_user()
+        st.rerun()
+
+
 def render_sidebar() -> None:
     """Render the sidebar with branding and info.
 
@@ -732,6 +770,7 @@ def render_sidebar() -> None:
             '<p class="text-muted">Quantitative edge in football betting</p>',
             unsafe_allow_html=True,
         )
+        _render_sidebar_identity()
         st.divider()
 
         # ── Pending slip counter (E35-06) ───────────────────────────────
