@@ -359,6 +359,29 @@ internal_elo:
   home_advantage: 65
 
 # ---------------------------------------------------------------------------
+# Data Health Check  (DH epic — src/monitoring/health_check.py)
+# ---------------------------------------------------------------------------
+# Thresholds for the read-only data-health diagnostics (CLI `make health`, the
+# Data Health dashboard page, and the morning-pipeline alert). These tune when a
+# check goes amber (warn) or red (fail). The Odds API budget thresholds are NOT
+# duplicated here — they are read from scraping.the_odds_api above.
+health:
+  # Max age (hours) since the last row from a source before WARN / FAIL, by cadence.
+  freshness_hours:
+    live:   { warn: 6,   fail: 24 }    # bookmaker odds — refreshed every run
+    daily:  { warn: 36,  fail: 72 }    # results, predictions, stats, Elo, weather
+    weekly: { warn: 192, fail: 384 }   # Transfermarkt squad values (8d / 16d)
+  coverage:
+    upcoming_days: 7        # how far ahead to check fixture odds/prediction coverage
+    min_odds_pct: 0.70      # WARN if fewer than this share of upcoming fixtures have odds
+    min_pred_pct: 0.90      # WARN if fewer than this share have a model prediction
+  standings:
+    stale_stub_fail_count: 10   # >= this many past-dated 'scheduled' stubs ⇒ FAIL (else WARN)
+  pipeline:
+    morning_overdue_hours: 26   # WARN if the last morning run is older than this
+    stuck_running_hours: 3      # a run still 'running' past this is treated as stuck ⇒ FAIL
+
+# ---------------------------------------------------------------------------
 # Enum Definitions  (MP §6 — used for validation throughout the codebase)
 # ---------------------------------------------------------------------------
 enums:

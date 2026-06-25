@@ -9901,3 +9901,63 @@ current-bankroll fixes). **→ HC EPIC COMPLETE (6/6); masterplan §13.16 + vers
 HC-01 (spine + glossary)  →  HC-02 (screen tour)  →  HC-03 (FAQ + page links)
                           →  HC-04 (Betting 101)  →  HC-05 (tools)  →  HC-06 (export + migrate)
 ```
+
+---
+
+## DH — Data Health (operational monitoring)
+
+**Owner-approved 2026-06-24 (Rule 8 Tier-2).** A read-only data-health check that answers
+the question Model Health never does — *is the data actually where it should be, and
+fresh?* Motivated by the owner noticing league/WC standings that weren't filling: the
+classic cause is a rescheduled fixture leaving an orphan `scheduled` stub that never flips
+to `finished`, so the standings query (finished-only) silently drops it. `cleanup_stale_stubs`
+sweeps them, but nothing *alarmed* when they appeared — this epic adds that tripwire. Owner
+chose **all three surfaces** (CLI + dashboard page + morning-pipeline alert). Entirely
+read-only (every check is a SELECT), config-driven, $0; zero change to model/value/bet logic.
+
+**Issues (4):**
+
+#### DH-01 — Check engine + config thresholds  ✅ DONE
+
+New `src/monitoring/health_check.py` (pure, importable, **read-only**) — one
+`run_health_checks()` returning a `HealthReport` of `CheckResult`s across five groups:
+**Connectivity** (DB reachable; the Neon-vs-SQLite split-brain tripwire via the bind
+dialect; ingestion API keys present — presence only, never values); **Source freshness**
+(per source, age of the newest row vs its cadence class — odds/results/predictions/stats/
+Elo/weather/Transfermarkt — plus the remaining Odds API monthly budget read from
+`data/logs/odds_api_budget.json`; **season-gated** so off-season league staleness SKIPs
+rather than crying wolf); **Coverage** (of upcoming fixtures, % with odds and a prediction —
+the "all-grey badges / no odds" symptom — and any finished match with NULL goals);
+**Standings integrity** (past-dated `scheduled` stubs for leagues + WC — the tripwire);
+**Pipeline** (the last morning `pipeline_runs` row — failed / stuck / overdue / 0-predictions).
+Thresholds live in `config/settings.yaml` `health:` (defaults documented in `HEALTH_DEFAULTS`;
+the Odds API budget bounds are reused from `scraping.the_odds_api`, not duplicated). All of
+`session` / `now` / config / `env` / budget-path are injectable → fully unit-testable. 27
+tests on a seeded in-memory DB (each check + the ISO parser across 7 formats + the
+season-gating + the DB-unreachable path); **1042/1042**. Gate 3 APPROVED (read-only confirmed
+— zero mutations; every referenced column verified against models.py + world_cup/models.py;
+config-driven; purely additive). **Live smoke vs Neon caught the real issue: 2 league + 4 WC
+stale scheduled stubs right now** (the owner's standings concern, confirmed), with off-season
+league sources correctly SKIP'd.
+
+#### DH-02 — CLI (`make health`)  ← NEXT
+
+`scripts/health_check.py` + a Makefile target: run the engine, print a grouped
+PASS/WARN/FAIL report, exit non-zero on any FAIL (so it can gate). Pure formatter, unit-tested.
+
+#### DH-03 — Data Health dashboard page
+
+`src/delivery/views/health.py` (🩺 Data Health, owner-scoped) — green/amber/red cards from
+the same engine, registered in nav, with empty/error states; AST-tested + escaped.
+
+#### DH-04 — Morning-pipeline FAIL-alert + integration test (closes the epic)
+
+Run the engine at the end of the morning pipeline; on any FAIL append a health section to
+the morning email/alert. Real integration test seeding stale stubs + missing odds and
+asserting the checks catch them. Then Rule-8 Tier-1 masterplan update (§13.x + version bump).
+
+### DH Critical Path
+
+```
+DH-01 (engine + config)  →  DH-02 (CLI)  →  DH-03 (dashboard page)  →  DH-04 (pipeline alert + close)
+```
