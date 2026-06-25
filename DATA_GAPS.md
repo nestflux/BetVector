@@ -9,6 +9,29 @@ during training and `fillna(0.0)` at prediction time.
 
 ---
 
+## ⚠️ OPEN — Pre-season investigation (parked 2026-06-25; do before leagues resume ~Aug)
+
+Unlike the confirmed-unfixable gaps below, these are **drifts to investigate** — surfaced by
+the 2026-06-25 level-staking baseline regen (re-running each league's *tuned* backtest on
+current data). No live impact now (leagues off-season); investigate/confirm before the season.
+
+1. **Pinnacle / sharp-only odds coverage collapse (La Liga, Ligue 1).** Their backtests run
+   `sharp_only: true` (Pinnacle-only). On current data the Pinnacle-covered value-bet count
+   collapsed — **La Liga 110 → 16 bets, Ligue 1 → 55** — making their tier CIs meaningless
+   (La Liga CI [−38%, +138%]). Investigate: did Pinnacle coverage for these leagues actually
+   shrink in the DB, or is it a join/ingestion regression? Affects their value bets + tier
+   reliability once live.
+2. **EPL Poisson λ-clamping / Brier degradation.** EPL Poisson Brier drifted 0.578 → 0.603
+   with heavy λ-clamping to the 0.2 floor (many matches' away-goals predictions pinned low).
+   Investigate which feature(s) push away-λ to the floor on current data.
+
+Stable (reproduce documented baselines — no action): Championship (731 bets, CI [3.4, 23.2]),
+Serie A (CI [−32.4, −4.5]). The staking change is NOT a cause — tier CIs are a bootstrap on
+per-bet returns = staking-invariant (Championship reproduced exactly). Full analysis:
+`betvector_buildplan.md` §staking-reconcile.
+
+---
+
 ## 1. Championship xG / Advanced Stats
 
 **Affected league:** Championship (league_id=2)
