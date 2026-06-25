@@ -37,6 +37,7 @@ from src.database.models import BetLog, User
 from src.delivery.views._user_ops import (
     clear_bet_history,
     deactivate_user,
+    delete_user,
     reactivate_user,
     reset_bankroll,
 )
@@ -423,6 +424,46 @@ for u in all_users:
                 else:
                     st.error("Failed to clear bet history.")
 
+        # -- Delete User (destructive — viewers only, owner protected) --
+        st.divider()
+        if is_self or u["role"] == "owner":
+            st.caption(
+                "🛡️ Owner accounts can't be deleted (prevents lock-out). "
+                "Deactivate instead if you need to block login."
+            )
+        else:
+            st.markdown(
+                f'<div style="font-family: Inter, sans-serif; font-size: 13px; '
+                f'font-weight: 600; color: {COLOURS["red"]}; margin-bottom: 4px;">'
+                f'Delete User</div>'
+                f'<div style="font-family: Inter, sans-serif; font-size: 12px; '
+                f'color: {COLOURS["text_secondary"]}; margin-bottom: 8px;">'
+                f'Permanently removes this account and all its bet records. This '
+                f'cannot be undone — use Deactivate to merely block login.</div>',
+                unsafe_allow_html=True,
+            )
+            # Name/email shown via st.caption + checkbox label (plain text, so
+            # Streamlit escapes them — no HTML injection from a user-set name).
+            st.caption(
+                f"Deleting: {u['name']} · {u['email']} · {placed_count} bet record(s)"
+            )
+            confirm_del = st.checkbox(
+                f"I understand this permanently deletes {u['name']}",
+                key=f"admin_confirm_del_{u['id']}",
+            )
+            if st.button(
+                "🗑️ Delete User",
+                key=f"admin_delete_{u['id']}",
+                type="primary",
+                disabled=not confirm_del,
+                use_container_width=True,
+            ):
+                if delete_user(u["id"]):
+                    st.toast(f"Deleted {u['name']}", icon="🗑️")
+                    st.rerun()
+                else:
+                    st.error("Failed to delete user (owner accounts can't be deleted).")
+
     st.markdown(
         f'<div style="border-bottom: 1px solid {COLOURS["border"]}; '
         f'margin: 2px 0 8px 0;"></div>',
@@ -449,7 +490,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-with st.form("create_user_form", border=False):
+with st.form("create_user_form", border=False, clear_on_submit=True):
     form_col1, form_col2 = st.columns(2)
 
     with form_col1:
@@ -511,19 +552,17 @@ if create_submitted:
             force_password_change=not skip_change,
         )
         if new_id:
-            if skip_change:
-                st.success(
-                    f"✅ Created **{new_name.strip()}** (ID: {new_id}) as **{new_role}**. "
-                    f"They log in with email `{new_email.strip().lower()}` and the "
-                    f"password you set — they will NOT be asked to change it."
-                )
-            else:
-                st.success(
-                    f"✅ Created **{new_name.strip()}** (ID: {new_id}) as **{new_role}**. "
-                    f"They log in with email `{new_email.strip().lower()}` and the "
-                    f"temporary password you set, then they'll be asked to choose their "
-                    f"own password before the dashboard loads."
-                )
+            # clear_on_submit resets the form fields; st.rerun refreshes the user
+            # list so the new account (and its manage/delete controls) appears
+            # immediately. A toast carries the confirmation across the rerun — an
+            # inline st.success would be discarded by it.
+            _note = (
+                "permanent password — no first-login change" if skip_change
+                else "they set their own password on first login"
+            )
+            st.toast(
+                f"✅ Created {new_name.strip()} ({new_role}) — {_note}", icon="✅",
+            )
             st.rerun()
         else:
             st.error(

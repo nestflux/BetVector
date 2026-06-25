@@ -178,3 +178,44 @@ def reactivate_user(user_id: int) -> bool:
         return True
     except Exception:
         return False
+
+
+def delete_user(user_id: int) -> bool:
+    """Permanently delete a viewer account and all its bet history.
+
+    DESTRUCTIVE and irreversible — unlike deactivate_user (which just sets
+    is_active=0 and keeps everything).  Refuses to delete an owner account
+    (role='owner'), mirroring deactivate_user, so the owner can never be removed
+    and lock everyone out; only viewers/testers can be deleted.
+
+    bet_log.user_id is a NOT NULL foreign key to users.id, so the user's bets
+    must be removed BEFORE the user row or the delete violates the constraint.
+    Both happen in one atomic transaction — if either fails, neither commits.
+    Bets belonging to OTHER users (e.g. the owner's system picks) are untouched.
+
+    Parameters
+    ----------
+    user_id : int
+        The viewer account to permanently delete.
+
+    Returns
+    -------
+    bool
+        True on success; False if the user is missing, is an owner, or the
+        transaction fails.
+    """
+    try:
+        with get_session() as session:
+            user = session.get(User, user_id)
+            if not user or user.role == "owner":
+                return False
+            # Remove this user's bet_log rows first (NOT NULL FK to users.id),
+            # then the user — all in one transaction.
+            session.query(BetLog).filter(
+                BetLog.user_id == user_id,
+            ).delete(synchronize_session=False)
+            session.delete(user)
+            session.commit()
+        return True
+    except Exception:
+        return False
