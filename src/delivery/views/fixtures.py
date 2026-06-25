@@ -73,6 +73,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import aliased
 
 from src.config import config
+from src.delivery._cache import CACHE_TTL, CACHE_TTL_LIVE, CACHE_TTL_SLOW
 from src.database.db import get_session
 from src.database.models import InjuryFlag, League, Match, Odds, Prediction, Team, ValueBet
 from src.delivery.views._badge_helper import render_team_badge
@@ -288,6 +289,7 @@ def _get_fixture_odds_for_slip(match_id: int) -> Dict[Tuple[str, str], Optional[
 # Data Loading
 # ============================================================================
 
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def get_all_upcoming_fixtures(days_ahead: int = 14) -> List[Dict]:
     """Fetch all upcoming scheduled matches with prediction + odds data.
 
@@ -557,6 +559,7 @@ def _determine_actual_outcomes(
     }
 
 
+@st.cache_data(ttl=CACHE_TTL_SLOW, show_spinner=False)
 def get_recent_results(days_back: int = 30) -> List[Dict]:
     """Fetch completed matches from the last ``days_back`` days.
 
@@ -899,6 +902,7 @@ def _compute_edge(
     return model_prob - implied_prob
 
 
+@st.cache_data(ttl=CACHE_TTL_LIVE, show_spinner=False)
 def get_top_picks(max_picks: int = 5) -> List[Dict]:
     """Fetch the highest-edge value bets across all upcoming fixtures.
 

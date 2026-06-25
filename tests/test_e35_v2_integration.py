@@ -36,6 +36,19 @@ from unittest.mock import MagicMock
 # Install streamlit mock BEFORE any src import that touches st.*
 # ============================================================================
 
+def _passthrough_decorator(*args, **kwargs):
+    """Pass-through for @st.cache_data / @st.cache_resource under the mock.
+
+    Supports both ``@st.cache_data`` (function passed directly) and the
+    ``@st.cache_data(ttl=...)`` call form the dashboard loaders use.  Returns the
+    function unchanged so decorated loaders actually run against the test DB
+    instead of being replaced by a MagicMock.
+    """
+    if len(args) == 1 and callable(args[0]) and not kwargs:
+        return args[0]
+    return lambda func: func
+
+
 def _make_st_mock() -> MagicMock:
     """Return a MagicMock safe enough for Streamlit page module imports."""
     st = MagicMock()
@@ -62,6 +75,11 @@ def _make_st_mock() -> MagicMock:
     st.radio.side_effect = _radio_side_effect
     st.info.return_value = None
     st.divider.return_value = None
+    # @st.cache_data(...) / @st.cache_resource(...) must be pass-through
+    # decorators, not MagicMocks — otherwise the decorated dashboard loaders
+    # become mocks and return MagicMock instead of querying the test DB.
+    st.cache_data = _passthrough_decorator
+    st.cache_resource = _passthrough_decorator
     return st
 
 
@@ -72,6 +90,11 @@ _st_mock = _make_st_mock()
 # handles any return value that is not a recognised window label.
 if "streamlit" not in sys.modules:
     sys.modules["streamlit"] = _st_mock
+# Whichever streamlit mock is active (ours or a sibling test's), ensure the
+# cache decorators are pass-throughs so @st.cache_data-decorated loaders run.
+if isinstance(sys.modules["streamlit"], MagicMock):
+    sys.modules["streamlit"].cache_data = _passthrough_decorator
+    sys.modules["streamlit"].cache_resource = _passthrough_decorator
 
 # ============================================================================
 # Now safe to import src modules

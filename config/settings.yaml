@@ -385,6 +385,19 @@ health:
                                 # (warn = include stale-stub etc. warnings; fail = failures only)
 
 # ---------------------------------------------------------------------------
+# Dashboard  (Streamlit read-caching — Neon data-transfer control)
+# ---------------------------------------------------------------------------
+# @st.cache_data is a CROSS-SESSION global cache, so one DB read serves every
+# user until the TTL expires. Dashboard data changes only when the pipeline
+# runs (~daily), so minutes-scale TTLs are invisible to users but slash Neon
+# egress. Only GLOBAL (non-user-scoped) loaders use these; per-user data
+# (a user's own bets/bankroll) stays uncached to avoid cross-session staleness.
+dashboard:
+  cache_ttl_seconds: 600         # standard global reads (fixtures, value bets, model perf) — 10 min
+  cache_ttl_live_seconds: 300    # most volatile global reads (live model metrics, top picks) — 5 min
+  cache_ttl_slow_seconds: 1800   # slow-moving global reads (group standings, recent results) — 30 min
+
+# ---------------------------------------------------------------------------
 # Enum Definitions  (MP §6 — used for validation throughout the codebase)
 # ---------------------------------------------------------------------------
 enums:

@@ -32,6 +32,8 @@ import streamlit as st
 from sqlalchemy import func as sqlfunc
 from sqlalchemy.orm import aliased
 
+from src.delivery._cache import CACHE_TTL
+
 from src.auth import get_session_user_id
 from src.database.db import get_session
 from src.database.models import BetLog, League, Match, Odds, Team, User
@@ -375,6 +377,7 @@ def load_upcoming_fixtures(days: int = 7) -> List[Dict]:
         return []
 
 
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def load_fixtures_with_odds(date_from: str, date_to: str) -> List[Dict]:
     """Load scheduled matches with the most recent available odds.
 

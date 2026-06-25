@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 import streamlit as st
 
 from src.config import config
+from src.delivery._cache import CACHE_TTL_LIVE
 from src.database.db import get_session
 from src.database.models import (
     BetLog,
@@ -209,6 +210,7 @@ def _enrich_value_bets(session, rows) -> List[Dict]:
     return results
 
 
+@st.cache_data(ttl=CACHE_TTL_LIVE, show_spinner=False)
 def get_value_bets_in_range(
     date_from: date,
     date_to: date,

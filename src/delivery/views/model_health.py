@@ -34,6 +34,8 @@ import streamlit as st
 
 from sqlalchemy import func as st_funcs
 
+from src.delivery._cache import CACHE_TTL, CACHE_TTL_LIVE
+
 from src.database.db import get_session
 from src.database.models import (
     BetLog,
@@ -79,6 +81,7 @@ ASSESSMENT_COLOURS = {
 # Data Loading
 # ============================================================================
 
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def load_calibration_data(preferred_model: Optional[str] = None) -> Optional[Dict]:
     """Load the most recent calibration data from model_performance.
 
@@ -146,6 +149,7 @@ def load_calibration_data(preferred_model: Optional[str] = None) -> Optional[Dic
         }
 
 
+@st.cache_data(ttl=CACHE_TTL_LIVE, show_spinner=False)
 def compute_live_brier_and_calibration() -> Optional[Dict]:
     """Compute Brier score and calibration from predictions + match results.
 
@@ -234,6 +238,7 @@ def compute_live_brier_and_calibration() -> Optional[Dict]:
     }
 
 
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def load_model_comparison() -> pd.DataFrame:
     """Load performance metrics for all active models.
 
@@ -272,6 +277,7 @@ def load_model_comparison() -> pd.DataFrame:
     return pd.DataFrame(unique)
 
 
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def load_ensemble_weights() -> List[Dict]:
     """Load the latest ensemble weight allocation per model."""
     with get_session() as session:
@@ -299,6 +305,7 @@ def load_ensemble_weights() -> List[Dict]:
     ]
 
 
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def load_feature_importance() -> pd.DataFrame:
     """Load the most recent feature importance rankings.
 
@@ -333,6 +340,7 @@ def load_feature_importance() -> pd.DataFrame:
     ])
 
 
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def load_market_edge_map() -> pd.DataFrame:
     """Load the market performance heatmap data.
 
@@ -366,6 +374,7 @@ def load_market_edge_map() -> pd.DataFrame:
     ])
 
 
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def load_calibration_history() -> pd.DataFrame:
     """Load past calibration events for the recalibration history table."""
     with get_session() as session:
@@ -394,6 +403,7 @@ def load_calibration_history() -> pd.DataFrame:
     ])
 
 
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def load_retrain_history() -> pd.DataFrame:
     """Load past retrain events for the retrain history table."""
     with get_session() as session:

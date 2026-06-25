@@ -10,6 +10,8 @@ from html import escape
 
 import plotly.graph_objects as go
 import streamlit as st
+
+from src.delivery._cache import CACHE_TTL_SLOW
 from sqlalchemy import func as sa_func, select
 from sqlalchemy.orm import joinedload
 
@@ -167,6 +169,14 @@ def _render_todays_matches() -> None:
 
     today_et = datetime.now(EASTERN).date()
     window_end = today_et + timedelta(days=2)
+    # Load ONLY the date window (with a ±1-day buffer to cover the UTC↔ET
+    # boundary) instead of every WC match. WCMatch.date is an ISO "YYYY-MM-DD"
+    # string, so lexical >=/<= bounds are chronological on both SQLite and
+    # Postgres. This is the single biggest Neon-egress cut on this page (~10
+    # rows + their odds, not all ~104 matches); the precise ET filter below is
+    # unchanged.
+    sql_from = (today_et - timedelta(days=1)).isoformat()
+    sql_to = (window_end + timedelta(days=1)).isoformat()
 
     with get_session() as session:
         matches = session.execute(
@@ -177,6 +187,7 @@ def _render_todays_matches() -> None:
                 joinedload(WCMatch.predictions),
                 joinedload(WCMatch.odds),
             )
+            .where(WCMatch.date >= sql_from, WCMatch.date <= sql_to)
             .order_by(WCMatch.date, WCMatch.kickoff_time)
         ).unique().scalars().all()
 
@@ -247,6 +258,7 @@ def _render_todays_matches() -> None:
 # Shared — Group standings computation (used by sections 3 and 3b)
 # ============================================================================
 
+@st.cache_data(ttl=CACHE_TTL_SLOW, show_spinner=False)
 def _compute_group_standings() -> dict[str, list[dict]]:
     """Compute group standings from DB. Returns {group: [sorted team dicts]}."""
     with get_session() as session:
