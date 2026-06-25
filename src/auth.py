@@ -38,6 +38,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import secrets
+from datetime import datetime
 from typing import Optional
 
 import streamlit as st
@@ -132,6 +133,141 @@ def verify_password(plain: str, stored_hash: str) -> bool:
     )
     # compare_digest is constant-time regardless of where the strings first differ
     return secrets.compare_digest(digest.hex(), stored_hex)
+
+
+# ============================================================================
+# Password Management (invite hardening)
+# ============================================================================
+
+# Unambiguous alphabet for owner-generated temporary passwords — excludes the
+# visually confusing characters (0/O, 1/l/I) so a temp password read off a
+# screen and typed by hand isn't misheard.  Letters and digits only (no
+# symbols) so it survives copy/paste and chat apps without escaping surprises.
+_TEMP_PW_LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz"
+_TEMP_PW_DIGITS = "23456789"
+_TEMP_PW_ALPHABET = _TEMP_PW_LETTERS + _TEMP_PW_DIGITS
+
+# Minimum password length, shared by every entry point (account creation,
+# forced first-login change, self-service change) so the rule can't drift.
+MIN_PASSWORD_LENGTH = 8
+
+
+def generate_temp_password(length: int = 12) -> str:
+    """Generate a random temporary password for an owner-created account.
+
+    Uses ``secrets`` (cryptographically secure) over an unambiguous
+    letters+digits alphabet, and guarantees at least one letter and one digit
+    so the result always satisfies the basic strength check.  Length is clamped
+    to a minimum of :data:`MIN_PASSWORD_LENGTH`.
+
+    The plaintext is shown to the owner ONCE (to pass on out-of-band) and is
+    stored only as a PBKDF2 hash — never persisted in plaintext.  The user is
+    forced to replace it on first login (``must_change_password=1``).
+    """
+    length = max(length, MIN_PASSWORD_LENGTH)
+    # Guarantee composition: one letter + one digit, then fill the remainder.
+    chars = [secrets.choice(_TEMP_PW_LETTERS), secrets.choice(_TEMP_PW_DIGITS)]
+    chars += [secrets.choice(_TEMP_PW_ALPHABET) for _ in range(length - 2)]
+    # Shuffle so the guaranteed letter/digit aren't always in positions 0/1.
+    secrets.SystemRandom().shuffle(chars)
+    return "".join(chars)
+
+
+def validate_new_password(
+    new_password: str,
+    confirm_password: str,
+    current_hash: Optional[str] = None,
+) -> tuple[bool, str]:
+    """Validate a proposed new password.  Pure — no DB, no side effects.
+
+    Rules:
+    - non-empty and at least :data:`MIN_PASSWORD_LENGTH` characters
+    - ``new_password`` and ``confirm_password`` must match
+    - if ``current_hash`` is supplied, the new password must DIFFER from the
+      current one (blocks "changing" to the same temporary password)
+
+    Returns ``(ok, message)`` — ``message`` is a user-facing error when
+    ``ok`` is False, or ``""`` when valid.
+    """
+    if not new_password:
+        return False, "Please enter a new password."
+    if len(new_password) < MIN_PASSWORD_LENGTH:
+        return False, f"Password must be at least {MIN_PASSWORD_LENGTH} characters."
+    if new_password != confirm_password:
+        return False, "The two passwords don't match."
+    if current_hash and verify_password(new_password, current_hash):
+        return False, "New password must be different from your current one."
+    return True, ""
+
+
+def set_user_password(user_id: int, new_password: str) -> bool:
+    """Hash and store a new password for ``user_id``, clearing the
+    forced-change flag.  Returns True on success, False on any error.
+
+    This is the single writer for passwords outside account creation: the
+    forced first-login screen and the Settings self-service change both end
+    here.  Setting a password always clears ``must_change_password`` — once the
+    user has chosen their own secret, the temporary-password state is over.
+    """
+    try:
+        with get_session() as session:
+            user = session.get(User, user_id)
+            if user is None:
+                return False
+            user.password_hash = hash_password(new_password)
+            user.must_change_password = 0
+            user.updated_at = datetime.utcnow().isoformat()
+            session.commit()
+            return True
+    except Exception:
+        logger.exception("set_user_password failed for user_id=%s", user_id)
+        return False
+
+
+def change_own_password(
+    user_id: int,
+    current_password: str,
+    new_password: str,
+    confirm_password: str,
+) -> tuple[bool, str]:
+    """Self-service password change for the logged-in user.
+
+    Verifies the current password before allowing the change (defence against
+    an unattended authenticated session).  If the account has NO password set
+    yet (``password_hash`` is NULL — only possible for the owner who has been
+    using the emergency ``DASHBOARD_PASSWORD`` fallback), the current-password
+    check is skipped so they can set one for the first time.
+
+    Returns ``(ok, message)`` — ``message`` is a success or error string.
+    """
+    with get_session() as session:
+        user = session.get(User, user_id)
+        if user is None:
+            return False, "Account not found."
+        stored = user.password_hash
+
+    # Verify the current password unless none is set yet.
+    if stored:
+        if not current_password or not verify_password(current_password, stored):
+            return False, "Your current password is incorrect."
+
+    ok, msg = validate_new_password(new_password, confirm_password, current_hash=stored)
+    if not ok:
+        return False, msg
+
+    if set_user_password(user_id, new_password):
+        return True, "Password updated."
+    return False, "Could not update password — please try again."
+
+
+def user_must_change_password(user) -> bool:
+    """Pure predicate: does this User row require a forced password change?
+
+    Tolerates a missing attribute by defaulting to False, so older in-memory
+    objects (or the emergency-owner fallback) never get trapped.  Centralised
+    so the dashboard gate and the tests share one definition.
+    """
+    return bool(getattr(user, "must_change_password", 0))
 
 
 # ============================================================================

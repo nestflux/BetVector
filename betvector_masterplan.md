@@ -150,12 +150,25 @@ This is the most important flow — it's what happens every match day.
 
 **Trigger:** Owner wants to give a friend access.
 
-1. Owner opens Settings → Users
+1. Owner opens Settings → Users (or the Admin page)
 2. Taps "Invite User"
 3. Enters friend's name and email
 4. System generates a unique access link
 5. Friend opens the link, sets their name, starting bankroll, and staking preferences
 6. Friend can now access the dashboard with their own bet tracking and bankroll, but sees the same model predictions as the Owner
+
+> **Implemented (June 2026 — invite hardening):** the unique-access-link design
+> in steps 4–5 was never built. The shipped flow is **owner-shared temporary
+> password + forced first-login change**: "Invite User" (Settings) auto-generates
+> a temporary password and shows it to the owner once (the owner also has the
+> Admin page where they choose the temporary password). The friend logs in with
+> email + the temporary password and is **forced to set their own password
+> before the dashboard loads** (`users.must_change_password`, gate in
+> `dashboard.main()` → `views/password_change.py`). Every user can also change
+> their own password any time via Settings → Change Password. A future
+> email-invite / magic-link enhancement would replace the manual hand-off (a
+> Tier-2 proposal). Outcome of step 6 (per-user bankroll + bet tracking, shared
+> predictions) is unchanged.
 
 ---
 
@@ -416,6 +429,15 @@ CREATE TABLE users (
     kelly_fraction  REAL NOT NULL DEFAULT 0.25,             -- Kelly multiplier (0.25 = quarter Kelly)
     edge_threshold  REAL NOT NULL DEFAULT 0.05,             -- Minimum edge to flag a value bet (0.05 = 5%)
     is_active       INTEGER NOT NULL DEFAULT 1,             -- 1 = active, 0 = deactivated
+    -- Auth + onboarding columns (E34 multi-user + later hardening; added via
+    -- db._apply_schema_migrations on already-deployed databases).
+    password_hash   TEXT,                                   -- PBKDF2-SHA256 hash; NULL = no password set yet
+    must_change_password INTEGER NOT NULL DEFAULT 0,        -- 1 = on a temporary password, forced to change on first login
+    has_onboarded   INTEGER NOT NULL DEFAULT 0,             -- 1 = completed the onboarding wizard
+    notify_morning  INTEGER NOT NULL DEFAULT 0,             -- Opt-in email flags (all default OFF)
+    notify_evening  INTEGER NOT NULL DEFAULT 0,
+    notify_weekly   INTEGER NOT NULL DEFAULT 0,
+    notify_wc       INTEGER NOT NULL DEFAULT 0,             -- World Cup daily digest opt-in
     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );

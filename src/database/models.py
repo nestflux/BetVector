@@ -88,6 +88,17 @@ class User(Base):
     # the admin page in E34-05).  When NULL the user cannot log in via email
     # — they must be given a password by the owner before their first login.
     password_hash = Column(String, nullable=True)
+    # must_change_password: 1 = the user is on an owner-assigned *temporary*
+    # password and must replace it with their own before using the app (the
+    # dashboard forces this on first login, before onboarding).  0 = normal.
+    # Set to 1 by BOTH owner-driven account-creation paths (admin "Create User"
+    # and Settings "Invite User"); cleared to 0 the moment the user sets their
+    # own password.  ``default=0`` is the Python-side ORM default so EXISTING
+    # users — including the owner (user 1) — are unaffected on already-deployed
+    # databases (they keep logging in normally); ``server_default="0"`` covers
+    # freshly-created schemas (tests, new deployments).  Column added
+    # post-deployment — see db._apply_schema_migrations.
+    must_change_password = Column(Integer, nullable=False, default=0, server_default="0")
     # has_onboarded: set to 1 after the user completes the onboarding wizard
     has_onboarded = Column(Integer, nullable=False, server_default="0")
     # Notification preferences: 1 = enabled, 0 = disabled

@@ -19,11 +19,16 @@ Friend), MP §8 Design System
 """
 
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import streamlit as st
 
-from src.auth import get_session_user_id
+from src.auth import (
+    change_own_password,
+    generate_temp_password,
+    get_session_user_id,
+    hash_password,
+)
 from src.database.db import get_session
 from src.database.models import BetLog, InjuryFlag, League, Team, User
 
@@ -178,18 +183,35 @@ def toggle_league_active(league_id: int, is_active: bool) -> bool:
         return False
 
 
-def create_viewer_user(name: str, email: str) -> Optional[int]:
-    """Create a new user with role='viewer'.
+def create_viewer_user(name: str, email: str) -> Optional[Tuple[int, str]]:
+    """Create a new viewer account with an auto-generated temporary password.
 
-    Returns the new user's ID on success, None on failure.
-    This is triggered by the owner via the 'Invite User' button (MP §3 Flow 7).
+    Triggered by the owner via the Settings "Invite User" button (MP §3 Flow 7).
+    A random temporary password is generated, stored as a PBKDF2 hash, and
+    ``must_change_password`` is set so the user is forced to choose their own
+    password on first login.  The plaintext temporary password is RETURNED (not
+    stored) so the owner can pass it on out-of-band; it is never persisted in
+    plaintext.
+
+    Previously this created an account with NO password (``password_hash`` NULL),
+    which left the "invited" user unable to log in at all — a dead account.
+    Generating and storing a temporary password here closes that gap so every
+    invite produces a usable login.
+
+    Email is normalised (strip + lowercase) to match the login lookup.
+
+    Returns ``(user_id, temp_password)`` on success, or ``None`` on failure
+    (e.g. duplicate email).
     """
+    normalised_email = email.strip().lower()
+    temp_password = generate_temp_password()
     try:
         with get_session() as session:
             new_user = User(
-                name=name,
-                email=email,
+                name=name.strip(),
+                email=normalised_email,
                 role="viewer",
+                password_hash=hash_password(temp_password),
                 starting_bankroll=500.0,
                 current_bankroll=500.0,
                 staking_method="flat",
@@ -197,13 +219,17 @@ def create_viewer_user(name: str, email: str) -> Optional[int]:
                 kelly_fraction=0.25,
                 edge_threshold=0.05,
                 is_active=1,
+                has_onboarded=0,
+                # Force the invited user to replace the temporary password
+                # before the dashboard loads.
+                must_change_password=1,
                 created_at=datetime.utcnow().isoformat(),
                 updated_at=datetime.utcnow().isoformat(),
             )
             session.add(new_user)
             session.commit()
             session.refresh(new_user)
-            return new_user.id
+            return new_user.id, temp_password
     except Exception:
         return None
 
@@ -983,18 +1009,77 @@ else:
         if invite_clicked:
             if not invite_name or not invite_email:
                 st.warning("Please enter both a name and email address.")
+            elif "@" not in invite_email:
+                st.warning("Please enter a valid email address.")
             else:
-                new_id = create_viewer_user(invite_name.strip(), invite_email.strip())
-                if new_id:
+                result = create_viewer_user(invite_name.strip(), invite_email.strip())
+                if result:
+                    new_id, temp_pw = result
                     st.success(
-                        f"Invited **{invite_name}** (ID: {new_id}) as a viewer. "
-                        f"They can access the dashboard with their own bankroll."
+                        f"Invited **{invite_name.strip()}** (ID: {new_id}) as a viewer."
                     )
-                    st.rerun()
+                    # Show the credentials once so the owner can pass them on.
+                    # Deliberately NOT followed by st.rerun() — a rerun would clear
+                    # this block before the temporary password could be copied.
+                    st.markdown(
+                        "Share these with them — they'll be asked to set their own "
+                        "password on first login:"
+                    )
+                    st.code(
+                        f"Email:    {invite_email.strip().lower()}\n"
+                        f"Password: {temp_pw}",
+                        language="text",
+                    )
+                    st.caption(
+                        "This temporary password is shown once and is never stored "
+                        "in plaintext. Refresh the page to update the user list above."
+                    )
                 else:
                     st.error(
                         "Failed to create user. The email may already be in use."
                     )
+
+    # ==================================================================
+    # Section: Change Password — self-service, all users
+    # ==================================================================
+    # Available to everyone (owner and viewers).  Lets a user rotate their own
+    # password without owner involvement.  The forced first-login change (for
+    # invited users) shares the same backend (auth.change_own_password); this is
+    # the voluntary equivalent available any time after.
+    st.divider()
+    st.markdown(
+        '<div class="bv-section-header">🔑 Change Password</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f'<p style="font-family: Inter, sans-serif; font-size: 13px; '
+        f'color: {COLOURS["text_secondary"]}; margin-bottom: 12px;">'
+        f"Update the password you use to log in. You'll need your current "
+        f"password (leave it blank only if you have never set one)."
+        f'</p>',
+        unsafe_allow_html=True,
+    )
+    with st.form("change_password_form", border=False):
+        pw_current = st.text_input(
+            "Current password", type="password", key="cp_current",
+        )
+        pw_new = st.text_input(
+            "New password", type="password", key="cp_new",
+            placeholder="At least 8 characters",
+        )
+        pw_confirm = st.text_input(
+            "Confirm new password", type="password", key="cp_confirm",
+        )
+        pw_submitted = st.form_submit_button("Update password", type="primary")
+
+    if pw_submitted:
+        ok, msg = change_own_password(
+            get_session_user_id(), pw_current, pw_new, pw_confirm,
+        )
+        if ok:
+            st.success(f"✅ {msg}")
+        else:
+            st.warning(msg)
 
     # ==================================================================
     # Section 6: Danger Zone — Per-User Reset Controls (E34-04)

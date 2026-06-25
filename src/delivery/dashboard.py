@@ -782,6 +782,26 @@ def check_onboarding() -> bool:
         return bool(user.has_onboarded)
 
 
+def needs_password_change() -> bool:
+    """Return True if the logged-in user must set a new password first.
+
+    Invited/created users start on an owner-assigned *temporary* password
+    (``must_change_password = 1``); they are routed to the forced
+    password-change screen before onboarding or the dashboard.  A missing user
+    record — or the emergency-owner fallback (user 1, whose flag is 0) — returns
+    False so nobody is ever trapped on the gate.
+    """
+    from src.auth import user_must_change_password
+    from src.database.db import get_session
+    from src.database.models import User
+
+    with get_session() as session:
+        user = session.get(User, get_session_user_id())
+        if user is None:
+            return False
+        return user_must_change_password(user)
+
+
 def main() -> None:
     """Main entry point for the BetVector dashboard."""
     # Inject custom CSS (must come after set_page_config)
@@ -811,6 +831,18 @@ def main() -> None:
             "→ `connection_string`.\n\n"
             f"Error: `{db_err}`"
         )
+        return
+
+    # Forced password-change gate — users on an owner-assigned temporary
+    # password must replace it before anything else (before onboarding and the
+    # dashboard).  Invite hardening: every owner-created account starts here on
+    # first login.  Runs BEFORE the onboarding gate so the password is set first.
+    if needs_password_change():
+        from src.delivery.views.password_change import render_forced_password_change
+        pw_page = st.Page(
+            render_forced_password_change, title="Set your password", icon="🔒",
+        )
+        st.navigation([pw_page], position="hidden").run()
         return
 
     # Onboarding gate — new users see the wizard instead of the dashboard.

@@ -163,6 +163,9 @@ def create_user_with_password(
                 edge_threshold=0.05,
                 is_active=1,
                 has_onboarded=0,
+                # Owner-assigned password is temporary — force the user to set
+                # their own on first login (the owner knows this one).
+                must_change_password=1,
                 created_at=datetime.utcnow().isoformat(),
                 updated_at=datetime.utcnow().isoformat(),
             )
@@ -492,8 +495,9 @@ if create_submitted:
         if new_id:
             st.success(
                 f"✅ Created **{new_name.strip()}** (ID: {new_id}) as **{new_role}**. "
-                f"They can log in with email `{new_email.strip().lower()}` and the "
-                f"temporary password you set."
+                f"They log in with email `{new_email.strip().lower()}` and the "
+                f"temporary password you set, then they'll be asked to choose their "
+                f"own password before the dashboard loads."
             )
             st.rerun()
         else:

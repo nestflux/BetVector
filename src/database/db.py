@@ -349,6 +349,12 @@ def _apply_schema_migrations(engine: Engine) -> None:
         # in via Settings. INTEGER NOT NULL DEFAULT 0 is valid on both Postgres and
         # SQLite (SQLite requires the DEFAULT when adding a NOT NULL column).
         ("users", "notify_wc", "INTEGER NOT NULL DEFAULT 0"),
+        # Invite-hardening (June 2026): forced first-login password change for
+        # users created on an owner-assigned temporary password. Default 0 so
+        # existing users — including the owner — are unaffected and keep their
+        # current sessions. INTEGER NOT NULL DEFAULT 0 is valid on both Postgres
+        # and SQLite (SQLite requires the DEFAULT when adding a NOT NULL column).
+        ("users", "must_change_password", "INTEGER NOT NULL DEFAULT 0"),
     ]
 
     with engine.begin() as conn:
