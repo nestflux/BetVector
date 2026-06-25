@@ -20,6 +20,7 @@ from pathlib import Path
 
 from src.delivery import help_content
 from src.delivery.help_content import (
+    CONCEPTS,
     DAILY_LOOP,
     FAQ,
     GLOSSARY_GROUPS,
@@ -144,6 +145,29 @@ def test_faq_is_well_formed():
 
 
 # ---------------------------------------------------------------------------
+# 1d. Betting 101 concepts (HC-04)
+# ---------------------------------------------------------------------------
+
+def test_concepts_are_well_formed_with_worked_examples():
+    assert len(CONCEPTS) >= 8
+    for c in CONCEPTS:
+        assert c["title"].strip()
+        assert len(c["body"]) >= 40           # a real explanation
+        assert len(c["example"]) >= 15        # and a worked example
+    titles = " ".join(c["title"] for c in CONCEPTS).lower()
+    for topic in ("edge", "clv", "variance", "bankroll", "calibration", "roi"):
+        assert topic in titles, f"Betting 101 never teaches “{topic}”"
+
+
+def test_edge_concept_uses_raw_implied_price_consistent_with_value_finder():
+    """The value/edge lesson must match the code (edge = model − 1/odds), not de-vig —
+    and its worked example must be arithmetically right (48% − 40% = +8%)."""
+    edge_c = next(c for c in CONCEPTS if c["title"] == "Value and edge")
+    assert "1 ÷ odds" in edge_c["body"] or "implied probability" in edge_c["body"]
+    assert "48%" in edge_c["example"] and "40%" in edge_c["example"] and "+8%" in edge_c["example"]
+
+
+# ---------------------------------------------------------------------------
 # 2. the pure search filter
 # ---------------------------------------------------------------------------
 
@@ -188,7 +212,7 @@ def test_filter_preserves_group_shape():
 # ---------------------------------------------------------------------------
 
 _PURE_FUNCS = {"_help_css", "_start_here_html", "_glossary_group_html", "_glossary_html",
-               "_tour_card_html", "_tour_html", "_faq_html"}
+               "_tour_card_html", "_tour_html", "_faq_html", "_concepts_html"}
 
 
 def _view_namespace():
@@ -280,6 +304,18 @@ def test_view_renders_faq_and_escapes():
     hostile = ns["_faq_html"]([("<script>q</script>", "<img src=x onerror=1>")])
     assert "<script>" not in hostile and "<img src=x" not in hostile
     assert "&lt;script&gt;" in hostile and "&lt;img" in hostile
+
+
+def test_view_renders_concepts_and_escapes():
+    ns = _view_namespace()
+    html = ns["_concepts_html"](CONCEPTS)
+    assert "Value and edge" in html and "Example." in html      # a card + the eg label
+    assert "+8%" in html                                        # a worked number lands
+    hostile = ns["_concepts_html"](
+        [{"title": "<b>t</b>", "body": "<i>b</i>", "example": "<script>e</script>"}]
+    )
+    assert "<script>" not in hostile and "<b>t" not in hostile
+    assert "&lt;script&gt;" in hostile and "&lt;b&gt;" in hostile
 
 
 # ---------------------------------------------------------------------------

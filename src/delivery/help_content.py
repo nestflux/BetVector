@@ -261,13 +261,15 @@ GLOSSARY_GROUPS = [
             ("Peak bankroll", "The highest your bankroll has ever reached — used to "
              "measure drawdown."),
             ("Drawdown", "How far the bankroll has fallen from its peak, as a "
-             "percentage. Peak $1,100 → now $990 = a 10% drawdown. 10–20% is normal; "
-             "beyond ~30% the app raises a safety alert."),
-            ("Flat staking", "Bet a fixed percentage of your starting bankroll every "
-             "time, regardless of the current balance. Simple and steady — e.g. 2% of "
-             "$1,000 = $20 every bet."),
+             "percentage. Peak $1,100 → now $990 = a 10% drawdown. 10–20% is normal; at "
+             "25% the app raises a safety alert."),
+            ("Flat staking", "Bet a fixed percentage of your bankroll each time (e.g. "
+             "2%). In BetVector, flat and percentage staking use the same "
+             "current-bankroll formula, so they come out almost identical — the real "
+             "choice is between these and Kelly."),
             ("Percentage staking", "Bet a fixed percentage of your current bankroll, so "
-             "stakes grow when you win and shrink when you lose — automatic protection."),
+             "the stake recomputes as the balance moves (it shrinks in a downswing — "
+             "automatic protection)."),
             ("Kelly Criterion", "A formula that sizes bets in proportion to the edge "
              "and the odds, to maximise long-term growth. It is volatile, so BetVector "
              "uses fractional (e.g. quarter) Kelly for safety."),
@@ -540,6 +542,109 @@ FAQ = [
      "No. BetVector is decision-support — it surfaces where the value is and the "
      "reasoning behind it. You decide what, if anything, to back, and you log it "
      "yourself."),
+]
+
+
+# ---------------------------------------------------------------------------
+# Betting 101 (HC-04) — short plain-English lessons, each with a WORKED numeric
+# example. Each entry: {title, body, example}. The maths is kept exact (Gate 2 checks
+# it), and the edge lesson uses the RAW implied price (1/odds) to match the value
+# finder — de-vig is only the deep-dive display refinement (see the glossary).
+# ---------------------------------------------------------------------------
+
+CONCEPTS = [
+    {
+        "title": "Odds and implied probability",
+        "body": "Decimal odds are what you get back per $1 staked (your stake "
+                "included). Flip them over and you get the bookmaker's implied "
+                "probability: 1 ÷ the odds. The lower the odds, the more likely the "
+                "bookmaker thinks it is.",
+        "example": "Odds of 2.50 → implied probability 1 ÷ 2.50 = 40%. If you believe "
+                   "it's more likely than 40%, the price looks generous.",
+    },
+    {
+        "title": "Value and edge",
+        "body": "A value bet is one where your probability is higher than the price "
+                "implies. Edge measures the gap: your model's probability minus the "
+                "bookmaker's implied probability (1 ÷ odds). A positive edge means the "
+                "selection is underpriced — that's the whole game.",
+        "example": "Model 48%, odds 2.50 (implied 40%) → edge = 48% − 40% = +8%. That "
+                   "8-point gap is the value the model is backing.",
+    },
+    {
+        "title": "The bookmaker's margin (overround) and de-vig",
+        "body": "Add up the implied probabilities of every outcome in a market and "
+                "they total more than 100% — the excess is the bookmaker's built-in "
+                "margin (the overround or “vig”). “De-vigging” strips it out so the "
+                "numbers sum to 100% and you can compare books fairly. (BetVector "
+                "de-vigs only on the deep dive, for display; a pick is flagged against "
+                "the raw price.)",
+        "example": "Home 45% + Draw 28% + Away 32% = 105% → a 5% margin. De-vigged "
+                   "(divide each by 1.05): 42.9% / 26.7% / 30.5%, which sum to ~100%.",
+    },
+    {
+        "title": "Closing-Line Value (CLV) — the truest scoreboard",
+        "body": "The closing price is the market's sharpest estimate, just before "
+                "kickoff. If the price you took was better than the close, you got "
+                "value — and that's true whether or not the bet wins. Beating the "
+                "close over many bets is the single best sign you're doing it right.",
+        "example": "You back at 2.20 (implies 45.5%); it closes at 2.00 (implies 50%). "
+                   "You beat the close by ~4.5 points — a good bet even if it loses.",
+    },
+    {
+        "title": "Why a +edge bet can still lose (variance)",
+        "body": "Edge is an average over many bets, not a promise on any one. A "
+                "positive-edge bet can — and often will — lose; that's normal. The edge "
+                "only shows up over a large sample, so judge the model over hundreds of "
+                "bets, never a handful.",
+        "example": "A +8% edge at roughly even odds still loses around 45% of the time. "
+                   "Over 1 bet that's almost a coin flip; over 500 bets the edge wins.",
+    },
+    {
+        "title": "Bankroll and staking",
+        "body": "Stake a small, consistent slice of your bankroll so a bad run can't "
+                "wipe you out. Flat and Percentage both bet a fixed % of your current "
+                "bankroll (in BetVector they come out almost the same); Kelly instead "
+                "sizes each bet by its edge — bigger edge, bigger bet — which grows "
+                "faster but swings harder, so it's used as a fraction.",
+        "example": "On a $1,000 bankroll at 2%, your next bet is about $20 (2% of the "
+                   "balance), recomputed as the balance moves.",
+    },
+    {
+        "title": "Drawdown",
+        "body": "A drawdown is how far your bankroll has fallen from its highest point. "
+                "Downswings are part of betting even with a real edge; the job is to "
+                "size stakes so a normal drawdown never becomes a fatal one.",
+        "example": "Peak $1,200, now $1,000 → a 16.7% drawdown. 10–20% is routine; at "
+                   "25% BetVector raises a safety flag and you should ease off.",
+    },
+    {
+        "title": "Reading the scoreline matrix",
+        "body": "For each match the model fills a 7×7 grid with the probability of "
+                "every scoreline. Every market is just a sum of the right cells — which "
+                "is how one model produces 1X2, Over/Under and BTTS all at once.",
+        "example": "Add the diagonal (1-1, 2-2, …) for the draw; add every cell where "
+                   "home > away for a home win; add every cell where both teams scored "
+                   "for BTTS Yes.",
+    },
+    {
+        "title": "Calibration and the Brier score",
+        "body": "A model is well calibrated when the things it calls 70% actually "
+                "happen about 70% of the time. The Brier score measures exactly that "
+                "(lower is better), rewarding probabilities that are both confident and "
+                "correct — and punishing overconfidence.",
+        "example": "Take every pick rated ~70%. If roughly 70 of each 100 win, the "
+                   "model is honest. One that calls everything 90% but wins 60% is "
+                   "overconfident, and its Brier score will be worse.",
+    },
+    {
+        "title": "ROI beats win rate",
+        "body": "Win rate ignores the odds, so on its own it tells you little. Return "
+                "on investment — profit per dollar staked — is what actually matters, "
+                "because a few winners at big prices can outweigh many at short ones.",
+        "example": "40% winners at average odds 3.00 returns +20% ROI; 60% winners at "
+                   "1.40 returns −16%. The higher win rate is the losing strategy.",
+    },
 ]
 
 

@@ -9825,13 +9825,28 @@ Gate 2 CLEAN (after the de-vig fixes) · Gate 3 APPROVED (the hot-path `dashboar
 reviewed: additive, guarded, title↔TOUR map exact). Real PNG on owner Desktop. Only
 help_content.py + views/help.py + dashboard.py (one call) + test changed — no other view.
 
-#### HC-04 — Betting 101 concept cards (worked examples)  ← NEXT
+#### HC-04 — Betting 101 concept cards (worked examples)  ✅ DONE
 
-Plain-English lessons with worked examples (odds ↔ implied probability, value/edge,
-de-vig, CLV, bankroll & staking, Poisson + reading the scoreline heatmap,
-calibration/Brier, ROI vs win rate, and “why did my +edge bet still lose?”).
+`CONCEPTS` in `help_content.py` — 10 plain-English lessons, each a {title, body,
+example} with a WORKED numeric example: odds ↔ implied probability, value/edge,
+overround/de-vig, CLV, "why a +edge bet can still lose" (variance), bankroll &
+staking, drawdown, reading the scoreline matrix, calibration/Brier, ROI vs win rate.
+Rendered as a "🎓 Betting 101" tab (5th) in `views/help.py` via a pure escaped
+`_concepts_html` (title + body + a green-accented "Example." box). Gate 2 RE-COMPUTED
+every example (all 10 arithmetically correct) and cross-checked each claim against the
+code — caught **two real errors** that were ALSO latent in the consolidated glossary:
+(1) the drawdown safety alert is **25%** (`settings.yaml drawdown_alert_threshold:
+0.25`), not the "~30%" the page glossaries had said; (2) **flat staking uses the
+CURRENT bankroll** (`bankroll.py`: flat and percentage share `current_bankroll ×
+stake_percentage`), not the "% of starting bankroll" the copy claimed. Fixed the
+concept + the glossary entries to match the code; spawned an owner task to reconcile
+the app's own Settings/onboarding copy (which still says 30% / starting-bankroll). The
+edge lesson uses the raw 1/odds basis (consistent with the HC-03 fix). 3 new tests
+(concept integrity + the edge-example arithmetic + AST/escaping). 1002/1002. Gate 1
+PASS · Gate 2 CLEAN (after the drawdown + flat-staking fixes) · Gate 3 APPROVED. Real
+PNG on owner Desktop. Only help_content.py + views/help.py + test changed.
 
-#### HC-05 — Interactive tools
+#### HC-05 — Interactive tools  ← NEXT
 
 Read-only widgets: an odds ↔ implied-prob ↔ edge calculator with a value verdict, a
 staking demo (bankroll + method → suggested stake), and a labelled scoreline-matrix

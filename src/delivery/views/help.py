@@ -26,6 +26,7 @@ from html import escape
 import streamlit as st
 
 from src.delivery.help_content import (
+    CONCEPTS,
     DAILY_LOOP,
     FAQ,
     GOOD_TO_KNOW,
@@ -95,6 +96,16 @@ def _help_css() -> str:
         "line-height:1.55;}"
         ".help-focus-head{font-family:Inter,sans-serif;font-size:12px;font-weight:700;"
         "color:#3FB950;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;}"
+        ".concept{background:#161B22;border:1px solid #30363D;border-radius:8px;"
+        "padding:12px 16px;margin-bottom:12px;}"
+        ".concept-title{font-family:Inter,sans-serif;font-size:15px;font-weight:700;"
+        "color:#E6EDF3;margin-bottom:6px;}"
+        ".concept-body{font-family:Inter,sans-serif;font-size:13px;color:#8B949E;"
+        "line-height:1.55;margin-bottom:8px;}"
+        ".concept-eg{background:#0D1117;border-left:2px solid #3FB950;border-radius:4px;"
+        "padding:8px 12px;font-family:Inter,sans-serif;font-size:12.5px;color:#E6EDF3;"
+        "line-height:1.5;}"
+        ".concept-eg b{color:#3FB950;font-weight:600;}"
         "</style>"
     )
 
@@ -175,6 +186,19 @@ def _faq_html(faq: list) -> str:
     )
 
 
+def _concepts_html(concepts: list) -> str:
+    """Betting 101 cards: a title, a plain-English explanation, and a worked example in
+    a tinted box. All dynamic text escaped (the “Example.” label is a static literal)."""
+    return "".join(
+        f'<div class="concept">'
+        f'<div class="concept-title">{escape(str(c.get("title", "")))}</div>'
+        f'<div class="concept-body">{escape(str(c.get("body", "")))}</div>'
+        f'<div class="concept-eg"><b>Example.</b> {escape(str(c.get("example", "")))}'
+        f'</div></div>'
+        for c in concepts
+    )
+
+
 def _glossary_html(groups: list) -> str:
     """The full (possibly filtered) glossary, or a friendly empty state when a search
     matches nothing."""
@@ -215,15 +239,15 @@ if _focus_card:
 
 st.divider()
 
-_tab_start, _tab_tour, _tab_faq, _tab_gloss = st.tabs(
-    ["📖 Start here", "🗺️ Screen tour", "❓ FAQ", "🔤 Glossary"]
+_tab_start, _tab_tour, _tab_101, _tab_faq, _tab_gloss = st.tabs(
+    ["📖 Start here", "🗺️ Screen tour", "🎓 Betting 101", "❓ FAQ", "🔤 Glossary"]
 )
 
 with _tab_start:
     st.markdown(_start_here_html(), unsafe_allow_html=True)
     st.caption(
-        "More is coming to this page — Betting 101 with worked examples, and "
-        "interactive tools."
+        "Tip: the tabs above cover the screen tour, Betting 101 with worked examples, "
+        "an FAQ, and a searchable glossary. Interactive tools are coming next."
     )
 
 with _tab_tour:
@@ -232,6 +256,10 @@ with _tab_tour:
         "every colour and badge means."
     )
     st.markdown(_tour_html(TOUR), unsafe_allow_html=True)
+
+with _tab_101:
+    st.caption("The ideas behind the numbers — each with a quick worked example.")
+    st.markdown(_concepts_html(CONCEPTS), unsafe_allow_html=True)
 
 with _tab_faq:
     st.caption("Quick answers to the questions that come up most.")
