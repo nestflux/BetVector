@@ -28,9 +28,15 @@ from src.delivery.help_content import (
     START_HERE_INTRO,
     TOUR,
     all_terms,
+    edge_pp,
     filter_glossary,
+    flat_stake,
+    implied_pct_from_odds,
+    kelly_fraction_of_bankroll,
+    kelly_stake,
     term_count,
     tour_for_page,
+    verdict_for_edge,
 )
 
 HELP_VIEW = (
@@ -168,6 +174,47 @@ def test_edge_concept_uses_raw_implied_price_consistent_with_value_finder():
 
 
 # ---------------------------------------------------------------------------
+# 1e. interactive-tool maths (HC-05) — exact arithmetic
+# ---------------------------------------------------------------------------
+
+def test_implied_pct_from_odds():
+    assert implied_pct_from_odds(2.50) == 40.0
+    assert implied_pct_from_odds(4.0) == 25.0
+    assert implied_pct_from_odds(1.0) is None        # decimal odds must be > 1
+    assert implied_pct_from_odds(0.5) is None
+    assert implied_pct_from_odds("x") is None
+
+
+def test_edge_pp_is_model_minus_raw_implied():
+    assert round(edge_pp(48.0, 2.50), 6) == 8.0      # 48 − 40 (raw 1/odds, matches value_finder)
+    assert round(edge_pp(40.0, 2.50), 6) == 0.0
+    assert round(edge_pp(30.0, 2.50), 6) == -10.0
+    assert edge_pp(50.0, 1.0) is None
+
+
+def test_verdict_for_edge_uses_config_bounds():
+    assert verdict_for_edge(8.0, 3.0, 15.0) == "value"
+    assert verdict_for_edge(3.0, 3.0, 15.0) == "value"      # threshold inclusive
+    assert verdict_for_edge(15.0, 3.0, 15.0) == "value"     # ceiling inclusive
+    assert verdict_for_edge(2.9, 3.0, 15.0) == "none"
+    assert verdict_for_edge(15.1, 3.0, 15.0) == "capped"
+    assert verdict_for_edge(None, 3.0, 15.0) == "none"
+
+
+def test_staking_helpers_exact():
+    assert flat_stake(1000, 2) == 20.0
+    assert flat_stake(1000, 0) == 0.0
+    assert flat_stake(-5, 2) == 0.0
+    assert flat_stake("x", 2) == 0.0
+    # full-Kelly fraction f* = (p·odds − 1) / (odds − 1); 60% @ 2.0 → 0.2
+    assert round(kelly_fraction_of_bankroll(60, 2.0), 6) == 0.2
+    assert kelly_fraction_of_bankroll(40, 2.0) == 0.0       # no edge → floored at 0
+    assert kelly_fraction_of_bankroll(50, 1.0) is None
+    assert round(kelly_stake(1000, 60, 2.0, 0.25), 6) == 50.0   # 1000 × ¼ × 0.2
+    assert kelly_stake(1000, 40, 2.0, 0.25) == 0.0
+
+
+# ---------------------------------------------------------------------------
 # 2. the pure search filter
 # ---------------------------------------------------------------------------
 
@@ -212,7 +259,8 @@ def test_filter_preserves_group_shape():
 # ---------------------------------------------------------------------------
 
 _PURE_FUNCS = {"_help_css", "_start_here_html", "_glossary_group_html", "_glossary_html",
-               "_tour_card_html", "_tour_html", "_faq_html", "_concepts_html"}
+               "_tour_card_html", "_tour_html", "_faq_html", "_concepts_html",
+               "_value_result_html", "_stake_result_html", "_matrix_reader_html"}
 
 
 def _view_namespace():
@@ -316,6 +364,23 @@ def test_view_renders_concepts_and_escapes():
     )
     assert "<script>" not in hostile and "<b>t" not in hostile
     assert "&lt;script&gt;" in hostile and "&lt;b&gt;" in hostile
+
+
+def test_view_renders_value_and_stake_tools():
+    ns = _view_namespace()
+    val = ns["_value_result_html"](2.50, 48.0, 40.0, 8.0, "value", 3.0, 15.0)
+    assert "40.0%" in val and "+8.0 pp" in val and "VALUE" in val
+    bad = ns["_value_result_html"](1.0, 50.0, None, None, "none", 3.0, 15.0)
+    assert "Enter decimal odds" in bad
+    stake = ns["_stake_result_html"](20.0, 50.0, 0.25)
+    assert "$20.00" in stake and "$50.00" in stake and "25%" in stake
+
+
+def test_view_matrix_reader_explains_the_markets():
+    ns = _view_namespace()
+    mx = ns["_matrix_reader_html"]()
+    assert "home win" in mx.lower() and "draw" in mx.lower() and "away win" in mx.lower()
+    assert "btts" in mx.lower()
 
 
 # ---------------------------------------------------------------------------

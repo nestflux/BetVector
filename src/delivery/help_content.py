@@ -662,6 +662,82 @@ def tour_for_page(page: str):
     page surface a focused card. Pure — no Streamlit."""
     return _TOUR_BY_PAGE.get(page)
 
+
+# ---------------------------------------------------------------------------
+# Interactive-tool maths (HC-05) — pure, unit-tested. The view supplies the live
+# inputs and the config bounds (edge_threshold / max_actionable_edge / kelly_fraction),
+# so these helpers stay Streamlit- and config-free. Percentages are PERCENTAGE POINTS
+# (0–100); the edge basis is the RAW implied price (1 ÷ odds), matching value_finder.
+# ---------------------------------------------------------------------------
+
+def implied_pct_from_odds(odds):
+    """Bookmaker implied probability (%) from decimal odds: 100 ÷ odds. ``None`` for an
+    invalid price (decimal odds must be > 1)."""
+    try:
+        odds = float(odds)
+    except (TypeError, ValueError):
+        return None
+    if odds <= 1.0:
+        return None
+    return 100.0 / odds
+
+
+def edge_pp(model_pct, odds):
+    """Edge in percentage points: the model's probability minus the bookmaker's implied
+    probability (1 ÷ odds) — the RAW price the value finder flags on. ``None`` if the
+    price is invalid or the model probability is missing."""
+    implied = implied_pct_from_odds(odds)
+    if implied is None or model_pct is None:
+        return None
+    return float(model_pct) - implied
+
+
+def verdict_for_edge(edge, threshold_pp, ceiling_pp):
+    """Classify an edge (pp) the way the value finder does, given the config bounds:
+    ``"value"`` when threshold ≤ edge ≤ ceiling, ``"capped"`` above the ceiling (an edge
+    so big it's likely model error), ``"none"`` below the threshold (including negative)."""
+    if edge is None or edge < threshold_pp:
+        return "none"
+    if edge > ceiling_pp:
+        return "capped"
+    return "value"
+
+
+def flat_stake(bankroll, stake_pct):
+    """Flat / percentage stake in dollars = bankroll × stake% (BetVector reads the
+    CURRENT bankroll for both). 0 for bad / negative inputs."""
+    try:
+        return max(0.0, float(bankroll)) * max(0.0, float(stake_pct)) / 100.0
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def kelly_fraction_of_bankroll(model_pct, odds):
+    """Full-Kelly fraction of bankroll for a bet: f* = (p·odds − 1) ÷ (odds − 1), with
+    p = model_pct/100, floored at 0 (no bet without an edge). ``None`` for an invalid
+    price."""
+    try:
+        odds = float(odds)
+        p = float(model_pct) / 100.0
+    except (TypeError, ValueError):
+        return None
+    if odds <= 1.0:
+        return None
+    return max(0.0, (p * odds - 1.0) / (odds - 1.0))
+
+
+def kelly_stake(bankroll, model_pct, odds, kelly_fraction):
+    """Suggested Kelly stake in dollars = bankroll × kelly_fraction × f*. The
+    ``kelly_fraction`` (e.g. 0.25 — quarter-Kelly) comes from config for safety. 0 when
+    there's no edge or a bad input."""
+    f = kelly_fraction_of_bankroll(model_pct, odds)
+    if f is None:
+        return 0.0
+    try:
+        return max(0.0, float(bankroll)) * max(0.0, float(kelly_fraction)) * f
+    except (TypeError, ValueError):
+        return 0.0
+
 def all_terms() -> list:
     """Flat ``[(term, definition), ...]`` across every group, in order. Used by the
     integrity tests and (HC-06) the downloadable-doc export."""

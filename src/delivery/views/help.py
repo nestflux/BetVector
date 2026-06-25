@@ -32,9 +32,14 @@ from src.delivery.help_content import (
     GOOD_TO_KNOW,
     START_HERE_INTRO,
     TOUR,
+    edge_pp,
     filter_glossary,
+    flat_stake,
+    implied_pct_from_odds,
+    kelly_stake,
     term_count,
     tour_for_page,
+    verdict_for_edge,
 )
 
 
@@ -106,6 +111,21 @@ def _help_css() -> str:
         "padding:8px 12px;font-family:Inter,sans-serif;font-size:12.5px;color:#E6EDF3;"
         "line-height:1.5;}"
         ".concept-eg b{color:#3FB950;font-weight:600;}"
+        ".tool-h{font-family:Inter,sans-serif;font-size:13px;font-weight:700;color:#3FB950;"
+        "text-transform:uppercase;letter-spacing:0.5px;margin:16px 0 8px;}"
+        ".tool-out{background:#161B22;border:1px solid #30363D;border-radius:8px;"
+        "padding:10px 14px;font-family:Inter,sans-serif;}"
+        ".tool-row{display:flex;justify-content:space-between;gap:12px;font-size:13px;"
+        "color:#8B949E;padding:3px 0;}"
+        ".tool-val{font-family:'JetBrains Mono',monospace;color:#E6EDF3;}"
+        ".tool-pill{display:inline-block;font-family:'JetBrains Mono',monospace;"
+        "font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;}"
+        ".mx{border-collapse:collapse;font-family:'JetBrains Mono',monospace;font-size:11px;}"
+        ".mx td,.mx th{width:26px;height:22px;text-align:center;color:#E6EDF3;"
+        "border:1px solid #0D1117;}"
+        ".mx th{color:#8B949E;font-weight:600;}"
+        ".mx-legend{font-family:Inter,sans-serif;font-size:12px;color:#8B949E;"
+        "margin-top:8px;line-height:1.6;}"
         "</style>"
     )
 
@@ -199,6 +219,86 @@ def _concepts_html(concepts: list) -> str:
     )
 
 
+def _value_result_html(odds, model_pct, implied, edge, verdict, threshold_pp, ceiling_pp) -> str:
+    """The 'Is it value?' read-out (all values numeric — no user strings reach the
+    markup). Shows implied %, the raw edge (model − 1/odds) coloured by verdict, and the
+    verdict pill against the config bounds."""
+    if implied is None or edge is None:
+        return ('<div class="tool-out"><div class="tool-row">'
+                '<span>Enter decimal odds above 1.00 to compare.</span></div></div>')
+    label, col = {
+        "value": ("VALUE", "#3FB950"),
+        "capped": ("CAPPED — likely model error", "#D29922"),
+        "none": ("NO EDGE", "#8B949E"),
+    }[verdict]
+    return (
+        '<div class="tool-out">'
+        f'<div class="tool-row"><span>Bookmaker implied probability (1 ÷ {odds:.2f})</span>'
+        f'<span class="tool-val">{implied:.1f}%</span></div>'
+        f'<div class="tool-row"><span>Your chance</span>'
+        f'<span class="tool-val">{model_pct:.1f}%</span></div>'
+        f'<div class="tool-row"><span>Edge (your % − implied)</span>'
+        f'<span class="tool-val" style="color:{col};">{edge:+.1f} pp</span></div>'
+        f'<div class="tool-row"><span>Verdict (backable {threshold_pp:.0f}–{ceiling_pp:.0f} pp)</span>'
+        f'<span class="tool-pill" style="background:{col};color:#0D1117;">{label}</span></div>'
+        '</div>'
+    )
+
+
+def _stake_result_html(flat, kelly, kelly_fraction) -> str:
+    """The 'How much to stake?' read-out — flat/percentage and (fractional) Kelly, in
+    dollars. Numeric only."""
+    note = "" if kelly > 0 else " — no edge at these numbers"
+    return (
+        '<div class="tool-out">'
+        f'<div class="tool-row"><span>Flat / percentage stake</span>'
+        f'<span class="tool-val">${flat:,.2f}</span></div>'
+        f'<div class="tool-row"><span>Kelly stake ({kelly_fraction * 100:.0f}% of full Kelly)</span>'
+        f'<span class="tool-val">${kelly:,.2f}{note}</span></div>'
+        '</div>'
+    )
+
+
+def _matrix_reader_html() -> str:
+    """A small labelled 7×7 scoreline grid: home-win / draw / away-win regions tinted,
+    with a legend explaining how each market is summed from the cells. Static."""
+    green, grey, red = "rgba(63,185,80,0.22)", "rgba(139,148,158,0.25)", "rgba(248,81,73,0.20)"
+    head = "".join(f"<th>{a}</th>" for a in range(7))
+    rows = ""
+    for h in range(7):
+        cells = "".join(
+            f'<td style="background:{green if h > a else (grey if h == a else red)};">·</td>'
+            for a in range(7)
+        )
+        rows += f"<tr><th>{h}</th>{cells}</tr>"
+    return (
+        '<div style="overflow-x:auto;">'
+        f'<table class="mx"><tr><th>H\\A</th>{head}</tr>{rows}</table></div>'
+        '<div class="mx-legend">Rows = home goals, columns = away goals. '
+        '<b style="color:#3FB950;">Green</b> cells (home &gt; away) sum to the home win; '
+        'the <b style="color:#8B949E;">grey</b> diagonal (level scores) sums to the draw; '
+        '<b style="color:#F85149;">red</b> cells (away &gt; home) sum to the away win. '
+        'Over 2.5 = every cell where the two numbers add to 3 or more; BTTS Yes = every '
+        'cell where both are at least 1.</div>'
+    )
+
+
+def _tool_bounds():
+    """(threshold_pp, ceiling_pp, kelly_fraction) from the SAME config the value finder
+    uses — documented defaults if it can't be loaded. Not pure (reads config), so it
+    stays out of the AST-tested helper set."""
+    try:
+        from src.world_cup.value_finder import _load_betting_config
+        cfg = _load_betting_config() or {}
+    except Exception:
+        cfg = {}
+    return (
+        float(cfg.get("edge_threshold", 0.03)) * 100.0,
+        float(cfg.get("max_actionable_edge", 0.15)) * 100.0,
+        float(cfg.get("kelly_fraction", 0.25)),
+    )
+
+
 def _glossary_html(groups: list) -> str:
     """The full (possibly filtered) glossary, or a friendly empty state when a search
     matches nothing."""
@@ -239,8 +339,8 @@ if _focus_card:
 
 st.divider()
 
-_tab_start, _tab_tour, _tab_101, _tab_faq, _tab_gloss = st.tabs(
-    ["📖 Start here", "🗺️ Screen tour", "🎓 Betting 101", "❓ FAQ", "🔤 Glossary"]
+_tab_start, _tab_tour, _tab_101, _tab_tools, _tab_faq, _tab_gloss = st.tabs(
+    ["📖 Start here", "🗺️ Screen tour", "🎓 Betting 101", "🧮 Tools", "❓ FAQ", "🔤 Glossary"]
 )
 
 with _tab_start:
@@ -260,6 +360,43 @@ with _tab_tour:
 with _tab_101:
     st.caption("The ideas behind the numbers — each with a quick worked example.")
     st.markdown(_concepts_html(CONCEPTS), unsafe_allow_html=True)
+
+with _tab_tools:
+    st.caption("Try the numbers yourself — read-only, nothing is logged.")
+    _thr_pp, _ceil_pp, _kf = _tool_bounds()
+
+    st.markdown('<div class="tool-h">Is it value?</div>', unsafe_allow_html=True)
+    _tc1, _tc2 = st.columns(2)
+    _t_odds = _tc1.number_input("Decimal odds", min_value=1.01, value=2.50, step=0.05,
+                                key="help_tool_odds")
+    _t_model = _tc2.number_input("Your (or the model's) chance, %", min_value=0.0,
+                                 max_value=100.0, value=48.0, step=0.5, key="help_tool_model")
+    _t_imp = implied_pct_from_odds(_t_odds)
+    _t_edge = edge_pp(_t_model, _t_odds)
+    _t_verd = verdict_for_edge(_t_edge, _thr_pp, _ceil_pp)
+    st.markdown(
+        _value_result_html(_t_odds, _t_model, _t_imp, _t_edge, _t_verd, _thr_pp, _ceil_pp),
+        unsafe_allow_html=True,
+    )
+
+    st.markdown('<div class="tool-h">How much to stake?</div>', unsafe_allow_html=True)
+    _tc3, _tc4 = st.columns(2)
+    _t_bank = _tc3.number_input("Bankroll, $", min_value=0.0, value=1000.0, step=50.0,
+                                key="help_tool_bank")
+    _t_pct = _tc4.number_input("Stake, % of bankroll", min_value=0.0, max_value=100.0,
+                               value=2.0, step=0.5, key="help_tool_pct")
+    st.markdown(
+        _stake_result_html(flat_stake(_t_bank, _t_pct),
+                           kelly_stake(_t_bank, _t_model, _t_odds, _kf), _kf),
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        f"Kelly uses the odds and chance from the calculator above, sized to {_kf * 100:.0f}% "
+        "of full Kelly for safety. Educational only — not a recommendation to bet."
+    )
+
+    st.markdown('<div class="tool-h">Reading the scoreline matrix</div>', unsafe_allow_html=True)
+    st.markdown(_matrix_reader_html(), unsafe_allow_html=True)
 
 with _tab_faq:
     st.caption("Quick answers to the questions that come up most.")

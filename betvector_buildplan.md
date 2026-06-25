@@ -9846,11 +9846,28 @@ edge lesson uses the raw 1/odds basis (consistent with the HC-03 fix). 3 new tes
 PASS · Gate 2 CLEAN (after the drawdown + flat-staking fixes) · Gate 3 APPROVED. Real
 PNG on owner Desktop. Only help_content.py + views/help.py + test changed.
 
-#### HC-05 — Interactive tools  ← NEXT
+#### HC-05 — Interactive tools  ✅ DONE
 
-Read-only widgets: an odds ↔ implied-prob ↔ edge calculator with a value verdict, a
-staking demo (bankroll + method → suggested stake), and a labelled scoreline-matrix
-reader. Pure math helpers unit-tested.
+A "🧮 Tools" tab (6th) with three read-only widgets. Pure math helpers in
+`help_content.py` (unit-tested with EXACT arithmetic): `implied_pct_from_odds` (100/odds),
+`edge_pp` (model − raw 1/odds, matching value_finder), `verdict_for_edge` (value/capped/
+none on the config bounds, inclusive both ends like the finder), `flat_stake`
+(bankroll × stake%, matching bankroll.py), `kelly_fraction_of_bankroll`
+(f* = (p·odds − 1)/(odds − 1)) + `kelly_stake` (× the configured kelly_fraction). The
+view (`help.py`) supplies live `st.number_input`s + reads the SAME config bounds the
+value finder uses via `_tool_bounds()` (edge_threshold 0.03 / max_actionable_edge 0.15 /
+kelly_fraction 0.25 — lazy-loaded, documented-default fallback, never hardcoded-wrong),
+and renders three pure escaped read-outs: **Is it value?** (implied %, edge pp coloured
+by verdict, VALUE/CAPPED/NO-EDGE pill), **How much to stake?** (flat + ¼-Kelly $), and a
+**scoreline-matrix reader** (a labelled 7×7 with home-win/draw/away-win regions tinted +
+a legend deriving 1X2 / O2.5 / BTTS from the cells). All inputs numeric → no XSS surface;
+read-only (nothing logged). 6 new tests (exact maths for all 6 helpers + AST render of
+the 3 read-outs). 1008/1008. Gate 1 PASS · Gate 2 CLEAN (every formula re-derived vs
+value_finder/bankroll/base_model + config) · Gate 3 APPROVED (crash-safe: tab unpack,
+division guards, no import cycle). Real PNG on owner Desktop. Only help_content.py +
+views/help.py + test changed.
+
+#### HC-06 — Downloadable doc export + migrate the 5 page glossaries to the shared source  ← NEXT
 
 #### HC-06 — Downloadable doc export + migrate the 5 page glossaries to the shared source
 
