@@ -565,10 +565,13 @@ odds_scrape:
   # Lean per-event pull (scrape_wc_match_odds, near kickoff) — protects the CLV
   # closing line: just the primary markets at minimal cost (markets × regions).
   markets: "h2h,totals"
-  # Richer once-daily board pull (scrape_wc_odds, morning). Cost = markets × regions
-  # PER REQUEST, and one board request returns every match — so the extra markets
-  # cost ~+2 credits/day total, not per match (DF-01). These feed the research card
-  # + deep dive comparison (1X2 + O/U 1.5/2.5/3.5 + BTTS); alternate_totals carries
-  # the non-2.5 O/U lines, btts the both-teams-to-score market.
-  board_markets: "h2h,totals,btts,alternate_totals"
+  # Once-daily board pull (scrape_wc_odds, morning) — one request returns every match.
+  # Restricted to the Odds API "featured" markets (h2h + totals) because the BULK
+  # /sports/{sport}/odds endpoint ONLY serves those. Requesting btts / alternate_totals
+  # here returns 422 INVALID_MARKET ("markets not supported by this endpoint") and the
+  # WHOLE request fails — those two are per-event-only markets (/events/{id}/odds).
+  # The deep dive's O/U 1.5/3.5 + BTTS columns come from the MODEL's scoreline grid
+  # (DF-01, predictor.derive_markets_from_lambdas), not from book odds. To add
+  # book-sourced BTTS / alt-O-U lines, pull them per-event (extra credits/match) — deferred.
+  board_markets: "h2h,totals"
   regions: "eu"
