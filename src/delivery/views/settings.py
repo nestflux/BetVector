@@ -60,8 +60,8 @@ COLOURS = {
 STAKING_OPTIONS = {
     "flat": (
         "Flat Staking",
-        "Bet a fixed percentage of your bankroll on every qualifying bet. "
-        "Simple and safe — recommended for beginners.",
+        "Bet the same fixed amount every time — a set % of your starting bankroll, "
+        "regardless of your current balance. Simple and steady — recommended for beginners.",
     ),
     "percentage": (
         "Percentage Staking",

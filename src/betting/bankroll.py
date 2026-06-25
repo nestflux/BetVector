@@ -16,15 +16,16 @@ Staking Methods
 This module supports three staking methods:
 
 1. **Flat staking** (default):
-   stake = current_bankroll × stake_percentage
-   Example: $1000 × 0.02 = $20 per bet.  Simple and conservative.
-   Recommended for beginners.
+   stake = starting_bankroll × stake_percentage
+   Example: $1000 starting × 0.02 = $20 — the SAME fixed amount every bet,
+   regardless of the current balance ("level staking").  The simplest and
+   lowest-variance method; recommended for beginners.
 
 2. **Percentage staking**:
-   Same formula as flat, but recalculates after each bet as the bankroll
-   changes.  When winning, stakes grow; when losing, stakes shrink
-   automatically.  In practice this is identical to flat in a single
-   calculation — the difference emerges over a sequence of bets.
+   stake = current_bankroll × stake_percentage
+   A fixed percentage of the CURRENT bankroll, recalculated each bet: stakes
+   grow on a winning run and shrink in a downswing (automatic protection).
+   Unlike flat, the stake moves with the balance and compounds over a sequence.
 
 3. **Kelly Criterion** (fractional):
    The Kelly Criterion is a formula that calculates the theoretically
@@ -289,11 +290,19 @@ class BankrollManager:
                 kelly_fraction=user["kelly_fraction"],
                 bankroll=bankroll,
             )
+        elif method == "flat":
+            # Flat (level) staking: the SAME fixed amount every bet — a set
+            # percentage of the user's STARTING bankroll, unchanged as the balance
+            # moves.  This is classic level staking: the simplest, lowest-variance
+            # method (recommended for beginners) and genuinely distinct from
+            # "percentage" below.  Falls back to the current bankroll only if a
+            # starting value is somehow missing, so a stake is never $0 by accident.
+            base = user.get("starting_bankroll") or bankroll
+            raw_stake = base * user["stake_percentage"]
         else:
-            # Both "flat" and "percentage" use the same formula:
-            # stake = current_bankroll × stake_percentage
-            # The difference is that "percentage" recalculates after each bet
-            # (which happens naturally since we always read current_bankroll)
+            # Percentage staking: a fixed percentage of the CURRENT bankroll, so the
+            # stake recomputes as the balance moves — it grows on a winning run and
+            # shrinks in a downswing (automatic protection), compounding over time.
             raw_stake = bankroll * user["stake_percentage"]
 
         # --- PC-25-09: Per-league stake multiplier ---

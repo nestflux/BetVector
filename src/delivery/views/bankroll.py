@@ -53,8 +53,8 @@ COLOURS = {
 
 # Human-readable staking method labels and explanations
 STAKING_LABELS = {
-    "flat": ("Flat Staking", "Fixed percentage of current bankroll on every bet."),
-    "percentage": ("Percentage Staking", "Recalculated percentage of bankroll after each bet."),
+    "flat": ("Flat Staking", "A fixed amount each bet — a set % of your starting bankroll (level staking)."),
+    "percentage": ("Percentage Staking", "Recalculated % of your current bankroll after each bet."),
     "kelly": ("Kelly Criterion", "Fractional Kelly — stake proportional to edge and odds."),
 }
 

@@ -9840,7 +9840,13 @@ code — caught **two real errors** that were ALSO latent in the consolidated gl
 CURRENT bankroll** (`bankroll.py`: flat and percentage share `current_bankroll ×
 stake_percentage`), not the "% of starting bankroll" the copy claimed. Fixed the
 concept + the glossary entries to match the code; spawned an owner task to reconcile
-the app's own Settings/onboarding copy (which still says 30% / starting-bankroll). The
+the app's own Settings/onboarding copy (which still says 30% / starting-bankroll).
+[RESOLVED 2026-06-25: the owner reconciled the OTHER way for flat staking — changed
+`bankroll.py` so flat sizes off the **starting** bankroll (true level staking, distinct
+from percentage), and aligned every copy source (help_content, Settings, onboarding,
+bankroll view) to "starting"; new `tests/test_flat_level_staking.py`. The drawdown 25%
+fix stood. The backtester's own current-based "flat" was left as-is — flagged for owner
+sign-off since changing it would shift documented backtest baselines.] The
 edge lesson uses the raw 1/odds basis (consistent with the HC-03 fix). 3 new tests
 (concept integrity + the edge-example arithmetic + AST/escaping). 1002/1002. Gate 1
 PASS · Gate 2 CLEAN (after the drawdown + flat-staking fixes) · Gate 3 APPROVED. Real

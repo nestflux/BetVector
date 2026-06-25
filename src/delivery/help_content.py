@@ -265,13 +265,14 @@ GLOSSARY_GROUPS = [
             ("Drawdown", "How far the bankroll has fallen from its peak, as a "
              "percentage. Peak $1,100 → now $990 = a 10% drawdown. 10–20% is normal; at "
              "25% the app raises a safety alert."),
-            ("Flat staking", "Bet a fixed percentage of your bankroll each time (e.g. "
-             "2%). In BetVector, flat and percentage staking use the same "
-             "current-bankroll formula, so they come out almost identical — the real "
-             "choice is between these and Kelly."),
+            ("Flat staking", "Level staking: the SAME fixed amount every bet — a set "
+             "percentage of your STARTING bankroll (e.g. 2% of a $1,000 start = $20 each "
+             "time), regardless of your current balance. The simplest, steadiest method, "
+             "good for beginners. Contrast with percentage staking, which moves with your "
+             "current balance."),
             ("Percentage staking", "Bet a fixed percentage of your current bankroll, so "
              "the stake recomputes as the balance moves (it shrinks in a downswing — "
-             "automatic protection)."),
+             "automatic protection). Unlike flat, it compounds over a run of bets."),
             ("Kelly Criterion", "A formula that sizes bets in proportion to the edge "
              "and the odds, to maximise long-term growth. It is volatile, so BetVector "
              "uses fractional (e.g. quarter) Kelly for safety."),
@@ -605,12 +606,14 @@ CONCEPTS = [
     {
         "title": "Bankroll and staking",
         "body": "Stake a small, consistent slice of your bankroll so a bad run can't "
-                "wipe you out. Flat and Percentage both bet a fixed % of your current "
-                "bankroll (in BetVector they come out almost the same); Kelly instead "
-                "sizes each bet by its edge — bigger edge, bigger bet — which grows "
-                "faster but swings harder, so it's used as a fraction.",
-        "example": "On a $1,000 bankroll at 2%, your next bet is about $20 (2% of the "
-                   "balance), recomputed as the balance moves.",
+                "wipe you out. Flat staking bets a fixed amount each time (a % of your "
+                "STARTING bankroll); Percentage staking bets a % of your CURRENT balance, "
+                "so it shrinks in a downswing; Kelly sizes each bet by its edge — bigger "
+                "edge, bigger bet — which grows faster but swings harder, so it's used as "
+                "a fraction.",
+        "example": "Start $1,000 at 2%: flat stakes a level $20 every bet, while "
+                   "percentage stakes 2% of the current balance — $20 now, less after a "
+                   "loss, more after a win.",
     },
     {
         "title": "Drawdown",
@@ -706,8 +709,9 @@ def verdict_for_edge(edge, threshold_pp, ceiling_pp):
 
 
 def flat_stake(bankroll, stake_pct):
-    """Flat / percentage stake in dollars = bankroll × stake% (BetVector reads the
-    CURRENT bankroll for both). 0 for bad / negative inputs."""
+    """Stake in dollars = bankroll × stake%. Pass your STARTING bankroll for flat
+    (level) staking, or your CURRENT balance for percentage staking. 0 for bad /
+    negative inputs."""
     try:
         return max(0.0, float(bankroll)) * max(0.0, float(stake_pct)) / 100.0
     except (TypeError, ValueError):

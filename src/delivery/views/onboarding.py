@@ -46,7 +46,8 @@ STAKING_OPTIONS = [
     (
         "flat",
         "Flat Stakes (recommended for beginners)",
-        "Bet 2% of your bankroll on every qualifying bet. Simple and safe.",
+        "Bet a fixed 2% of your starting bankroll every time — the same stake "
+        "regardless of swings. Simple and safe.",
     ),
     (
         "percentage",

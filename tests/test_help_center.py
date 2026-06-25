@@ -493,9 +493,11 @@ def test_migration_propagates_the_hc04_fixes_to_the_page_glossaries():
     # HC-04 corrected the master source; migrating must carry those fixes onto the pages.
     bank = help_content.glossary_sections_html("Bankroll Manager")
     assert "25%" in bank and "30%" not in bank          # drawdown alert is 25%, not 30%
+    # Flat = level staking off the STARTING bankroll (the owner reconcile decision,
+    # 2026-06-25: the code now uses starting_bankroll and the copy matches).
     flat = _page_def("Bankroll Manager", "Flat Staking")
-    assert "current-bankroll" in flat                   # flat reads CURRENT bankroll …
-    assert "starting bankroll" not in flat.lower()      # … not the starting bankroll
+    assert "starting" in flat.lower() and "level" in flat.lower()  # level/starting, distinct
+    assert "current-bankroll formula" not in flat                  # not the old degenerate wording
 
 
 def test_glossary_sections_html_renders_escaped_for_every_page():

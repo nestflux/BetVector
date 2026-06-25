@@ -255,7 +255,7 @@ def _stake_result_html(flat, kelly, kelly_fraction) -> str:
     note = "" if kelly > 0 else " — no edge at these numbers"
     return (
         '<div class="tool-out">'
-        f'<div class="tool-row"><span>Flat / percentage stake</span>'
+        f'<div class="tool-row"><span>Stake at this % of bankroll</span>'
         f'<span class="tool-val">${flat:,.2f}</span></div>'
         f'<div class="tool-row"><span>Kelly stake ({kelly_fraction * 100:.0f}% of full Kelly)</span>'
         f'<span class="tool-val">${kelly:,.2f}{note}</span></div>'
