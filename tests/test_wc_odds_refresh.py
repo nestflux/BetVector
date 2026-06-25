@@ -35,14 +35,16 @@ class _Resp:
 def test_odds_scrape_cfg_is_disciplined():
     cfg = _get_odds_scrape_cfg()
     assert cfg["markets"] == "h2h,totals"   # lean per-event pull (spreads dropped)
-    # Richer board pull adds btts + alternate_totals for the research comparison (DF-01)
-    assert cfg["board_markets"] == "h2h,totals,btts,alternate_totals"
+    # Board pull is featured-markets ONLY: the bulk /odds endpoint rejects btts /
+    # alternate_totals with 422 (per-event-only markets). The deep dive derives
+    # O/U 1.5/3.5 + BTTS from the model's scoreline grid instead.
+    assert cfg["board_markets"] == "h2h,totals"
     assert cfg["regions"] == "eu"           # 1 region incl. Pinnacle → 2 credits/call
 
 
 def test_scrape_uses_config_defaults(monkeypatch, tmp_path):
-    """No-arg board scrape uses the richer board_markets set (DF-01) — still cheap:
-    cost is markets × regions PER REQUEST and one request covers every match."""
+    """No-arg board scrape uses the board_markets set — featured markets only, since
+    the bulk /odds endpoint rejects btts/alternate_totals with 422 (per-event-only)."""
     captured = {}
 
     def fake_get(url, params=None, timeout=None):
@@ -55,7 +57,7 @@ def test_scrape_uses_config_defaults(monkeypatch, tmp_path):
     monkeypatch.setattr(scraper, "_load_odds_to_db", lambda events: 0)
 
     scrape_wc_odds()
-    assert captured["markets"] == "h2h,totals,btts,alternate_totals"   # board pull
+    assert captured["markets"] == "h2h,totals"   # board pull (featured markets only)
     assert captured["regions"] == "eu"
     assert "spreads" not in captured["markets"]   # the unused, costly market stays out
 
