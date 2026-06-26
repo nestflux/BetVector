@@ -30,6 +30,7 @@ python-dotenv==1.1.0
 
 # --- Dashboard ---
 streamlit==1.41.0
+streamlit-cookies-controller==0.0.4  # persistent login: signed session cookie (survives refresh)
 plotly==5.24.1
 
 # --- Charts (static exports) ---

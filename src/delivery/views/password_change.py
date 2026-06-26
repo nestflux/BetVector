@@ -29,7 +29,6 @@ import html
 import streamlit as st
 
 from src.auth import (
-    clear_session_user,
     get_session_user_id,
     set_user_password,
     validate_new_password,
@@ -115,5 +114,9 @@ def render_forced_password_change() -> None:
         # Escape hatch so a confused user is never trapped on this screen.
         st.divider()
         if st.button("Log out", key="fpc_logout", use_container_width=True):
-            clear_session_user()
+            # Defer the session-clear + cookie-expire to the login gate
+            # (dashboard.check_password) so the expire-cookie component fires on a
+            # completing run; clearing it here then st.rerun would leave the
+            # cookie behind and silently re-hydrate the session.
+            st.session_state["_pending_logout"] = True
             st.rerun()

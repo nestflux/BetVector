@@ -36,8 +36,11 @@ Master Plan refs: MP §6 Database Schema (users table)
 from __future__ import annotations
 
 import hashlib
+import hmac
 import logging
+import os
 import secrets
+import time
 from datetime import datetime
 from typing import Optional
 
@@ -376,3 +379,114 @@ def get_session_user_role() -> str:
         ``"owner"`` or ``"viewer"``.
     """
     return st.session_state.get("user_role", "owner")
+
+
+# ============================================================================
+# Persistent Login — Signed Session Cookie
+# ============================================================================
+# Streamlit keeps ``st.session_state`` only for the life of a browser WebSocket
+# connection, so a full page refresh starts a fresh session and the user
+# appears logged out.  To survive a refresh we store a SIGNED, EXPIRING token in
+# a browser cookie (set/read by the dashboard via streamlit-cookies-controller)
+# and re-hydrate the session from it on load.
+#
+# Token format:  ``"<user_id>.<expiry_epoch>.<hmac_sha256>"``
+# The HMAC is keyed on a server-side secret (SESSION_COOKIE_SECRET) so a client
+# can neither forge nor tamper with a token — only the server can mint a valid
+# one.  Without a secret configured the feature is INERT (both functions return
+# ``None``), so the app safely degrades to session-only auth with no behaviour
+# change and no error.
+
+SESSION_COOKIE_NAME = "bv_session"
+
+
+def _cookie_secret() -> Optional[str]:
+    """Return the server-side HMAC secret for session cookies, or ``None``.
+
+    Looks in the ``SESSION_COOKIE_SECRET`` environment variable first (local
+    ``.env``), then Streamlit secrets (cloud).  Returns ``None`` if neither is
+    set — callers treat that as "persistent login disabled", never an error.
+    The secret value is never logged.
+    """
+    sec = os.environ.get("SESSION_COOKIE_SECRET")
+    if not sec:
+        try:
+            sec = st.secrets.get("SESSION_COOKIE_SECRET")
+        except Exception:
+            # st.secrets raises when no secrets file exists — treat as unset.
+            sec = None
+    return sec or None
+
+
+def make_session_token(
+    user_id: int,
+    days: int,
+    *,
+    secret: Optional[str] = None,
+    now_ts: Optional[float] = None,
+) -> Optional[str]:
+    """Mint a signed session token for ``user_id`` valid for ``days`` days.
+
+    Returns ``None`` if no signing secret is configured (feature disabled).
+    ``secret`` and ``now_ts`` are injectable so the function is pure and unit
+    testable; in production they default to :func:`_cookie_secret` and the wall
+    clock.
+
+    Parameters
+    ----------
+    user_id : int
+        The authenticated user's database id to embed in the token.
+    days : int
+        Token lifetime in days (also used as the cookie max-age by the caller).
+    """
+    secret = secret if secret is not None else _cookie_secret()
+    if not secret:
+        return None
+    now_ts = time.time() if now_ts is None else now_ts
+    expiry = int(now_ts + days * 86400)
+    message = f"{int(user_id)}.{expiry}"
+    signature = hmac.new(secret.encode(), message.encode(), hashlib.sha256).hexdigest()
+    return f"{message}.{signature}"
+
+
+def verify_session_token(
+    token: Optional[str],
+    *,
+    secret: Optional[str] = None,
+    now_ts: Optional[float] = None,
+) -> Optional[int]:
+    """Validate a session token and return its ``user_id``, or ``None``.
+
+    Rejects (returns ``None``) when: no secret is configured, the token is
+    malformed, the signature doesn't match (tampered/forged), or it has expired.
+    Uses :func:`hmac.compare_digest` for a constant-time signature comparison so
+    it can't be timing-attacked.
+
+    This proves the token's INTEGRITY and FRESHNESS only — the caller must still
+    confirm the user is active in the database before trusting it, because a
+    token stays cryptographically valid until its expiry even if the account was
+    deactivated or deleted in the meantime.
+    """
+    if not token:
+        return None
+    secret = secret if secret is not None else _cookie_secret()
+    if not secret:
+        return None
+    parts = token.split(".")
+    if len(parts) != 3:
+        return None
+    user_id_str, expiry_str, signature = parts
+    message = f"{user_id_str}.{expiry_str}"
+    expected = hmac.new(secret.encode(), message.encode(), hashlib.sha256).hexdigest()
+    # Constant-time comparison — reject any tampered or forged signature.
+    if not hmac.compare_digest(expected, signature):
+        return None
+    try:
+        expiry = int(expiry_str)
+        user_id = int(user_id_str)
+    except ValueError:
+        return None
+    now_ts = time.time() if now_ts is None else now_ts
+    if expiry < now_ts:
+        return None
+    return user_id

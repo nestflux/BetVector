@@ -69,7 +69,8 @@ from src.config import PROJECT_ROOT
 from src.auth import (
     is_authenticated, set_session_user, get_session_user_id,
     get_session_user_role, get_user_by_email, verify_password,
-    clear_session_user,
+    clear_session_user, make_session_token, verify_session_token,
+    SESSION_COOKIE_NAME, _cookie_secret,
 )
 
 # Load .env file so DASHBOARD_PASSWORD and other secrets are available
@@ -412,6 +413,155 @@ def _get_emergency_password() -> str:
     return pwd
 
 
+# ---------------------------------------------------------------------------
+# Persistent login — signed-cookie session restore (survives a page refresh)
+# ---------------------------------------------------------------------------
+def _cookie_jar():
+    """Return a CookieController (mounts the read-component once per run), or
+    ``None`` if the component is unavailable.
+
+    Re-instantiating within the same run reuses the cached cookie dict (see
+    CookieController.__init__), so it is safe to call from several sites (gate,
+    login handler, logout) in one run.  Any failure returns None and the app
+    degrades to session-only auth — never an error on the login path.
+
+    Returns None (skipping the component mount entirely) when no signing secret
+    is configured, so persistent login is fully inert — the gate then behaves
+    exactly as before, with no cookie and no "restoring session" wait.
+    """
+    if not _cookie_secret():
+        return None
+    try:
+        from streamlit_cookies_controller import CookieController
+        return CookieController()
+    except Exception:
+        return None
+
+
+def _running_on_cloud() -> bool:
+    """True on Streamlit Cloud (HTTPS), detected via the database connection
+    secret — the same signal check_password uses to require authentication."""
+    try:
+        return bool(st.secrets.get("database", {}).get("connection_string", ""))
+    except Exception:
+        return False
+
+
+def _cookie_settings():
+    """(days, secure) for the session cookie, from config with safe fallbacks.
+
+    ``secure`` is forced True on Streamlit Cloud (HTTPS) regardless of config so
+    the live deployment always ships a Secure cookie; locally it honours the
+    config default (False) so the cookie still works over plain http.
+    """
+    from src.config import config
+    try:
+        days = int(getattr(config.settings.dashboard, "session_cookie_days"))
+    except Exception:
+        days = 7
+    try:
+        secure = bool(getattr(config.settings.dashboard, "session_cookie_secure"))
+    except Exception:
+        secure = False
+    return max(1, days), (secure or _running_on_cloud())
+
+
+def _load_active_user(user_id: int):
+    """Return ``(id, role)`` if the user exists AND is active, else ``None``.
+
+    Re-validated on every cookie rehydrate so a deactivated or deleted account
+    cannot keep riding a still-cryptographically-valid token.
+    """
+    try:
+        from src.database.db import get_session
+        from src.database.models import User
+        with get_session() as session:
+            user = session.get(User, user_id)
+            if user is not None and getattr(user, "is_active", 1) == 1:
+                return (user.id, user.role)
+    except Exception:
+        return None
+    return None
+
+
+def persist_login_cookie(jar, user_id: int) -> None:
+    """Set the signed session cookie after a successful login.
+
+    No-op if the cookie component is unavailable or no signing secret is set
+    (``make_session_token`` returns None) — persistent login simply stays off.
+    A cookie-set failure must never block a successful login.
+    """
+    if jar is None:
+        return
+    days, secure = _cookie_settings()
+    token = make_session_token(user_id, days)
+    if not token:
+        return
+    try:
+        from datetime import datetime, timedelta
+        jar.set(
+            SESSION_COOKIE_NAME, token,
+            max_age=days * 86400,
+            expires=datetime.now() + timedelta(days=days),
+            same_site="lax",
+            secure=secure,
+        )
+    except Exception:
+        pass
+
+
+def clear_login_cookie(jar) -> None:
+    """Expire the session cookie on logout / when a stale token is rejected.
+
+    Overwrites it with an immediately-expiring empty value via ``set`` rather
+    than calling ``remove``. ``set`` is the reliable path here: the component's
+    ``remove`` both raises KeyError when the cookie isn't cached AND, in
+    practice, can fail to actually delete the browser cookie — whereas a ``set``
+    with max_age=0 and a past expiry deletes it dependably, using the same path
+    and SameSite the cookie was created with.
+    """
+    if jar is None:
+        return
+    try:
+        from datetime import datetime, timedelta
+        _, secure = _cookie_settings()
+        jar.set(
+            SESSION_COOKIE_NAME, "",
+            max_age=0,
+            expires=datetime.now() - timedelta(days=1),
+            same_site="lax",
+            secure=secure,
+        )
+    except Exception:
+        pass
+
+
+def _rehydrate_from_cookie(jar) -> bool:
+    """Restore the session from a valid cookie token. Returns True on success.
+
+    A present-but-invalid/expired/forged token, or one for a user who is gone
+    or deactivated, is dropped so we do not retry it on every load.  A missing
+    cookie returns False without removing anything (it may simply not have been
+    delivered by the component yet).
+    """
+    if jar is None:
+        return False
+    try:
+        token = jar.get(SESSION_COOKIE_NAME)
+    except Exception:
+        return False
+    if not token:
+        return False
+    user_id = verify_session_token(token)
+    if user_id is not None:
+        ident = _load_active_user(user_id)
+        if ident is not None:
+            set_session_user(ident[0], ident[1])
+            return True
+    clear_login_cookie(jar)
+    return False
+
+
 def check_password() -> bool:
     """Multi-user login gate with emergency owner fallback (E34-02).
 
@@ -435,11 +585,49 @@ def check_password() -> bool:
 
     Returns True if authenticated this session, False while showing the form.
     """
+    # Deferred logout: a "Log out" click sets this flag and reruns; the actual
+    # session-clear + cookie-expire happen HERE, on a run that COMPLETES by
+    # rendering the login form, so the expire-cookie component actually fires.
+    # (Expiring the cookie then immediately st.rerun()-ing inside the click
+    # handler tears the component down before it deletes the browser cookie, and
+    # the surviving cookie would silently re-hydrate the session on the next run
+    # — i.e. logout wouldn't stick.)
+    if st.session_state.get("_pending_logout"):
+        st.session_state.pop("_pending_logout", None)
+        clear_login_cookie(_cookie_jar())
+        clear_session_user()
+
     emergency_pwd = _get_emergency_password()
 
     # Already authenticated in this browser session — skip the form
     if is_authenticated():
         return True
+
+    # Persistent login: re-hydrate the session from a signed cookie so a browser
+    # refresh (which wipes st.session_state) doesn't bounce the user to login.
+    jar = _cookie_jar()
+    if _rehydrate_from_cookie(jar):
+        return True
+    # The cookie component delivers its value ASYNCHRONOUSLY, ~one rerun after it
+    # mounts, so on the first run of a fresh page (e.g. just after a refresh) the
+    # cookie hasn't arrived yet. Wait for that single delivery with st.stop() —
+    # NOT st.rerun(): the library mounts the read-component only once and then
+    # caches it, so a premature rerun tears it down before it reports and the
+    # cookie is never read. The flag bounds this to ONE wait, so a genuinely
+    # absent cookie just falls through to the login form on the next run (when
+    # the component has reported back an empty set). A neutral "restoring"
+    # placeholder shows instead of a login-form flash for a returning user.
+    if jar is not None and not st.session_state.get("_cookie_checked"):
+        st.session_state["_cookie_checked"] = True
+        _, _mid, _ = st.columns([1, 2, 1])
+        with _mid:
+            render_page_logo(width=180)
+            st.markdown(
+                '<p style="text-align:center;color:#8B949E;font-family:Inter,'
+                'sans-serif;font-size:13px;margin-top:8px;">Restoring your session…</p>',
+                unsafe_allow_html=True,
+            )
+        st.stop()
 
     # PC-10: Detect Streamlit Cloud — if database secrets are configured,
     # we're running in production and MUST require authentication.
@@ -548,8 +736,9 @@ def _handle_login(email: str, password: str, emergency_pwd: str) -> None:
         user = get_user_by_email(email)
         if user is not None:
             if user.password_hash and verify_password(password, user.password_hash):
-                # Successful DB login — set session and reload
+                # Successful DB login — set session, persist the cookie, reload
                 set_session_user(user.id, user.role)
+                persist_login_cookie(_cookie_jar(), user.id)
                 st.rerun()
                 return
             # User found but password wrong or not set — fall through to
@@ -559,6 +748,7 @@ def _handle_login(email: str, password: str, emergency_pwd: str) -> None:
     # Path 2: emergency owner fallback (password-only, no email required)
     if emergency_pwd and password == emergency_pwd:
         set_session_user(1, "owner")
+        persist_login_cookie(_cookie_jar(), 1)
         st.rerun()
         return
 
@@ -745,7 +935,9 @@ def _render_sidebar_identity() -> None:
         unsafe_allow_html=True,
     )
     if st.button("Log out", key="sidebar_logout", use_container_width=True):
-        clear_session_user()
+        # Defer to the gate (check_password) so the cookie-expire fires on a
+        # completing run — see the _pending_logout handler there.
+        st.session_state["_pending_logout"] = True
         st.rerun()
 
 

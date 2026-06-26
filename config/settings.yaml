@@ -402,6 +402,11 @@ dashboard:
   cache_ttl_seconds: 600         # standard global reads (fixtures, value bets, model perf) — 10 min
   cache_ttl_live_seconds: 300    # most volatile global reads (live model metrics, top picks) — 5 min
   cache_ttl_slow_seconds: 1800   # slow-moving global reads (group standings, recent results) — 30 min
+  # Persistent login (signed session cookie) — keeps a user signed in across a
+  # browser refresh instead of bouncing them to the login page (Streamlit wipes
+  # st.session_state on refresh). Requires SESSION_COOKIE_SECRET in .env / secrets.
+  session_cookie_days: 7         # how long "stay signed in" lasts before re-login is required
+  session_cookie_secure: false   # local default; auto-forced True on Streamlit Cloud (HTTPS). Set true to require HTTPS everywhere
 
 # ---------------------------------------------------------------------------
 # Enum Definitions  (MP §6 — used for validation throughout the codebase)
