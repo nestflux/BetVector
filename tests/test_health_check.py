@@ -263,6 +263,7 @@ def test_api_keys_check(session):
 
 def test_last_pipeline_run_states(session):
     cfg = resolve_config()
+    _match(session)  # in-season: an upcoming league fixture so the check isn't season-skipped
     assert hc._check_last_pipeline_run(session, NOW, cfg).status == SKIP   # none yet
     _pipeline_run(session, status="completed", started_at=_iso(NOW - timedelta(hours=2)))
     assert hc._check_last_pipeline_run(session, NOW, cfg).status == OK
@@ -273,9 +274,21 @@ def test_last_pipeline_run_states(session):
 
 def test_last_pipeline_run_overdue_and_empty(session):
     cfg = resolve_config()
+    _match(session)  # in-season fixture so the overdue check actually fires (not season-skipped)
     _pipeline_run(session, status="completed",
                   started_at=_iso(NOW - timedelta(hours=40)), predictions_made=10)
     assert hc._check_last_pipeline_run(session, NOW, cfg).status == WARN   # overdue ≥26h
+
+
+def test_last_pipeline_run_skips_off_season(session):
+    """Off-season: no recent/upcoming league fixtures, so the league morning pipeline
+    is intentionally paused — the check SKIPs rather than crying WARN, even with a
+    long-overdue run still on the ledger (the DH-01 "activity-aware" rule)."""
+    cfg = resolve_config()
+    _pipeline_run(session, status="completed",
+                  started_at=_iso(NOW - timedelta(hours=200)))
+    # No active league fixtures seeded → _leagues_active is False → SKIP.
+    assert hc._check_last_pipeline_run(session, NOW, cfg).status == SKIP
 
 
 def test_world_cup_checks_skip_without_data_and_flag_stale_stubs(session):

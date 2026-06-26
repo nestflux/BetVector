@@ -466,7 +466,17 @@ def _check_stale_stubs(session: Session, now: datetime, cfg: dict) -> CheckResul
 
 def _check_last_pipeline_run(session: Session, now: datetime, cfg: dict) -> CheckResult:
     """Did the most recent morning pipeline finish, recently, and actually produce
-    predictions? Reads the pipeline_runs ledger."""
+    predictions? Reads the pipeline_runs ledger.
+
+    Season-gated: the morning run tracked here is the DOMESTIC LEAGUE pipeline, which
+    is intentionally paused between seasons (its launchd crons are unloaded off-season).
+    When the leagues aren't playing we SKIP rather than WARN — otherwise it would cry
+    "the scheduled job may not be firing" for the whole off-season even though the pause
+    is deliberate. (The World Cup pipeline is covered by its own freshness checks.)"""
+    if not _leagues_active(session, now, cfg):
+        return CheckResult("Pipeline", "Last morning run", SKIP,
+                           "Domestic leagues are between seasons — the league morning "
+                           "pipeline is intentionally paused, so no recent run is expected.")
     run = session.query(PipelineRun).filter(
         PipelineRun.run_type == "morning").order_by(
         PipelineRun.started_at.desc()).first()
