@@ -55,10 +55,18 @@ LOG_FILE="$LOG_DIR/wc_${MODE}_${DATE_STAMP}.log"
 # Source .env (launchd doesn't inherit shell env vars)
 # ---------------------------------------------------------------------------
 if [[ -f "$ENV_FILE" ]]; then
+    # Non-fatal source: a single malformed .env line (e.g. a stray space after
+    # '=', which bash mis-parses as `KEY= ` + a command) must NOT abort the
+    # whole results run under `set -e`. The pipeline's Python entrypoint also
+    # calls load_dotenv(), which parses such quirks correctly and is the real
+    # loader, so this shell source is best-effort. stderr -> /dev/null so a bad
+    # line can never echo a secret value into the logs.
+    set +e
     set -a
     # shellcheck disable=SC1090
-    source "$ENV_FILE"
+    source "$ENV_FILE" 2>/dev/null
     set +a
+    set -e
 else
     echo "[$TIME_STAMP] WARNING: .env file not found at $ENV_FILE" | tee -a "$LOG_FILE"
 fi
