@@ -211,7 +211,7 @@ def _run_morning() -> dict:
         results["value_bets"] = {"new": 0, "total": 0}
 
     # 7b. Write today's fixtures to the local cache for the pre-kickoff dispatcher
-    # (WC-10-03) — lets the 15-min heartbeat find imminent matches without Neon.
+    # (WC-10-03) — lets the 5-min heartbeat find imminent matches without Neon.
     from src.world_cup.dispatcher import write_fixture_cache
     results["fixture_cache"] = _step("Write Fixture Cache", write_fixture_cache)
 

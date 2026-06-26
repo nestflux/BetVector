@@ -3,17 +3,17 @@ BetVector World Cup 2026 — Pre-Kickoff Dispatcher (WC-10-03)
 ============================================================
 A schedule-proof trigger for per-match pre-kickoff runs. The morning pipeline
 writes the day's fixtures to a LOCAL json cache; a launchd job runs this
-dispatcher every ~15 min. When a match enters the pre-KO window (~40 min before
+dispatcher every ~5 min. When a match enters the pre-KO window (~40 min before
 kickoff) and hasn't been prepped today, it fires the prematch run (WC-10-04) —
 **exactly once** per match.
 
 Free-tier discipline (WC-10-03): the idle heartbeat reads ONLY local json (the
 fixture cache + the prepped-state file) — it never opens a Neon connection. Neon
 is touched only when a prematch run actually fires, so the DB stays autosuspended
-between kickoffs and we don't burn free-tier compute on 96 daily wake-ups.
+between kickoffs and we don't burn free-tier compute on 288 daily wake-ups.
 
 Why dynamic (not a fixed schedule): WC matches span ~11 kickoff times (1–11 PM
-ET), 2–8/day, reshuffling each round. A 15-min heartbeat that acts only when a
+ET), 2–8/day, reshuffling each round. A 5-min heartbeat that acts only when a
 match is imminent adapts to any schedule with zero manual retuning.
 """
 

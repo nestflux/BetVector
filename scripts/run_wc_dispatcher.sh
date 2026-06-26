@@ -2,7 +2,7 @@
 # ---------------------------------------------------------------------------
 # BetVector — WC Pre-Kickoff Dispatcher runner (WC-10-03)
 # ---------------------------------------------------------------------------
-# Invoked every ~15 min by launchd (com.betvector.wc_dispatcher). Reads the
+# Invoked every ~5 min by launchd (com.betvector.wc_dispatcher). Reads the
 # LOCAL fixture cache and fires a focused prematch run only when a match is
 # ~40 min from kickoff. .env is sourced so that WHEN a prematch fires it reaches
 # Neon (DATABASE_URL); idle ticks open no DB connection.
@@ -38,5 +38,5 @@ else
     exit 1
 fi
 
-# One quick tick. The ~15-min cadence is launchd's StartInterval, not a loop here.
+# One quick tick. The ~5-min cadence is launchd's StartInterval, not a loop here.
 python -m src.world_cup.dispatcher >> "$LOG_FILE" 2>&1
