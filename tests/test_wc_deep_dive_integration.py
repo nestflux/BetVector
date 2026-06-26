@@ -199,6 +199,7 @@ _PURE_FUNCS = {
     "_scenarios_table_html", "_model_cell_html", "_delta_html",
     "_model_compare_table_html", "_price_td", "_clv_td", "_movement_table_html",
     "_lineup_card_html", "_book_cell_html", "_market_table_html",
+    "_position_group", "_position_chip",
 }
 
 
@@ -213,6 +214,34 @@ def _view_namespace():
         elif isinstance(node, ast.FunctionDef) and node.name in _PURE_FUNCS:
             exec(compile(ast.Module(body=[node], type_ignores=[]), "<dd>", "exec"), ns)
     return ns
+
+
+def test_position_group_mapping_and_chips():
+    """Cosmetic position chips: ESPN abbrevs map to GK/DEF/MID/FWD, and the lineup
+    card renders one chip per starter in team-sheet order (GK -> DEF -> MID -> FWD)."""
+    ns = _view_namespace()
+    pg = ns["_position_group"]
+    assert pg("G") == "GK"
+    assert pg("CD-L") == "DEF" and pg("RB") == "DEF" and pg("SW") == "DEF"
+    assert pg("DM") == "MID" and pg("AM-R") == "MID" and pg("LM") == "MID"
+    assert pg("CF-L") == "FWD" and pg("RF") == "FWD" and pg("F") == "FWD"
+    assert pg("SUB") is None and pg(None) is None and pg("") is None
+
+    team = {
+        "team": "Brazil", "formation": "4-2-3-1", "changes": None,
+        "heavy_rotation": False,
+        "xi_rows": [
+            {"name": "Vinicius Jr", "position": "LF", "jersey": 7},
+            {"name": "Alisson", "position": "G", "jersey": 1},
+            {"name": "Casemiro", "position": "DM", "jersey": 5},
+            {"name": "Marquinhos", "position": "CD-L", "jersey": 4},
+        ],
+    }
+    html = ns["_lineup_card_html"](team)
+    for grp in ("GK", "DEF", "MID", "FWD"):
+        assert f">{grp}</span>" in html                       # a chip per group
+    assert html.index(">GK</span>") < html.index(">FWD</span>")  # team-sheet order
+    assert "Alisson" in html and "Vinicius Jr" in html
 
 
 def test_view_helpers_render_every_section_from_real_data(seeded):

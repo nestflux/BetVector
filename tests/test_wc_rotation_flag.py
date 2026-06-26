@@ -109,6 +109,27 @@ def test_unknown_match_returns_none(session, monkeypatch):
     assert lineup_signal(99999) is None
 
 
+def test_lineup_signal_carries_position_rows(session, monkeypatch):
+    """xi_rows (cosmetic, for the deep-dive position chips) carries name + raw ESPN
+    position abbrev + jersey per starter, alongside the unchanged plain xi list."""
+    s = session
+    _match(s, 13, "2026-06-25")
+    seeded = [("Alisson", "G", 1), ("Marquinhos", "CD-L", 4),
+              ("Casemiro", "DM", 5), ("Vinicius Jr", "LF", 7)]
+    for nm, pos, jr in seeded:
+        s.add(WCLineup(match_id=13, team_id=1, player_name=nm, is_starter=1,
+                       formation="4-2-3-1", position=pos, jersey=jr))
+    s.commit()
+    _patch(s, monkeypatch)
+
+    brazil = next(t for t in lineup_signal(13)["teams"] if t["team"] == "Brazil")
+    assert brazil["xi"] == sorted(nm for nm, _, _ in seeded)   # plain list unchanged
+    rows = {r["name"]: r for r in brazil["xi_rows"]}
+    assert rows["Alisson"]["position"] == "G" and rows["Alisson"]["jersey"] == 1
+    assert rows["Casemiro"]["position"] == "DM"
+    assert len(brazil["xi_rows"]) == 4
+
+
 def test_rotation_threshold_from_config():
     assert _rotation_threshold() == 5    # config/worldcup_2026.yaml lineups.rotation_threshold
 

@@ -429,6 +429,54 @@ def _render_movement(match_id: int) -> None:
 # never disagree. Decision-support only: a confirmed XI / rotation read is a
 # hypothesis to re-check, never a model input.
 
+# Position chips (cosmetic): map ESPN's granular abbrev (G, CD-L, AM-R, CF-L, ...)
+# to a readable group so a confirmed XI reads like a team sheet. Pure display —
+# never touches the model/value path. Colours are a neutral accent palette,
+# deliberately NOT the value green/red.
+_POS_RANK = {"GK": 0, "DEF": 1, "MID": 2, "FWD": 3}
+_POS_COLOR = {"GK": "#D29922", "DEF": "#58A6FF", "MID": "#39C5CF", "FWD": "#A371F7"}
+_POS_EXPLICIT = {
+    "G": "GK",
+    "D": "DEF", "CD": "DEF", "LB": "DEF", "RB": "DEF", "WB": "DEF", "SW": "DEF",
+    "M": "MID", "CM": "MID", "DM": "MID", "AM": "MID", "LM": "MID", "RM": "MID",
+    "F": "FWD", "CF": "FWD", "LF": "FWD", "RF": "FWD",
+    "ST": "FWD", "LW": "FWD", "RW": "FWD", "SS": "FWD",
+}
+
+
+def _position_group(pos):
+    """ESPN position abbrev (e.g. 'CD-L', 'AM', 'G') -> 'GK'/'DEF'/'MID'/'FWD',
+    or None for a sub/blank/unknown code. Display-only."""
+    if not pos:
+        return None
+    base = str(pos).split("-", 1)[0].strip().upper()
+    if base in ("", "SUB"):
+        return None
+    if base in _POS_EXPLICIT:
+        return _POS_EXPLICIT[base]
+    # Fallback for an unseen ESPN code: classify by its role letter.
+    if base.startswith("G"):
+        return "GK"
+    if base.endswith(("B", "D")):
+        return "DEF"
+    if base.endswith("M"):
+        return "MID"
+    if base.endswith(("F", "W", "S", "T")):
+        return "FWD"
+    return None
+
+
+def _position_chip(group) -> str:
+    """Fixed-width position badge so names align in a column; an empty same-width
+    placeholder when the position is unknown."""
+    if not group:
+        return '<span style="display:inline-block;width:34px;"></span>'
+    col = _POS_COLOR.get(group, TEXT_DIM)
+    return (f'<span style="display:inline-block;width:34px;color:{col};'
+            f'font-family:JetBrains Mono,monospace;font-size:0.7rem;font-weight:700;'
+            f'letter-spacing:0.5px;">{group}</span>')
+
+
 def _lineup_card_html(team: dict) -> str:
     """Pure HTML card for one team's confirmed XI: team · formation · rotation note
     over the 11 starters. Heavy rotation reads amber (a flag to re-check), a small
@@ -444,10 +492,29 @@ def _lineup_card_html(team: dict) -> str:
         plural = "s" if changes != 1 else ""
         note = (f'<div style="color:{TEXT_DIM};font-size:0.78rem;margin-bottom:2px;">'
                 f'{int(changes)} change{plural} vs last XI</div>')
-    xi_html = "".join(
-        f'<li style="padding:2px 0;color:{TEXT};font-size:0.84rem;">{escape(name)}</li>'
-        for name in team.get("xi", [])
-    )
+    rows = team.get("xi_rows")
+    if rows:
+        # Order the XI like a team sheet: GK, then DEF, MID, FWD, then by name —
+        # and show each player's position group as a small chip beside the name.
+        ordered = sorted(
+            rows,
+            key=lambda r: (_POS_RANK.get(_position_group(r.get("position")), 9),
+                           r.get("name", "")),
+        )
+        xi_html = "".join(
+            f'<li style="padding:2px 0;color:{TEXT};font-size:0.84rem;'
+            f'display:flex;align-items:baseline;gap:6px;">'
+            f'{_position_chip(_position_group(r.get("position")))}'
+            f'<span>{escape(r.get("name", ""))}</span></li>'
+            for r in ordered
+        )
+    else:
+        # Fallback (signal without xi_rows): names only, alphabetical.
+        xi_html = "".join(
+            f'<li style="padding:2px 0;color:{TEXT};font-size:0.84rem;">'
+            f'{escape(name)}</li>'
+            for name in team.get("xi", [])
+        )
     return (
         f'<div style="border:1px solid {BORDER};border-radius:8px;padding:10px 12px;'
         f'background:{SURFACE};">'

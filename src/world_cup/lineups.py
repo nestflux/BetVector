@@ -260,6 +260,15 @@ def lineup_signal(match_id: int) -> dict | None:
                 "status": "announced",
                 "formation": xi[0].formation,
                 "xi": sorted(current),
+                # Additive (cosmetic): name + raw ESPN position abbrev + jersey per
+                # starter, so the deep-dive can show a position chip. The plain
+                # ``xi`` name list above is kept unchanged for the rotation
+                # set-comparison and any other existing consumers.
+                "xi_rows": sorted(
+                    ({"name": p.player_name, "position": p.position,
+                      "jersey": p.jersey} for p in xi),
+                    key=lambda r: r["name"],
+                ),
                 "changes": None,            # None = no prior XI to compare against
                 "heavy_rotation": False,
             }
