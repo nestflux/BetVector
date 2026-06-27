@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import logging
 import math
-from datetime import datetime
+from datetime import date, datetime
 
 import numpy as np
 import pandas as pd
@@ -200,15 +200,25 @@ class WCPoissonPredictor:
             return None
 
     def predict_all(self) -> int:
-        """Predict all scheduled WC matches and store in wc_predictions."""
+        """Predict all UPCOMING scheduled WC matches (not yet kicked off).
+
+        TEMPORAL INTEGRITY (Rule 6): the selection is gated to status 'scheduled'
+        AND a date of today or later, so a match that has already been played is
+        NEVER re-predicted. Predicting a finished/past match would write an
+        after-the-fact prediction (created_at = now) that then masquerades as a
+        pre-match call in the Results scorecard."""
         if not self._is_fitted:
             logger.error("Model not fitted")
             return 0
 
         try:
+            # Only matches that have NOT kicked off yet (scheduled + today-or-later).
+            today = date.today().isoformat()
             with get_session() as session:
                 matches = session.execute(
-                    select(WCMatch).order_by(WCMatch.date)
+                    select(WCMatch)
+                    .where(WCMatch.status == "scheduled", WCMatch.date >= today)
+                    .order_by(WCMatch.date)
                 ).scalars().all()
 
                 stored = 0

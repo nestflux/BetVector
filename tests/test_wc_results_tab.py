@@ -17,7 +17,8 @@ ROOT = Path(__file__).resolve().parents[1]
 HUB = ROOT / "src" / "delivery" / "views" / "world_cup.py"
 HUB_SRC = HUB.read_text()
 
-_PURE = {"_result_outcome", "_model_pick", "_pick_conf", "_short_date", "_result_row_html"}
+_PURE = {"_result_outcome", "_model_pick", "_pick_conf", "_short_date", "_result_row_html",
+         "_was_pred_prematch", "_parse_ts"}
 
 
 def _ns():
@@ -114,6 +115,58 @@ def test_row_escapes_team_names():
 
 
 # ---- structural wiring ------------------------------------------------------
+
+# ---- temporal-integrity guard: back-filled predictions must not count --------
+
+def _pred_at(created_at, h=0.6, d=0.25, a=0.15):
+    return SimpleNamespace(home_win_prob=h, draw_prob=d, away_win_prob=a,
+                           most_likely_score="1-0", created_at=created_at)
+
+
+def _match_at(date, kickoff_time="18:00"):
+    return SimpleNamespace(date=date, kickoff_time=kickoff_time)
+
+
+def test_prematch_prediction_counts():
+    ns = _ns()
+    # created the morning of the match, before an 18:00 kickoff -> genuine call
+    assert ns["_was_pred_prematch"](
+        _pred_at("2026-06-20 09:30:00"), _match_at("2026-06-20")) is True
+
+
+def test_backfilled_prediction_excluded():
+    ns = _ns()
+    # created days AFTER the match (the real bug) -> must not count
+    assert ns["_was_pred_prematch"](
+        _pred_at("2026-06-26 13:30:00"), _match_at("2026-06-11")) is False
+    # created later the SAME day, after the 18:00 kickoff -> still excluded
+    assert ns["_was_pred_prematch"](
+        _pred_at("2026-06-20 20:00:00"), _match_at("2026-06-20", "18:00")) is False
+
+
+def test_unknown_kickoff_falls_back_to_end_of_day():
+    ns = _ns()
+    # kickoff unknown: a same-date prediction counts, a later-date one does not
+    assert ns["_was_pred_prematch"](
+        _pred_at("2026-06-20 09:30:00"), _match_at("2026-06-20", None)) is True
+    assert ns["_was_pred_prematch"](
+        _pred_at("2026-06-26 13:30:00"), _match_at("2026-06-20", None)) is False
+
+
+def test_no_prediction_or_no_timestamp_is_not_prematch():
+    ns = _ns()
+    assert ns["_was_pred_prematch"](None, _match_at("2026-06-20")) is False
+    assert ns["_was_pred_prematch"](_pred_at(None), _match_at("2026-06-20")) is False
+
+
+def test_results_gate_and_predictor_filter_wired():
+    # Results render drops back-filled predictions before scoring the model.
+    assert "_was_pred_prematch(pred, m)" in HUB_SRC
+    # Root cause: predict_all only predicts upcoming scheduled matches.
+    pred_src = (ROOT / "src" / "world_cup" / "predictor.py").read_text()
+    assert 'WCMatch.status == "scheduled"' in pred_src
+    assert "WCMatch.date >= today" in pred_src
+
 
 def test_results_tab_registered():
     assert '"✅ Results"' in HUB_SRC

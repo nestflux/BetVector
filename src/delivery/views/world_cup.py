@@ -1371,8 +1371,9 @@ def _result_outcome(home_goals, away_goals):
 
 def _model_pick(pred):
     """The side the model rated most likely pre-match (argmax of its 1X2 probs), as
-    'H'/'D'/'A'. None when there's no stored prediction — e.g. matches that finished
-    before the model was running (the backfilled 11-19 Jun history)."""
+    'H'/'D'/'A'. None when there's no usable pre-match prediction — either no stored
+    row, or one that was back-filled after kickoff and gated out upstream by
+    _was_pred_prematch."""
     if pred is None:
         return None
     probs = {
@@ -1388,6 +1389,36 @@ def _pick_conf(pred, pick):
     if pred is None or pick is None:
         return None
     return {"H": pred.home_win_prob, "D": pred.draw_prob, "A": pred.away_win_prob}.get(pick)
+
+
+def _parse_ts(ts):
+    """Tolerant parse of a stored timestamp to a naive datetime, or None. Handles
+    'YYYY-MM-DD HH:MM[:SS]' with a space or 'T' separator, dropping any fractional or
+    timezone suffix. created_at and kickoff are both stored UTC, so a naive compare
+    is correct."""
+    if not ts:
+        return None
+    s = str(ts).strip().replace("T", " ").split("+")[0].split(".")[0].strip()
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+        try:
+            return datetime.strptime(s, fmt)
+        except ValueError:
+            pass
+    return None
+
+
+def _was_pred_prematch(pred, match) -> bool:
+    """True only if the prediction was created BEFORE the match kicked off — i.e. a
+    genuine pre-match call. This is the temporal-integrity guard (Rule 6) for the
+    Results scorecard: a back-filled prediction (created after the match) must never
+    count as a model call. When the kickoff time is unknown we fall back to
+    end-of-day, so a prediction made ON the match date still counts but one made on a
+    LATER date does not."""
+    if pred is None or not getattr(pred, "created_at", None):
+        return False
+    made = _parse_ts(pred.created_at)
+    ko = _parse_ts(f"{match.date} {match.kickoff_time or '23:59'}")
+    return made is not None and ko is not None and made < ko
 
 
 def _short_date(iso):
@@ -1469,6 +1500,11 @@ def _render_results() -> None:
             if m.group_letter:
                 groups_present.add(m.group_letter)
             pred = next((p for p in m.predictions if p.model_name == MODEL_NAME), None)
+            # Temporal-integrity guard: a prediction created AFTER kickoff is
+            # back-filled, not a real call — drop it so the row shows "no model
+            # call" and it's excluded from the hit-rate.
+            if not _was_pred_prematch(pred, m):
+                pred = None
             pick = _model_pick(pred)
             actual = _result_outcome(m.home_goals, m.away_goals)
             if pick is not None and actual is not None:
@@ -1484,7 +1520,8 @@ def _render_results() -> None:
         hit = f"{correct}/{called} ({correct / called:.0%})" if called else "—"
         st.caption(
             f"{len(matches)} matches played · model called {hit} correct where it had a "
-            "pre-match read (earlier backfilled games have no model call) · dates ET · newest first"
+            "genuine pre-match read (predictions made after a match are excluded) · "
+            "dates ET · newest first"
         )
 
         label_to_id = {}
