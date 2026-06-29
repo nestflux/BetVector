@@ -99,6 +99,11 @@ def test_log_rejects_bad_input(db):
     assert log_wc_bet(1, mid, "1X2", "home", 2.0, 0) is None      # stake must be > 0
 
 
+def test_log_rejects_unknown_match(db):
+    _match(db)  # some match exists, but 99999 does not
+    assert log_wc_bet(1, 99999, "1X2", "home", 2.0, 10.0) is None  # defensive existence check
+
+
 # ---- settle -----------------------------------------------------------------
 
 def test_settle_marks_won_lost_and_pnl(db):

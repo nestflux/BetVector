@@ -84,6 +84,12 @@ def log_wc_bet(user_id: int, match_id: int, market_type: str, selection: str,
         return None
     try:
         with get_session() as session:
+            # Never log a bet against a non-existent match — a dangling row would
+            # never display (load_wc_bets inner-joins WCMatch) nor settle. Postgres'
+            # FK would reject it, but SQLite (local backup) doesn't enforce FKs, so
+            # check explicitly.
+            if session.get(WCMatch, match_id) is None:
+                return None
             bet = WCBetLog(
                 user_id=user_id, match_id=match_id, market_type=market_type,
                 selection=selection, odds=odds, stake=stake, bookmaker=bookmaker,

@@ -1,6 +1,6 @@
 # BetVector — Masterplan
 
-Version 1.8 · June 2026
+Version 1.9 · June 2026
 
 ---
 

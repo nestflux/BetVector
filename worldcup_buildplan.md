@@ -2166,3 +2166,39 @@ overlay is a separate, funded decision.
 | Forrest, Goddard & Simmons | 2005 | Draws underpriced by 2-3% in international football | WC-04-01 |
 | Leeds & Leeds | 2009 | Political stability +0.15-0.20 pts/match effect | WC-02-04 |
 | Goldman Sachs | 2018 | Intra-squad market value Gini: star-dependent teams underperform | WC-02-05 |
+
+---
+
+## WC-BET — Personal Bet Tracker (Complete · 2026-06-29)
+
+Self-contained World Cup personal bet tracker: a user logs their OWN WC bets
+(manually or from a model pick) and tracks them with auto-settlement + running
+P&L. Entirely separate from the model's shadow value picks (`wc_value_bets`) and
+from league bets (`bet_log`); never touches the model / value / prediction path.
+User-scoped (user_id); markets 1X2 / O-U 1.5·2.5·3.5 / BTTS.
+
+- **WC-BET-01** (6f3fd77) — Data + settlement layer. New `wc_bet_log` table
+  (`WCBetLog`: user_id, match_id, market_type, selection, odds, stake, bookmaker,
+  model_prob/edge captured-and-frozen at log time, status, pnl, placed_at /
+  settled_at; created on local + Neon via create_all). `src/world_cup/bets.py`:
+  `log_wc_bet` (validates market/selection + odds>1 + stake>0), `settle_wc_bets`
+  (idempotent, pipeline-safe), `load_wc_bets` (read-time settlement so the display
+  is correct before the pipeline persists it), `wc_bet_summary`. Settlement reuses
+  `betting.tracker._did_bet_win`, so a WC bet settles by the same proven logic as a
+  league bet.
+- **WC-BET-02** (6fc74d0) — "🎟️ My Bets" tab in the WC hub: scoreboard (Net P&L /
+  ROI / record / win-rate / staked / pending + a model-advised subset), a manual
+  log form, and the settled bet list. Verified live.
+- **WC-BET-03** (6f6ed15) — Log-from-advice: an inline "➕ Log one of these picks"
+  control under the Value Bets pre-fills the model's pick (odds from the best book)
+  and logs it tagged 🎯, capturing model_prob/edge. `_vb_to_canon` maps a value bet
+  (h2h/totals/btts) to canonical (1X2/OU25/BTTS); totals → OU25 (the only line the
+  model prices).
+- **WC-BET-04** (416bc91) — `settle_wc_bets` wired into BOTH the morning + evening
+  pipeline runs (persisted settlement); a cumulative-P&L-over-time line chart in My
+  Bets.
+- **WC-BET-05** — review (independent code-review agent) + docs.
+
+Tests: `tests/test_wc_bet_tracker.py`. Owner-approved 2026-06-29 (inline logging
+chosen; the accumulator/parlay variant — multi-leg, combined odds, all-legs-must-win
+— is deferred to a follow-up to be plan-first, chip task_e5f58071).
