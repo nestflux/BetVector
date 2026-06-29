@@ -206,3 +206,31 @@ def test_bet_row_and_summary_helpers_render():
         "void": 0, "staked_total": 200.0, "pending": 1})
     # "Net P&L" renders escaped as "Net P&amp;L" (correct) — assert on &-free tokens.
     assert "+$25.00" in summ and "ROI" in summ and "Win rate" in summ
+
+
+# ---- WC-BET-03: log-from-advice (value-pick -> loggable bet) -----------------
+
+def test_vb_to_canon_mapping():
+    import ast
+    ns = {"_VB_MARKET_MAP": {"h2h": "1X2", "totals": "OU25", "btts": "BTTS"}}
+    for node in ast.parse(HUB_SRC).body:
+        if isinstance(node, ast.FunctionDef) and node.name == "_vb_to_canon":
+            exec(compile(ast.Module(body=[node], type_ignores=[]), "<wc>", "exec"), ns)
+    f = ns["_vb_to_canon"]
+    assert f("h2h", "home") == ("1X2", "home")
+    assert f("h2h", "draw") == ("1X2", "draw")
+    assert f("totals", "over") == ("OU25", "over")   # model prices only the 2.5 line
+    assert f("totals", "under") == ("OU25", "under")
+    assert f("btts", "yes") == ("BTTS", "yes")
+    assert f("btts", "no") == ("BTTS", "no")
+    assert f("h2h", "lay") is None        # unsupported selection
+    assert f("spreads", "home") is None   # unsupported market
+    assert f(None, None) is None
+
+
+def test_log_from_advice_wired():
+    assert "def _render_log_pick_control" in HUB_SRC
+    assert "_render_log_pick_control(picks)" in HUB_SRC      # called under the value bets
+    assert 'source="research_card"' in HUB_SRC               # tagged as a model tip
+    assert "_vb_to_canon(" in HUB_SRC                         # picks mapped to canonical
+    assert "get_session_user_id()" in HUB_SRC                # user-scoped

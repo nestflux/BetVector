@@ -563,6 +563,63 @@ def _render_third_place() -> None:
 # Section 4 — Value Bets
 # ============================================================================
 
+# --- Log-from-advice (WC-BET-03): turn a model value pick into a tracked bet ----
+_VB_MARKET_MAP = {"h2h": "1X2", "totals": "OU25", "btts": "BTTS"}
+
+
+def _vb_to_canon(market_type, selection):
+    """Map a WCValueBet (market_type/selection) to the bet-tracker canonical
+    (market, selection), or None if not a loggable single. Value bets cover 1X2,
+    O/U 2.5 (the only totals line the model prices), and BTTS."""
+    m = _VB_MARKET_MAP.get((market_type or "").lower())
+    sel = (selection or "").lower()
+    if m and sel in {"home", "draw", "away", "over", "under", "yes", "no"}:
+        return (m, sel)
+    return None
+
+
+def _render_log_pick_control(picks: list) -> None:
+    """Inline 'log one of these picks to My Bets' control under the value bets:
+    choose a model pick (odds pre-filled from the best book), set your stake, and
+    it's logged to the user's WC bets tagged 🎯 (from a model tip). Empty → silent."""
+    if not picks:
+        return
+    from src.auth import get_session_user_id
+    from src.world_cup.bets import MARKET_LABELS, log_wc_bet
+    with st.expander("➕ Log one of these picks to My Bets"):
+        labels, by_label = [], {}
+        for p in picks:
+            lbl = (f'{p["home"]} v {p["away"]} · '
+                   f'{MARKET_LABELS.get(p["market"], p["market"])} '
+                   f'{_SEL_LABELS.get(p["selection"], p["selection"])} · '
+                   f'@{p["odds"]:.2f} (+{(p["edge"] or 0) * 100:.0f}%)')
+            labels.append(lbl)
+            by_label[lbl] = p
+        choice = st.selectbox("Model pick", labels, key="wc_logpick_sel")
+        p = by_label[choice]
+        c1, c2 = st.columns(2)
+        with c1:
+            odds = st.number_input("Your odds", min_value=1.01,
+                                   value=float(p["odds"]), step=0.05,
+                                   key="wc_logpick_odds")
+        with c2:
+            stake = st.number_input("Stake ($)", min_value=0.0, value=10.0,
+                                    step=5.0, key="wc_logpick_stake")
+        if st.button("➕ Log this pick", type="primary", key="wc_logpick_btn"):
+            bid = log_wc_bet(
+                get_session_user_id(), p["match_id"], p["market"], p["selection"],
+                float(odds), float(stake), bookmaker=p.get("bookmaker"),
+                model_prob=p.get("model_prob"), edge=p.get("edge"),
+                source="research_card")
+            if bid:
+                st.toast("🎯 Logged to My Bets", icon="🎯")
+                st.rerun()
+            else:
+                st.error("Couldn't log — odds must be > 1 and stake > 0.")
+        st.caption("Odds default to the best book price — edit to what you actually "
+                   "got. Tracked in 🎟️ My Bets, marked 🎯 (logged from a model tip).")
+
+
 def _render_value_bets() -> None:
     _section_header("Value Bets")
     st.caption(
@@ -570,6 +627,7 @@ def _render_value_bets() -> None:
         "sharp market on this little data. Monitor CLV before staking real money."
     )
 
+    picks: list = []
     with get_session() as session:
         vbs = session.execute(
             select(WCValueBet)
@@ -591,16 +649,27 @@ def _render_value_bets() -> None:
         for vb in vbs:
             home = vb.match.home_team if vb.match else None
             away = vb.match.away_team if vb.match else None
+            hn = home.name if home else "?"
+            an = away.name if away else "?"
             rows.append({
-                "Match": f"{home.name if home else '?'} vs {away.name if away else '?'}",
+                "Match": f"{hn} vs {an}",
                 "Market": f"{vb.market_type}/{vb.selection}",
                 "Edge": f"+{vb.edge:.1%}",
                 "Odds": f"{vb.best_odds:.2f}",
                 "Bookmaker": vb.bookmaker,
                 "Kelly": f"{vb.kelly_stake:.2%}" if vb.kelly_stake else "—",
             })
+            mapped = _vb_to_canon(vb.market_type, vb.selection)
+            if mapped and vb.best_odds:
+                picks.append({
+                    "match_id": vb.match_id, "home": hn, "away": an,
+                    "market": mapped[0], "selection": mapped[1],
+                    "odds": vb.best_odds, "edge": vb.edge,
+                    "model_prob": vb.model_prob, "bookmaker": vb.bookmaker,
+                })
 
     st.dataframe(rows, use_container_width=True, hide_index=True)
+    _render_log_pick_control(picks)
 
 
 # ============================================================================
