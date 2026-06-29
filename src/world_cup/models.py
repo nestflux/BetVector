@@ -406,3 +406,51 @@ class WCLineup(Base):
             f"WCLineup(match={self.match_id}, team={self.team_id}, "
             f"{self.player_name!r}, starter={self.is_starter})"
         )
+
+
+class WCBetLog(Base):
+    """A user's PERSONAL World Cup bet — placed and tracked by a user, kept entirely
+    separate from the model's shadow value picks (``wc_value_bets``) and from league
+    bets (``bet_log``). Scoped per ``user_id``; settles off the ``wc_matches`` final
+    score.
+
+    ``market_type`` / ``selection`` use the canonical convention of
+    ``betting.tracker._did_bet_win`` — market in {1X2, OU15, OU25, OU35, BTTS},
+    selection in {home, draw, away, over, under, yes, no} — so settlement reuses the
+    exact same proven league outcome logic.
+
+    ``model_prob`` / ``edge`` are captured (frozen) at log time when the bet is
+    placed off a model tip, never recomputed — consistent with temporal integrity.
+    """
+
+    __tablename__ = "wc_bet_log"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    match_id = Column(Integer, ForeignKey("wc_matches.id"), nullable=False)
+    market_type = Column(String, nullable=False)   # 1X2 / OU15 / OU25 / OU35 / BTTS
+    selection = Column(String, nullable=False)      # home/draw/away/over/under/yes/no
+    odds = Column(Float, nullable=False)            # decimal odds the user actually got
+    stake = Column(Float, nullable=False)
+    bookmaker = Column(String, nullable=True)
+    # Captured at log time when placed off a model tip (frozen, never recomputed):
+    model_prob = Column(Float, nullable=True)
+    edge = Column(Float, nullable=True)
+    source = Column(String, nullable=True)          # research_card / deep_dive / manual
+    status = Column(String, nullable=False, server_default="pending")  # pending/won/lost/void
+    pnl = Column(Float, nullable=True)              # profit/loss once settled
+    notes = Column(String, nullable=True)
+    placed_at = Column(String, nullable=False, server_default=func.now())
+    settled_at = Column(String, nullable=True)
+
+    __table_args__ = (
+        Index("ix_wc_bet_user", "user_id"),
+        Index("ix_wc_bet_match", "match_id"),
+        Index("ix_wc_bet_status", "status"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"WCBetLog(user={self.user_id}, match={self.match_id}, "
+            f"{self.market_type}/{self.selection} @ {self.odds}, status={self.status})"
+        )
