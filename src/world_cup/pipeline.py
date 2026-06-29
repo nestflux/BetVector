@@ -150,6 +150,12 @@ def _run_morning() -> dict:
     from src.world_cup.value_finder import capture_wc_closing_lines
     results["closing_lines"] = _step("Capture Closing Lines (CLV)", capture_wc_closing_lines)
 
+    # 1c. Settle any pending user WC bets whose match just finished (WC-BET-04).
+    # Pipeline-safe (never raises); persists what the My Bets read-time settlement
+    # already shows, so the scorecard stays correct between page loads.
+    from src.world_cup.bets import settle_wc_bets
+    results["settle_bets"] = _step("Settle User WC Bets", settle_wc_bets)
+
     # 2. Update Elo from any newly finished matches
     from src.world_cup.calibration import update_tournament_elo
     results["elo_update"] = _step("Update Tournament Elo", update_tournament_elo)
@@ -263,6 +269,10 @@ def _run_evening() -> dict:
     # 1b. Freeze closing lines + CLV for picks whose match just finished (WC-09-01)
     from src.world_cup.value_finder import capture_wc_closing_lines
     results["closing_lines"] = _step("Capture Closing Lines (CLV)", capture_wc_closing_lines)
+
+    # 1c. Settle any pending user WC bets whose match just finished (WC-BET-04).
+    from src.world_cup.bets import settle_wc_bets
+    results["settle_bets"] = _step("Settle User WC Bets", settle_wc_bets)
 
     # 2. Update Elo
     from src.world_cup.calibration import update_tournament_elo

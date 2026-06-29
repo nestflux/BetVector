@@ -234,3 +234,25 @@ def test_log_from_advice_wired():
     assert 'source="research_card"' in HUB_SRC               # tagged as a model tip
     assert "_vb_to_canon(" in HUB_SRC                         # picks mapped to canonical
     assert "get_session_user_id()" in HUB_SRC                # user-scoped
+
+
+# ---- WC-BET-04: cumulative P&L timeline + pipeline settlement ----------------
+
+def test_pnl_timeline_cumulative():
+    from src.world_cup.bets import wc_pnl_timeline
+    bets = [
+        {"status": "won", "pnl": 10.0, "date": "2026-06-11", "id": 1},
+        {"status": "pending", "pnl": 0.0, "date": "2026-06-20", "id": 2},
+        {"status": "lost", "pnl": -5.0, "date": "2026-06-12", "id": 3},
+        {"status": "won", "pnl": 7.0, "date": "2026-06-13", "id": 4},
+    ]
+    tl = wc_pnl_timeline(bets)
+    # pending excluded; ordered by date 6/11(+10) -> 6/12(-5) -> 6/13(+7)
+    assert [t["cumulative"] for t in tl] == [10.0, 5.0, 12.0]
+    assert [t["date"] for t in tl] == ["2026-06-11", "2026-06-12", "2026-06-13"]
+
+
+def test_pipeline_and_chart_wired():
+    pl = (ROOT / "src" / "world_cup" / "pipeline.py").read_text()
+    assert pl.count("settle_wc_bets") >= 2       # wired into morning + evening runs
+    assert "wc_pnl_timeline(bets)" in HUB_SRC     # cumulative-P&L chart in My Bets

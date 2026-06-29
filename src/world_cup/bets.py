@@ -206,3 +206,17 @@ def wc_bet_summary(user_id: int) -> dict:
         "advised_won": advised_won,
         "advised_win_rate": round(advised_won / len(advised), 4) if advised else None,
     }
+
+
+def wc_pnl_timeline(bets: list) -> list:
+    """Cumulative net P&L from a loaded bets list (settled bets only), ordered by
+    match date then id, as [{date, pnl, cumulative}]. Pure — takes the list from
+    load_wc_bets so it needs no extra query. [] if nothing is settled yet."""
+    settled = [b for b in bets if b["status"] in ("won", "lost", "void")]
+    settled.sort(key=lambda b: ((b.get("date") or ""), b["id"]))
+    out, run = [], 0.0
+    for b in settled:
+        run += (b["pnl"] or 0.0)
+        out.append({"date": b.get("date"), "pnl": b["pnl"],
+                    "cumulative": round(run, 2)})
+    return out

@@ -1739,6 +1739,7 @@ def _render_my_bets() -> None:
     from src.auth import get_session_user_id
     from src.world_cup.bets import (
         MARKET_LABELS, WC_MARKETS, load_wc_bets, log_wc_bet, wc_bet_summary,
+        wc_pnl_timeline,
     )
     _section_header("My Bets")
     uid = get_session_user_id()
@@ -1752,6 +1753,26 @@ def _render_my_bets() -> None:
                    if summ["advised_win_rate"] is not None else "—")
             st.caption(f"🎯 Of your model-advised bets: {summ['advised_won']}/"
                        f"{summ['advised_settled']} won ({awr}).")
+
+    # Cumulative P&L over time (settled bets) — the running scoreboard as a curve.
+    timeline = wc_pnl_timeline(bets)
+    if len(timeline) >= 2:
+        ys = [t["cumulative"] for t in timeline]
+        line_col = GREEN if ys[-1] >= 0 else RED
+        fig = go.Figure(go.Scatter(
+            x=list(range(1, len(ys) + 1)), y=ys, mode="lines+markers",
+            line=dict(color=line_col, width=2), marker=dict(size=5, color=line_col),
+            hovertext=[f'#{i + 1} · {t["date"]} · cum {t["cumulative"]:+.2f}'
+                       for i, t in enumerate(timeline)],
+            hoverinfo="text"))
+        fig.add_hline(y=0, line=dict(color=BORDER, width=1, dash="dot"))
+        fig.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(family="JetBrains Mono, monospace", color=TEXT_DIM, size=11),
+            xaxis=dict(title="settled bet #", showgrid=False, zeroline=False),
+            yaxis=dict(title="cumulative P&L ($)", gridcolor=BORDER, zeroline=False),
+            margin=dict(l=50, r=16, t=18, b=34), height=230, showlegend=False)
+        st.plotly_chart(fig, use_container_width=True)
 
     # Log a bet — reactive widgets (not a form) so Selection follows Market.
     with st.expander("➕ Log a bet", expanded=not bets):
