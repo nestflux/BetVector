@@ -158,3 +158,51 @@ def test_summary_math(db):
     assert s["net_pnl"] == 0.0 and s["staked_settled"] == 20.0
     assert s["roi"] == 0.0 and s["win_rate"] == 0.5
     assert s["advised_settled"] == 1 and s["advised_won"] == 1   # the research_card bet
+
+
+# ---- view wiring (world_cup.py runs st.* at import → source + AST-exec) ------
+
+HUB_SRC = (ROOT / "src" / "delivery" / "views" / "world_cup.py").read_text()
+
+
+def test_my_bets_tab_wired():
+    assert "🎟️ My Bets" in HUB_SRC                  # the tab label
+    assert "def _render_my_bets" in HUB_SRC and "_render_my_bets()" in HUB_SRC
+    assert "get_session_user_id()" in HUB_SRC        # user-scoped
+    assert "log_wc_bet(" in HUB_SRC                   # the form logs a bet
+    assert "load_wc_bets(" in HUB_SRC and "wc_bet_summary(" in HUB_SRC
+    compile(HUB_SRC, "world_cup.py", "exec")
+
+
+def test_bet_row_and_summary_helpers_render():
+    import ast
+    from html import escape as _esc
+    ns = {
+        "escape": _esc, "GREEN": "#3FB950", "RED": "#F85149", "TEXT": "#E6EDF3",
+        "TEXT_DIM": "#8B949E", "BORDER": "#30363D", "SURFACE": "#161B22",
+        "YELLOW": "#D29922", "ACCENT": "#58A6FF",
+        "_SEL_LABELS": {"home": "Home", "over": "Over"},
+        "_short_date": lambda s: s,
+    }
+    pure = {"_bet_row_html", "_bet_summary_html"}
+    for node in ast.parse(HUB_SRC).body:
+        if isinstance(node, ast.FunctionDef) and node.name in pure:
+            exec(compile(ast.Module(body=[node], type_ignores=[]), "<wc>", "exec"), ns)
+
+    won = ns["_bet_row_html"]({
+        "status": "won", "pnl": 12.0, "source": "research_card", "home": "Brazil",
+        "away": "Spain", "market_label": "Match result", "selection": "home",
+        "bookmaker": "FanDuel", "date": "2026-06-20", "odds": 2.1, "stake": 10.0})
+    assert "✓ won" in won and "+$12.00" in won and "🎯" in won and "Brazil v Spain" in won
+
+    lost = ns["_bet_row_html"]({
+        "status": "lost", "pnl": -10.0, "source": "manual", "home": "A", "away": "B",
+        "market_label": "Over/Under 2.5", "selection": "over", "bookmaker": None,
+        "date": "2026-06-20", "odds": 1.9, "stake": 10.0})
+    assert "✗ lost" in lost and "🎯" not in lost    # manual bets carry no tip marker
+
+    summ = ns["_bet_summary_html"]({
+        "net_pnl": 25.0, "roi": 0.125, "win_rate": 0.6, "won": 3, "lost": 2,
+        "void": 0, "staked_total": 200.0, "pending": 1})
+    # "Net P&L" renders escaped as "Net P&amp;L" (correct) — assert on &-free tokens.
+    assert "+$25.00" in summ and "ROI" in summ and "Win rate" in summ

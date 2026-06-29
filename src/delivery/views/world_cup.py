@@ -1562,6 +1562,181 @@ def _render_results() -> None:
 
 
 # ============================================================================
+# Section 9 — My Bets (personal WC bet tracker)  [My Bets tab — WC-BET-02]
+# ============================================================================
+# A user's OWN World Cup bets: log a selection, watch it auto-settle off the final
+# score, track running P&L. Self-contained in this tab and scoped to the logged-in
+# user. Reads/writes only wc_bet_log (the user's data) via world_cup.bets — it never
+# touches the model / value / prediction path.
+
+_SEL_LABELS = {"home": "Home", "draw": "Draw", "away": "Away",
+               "over": "Over", "under": "Under", "yes": "Yes", "no": "No"}
+
+
+def _wc_betting_fixtures() -> list:
+    """WC matches a user can log a bet on: upcoming (scheduled) plus recently
+    finished (so a past bet can be backfilled), earliest first. Each: id, date,
+    status, label. Read-only; returns [] on error."""
+    out = []
+    try:
+        recent = (datetime.utcnow().date() - timedelta(days=5)).isoformat()
+        with get_session() as session:
+            matches = session.execute(
+                select(WCMatch)
+                .options(joinedload(WCMatch.home_team), joinedload(WCMatch.away_team))
+                .where(WCMatch.status.in_(["scheduled", "finished"]))
+                .order_by(WCMatch.date, WCMatch.kickoff_time)
+            ).unique().scalars().all()
+        for m in matches:
+            if m.status == "finished" and (m.date or "") < recent:
+                continue
+            home = m.home_team.name if m.home_team else "?"
+            away = m.away_team.name if m.away_team else "?"
+            tag = "" if m.status == "scheduled" else " (FT)"
+            out.append({"id": m.id, "date": m.date, "status": m.status,
+                        "label": f"{m.date} · {home} v {away}{tag}"})
+    except Exception:
+        return []
+    return out
+
+
+def _bet_summary_html(s: dict) -> str:
+    """Running-P&L scoreboard strip. Net P&L / ROI coloured green(+) / red(−)."""
+    net = s["net_pnl"]
+    col = GREEN if net > 0 else (RED if net < 0 else TEXT_DIM)
+    roi = f"{s['roi'] * 100:+.1f}%" if s["roi"] is not None else "—"
+    wr = f"{s['win_rate'] * 100:.0f}%" if s["win_rate"] is not None else "—"
+    record = f"{s['won']}–{s['lost']}" + (f" ({s['void']}v)" if s["void"] else "")
+    sign = "+" if net >= 0 else "−"
+    cells = [
+        ("Net P&L", f"{sign}${abs(net):,.2f}", col),
+        ("ROI", roi, col),
+        ("Record W–L", record, TEXT),
+        ("Win rate", wr, TEXT),
+        ("Staked", f"${s['staked_total']:,.2f}", TEXT),
+        ("Pending", str(s["pending"]), TEXT_DIM),
+    ]
+    inner = "".join(
+        f'<div style="flex:1;min-width:84px;text-align:center;padding:8px 6px;">'
+        f'<div style="color:{c};font-family:JetBrains Mono,monospace;font-weight:700;'
+        f'font-size:1.02rem;">{escape(v)}</div>'
+        f'<div style="color:{TEXT_DIM};font-size:0.68rem;text-transform:uppercase;'
+        f'letter-spacing:0.5px;margin-top:2px;">{escape(label)}</div></div>'
+        for label, v, c in cells
+    )
+    return (f'<div style="display:flex;flex-wrap:wrap;gap:4px;border:1px solid {BORDER};'
+            f'border-radius:8px;background:{SURFACE};margin-bottom:10px;">{inner}</div>')
+
+
+def _bet_row_html(b: dict) -> str:
+    """One logged bet row: date · teams · pick · price/stake · status · P&L. 🎯 marks
+    a bet logged from a model tip. All dynamic text escaped."""
+    status = b["status"]
+    if status == "won":
+        badge = f'<span style="color:{GREEN};font-weight:700;">✓ won</span>'
+        pnl = f'<span style="color:{GREEN};font-weight:700;">+${b["pnl"]:,.2f}</span>'
+    elif status == "lost":
+        badge = f'<span style="color:{RED};font-weight:700;">✗ lost</span>'
+        pnl = f'<span style="color:{RED};font-weight:700;">−${abs(b["pnl"]):,.2f}</span>'
+    elif status == "void":
+        badge = f'<span style="color:{TEXT_DIM};">void</span>'
+        pnl = f'<span style="color:{TEXT_DIM};">$0.00</span>'
+    else:
+        badge = f'<span style="color:{YELLOW};">pending</span>'
+        pnl = f'<span style="color:{TEXT_DIM};">—</span>'
+    advised = "" if (b.get("source") or "manual") == "manual" else \
+        f' <span title="logged from a model tip" style="color:{ACCENT};">🎯</span>'
+    teams = escape(f'{b["home"]} v {b["away"]}')
+    pick = escape(f'{b["market_label"]} · {_SEL_LABELS.get(b["selection"], b["selection"])}')
+    book = f' · {escape(b["bookmaker"])}' if b.get("bookmaker") else ""
+    return (
+        f'<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;'
+        f'border-bottom:1px solid {BORDER};font-size:0.84rem;">'
+        f'<span style="color:{TEXT_DIM};min-width:60px;font-size:0.74rem;">'
+        f'{escape(_short_date(b["date"]))}</span>'
+        f'<span style="flex:2;color:{TEXT};">{teams}</span>'
+        f'<span style="flex:2;color:{TEXT_DIM};">{pick}{advised}</span>'
+        f'<span style="flex:1;color:{TEXT_DIM};font-family:JetBrains Mono,monospace;'
+        f'font-size:0.76rem;">@{b["odds"]:.2f} · ${b["stake"]:,.0f}{book}</span>'
+        f'<span style="min-width:64px;text-align:right;">{badge}</span>'
+        f'<span style="min-width:78px;text-align:right;'
+        f'font-family:JetBrains Mono,monospace;">{pnl}</span></div>'
+    )
+
+
+def _render_my_bets() -> None:
+    """My Bets tab: scoreboard + log-a-bet form + the user's bet list. Scoped to the
+    logged-in user; bets auto-settle off final scores (read-time + pipeline)."""
+    from src.auth import get_session_user_id
+    from src.world_cup.bets import (
+        MARKET_LABELS, WC_MARKETS, load_wc_bets, log_wc_bet, wc_bet_summary,
+    )
+    _section_header("My Bets")
+    uid = get_session_user_id()
+    bets = load_wc_bets(uid)
+    summ = wc_bet_summary(uid)
+
+    if summ["total"]:
+        st.markdown(_bet_summary_html(summ), unsafe_allow_html=True)
+        if summ["advised_settled"]:
+            awr = (f"{summ['advised_win_rate'] * 100:.0f}%"
+                   if summ["advised_win_rate"] is not None else "—")
+            st.caption(f"🎯 Of your model-advised bets: {summ['advised_won']}/"
+                       f"{summ['advised_settled']} won ({awr}).")
+
+    # Log a bet — reactive widgets (not a form) so Selection follows Market.
+    with st.expander("➕ Log a bet", expanded=not bets):
+        fixtures = _wc_betting_fixtures()
+        if not fixtures:
+            st.caption("No World Cup fixtures available to bet on right now.")
+        else:
+            labels = [f["label"] for f in fixtures]
+            ids = {f["label"]: f["id"] for f in fixtures}
+            c1, c2, c3 = st.columns([2, 1, 1])
+            with c1:
+                fx = st.selectbox("Match", labels, key="wcbet_match")
+            with c2:
+                market = st.selectbox(
+                    "Market", list(WC_MARKETS.keys()), key="wcbet_market",
+                    format_func=lambda m: MARKET_LABELS.get(m, m))
+            with c3:
+                selection = st.selectbox(
+                    "Selection", list(WC_MARKETS[market]),
+                    format_func=lambda x: _SEL_LABELS.get(x, x))
+            c4, c5, c6 = st.columns([1, 1, 2])
+            with c4:
+                odds = st.number_input("Odds", min_value=1.01, value=2.00,
+                                       step=0.05, key="wcbet_odds")
+            with c5:
+                stake = st.number_input("Stake ($)", min_value=0.0, value=10.0,
+                                        step=5.0, key="wcbet_stake")
+            with c6:
+                book = st.text_input("Bookmaker (optional)", key="wcbet_book")
+            if st.button("Log bet", type="primary", key="wcbet_log"):
+                bid = log_wc_bet(uid, ids[fx], market, selection, float(odds),
+                                 float(stake), bookmaker=(book or None),
+                                 source="manual")
+                if bid:
+                    st.toast("✅ Bet logged", icon="✅")
+                    st.rerun()
+                else:
+                    st.error("Couldn't log that bet — odds must be > 1 and stake > 0.")
+
+    if not bets:
+        st.info("No bets logged yet — log one above, or tap ➕ on a model pick in "
+                "the research card / deep dive.")
+        return
+
+    st.markdown(
+        f'<div style="border:1px solid {BORDER};border-radius:8px;overflow:hidden;">'
+        + "".join(_bet_row_html(b) for b in bets) + "</div>",
+        unsafe_allow_html=True,
+    )
+    st.caption("Bets settle automatically off the final score. 🎯 = logged from a "
+               "model tip. These are your own bets — separate from the model's picks.")
+
+
+# ============================================================================
 # Page Entry Point
 # ============================================================================
 
@@ -1572,14 +1747,18 @@ def main() -> None:
     # (fixtures + value bets) is the default landing tab; "Results" is the
     # completed-match history beside it; reference material is one click away,
     # not a long scroll down (WC-08-03; Results tab added 2026-06-25).
-    tab_bets, tab_results, tab_groups, tab_ko, tab_model = st.tabs(
-        ["📋 Today & Bets", "✅ Results", "📊 Groups", "🏆 Knockouts", "📈 Model"]
+    tab_bets, tab_mybets, tab_results, tab_groups, tab_ko, tab_model = st.tabs(
+        ["📋 Today & Bets", "🎟️ My Bets", "✅ Results", "📊 Groups",
+         "🏆 Knockouts", "📈 Model"]
     )
 
     with tab_bets:
         _render_todays_matches()
         _render_value_bets()
         _render_research_card()
+
+    with tab_mybets:
+        _render_my_bets()
 
     with tab_results:
         _render_results()
