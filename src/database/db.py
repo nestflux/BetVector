@@ -373,6 +373,15 @@ def _apply_schema_migrations(engine: Engine) -> None:
         # current sessions. INTEGER NOT NULL DEFAULT 0 is valid on both Postgres
         # and SQLite (SQLite requires the DEFAULT when adding a NOT NULL column).
         ("users", "must_change_password", "INTEGER NOT NULL DEFAULT 0"),
+        # WC-ACC-02 (June 2026): 90-minute (regulation) score + extra-time flag on
+        # knockout matches, so bets settle on the bookmaker's 90-minute convention
+        # (not extra-time/penalties). The two score columns are nullable (NULL for
+        # group + regulation-time knockouts); the flag defaults 0 so every existing
+        # match settles on its final score exactly as before until a KO is found to
+        # have gone to ET. INTEGER NOT NULL DEFAULT 0 is valid on Postgres + SQLite.
+        ("wc_matches", "home_goals_reg", "INTEGER"),
+        ("wc_matches", "away_goals_reg", "INTEGER"),
+        ("wc_matches", "went_to_extra_time", "INTEGER NOT NULL DEFAULT 0"),
     ]
 
     with engine.begin() as conn:

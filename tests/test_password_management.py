@@ -258,10 +258,12 @@ def test_create_viewer_user_is_loginable_not_a_dead_account(patched_db):
 
 def test_migration_adds_must_change_password_column():
     engine = create_engine("sqlite:///:memory:")
-    # Minimal pre-migration schema (the two tables the migration list touches).
+    # Minimal pre-migration schema (the tables the migration list touches). In real
+    # init_db, create_all builds these before _apply_schema_migrations runs.
     with engine.begin() as c:
         c.execute(text("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)"))
         c.execute(text("CREATE TABLE wc_lineups (id INTEGER PRIMARY KEY)"))
+        c.execute(text("CREATE TABLE wc_matches (id INTEGER PRIMARY KEY)"))  # WC-ACC-02
     db_mod._apply_schema_migrations(engine)
     cols = [col["name"] for col in inspect(engine).get_columns("users")]
     assert "must_change_password" in cols

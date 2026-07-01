@@ -109,6 +109,15 @@ class WCMatch(Base):
     away_goals = Column(Integer, nullable=True)
     home_goals_ht = Column(Integer, nullable=True)
     away_goals_ht = Column(Integer, nullable=True)
+    # WC-ACC-02: 90-minute (regulation) score for knockout matches decided in extra
+    # time / penalties. Bookmaker markets (1X2 / O-U / BTTS) settle on the 90-MINUTE
+    # score, NOT ET/pens. NULL for group + regulation-time knockouts — their stored
+    # final score IS the 90-minute score. ``went_to_extra_time`` flags a KO that ran
+    # to ET/pens; if it is set but the regulation score is NULL (reconstruction not
+    # yet verified), settlement DEFERS rather than settle on the a.e.t. score.
+    home_goals_reg = Column(Integer, nullable=True)
+    away_goals_reg = Column(Integer, nullable=True)
+    went_to_extra_time = Column(Integer, nullable=False, server_default="0")
     home_xg = Column(Float, nullable=True)
     away_xg = Column(Float, nullable=True)
     attendance = Column(Integer, nullable=True)

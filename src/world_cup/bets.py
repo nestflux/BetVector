@@ -66,6 +66,28 @@ def bet_pnl(status: str, stake: float, odds: float) -> float:
     return 0.0
 
 
+def settlement_score(match):
+    """The score a WC bet settles against — the 90-MINUTE score (WC-ACC-02).
+
+    Bookmaker markets (1X2 / Over-Under / BTTS) ignore extra time and penalties, so a
+    knockout decided in ET/pens settles on the regulation (90-minute) score. Group
+    matches and knockouts decided inside 90 minutes settle on their final score, which
+    IS the 90-minute score. Returns ``(home, away)`` or ``None`` when the match isn't
+    settleable yet — not scored, or a knockout that went to extra time whose
+    regulation score hasn't been reconstructed (defer rather than settle on the
+    a.e.t. score). ``getattr`` defaults keep this safe against older/mock rows that
+    predate the WC-ACC-02 columns."""
+    if getattr(match, "went_to_extra_time", 0):
+        rh = getattr(match, "home_goals_reg", None)
+        ra = getattr(match, "away_goals_reg", None)
+        if rh is None or ra is None:
+            return None  # extra time, but the 90-minute score isn't resolved yet
+        return (int(rh), int(ra))
+    if match.home_goals is None or match.away_goals is None:
+        return None
+    return (int(match.home_goals), int(match.away_goals))
+
+
 def log_wc_bet(user_id: int, match_id: int, market_type: str, selection: str,
                odds: float, stake: float, *, bookmaker: Optional[str] = None,
                model_prob: Optional[float] = None, edge: Optional[float] = None,
@@ -118,10 +140,10 @@ def settle_wc_bets() -> int:
                 .where(WCBetLog.status == "pending", WCMatch.status == "finished")
             ).all()
             for bet, match in rows:
-                if match.home_goals is None or match.away_goals is None:
-                    continue  # finished but not scored yet — leave pending
-                won = bet_outcome(bet.market_type, bet.selection,
-                                  match.home_goals, match.away_goals)
+                score = settlement_score(match)  # 90-minute score (WC-ACC-02)
+                if score is None:
+                    continue  # not scored / knockout ET score unresolved — leave pending
+                won = _did_bet_win(bet.market_type, bet.selection, score[0], score[1])
                 bet.status = "void" if won is None else ("won" if won else "lost")
                 bet.pnl = bet_pnl(bet.status, bet.stake, bet.odds)
                 bet.settled_at = datetime.utcnow().isoformat()
@@ -156,13 +178,15 @@ def load_wc_bets(user_id: int) -> list:
                 status, pnl = bet.status, (bet.pnl or 0.0)
                 # Read-time settlement for display: the persisted settle step runs
                 # in the pipeline and may lag a few hours, so reflect a finished
-                # result immediately without writing.
-                if status == "pending" and match.status == "finished" \
-                        and match.home_goals is not None and match.away_goals is not None:
-                    won = bet_outcome(bet.market_type, bet.selection,
-                                      match.home_goals, match.away_goals)
-                    status = "void" if won is None else ("won" if won else "lost")
-                    pnl = bet_pnl(status, bet.stake, bet.odds)
+                # result immediately without writing. Settles on the 90-minute score
+                # (WC-ACC-02) — a knockout awaiting ET reconstruction stays pending.
+                if status == "pending" and match.status == "finished":
+                    score = settlement_score(match)
+                    if score is not None:
+                        won = _did_bet_win(bet.market_type, bet.selection,
+                                           score[0], score[1])
+                        status = "void" if won is None else ("won" if won else "lost")
+                        pnl = bet_pnl(status, bet.stake, bet.odds)
                 out.append({
                     "id": bet.id, "match_id": bet.match_id, "date": match.date,
                     "home": home, "away": away,
@@ -306,16 +330,21 @@ def accumulator_pnl(status, stake, leg_odds, leg_statuses) -> float:
 
 def _leg_status(market_type, selection, match) -> str:
     """Settled status of a single leg given its match row: 'pending' until the match
-    is finished + scored, then 'won'/'lost' (via the same outcome logic as singles),
-    or 'void' if the match was abandoned/cancelled (no result to settle against)."""
+    is finished + settleable, then 'won'/'lost' (via the same outcome logic as
+    singles), or 'void' if the match was abandoned/cancelled (no result to settle
+    against). Settles on the 90-minute score (WC-ACC-02) — a knockout that went to
+    extra time settles on regulation, and stays 'pending' until that score is
+    reconstructed."""
     if match is None:
         return "pending"
     if match.status in _VOID_MATCH_STATUSES:
         return "void"
-    if match.status != "finished" or match.home_goals is None \
-            or match.away_goals is None:
+    if match.status != "finished":
         return "pending"
-    won = bet_outcome(market_type, selection, match.home_goals, match.away_goals)
+    score = settlement_score(match)
+    if score is None:
+        return "pending"  # finished but 90-minute score not resolved (KO awaiting ET)
+    won = _did_bet_win(market_type, selection, score[0], score[1])
     return "void" if won is None else ("won" if won else "lost")
 
 
