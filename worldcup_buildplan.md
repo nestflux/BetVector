@@ -2400,7 +2400,7 @@ WC-ACC. Cost: $0 (ESPN free; no Odds API). Value / predictor path held byte-for-
 unchanged.
 
 
-## WC-ODDS — Odds auto-fill + bookmaker selection · APPROVED (owner-approved 2026-07-01, building on branch `wc-odds`)
+## WC-ODDS — Odds auto-fill + bookmaker selection · ✅ COMPLETE 3/3 (owner-approved 2026-07-01; branch `wc-odds` → PR #3; masterplan v1.11 → v1.12)
 
 In the WC bet-tracker's log form AND the accumulator slip builder, pre-fill the odds
 when a match + market + selection is chosen, with a **bookmaker selector** — **FanDuel
@@ -2457,11 +2457,17 @@ diff).
   APPROVED (1 nit applied: float-parse the budget header; 1 noted: `{}`-fetch cached
   for the TTL = credit-conservation trade-off). +11 tests (20 in tests/test_wc_odds.py);
   suite 1320.
-- **WC-ODDS-03 — Review + docs.** Holistic review (shadow-safety: no `wc_odds` writes,
-  value_finder ×2 + predictor empty diff; budget-guard; cache correctness; multi-user)
-  + live verification (auto-fill a real 1X2 + O/U from Neon odds; one real BTTS fetch
-  showing the ~1-credit cost + FanDuel price) + masterplan / build-plan docs (Rule 8
-  Tier-1) + version bump. Closes the epic.
+- **WC-ODDS-03 — Review + docs.** ✅ DONE (2026-07-01). Holistic cross-issue review
+  APPROVED — shadow-safety epic-wide (no `wc_odds` writes; `value_finder` ×2 + predictor
+  empty diff; the slip's per-leg book is display-only — `WCAccaLeg` has no bookmaker
+  column, and nothing reaches `wc_odds`/`wc_value_bets`), budget can't blow quota (one
+  paid call, cached + guarded), cache multi-user-safe (`match_id`-keyed global odds),
+  WC-ODDS-01 unchanged by -02. **Live-verified on Neon + the real Odds API:** stored
+  1X2/O-U auto-fill (Panama v Croatia — FanDuel 7.00 / best 8.00 Unibet; O-U FanDuel
+  had no line → best-price fallback), and one real BTTS fetch (Belgium v Senegal) cost
+  **exactly 1 credit (488 → 487)**, returned 5 books, **FanDuel BTTS Yes 1.83 / No
+  1.95**, not written to `wc_odds`. Rule 8 Tier-1: masterplan §13.16 WC-ODDS paragraph
+  + version 1.11 → 1.12. Closes the epic.
 
 Tests: `tests/test_wc_odds.py` (mapping, best-price, book selector, budget-guard
 fallback, cache behaviour, shadow-safety = no `wc_odds` writes). Each issue: full
