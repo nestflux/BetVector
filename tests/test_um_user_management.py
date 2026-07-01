@@ -349,3 +349,85 @@ def test_dashboard_records_login_on_every_entry_path():
     src = (ROOT / "src" / "delivery" / "dashboard.py").read_text()
     # credential login + cookie rehydrate + emergency owner fallback
     assert src.count("record_login(") >= 3
+
+
+# ============================================================================
+# UM-06 — Force logout / "sign out everywhere" (session epoch)
+# ============================================================================
+import hashlib as _hashlib  # noqa: E402
+import hmac as _hmac  # noqa: E402
+
+from src.auth import (  # noqa: E402
+    bump_session_epoch, get_session_epoch, make_session_token,
+    session_token_epoch, verify_session_token,
+)
+
+_SECRET = "unit-test-cookie-secret"
+
+
+def test_token_roundtrip_with_epoch():
+    tok = make_session_token(7, 7, secret=_SECRET, now_ts=1000.0, epoch=3)
+    assert tok and tok.count(".") == 3                # uid.epoch.expiry.sig
+    assert verify_session_token(tok, secret=_SECRET, now_ts=1000.0) == 7
+    assert session_token_epoch(tok) == 3
+
+
+def test_legacy_3part_token_still_verifies():
+    # A token minted the OLD way (uid.expiry.sig) must still verify, as epoch 0,
+    # so existing cookies keep working across the UM-06 deploy.
+    expiry = 20000
+    msg = f"5.{expiry}"
+    sig = _hmac.new(_SECRET.encode(), msg.encode(), _hashlib.sha256).hexdigest()
+    legacy = f"{msg}.{sig}"
+    assert verify_session_token(legacy, secret=_SECRET, now_ts=1000.0) == 5
+    assert session_token_epoch(legacy) == 0
+
+
+def test_token_tamper_and_expiry_rejected():
+    tok = make_session_token(7, 7, secret=_SECRET, now_ts=1000.0, epoch=1)
+    assert verify_session_token(tok + "x", secret=_SECRET, now_ts=1000.0) is None   # tampered
+    assert verify_session_token(tok, secret=_SECRET, now_ts=10**12) is None          # expired
+
+
+def test_session_token_epoch_parses_safely():
+    assert session_token_epoch(None) == 0
+    assert session_token_epoch("garbage") == 0
+    assert session_token_epoch("1.2.3.sig") == 2
+
+
+def test_bump_and_get_session_epoch(db):
+    uid = _mk_user(db)
+    assert get_session_epoch(uid) == 0
+    assert bump_session_epoch(uid) is True
+    assert get_session_epoch(uid) == 1
+    assert bump_session_epoch(uid) is True
+    assert get_session_epoch(uid) == 2
+
+
+def test_bump_session_epoch_missing_user(db):
+    assert bump_session_epoch(99999) is False
+
+
+def test_sign_out_everywhere_makes_old_token_stale(db):
+    uid = _mk_user(db)
+    tok = make_session_token(uid, 7, secret=_SECRET, now_ts=1000.0,
+                             epoch=get_session_epoch(uid))
+    # Before the bump: token is valid AND its epoch matches the user's current epoch,
+    # so the rehydrate epoch-check passes.
+    assert verify_session_token(tok, secret=_SECRET, now_ts=1000.0) == uid
+    assert session_token_epoch(tok) == get_session_epoch(uid)      # 0 == 0
+    # "Sign out everywhere" bumps the epoch. The token still passes integrity, but its
+    # embedded epoch is now stale vs the user's — the dashboard rehydrate rejects it.
+    bump_session_epoch(uid)
+    assert session_token_epoch(tok) != get_session_epoch(uid)      # 0 != 1
+
+
+def test_admin_view_wires_signout():
+    src = (ROOT / "src" / "delivery" / "views" / "admin.py").read_text()
+    assert "bump_session_epoch" in src and "Sign out everywhere" in src
+    compile(src, "admin.py", "exec")
+
+
+def test_dashboard_wires_epoch_check():
+    src = (ROOT / "src" / "delivery" / "dashboard.py").read_text()
+    assert "session_token_epoch(token)" in src and "get_session_epoch(" in src

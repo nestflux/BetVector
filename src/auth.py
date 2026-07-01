@@ -439,12 +439,18 @@ def get_session_user_role() -> str:
 # a browser cookie (set/read by the dashboard via streamlit-cookies-controller)
 # and re-hydrate the session from it on load.
 #
-# Token format:  ``"<user_id>.<expiry_epoch>.<hmac_sha256>"``
+# Token format:  ``"<user_id>.<session_epoch>.<expiry_epoch>.<hmac_sha256>"``
 # The HMAC is keyed on a server-side secret (SESSION_COOKIE_SECRET) so a client
 # can neither forge nor tamper with a token — only the server can mint a valid
 # one.  Without a secret configured the feature is INERT (both functions return
 # ``None``), so the app safely degrades to session-only auth with no behaviour
 # change and no error.
+#
+# ``session_epoch`` (UM-06) is the user's ``users.session_epoch`` at mint time;
+# rehydration rejects a token whose epoch is older than the user's current one,
+# which is how "sign out everywhere" invalidates all of a user's cookies at once.
+# A LEGACY 3-part token (``uid.expiry.sig``, minted before UM-06) is still accepted
+# and treated as epoch 0, so existing cookies keep working until the first bump.
 
 SESSION_COOKIE_NAME = "bv_session"
 
@@ -473,6 +479,7 @@ def make_session_token(
     *,
     secret: Optional[str] = None,
     now_ts: Optional[float] = None,
+    epoch: int = 0,
 ) -> Optional[str]:
     """Mint a signed session token for ``user_id`` valid for ``days`` days.
 
@@ -487,13 +494,17 @@ def make_session_token(
         The authenticated user's database id to embed in the token.
     days : int
         Token lifetime in days (also used as the cookie max-age by the caller).
+    epoch : int
+        The user's current ``session_epoch`` at mint time (UM-06). Rehydration
+        rejects a token whose epoch is older than the user's current one, so
+        bumping the epoch signs the user out of every device at once.
     """
     secret = secret if secret is not None else _cookie_secret()
     if not secret:
         return None
     now_ts = time.time() if now_ts is None else now_ts
     expiry = int(now_ts + days * 86400)
-    message = f"{int(user_id)}.{expiry}"
+    message = f"{int(user_id)}.{int(epoch)}.{expiry}"
     signature = hmac.new(secret.encode(), message.encode(), hashlib.sha256).hexdigest()
     return f"{message}.{signature}"
 
@@ -522,10 +533,16 @@ def verify_session_token(
     if not secret:
         return None
     parts = token.split(".")
-    if len(parts) != 3:
+    # New (UM-06) 4-part token embeds the session epoch; a legacy 3-part token
+    # (minted before UM-06) is still accepted and treated as epoch 0.
+    if len(parts) == 4:
+        user_id_str, _epoch_str, expiry_str, signature = parts
+        message = f"{user_id_str}.{_epoch_str}.{expiry_str}"
+    elif len(parts) == 3:
+        user_id_str, expiry_str, signature = parts
+        message = f"{user_id_str}.{expiry_str}"
+    else:
         return None
-    user_id_str, expiry_str, signature = parts
-    message = f"{user_id_str}.{expiry_str}"
     expected = hmac.new(secret.encode(), message.encode(), hashlib.sha256).hexdigest()
     # Constant-time comparison — reject any tampered or forged signature.
     if not hmac.compare_digest(expected, signature):
@@ -539,3 +556,49 @@ def verify_session_token(
     if expiry < now_ts:
         return None
     return user_id
+
+
+def session_token_epoch(token: Optional[str]) -> int:
+    """The session epoch embedded in a token — 0 for a legacy 3-part token or
+    anything unparseable (UM-06).
+
+    Pure string parse: call this only AFTER :func:`verify_session_token` has proven
+    the token's integrity, then compare the result to the user's current
+    ``session_epoch`` to reject a token issued before a "sign out everywhere".
+    """
+    try:
+        parts = (token or "").split(".")
+        if len(parts) == 4:
+            return int(parts[1])
+    except (ValueError, AttributeError):
+        pass
+    return 0
+
+
+def get_session_epoch(user_id: int) -> int:
+    """The user's current ``session_epoch`` (UM-06), or 0 if unknown/unset. Read at
+    login time to mint the cookie at the right epoch. Never raises."""
+    try:
+        with get_session() as session:
+            user = session.get(User, user_id)
+            return int(getattr(user, "session_epoch", 0) or 0) if user else 0
+    except Exception:
+        return 0
+
+
+def bump_session_epoch(user_id: int) -> bool:
+    """Increment the user's ``session_epoch`` so every existing persistent-login
+    cookie for them stops verifying on its next request — the "sign out everywhere"
+    action (UM-06). Returns True on success, False on unknown user / error."""
+    try:
+        with get_session() as session:
+            user = session.get(User, user_id)
+            if user is None:
+                return False
+            user.session_epoch = int(getattr(user, "session_epoch", 0) or 0) + 1
+            user.updated_at = datetime.utcnow().isoformat()
+            session.commit()
+        return True
+    except Exception:
+        logger.exception("bump_session_epoch failed for user_id=%s", user_id)
+        return False

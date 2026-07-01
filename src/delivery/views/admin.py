@@ -28,6 +28,7 @@ import streamlit as st
 
 from src.auth import (
     admin_reset_password,
+    bump_session_epoch,
     get_session_user_id,
     get_session_user_role,
     hash_password,
@@ -557,6 +558,29 @@ for u in all_users:
                     st.code(temp_pw, language=None)
                 else:
                     st.error("Failed to reset password.")
+
+            # -- Sign out everywhere (invalidate all persistent-login cookies) --
+            st.markdown(
+                f'<div style="font-family: Inter, sans-serif; font-size: 13px; '
+                f'font-weight: 600; color: {COLOURS["text"]}; margin: 10px 0 4px 0;">'
+                f'Sign Out Everywhere</div>'
+                f'<div style="font-family: Inter, sans-serif; font-size: 12px; '
+                f'color: {COLOURS["text_secondary"]}; margin-bottom: 8px;">'
+                f'Ends {u["name"]}\'s stay-signed-in sessions on all devices — they '
+                f'must log in again. Use after a reset, or if a device was lost.</div>',
+                unsafe_allow_html=True,
+            )
+            if st.button(
+                "🚪 Sign out everywhere",
+                key=f"admin_signout_{u['id']}",
+                type="secondary",
+                use_container_width=True,
+            ):
+                if bump_session_epoch(u["id"]):
+                    st.toast(f"Signed {u['name']} out of all devices", icon="✅")
+                    st.rerun()
+                else:
+                    st.error("Failed to sign the user out.")
 
         # -- Delete User (destructive — viewers only, owner protected) --
         st.divider()

@@ -33,9 +33,10 @@ def test_roundtrip_returns_user_id():
     assert verify_session_token(tok, secret=SECRET, now_ts=NOW) == 42
 
 
-def test_token_shape_is_three_parts():
+def test_token_shape_is_four_parts():
+    # UM-06 added the session epoch: "<user_id>.<session_epoch>.<expiry>.<signature>".
     tok = make_session_token(1, 7, secret=SECRET, now_ts=NOW)
-    assert tok.count(".") == 2  # "<user_id>.<expiry>.<signature>"
+    assert tok.count(".") == 3
 
 
 def test_distinct_users_distinct_tokens():
@@ -60,15 +61,15 @@ def test_verify_returns_none_with_empty_secret():
 def test_tampered_user_id_rejected():
     # Try to escalate to user 999 while keeping user 1's signature.
     tok = make_session_token(1, 7, secret=SECRET, now_ts=NOW)
-    _uid, exp, sig = tok.split(".")
-    forged = f"999.{exp}.{sig}"
+    _uid, epoch, exp, sig = tok.split(".")   # UM-06: 4-part token
+    forged = f"999.{epoch}.{exp}.{sig}"
     assert verify_session_token(forged, secret=SECRET, now_ts=NOW) is None
 
 
 def test_tampered_signature_rejected():
     tok = make_session_token(1, 7, secret=SECRET, now_ts=NOW)
-    uid, exp, sig = tok.split(".")
-    assert verify_session_token(f"{uid}.{exp}.{'0' * len(sig)}",
+    uid, epoch, exp, sig = tok.split(".")   # UM-06: 4-part token
+    assert verify_session_token(f"{uid}.{epoch}.{exp}.{'0' * len(sig)}",
                                 secret=SECRET, now_ts=NOW) is None
 
 
