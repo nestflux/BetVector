@@ -2205,7 +2205,7 @@ chosen; the accumulator/parlay variant — multi-leg, combined odds, all-legs-mu
 
 ---
 
-## WC-ACC — Accumulator (Parlay) Bets · IN PROGRESS (owner-approved 2026-06-29; WC-ACC-01/02 DONE 2026-06-30, WC-ACC-03/04 DONE 2026-07-01; WC-ACC-05 next; in PR #1 on branch `wc-acc`)
+## WC-ACC — Accumulator (Parlay) Bets · ✅ COMPLETE 5/5 (owner-approved 2026-06-29; WC-ACC-01/02 2026-06-30, WC-ACC-03/04/05 2026-07-01; in PR #1 on branch `wc-acc`, awaiting merge)
 
 Extends the WC bet tracker (WC-BET) to **accumulators**: multiple legs as one bet,
 all legs must win, combined odds = product of the legs. **Calculator + tracker, NOT
@@ -2292,10 +2292,21 @@ model/value/prediction path.
   pipeline settles accas · read-time == persisted. Gate 2 CLEAN · Gate 3 APPROVED.
   6 tests (30 in test_wc_accumulator.py) + 2 wiring assertions updated; suite 1280.
   PNG proof on Desktop.
-- **WC-ACC-05 — Review + docs.** Independent code-review agent (money/P&L, settlement
-  edge cases incl. void + knockout, multi-user isolation, shadow safety); live
-  verification (build + log an acca + settle it); masterplan/build-plan docs (Rule 8
-  Tier-1) + version bump.
+- **WC-ACC-05 — Review + docs.** ✅ DONE (2026-07-01), CLOSES the epic. Holistic
+  independent review of all 5 issues APPROVED — verified the cross-issue seams:
+  read-time (`load_wc_accumulators`) == persisted (`settle_wc_accumulators`) P&L (same
+  pure trio over the same legs); singles + acca legs both route `settlement_score`
+  (KO 90-min; a KO awaiting reconstruction keeps the acca pending, never settles
+  early); each acca counts as ONE unit in `combined_bet_summary`/`combined_pnl_timeline`
+  (no per-leg double-count); void-drops-out identical both paths; shadow-safe (only
+  `wc_accumulator`/`wc_acca_leg` writes; reconcile only the 3 `wc_matches` reg cols);
+  never-raises + idempotent. LIVE E2E (real fns, fresh DB): 2-leg acca WON +24.20;
+  3-leg acca LOST −10.00 because its KO leg settled on the 90-min draw (Spain 2-1
+  a.e.t. / 1-1 at 90) — proves 01↔02; merged scoreboard net +21.20 across 1 single +
+  2 accas. DATA CHECK: WC knockouts carry `stage='knockout'` (6 finished on Neon) →
+  the reconciler's `stage != "group"` filter processes them (KO reg scores populate
+  next pipeline run). Rule-8 Tier-1: masterplan 1.9 → 1.10 + §13.16 WC-ACC & WC-BET
+  paragraphs. Suite 1280.
 
 Tests: `tests/test_wc_accumulator.py`. Each issue runs the full review gates +
 commit/push, exactly like WC-BET. Supersedes follow-up chip task_e5f58071.
