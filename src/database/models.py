@@ -116,6 +116,11 @@ class User(Base):
     # db._apply_schema_migrations); same opt-in treatment as the league flags.
     notify_wc = Column(Integer, nullable=False, default=0, server_default="0")
     is_active = Column(Integer, nullable=False, server_default="1")
+    # last_login_at: ISO timestamp of the user's most recent successful login or
+    # cookie rehydrate (UM-05). NULL = never signed in — an invited tester who has a
+    # password but hasn't logged in yet. Nullable; column added post-deployment
+    # (see db._apply_schema_migrations), so existing rows carry NULL until next login.
+    last_login_at = Column(String, nullable=True)
     created_at = Column(
         String, nullable=False, server_default=func.now(),
     )

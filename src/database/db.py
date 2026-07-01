@@ -373,6 +373,11 @@ def _apply_schema_migrations(engine: Engine) -> None:
         # current sessions. INTEGER NOT NULL DEFAULT 0 is valid on both Postgres
         # and SQLite (SQLite requires the DEFAULT when adding a NOT NULL column).
         ("users", "must_change_password", "INTEGER NOT NULL DEFAULT 0"),
+        # UM-05 (July 2026): last successful login / cookie-rehydrate timestamp, so the
+        # owner can see who's actively testing and who was invited but never signed in
+        # (has a password + last_login_at NULL). Nullable — existing rows carry NULL
+        # until their next login.
+        ("users", "last_login_at", "VARCHAR" if is_postgres else "TEXT"),
         # WC-ACC-02 (June 2026): 90-minute (regulation) score + extra-time flag on
         # knockout matches, so bets settle on the bookmaker's 90-minute convention
         # (not extra-time/penalties). The two score columns are nullable (NULL for

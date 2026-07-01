@@ -100,6 +100,13 @@ def load_all_users_admin() -> List[Dict]:
                 "created_at": (u.created_at or "")[:10] or "—",
                 # Flag whether a password has been set (None → no login possible)
                 "has_password": u.password_hash is not None,
+                # UM-05: last successful login / rehydrate (date only), and the
+                # "invited but never signed in" flag = has a password yet last_login
+                # is still NULL (the testers to chase).
+                "last_login_at": (u.last_login_at or "")[:10] or "—",
+                "never_logged_in": (
+                    u.password_hash is not None and not u.last_login_at
+                ),
             }
             for u in users
         ]
@@ -284,12 +291,29 @@ for u in all_users:
     row_cols = st.columns([2, 2, 1, 1, 1, 1])
 
     with row_cols[0]:
+        # UM-05: a third line shows "⚠️ never logged in" (invited, has a password,
+        # but hasn't signed in) or the last-seen date — so the owner can tell who's
+        # actually testing at a glance.
+        if u["never_logged_in"]:
+            seen_line = (
+                f'<div style="font-family: Inter, sans-serif; font-size: 11px; '
+                f'color: {COLOURS["yellow"]};">⚠️ never logged in</div>'
+            )
+        elif u["last_login_at"] != "—":
+            seen_line = (
+                f'<div style="font-family: JetBrains Mono, monospace; '
+                f'font-size: 11px; color: {COLOURS["text_secondary"]};">'
+                f'last seen {u["last_login_at"]}</div>'
+            )
+        else:
+            seen_line = ""
         st.markdown(
             f'<div style="padding: 4px 0;">'
             f'<div style="font-family: Inter, sans-serif; font-size: 14px; '
             f'font-weight: 600; color: {name_colour};">{u["name"]}</div>'
             f'<div style="font-family: JetBrains Mono, monospace; font-size: 11px; '
             f'color: {COLOURS["text_secondary"]};">{u["email"]}</div>'
+            f'{seen_line}'
             f'</div>',
             unsafe_allow_html=True,
         )
