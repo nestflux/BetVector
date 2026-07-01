@@ -378,6 +378,11 @@ def _apply_schema_migrations(engine: Engine) -> None:
         # (has a password + last_login_at NULL). Nullable — existing rows carry NULL
         # until their next login.
         ("users", "last_login_at", "VARCHAR" if is_postgres else "TEXT"),
+        # UM-06 (July 2026): per-user session epoch. Bumping it invalidates every
+        # existing persistent-login cookie for that user ("sign out everywhere"). A
+        # session token embeds the epoch it was minted at; a stale epoch is rejected on
+        # rehydrate. Default 0 so existing users/sessions are unaffected.
+        ("users", "session_epoch", "INTEGER NOT NULL DEFAULT 0"),
         # WC-ACC-02 (June 2026): 90-minute (regulation) score + extra-time flag on
         # knockout matches, so bets settle on the bookmaker's 90-minute convention
         # (not extra-time/penalties). The two score columns are nullable (NULL for

@@ -121,6 +121,12 @@ class User(Base):
     # password but hasn't logged in yet. Nullable; column added post-deployment
     # (see db._apply_schema_migrations), so existing rows carry NULL until next login.
     last_login_at = Column(String, nullable=True)
+    # session_epoch: bumped to invalidate ALL of this user's persistent-login cookies
+    # at once ("sign out everywhere", UM-06). A session token embeds the epoch it was
+    # minted at; rehydration rejects a token whose epoch is older than this. Default 0
+    # so existing users/sessions are unaffected; column added post-deployment (see
+    # db._apply_schema_migrations).
+    session_epoch = Column(Integer, nullable=False, default=0, server_default="0")
     created_at = Column(
         String, nullable=False, server_default=func.now(),
     )

@@ -70,6 +70,7 @@ from src.auth import (
     is_authenticated, set_session_user, get_session_user_id,
     get_session_user_role, get_user_by_email, verify_password, record_login,
     clear_session_user, make_session_token, verify_session_token,
+    session_token_epoch, get_session_epoch,
     SESSION_COOKIE_NAME, _cookie_secret,
 )
 
@@ -467,10 +468,13 @@ def _cookie_settings():
 
 
 def _load_active_user(user_id: int):
-    """Return ``(id, role)`` if the user exists AND is active, else ``None``.
+    """Return ``(id, role, session_epoch)`` if the user exists AND is active, else
+    ``None``.
 
     Re-validated on every cookie rehydrate so a deactivated or deleted account
-    cannot keep riding a still-cryptographically-valid token.
+    cannot keep riding a still-cryptographically-valid token. The session epoch is
+    returned so the caller can reject a token minted before a "sign out everywhere"
+    (UM-06).
     """
     try:
         from src.database.db import get_session
@@ -478,7 +482,7 @@ def _load_active_user(user_id: int):
         with get_session() as session:
             user = session.get(User, user_id)
             if user is not None and getattr(user, "is_active", 1) == 1:
-                return (user.id, user.role)
+                return (user.id, user.role, int(getattr(user, "session_epoch", 0) or 0))
     except Exception:
         return None
     return None
@@ -494,7 +498,9 @@ def persist_login_cookie(jar, user_id: int) -> None:
     if jar is None:
         return
     days, secure = _cookie_settings()
-    token = make_session_token(user_id, days)
+    # Mint the token at the user's current session epoch (UM-06) so a later
+    # "sign out everywhere" (which bumps the epoch) invalidates this cookie.
+    token = make_session_token(user_id, days, epoch=get_session_epoch(user_id))
     if not token:
         return
     try:
@@ -555,7 +561,11 @@ def _rehydrate_from_cookie(jar) -> bool:
     user_id = verify_session_token(token)
     if user_id is not None:
         ident = _load_active_user(user_id)
-        if ident is not None:
+        # ident = (id, role, session_epoch). Reject a token minted before a
+        # "sign out everywhere" — its embedded epoch is older than the user's now
+        # (UM-06). A legacy 3-part token parses as epoch 0 and rides until the
+        # first bump.
+        if ident is not None and session_token_epoch(token) == ident[2]:
             set_session_user(ident[0], ident[1])
             record_login(ident[0])   # UM-05: stamp last-seen on cookie rehydrate
             return True
