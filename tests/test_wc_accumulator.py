@@ -22,8 +22,9 @@ import src.database.models  # noqa: E402,F401  (register User/users table on Bas
 from src.database.db import Base  # noqa: E402
 from src.world_cup.bets import (  # noqa: E402
     accumulator_effective_odds, accumulator_odds, accumulator_pnl,
-    accumulator_slip_readout, accumulator_status, load_wc_accumulators,
-    log_wc_accumulator, settle_wc_accumulators,
+    accumulator_slip_readout, accumulator_status, combined_bet_summary,
+    combined_pnl_timeline, load_wc_accumulators, log_wc_accumulator,
+    settle_wc_accumulators,
 )
 from src.world_cup.models import WCAccaLeg, WCAccumulator, WCMatch, WCTeam  # noqa: E402
 
@@ -338,3 +339,97 @@ def test_slip_html_helpers_render():
                "model_prob": 0.18, "edge": 0.0467, "correlated": []}
     out = ns["_slip_readout_html"](readout, 10.0, 75.0)
     assert "7.50" in out and "$75.00" in out and "+4.7%" in out and "18.0%" in out
+
+
+# ---- WC-ACC-04: combined scoreboard + timeline + accumulator display --------
+
+def test_combined_summary_merges_singles_and_accas():
+    singles = [
+        {"id": 1, "date": "2026-06-20", "status": "won", "stake": 10.0, "pnl": 10.0,
+         "source": "manual"},
+        {"id": 2, "date": "2026-06-21", "status": "pending", "stake": 10.0,
+         "pnl": 0.0, "source": "manual"},
+    ]
+    accas = [
+        {"id": 1, "status": "won", "stake": 10.0, "pnl": 50.0,
+         "source": "research_card",
+         "legs": [{"date": "2026-06-19"}, {"date": "2026-06-22"}]},
+        {"id": 2, "status": "lost", "stake": 10.0, "pnl": -10.0, "source": "manual",
+         "legs": [{"date": "2026-06-20"}]},
+    ]
+    s = combined_bet_summary(singles, accas)
+    assert s["total"] == 4 and s["singles"] == 2 and s["accas"] == 2
+    assert s["pending"] == 1 and s["settled"] == 3
+    assert s["won"] == 2 and s["lost"] == 1
+    assert s["staked_total"] == 40.0 and s["staked_settled"] == 30.0
+    assert s["net_pnl"] == 50.0                          # +10 single, +50 & -10 accas
+    assert s["roi"] == round(50.0 / 30.0, 4)
+    assert s["win_rate"] == round(2 / 3, 4)
+    assert s["advised_settled"] == 1 and s["advised_won"] == 1   # the research_card acca
+
+
+def test_combined_summary_empty():
+    s = combined_bet_summary([], [])
+    assert s["total"] == 0 and s["net_pnl"] == 0.0
+    assert s["roi"] is None and s["win_rate"] is None
+
+
+def test_combined_timeline_orders_by_settle_date():
+    singles = [
+        {"id": 1, "date": "2026-06-21", "status": "won", "stake": 10.0, "pnl": 7.0,
+         "source": "manual"},
+    ]
+    accas = [
+        {"id": 1, "status": "won", "stake": 10.0, "pnl": 20.0, "source": "manual",
+         "legs": [{"date": "2026-06-18"}, {"date": "2026-06-20"}]},   # settles 6/20
+        {"id": 2, "status": "lost", "stake": 10.0, "pnl": -10.0, "source": "manual",
+         "legs": [{"date": "2026-06-19"}]},                            # settles 6/19
+    ]
+    tl = combined_pnl_timeline(singles, accas)
+    # an acca's settle date is its LATEST leg date; order 6/19 -> 6/20 -> 6/21
+    assert [t["date"] for t in tl] == ["2026-06-19", "2026-06-20", "2026-06-21"]
+    assert [t["cumulative"] for t in tl] == [-10.0, 10.0, 17.0]
+    assert [t["kind"] for t in tl] == ["acca", "acca", "single"]
+
+
+def test_acca_display_wired():
+    assert "def _acca_expander_label" in HUB_SRC_ACC
+    assert "def _acca_leg_row_html" in HUB_SRC_ACC
+    assert "load_wc_accumulators(" in HUB_SRC_ACC        # My Bets loads accas
+    assert "_acca_expander_label(a)" in HUB_SRC_ACC       # parent header row
+    assert "_acca_leg_row_html(" in HUB_SRC_ACC           # expandable legs
+    assert "combined_bet_summary(" in HUB_SRC_ACC         # merged scoreboard
+
+
+def test_settle_accumulators_wired_in_pipeline():
+    pl = (ROOT / "src" / "world_cup" / "pipeline.py").read_text()
+    assert pl.count("settle_wc_accumulators") >= 2        # morning + evening runs
+
+
+def test_acca_display_helpers_render():
+    import ast
+    from html import escape as _esc
+    ns = {
+        "escape": _esc, "GREEN": "#3FB950", "RED": "#F85149", "TEXT": "#E6EDF3",
+        "TEXT_DIM": "#8B949E", "BORDER": "#30363D", "SURFACE": "#161B22",
+        "YELLOW": "#D29922", "ACCENT": "#58A6FF",
+        "_SEL_LABELS": {"home": "Home", "over": "Over"},
+    }
+    pure = {"_acca_leg_row_html", "_acca_expander_label"}
+    for node in ast.parse(HUB_SRC_ACC).body:
+        if isinstance(node, ast.FunctionDef) and node.name in pure:
+            exec(compile(ast.Module(body=[node], type_ignores=[]), "<wc>", "exec"), ns)
+
+    leg = ns["_acca_leg_row_html"]({
+        "market_type": "1X2", "market_label": "Match result", "selection": "home",
+        "home": "Brazil", "away": "Spain", "odds": 1.8, "status": "won"})
+    assert "Brazil v Spain" in leg and "@1.80" in leg and "won" in leg
+
+    won = ns["_acca_expander_label"]({
+        "status": "won", "n_legs": 3, "combined_odds": 6.0, "stake": 10.0, "pnl": 50.0})
+    assert "3-leg" in won and "@6.00" in won and "+50.00" in won and "✓" in won
+
+    pending = ns["_acca_expander_label"]({
+        "status": "pending", "n_legs": 2, "combined_odds": 4.0, "stake": 10.0,
+        "pnl": 0.0})
+    assert "pending" in pending and "$40" in pending    # shows potential payout

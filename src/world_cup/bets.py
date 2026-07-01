@@ -580,3 +580,72 @@ def accumulator_slip_readout(legs) -> dict:
         "n_legs": len(legs), "combined_odds": combined, "implied_prob": implied,
         "model_prob": model_prob, "edge": edge, "correlated": correlated,
     }
+
+
+# ---------------------------------------------------------------------------
+# Combined singles + accumulators — scoreboard + timeline (WC-ACC-04)
+# ---------------------------------------------------------------------------
+# The My Bets scoreboard + cumulative-P&L chart cover BOTH single bets and
+# accumulators, so a user sees one running P&L across everything they've staked.
+# Each bet — single or accumulator — counts as ONE unit (one stake, one result).
+
+def _bet_unit(b: dict) -> dict:
+    """Normalise a single-bet dict (from load_wc_bets) to a P&L unit."""
+    return {"date": b.get("date"), "status": b["status"], "stake": b["stake"],
+            "pnl": b.get("pnl") or 0.0, "source": b.get("source") or "manual",
+            "kind": "single", "id": b["id"]}
+
+
+def _acca_unit(a: dict) -> dict:
+    """Normalise an accumulator dict (from load_wc_accumulators) to a P&L unit. Its
+    effective settle date is the LATEST leg date — an accumulator only resolves once
+    its last leg's match has finished."""
+    leg_dates = [lg.get("date") for lg in a.get("legs", []) if lg.get("date")]
+    return {"date": max(leg_dates) if leg_dates else None, "status": a["status"],
+            "stake": a["stake"], "pnl": a.get("pnl") or 0.0,
+            "source": a.get("source") or "manual", "kind": "acca", "id": a["id"]}
+
+
+def combined_bet_summary(singles: list, accas: list) -> dict:
+    """Running-P&L scoreboard across BOTH singles and accumulators (WC-ACC-04). Takes
+    the two already-loaded lists (read-time settled) so it needs no extra query; each
+    bet counts once. Same shape as ``wc_bet_summary`` plus ``singles``/``accas``
+    counts, so the existing scoreboard renderer works unchanged."""
+    units = [_bet_unit(b) for b in singles] + [_acca_unit(a) for a in accas]
+    settled = [u for u in units if u["status"] in ("won", "lost", "void")]
+    won = [u for u in settled if u["status"] == "won"]
+    staked_settled = sum(u["stake"] for u in settled)
+    net = sum(u["pnl"] for u in settled)
+    returned = sum((u["stake"] + u["pnl"]) for u in settled if u["status"] != "lost")
+    advised = [u for u in settled if u["source"] != "manual"]
+    advised_won = sum(1 for u in advised if u["status"] == "won")
+    return {
+        "total": len(units), "singles": len(singles), "accas": len(accas),
+        "pending": sum(1 for u in units if u["status"] == "pending"),
+        "settled": len(settled), "won": len(won),
+        "lost": sum(1 for u in settled if u["status"] == "lost"),
+        "void": sum(1 for u in settled if u["status"] == "void"),
+        "staked_total": round(sum(u["stake"] for u in units), 2),
+        "staked_settled": round(staked_settled, 2),
+        "returned": round(returned, 2),
+        "net_pnl": round(net, 2),
+        "roi": round(net / staked_settled, 4) if staked_settled else None,
+        "win_rate": round(len(won) / len(settled), 4) if settled else None,
+        "advised_settled": len(advised), "advised_won": advised_won,
+        "advised_win_rate": round(advised_won / len(advised), 4) if advised else None,
+    }
+
+
+def combined_pnl_timeline(singles: list, accas: list) -> list:
+    """Cumulative net P&L across settled singles + accumulators, ordered by settle date
+    (WC-ACC-04). Pure — takes the loaded lists. Each entry: {date, pnl, cumulative,
+    kind}. [] if nothing is settled yet."""
+    units = [_bet_unit(b) for b in singles] + [_acca_unit(a) for a in accas]
+    settled = [u for u in units if u["status"] in ("won", "lost", "void")]
+    settled.sort(key=lambda u: ((u.get("date") or ""), u["kind"], u["id"]))
+    out, run = [], 0.0
+    for u in settled:
+        run += u["pnl"]
+        out.append({"date": u.get("date"), "pnl": u["pnl"],
+                    "cumulative": round(run, 2), "kind": u["kind"]})
+    return out

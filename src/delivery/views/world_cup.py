@@ -1921,29 +1921,69 @@ def _render_bet_slip(uid: int) -> None:
             st.caption("Add at least 2 legs to log an accumulator.")
 
 
+def _acca_leg_row_html(leg: dict) -> str:
+    """One leg inside an expanded accumulator: teams · market/selection · odds · the
+    leg's own settled status (won/lost/void/pending). All escaped."""
+    st_ = leg.get("status", "pending")
+    scol = {"won": GREEN, "lost": RED, "void": TEXT_DIM}.get(st_, YELLOW)
+    mk = escape(leg.get("market_label", leg["market_type"]))
+    sel = escape(_SEL_LABELS.get(leg["selection"], leg["selection"]))
+    teams = escape(f'{leg.get("home", "?")} v {leg.get("away", "?")}')
+    return (
+        f'<div style="display:flex;gap:10px;align-items:center;padding:4px 8px;'
+        f'border-bottom:1px solid {BORDER};font-size:0.8rem;">'
+        f'<span style="flex:2;color:{TEXT};">{teams}</span>'
+        f'<span style="flex:2;color:{TEXT_DIM};">{mk} · {sel}</span>'
+        f'<span style="color:{TEXT};font-family:JetBrains Mono,monospace;">'
+        f'@{leg["odds"]:.2f}</span>'
+        f'<span style="min-width:56px;text-align:right;color:{scol};">'
+        f'{escape(st_)}</span></div>'
+    )
+
+
+def _acca_expander_label(a: dict) -> str:
+    """Plain-text header for an accumulator's expander: status icon · N-leg · combined
+    odds · stake · P&L (once settled) or potential payout (while pending)."""
+    status = a["status"]
+    icon = {"won": "✓", "lost": "✗", "void": "•"}.get(status, "⏳")
+    if status in ("won", "lost"):
+        tail = f'{a["pnl"]:+.2f}'
+    elif status == "pending":
+        tail = f'→ ${a["stake"] * a["combined_odds"]:,.0f} potential'
+    else:
+        tail = "$0.00"
+    return (f'{icon} {a["n_legs"]}-leg acca · @{a["combined_odds"]:.2f} · '
+            f'${a["stake"]:,.0f} · {status} · {tail}')
+
+
 def _render_my_bets() -> None:
     """My Bets tab: scoreboard + log-a-bet form + the user's bet list. Scoped to the
     logged-in user; bets auto-settle off final scores (read-time + pipeline)."""
     from src.auth import get_session_user_id
     from src.world_cup.bets import (
-        MARKET_LABELS, WC_MARKETS, load_wc_bets, log_wc_bet, wc_bet_summary,
-        wc_pnl_timeline,
+        MARKET_LABELS, WC_MARKETS, combined_bet_summary, combined_pnl_timeline,
+        load_wc_accumulators, load_wc_bets, log_wc_bet,
     )
     _section_header("My Bets")
     uid = get_session_user_id()
-    bets = load_wc_bets(uid)
-    summ = wc_bet_summary(uid)
+    singles = load_wc_bets(uid)
+    accas = load_wc_accumulators(uid)
+    summ = combined_bet_summary(singles, accas)   # scoreboard across both (WC-ACC-04)
 
     if summ["total"]:
         st.markdown(_bet_summary_html(summ), unsafe_allow_html=True)
+        if summ["accas"]:
+            st.caption(f"Across {summ['singles']} single"
+                       f"{'s' if summ['singles'] != 1 else ''} + {summ['accas']} "
+                       f"accumulator{'s' if summ['accas'] != 1 else ''}.")
         if summ["advised_settled"]:
             awr = (f"{summ['advised_win_rate'] * 100:.0f}%"
                    if summ["advised_win_rate"] is not None else "—")
             st.caption(f"🎯 Of your model-advised bets: {summ['advised_won']}/"
                        f"{summ['advised_settled']} won ({awr}).")
 
-    # Cumulative P&L over time (settled bets) — the running scoreboard as a curve.
-    timeline = wc_pnl_timeline(bets)
+    # Cumulative P&L over time (settled singles + accumulators) — running curve.
+    timeline = combined_pnl_timeline(singles, accas)
     if len(timeline) >= 2:
         ys = [t["cumulative"] for t in timeline]
         line_col = GREEN if ys[-1] >= 0 else RED
@@ -1963,7 +2003,7 @@ def _render_my_bets() -> None:
         st.plotly_chart(fig, use_container_width=True)
 
     # Log a bet — reactive widgets (not a form) so Selection follows Market.
-    with st.expander("➕ Log a bet", expanded=not bets):
+    with st.expander("➕ Log a bet", expanded=not (singles or accas)):
         fixtures = _wc_betting_fixtures()
         if not fixtures:
             st.caption("No World Cup fixtures available to bet on right now.")
@@ -2004,18 +2044,39 @@ def _render_my_bets() -> None:
     # any single bets are logged.
     _render_bet_slip(uid)
 
-    if not bets:
+    if not singles and not accas:
         st.info("No bets logged yet — log one above, build an accumulator, or tap ➕ "
                 "on a model pick in the 📋 Today & Bets tab.")
         return
 
-    st.markdown(
-        f'<div style="border:1px solid {BORDER};border-radius:8px;overflow:hidden;">'
-        + "".join(_bet_row_html(b) for b in bets) + "</div>",
-        unsafe_allow_html=True,
-    )
-    st.caption("Bets settle automatically off the final score. 🎯 = logged from a "
-               "model tip. These are your own bets — separate from the model's picks.")
+    # Accumulators — a parent header row per acca with expandable legs (WC-ACC-04).
+    if accas:
+        st.markdown('<div style="color:#8B949E;font-size:0.8rem;font-weight:600;'
+                    'margin:8px 0 2px;">🎫 Accumulators</div>', unsafe_allow_html=True)
+        for a in accas:
+            with st.expander(_acca_expander_label(a)):
+                st.markdown(
+                    f'<div style="border:1px solid {BORDER};border-radius:6px;'
+                    f'overflow:hidden;">'
+                    + "".join(_acca_leg_row_html(lg) for lg in a["legs"]) + "</div>",
+                    unsafe_allow_html=True)
+                st.caption(f'Combined @{a["combined_odds"]:.2f} · stake '
+                           f'${a["stake"]:,.2f} · every leg must win.')
+
+    # Single bets.
+    if singles:
+        if accas:
+            st.markdown('<div style="color:#8B949E;font-size:0.8rem;font-weight:600;'
+                        'margin:10px 0 2px;">🎟️ Single bets</div>',
+                        unsafe_allow_html=True)
+        st.markdown(
+            f'<div style="border:1px solid {BORDER};border-radius:8px;overflow:hidden;">'
+            + "".join(_bet_row_html(b) for b in singles) + "</div>",
+            unsafe_allow_html=True,
+        )
+    st.caption("Bets settle automatically off the 90-minute score (knockouts on "
+               "regulation). 🎯 = logged from a model tip. Your own bets — separate "
+               "from the model's picks.")
 
 
 # ============================================================================
