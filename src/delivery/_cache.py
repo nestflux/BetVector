@@ -37,3 +37,8 @@ CACHE_TTL_LIVE = _ttl("cache_ttl_live_seconds", 300)
 # Long TTL for slow-moving global reads (group standings, recent results).
 # 30 minutes.
 CACHE_TTL_SLOW = _ttl("cache_ttl_slow_seconds", 1800)
+# On-demand LIVE odds fetches (WC bet-tracker BTTS auto-fetch). Unlike the reads
+# above this hits The Odds API, so every cache MISS costs ~1 credit — a coarse TTL
+# keeps live fetching cheap (a match is fetched at most once per window, shared
+# across all users). 15 minutes.
+CACHE_TTL_ODDS = _ttl("cache_ttl_odds_seconds", 900)
