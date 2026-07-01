@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,6 +30,17 @@ from src.database.models import User  # noqa: E402
 @pytest.fixture
 def db():
     engine = create_engine("sqlite:///:memory:")
+
+    # Enforce foreign keys in SQLite (off by default) so the delete-order tests
+    # genuinely exercise the FK constraints that fail on PostgreSQL/Neon — the exact
+    # condition UM-03 fixes. Without this, SQLite would silently orphan child rows and
+    # the test would pass even against the old, buggy delete.
+    @event.listens_for(engine, "connect")
+    def _enable_sqlite_fk(dbapi_conn, _rec):  # noqa: ANN001
+        cur = dbapi_conn.cursor()
+        cur.execute("PRAGMA foreign_keys=ON")
+        cur.close()
+
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine, expire_on_commit=False)
     orig_e, orig_f = db_mod._engine, db_mod._SessionFactory
@@ -165,3 +176,90 @@ def test_admin_view_wires_profile_edit():
     src = (ROOT / "src" / "delivery" / "views" / "admin.py").read_text()
     assert "update_user_profile" in src and "Save profile" in src
     compile(src, "admin.py", "exec")
+
+
+# ============================================================================
+# UM-03 — Delete / Clear / Reset cover the WC bet-tracker tables (FK bug fix)
+# ============================================================================
+from src.delivery.views._user_ops import (  # noqa: E402
+    clear_bet_history, delete_user, reset_everything,
+)
+from src.world_cup.models import (  # noqa: E402
+    WCAccaLeg, WCAccumulator, WCBetLog, WCMatch, WCTeam,
+)
+
+
+def _seed_wc_match(db, mid=1):
+    """A minimal WC match (+ its two teams) so WC bet rows satisfy the match FK."""
+    with db() as s:
+        if s.get(WCTeam, 1) is None:
+            s.add(WCTeam(id=1, name="Alpha", fifa_code="ALP",
+                         confederation="UEFA", group_letter="A"))
+            s.add(WCTeam(id=2, name="Beta", fifa_code="BET",
+                         confederation="UEFA", group_letter="A"))
+        s.add(WCMatch(id=mid, date="2026-07-05", stage="round_of_32",
+                      home_team_id=1, away_team_id=2, status="scheduled"))
+        s.commit()
+
+
+def _add_wc_bets(db, user_id, match_id=1):
+    """Give a user one single WC bet + one 2-leg accumulator."""
+    with db() as s:
+        s.add(WCBetLog(user_id=user_id, match_id=match_id, market_type="1X2",
+                       selection="home", odds=2.0, stake=10.0, status="pending"))
+        acc = WCAccumulator(user_id=user_id, stake=5.0, combined_odds=4.0,
+                            status="pending")
+        s.add(acc)
+        s.flush()
+        s.add(WCAccaLeg(accumulator_id=acc.id, match_id=match_id,
+                        market_type="1X2", selection="home", odds=2.0,
+                        status="pending"))
+        s.add(WCAccaLeg(accumulator_id=acc.id, match_id=match_id,
+                        market_type="BTTS", selection="yes", odds=2.0,
+                        status="pending"))
+        s.commit()
+
+
+def test_delete_user_removes_wc_bets_and_spares_others(db):
+    _seed_wc_match(db)
+    keep = _mk_user(db, name="Keep", email="keep@x.com")
+    victim = _mk_user(db, name="Victim", email="victim@x.com")
+    _add_wc_bets(db, keep)
+    _add_wc_bets(db, victim)
+
+    # With FK enforcement ON this is exactly the case that failed before UM-03.
+    assert delete_user(victim) is True
+    with db() as s:
+        assert s.get(User, victim) is None
+        # victim's WC rows all gone — no orphans
+        assert s.query(WCBetLog).filter_by(user_id=victim).count() == 0
+        assert s.query(WCAccumulator).filter_by(user_id=victim).count() == 0
+        # only keep's two legs remain (victim's were removed with the accumulator)
+        assert s.query(WCAccaLeg).count() == 2
+        # keep is fully intact
+        assert s.get(User, keep) is not None
+        assert s.query(WCBetLog).filter_by(user_id=keep).count() == 1
+        assert s.query(WCAccumulator).filter_by(user_id=keep).count() == 1
+
+
+def test_clear_history_removes_wc_bets(db):
+    _seed_wc_match(db)
+    uid = _mk_user(db)
+    _add_wc_bets(db, uid)
+    n = clear_bet_history(uid)
+    assert n == 2                                 # 1 single + 1 accumulator
+    with db() as s:
+        assert s.query(WCBetLog).filter_by(user_id=uid).count() == 0
+        assert s.query(WCAccumulator).filter_by(user_id=uid).count() == 0
+        assert s.query(WCAccaLeg).count() == 0    # legs went with the accumulator
+
+
+def test_reset_everything_removes_wc_bets(db):
+    _seed_wc_match(db)
+    uid = _mk_user(db)
+    _add_wc_bets(db, uid)
+    assert reset_everything(uid) is True
+    with db() as s:
+        assert s.query(WCBetLog).filter_by(user_id=uid).count() == 0
+        assert s.query(WCAccumulator).filter_by(user_id=uid).count() == 0
+        assert s.query(WCAccaLeg).count() == 0

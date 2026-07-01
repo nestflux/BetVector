@@ -22,6 +22,41 @@ from datetime import datetime
 
 from src.database.db import get_session
 from src.database.models import BetLog, User
+from src.world_cup.models import WCAccaLeg, WCAccumulator, WCBetLog
+
+
+def _delete_wc_personal_bets(session, user_id: int) -> int:
+    """Delete a user's PERSONAL World Cup bets — accumulator legs, then accumulators,
+    then single bets — inside the caller's transaction (UM-03).
+
+    The WC bet-tracker tables (``wc_bet_log`` / ``wc_accumulator`` and its
+    ``wc_acca_leg`` children) all reference ``users.id`` — directly, or via the parent
+    accumulator — with NOT-NULL foreign keys, but the original league-only reset/delete
+    helpers never touched them.  On PostgreSQL that made deleting a WC-tracker tester
+    fail the FK constraint; on SQLite it orphaned the rows.  Deleting child-table-first
+    keeps every constraint satisfied.
+
+    Returns the number of WC *bets* removed (single bets + accumulators; legs are parts
+    of an accumulator, not counted separately) so callers can report an accurate total.
+    """
+    acc_ids = [
+        a_id for (a_id,) in session.query(WCAccumulator.id)
+        .filter(WCAccumulator.user_id == user_id).all()
+    ]
+    n_accumulators = len(acc_ids)
+    if acc_ids:
+        session.query(WCAccaLeg).filter(
+            WCAccaLeg.accumulator_id.in_(acc_ids)
+        ).delete(synchronize_session=False)
+    session.query(WCAccumulator).filter(
+        WCAccumulator.user_id == user_id
+    ).delete(synchronize_session=False)
+    n_singles = (
+        session.query(WCBetLog)
+        .filter(WCBetLog.user_id == user_id)
+        .delete(synchronize_session=False)
+    )
+    return n_singles + n_accumulators
 
 
 def reset_bankroll(user_id: int) -> bool:
@@ -81,6 +116,9 @@ def clear_bet_history(user_id: int) -> int:
                 )
                 .delete(synchronize_session=False)
             )
+            # WC bets are all personal (no system picks), so "clear history" should
+            # sweep them too — otherwise a tester's WC bets survive a clear (UM-03).
+            deleted += _delete_wc_personal_bets(session, user_id)
             session.commit()
             return deleted
     except Exception:
@@ -118,7 +156,10 @@ def reset_everything(user_id: int) -> bool:
                 BetLog.user_id == user_id,
                 BetLog.bet_type == "user_placed",
             ).delete(synchronize_session=False)
-            # Both changes committed in one atomic transaction
+            # 3. Clear personal WC bets too — a "fresh start" covers the WC tracker,
+            #    not just league bets (UM-03).
+            _delete_wc_personal_bets(session, user_id)
+            # All changes committed in one atomic transaction
             session.commit()
         return True
     except Exception:
@@ -257,11 +298,15 @@ def delete_user(user_id: int) -> bool:
             user = session.get(User, user_id)
             if not user or user.role == "owner":
                 return False
-            # Remove this user's bet_log rows first (NOT NULL FK to users.id),
-            # then the user — all in one transaction.
+            # Remove every row that references this user (all NOT NULL FKs to
+            # users.id) BEFORE the user row, or the delete violates the constraint:
+            #   - league bets (bet_log)
+            #   - WC personal bets (wc_acca_leg -> wc_accumulator -> wc_bet_log)
+            # all in one transaction. Other users' rows are untouched.
             session.query(BetLog).filter(
                 BetLog.user_id == user_id,
             ).delete(synchronize_session=False)
+            _delete_wc_personal_bets(session, user_id)
             session.delete(user)
             session.commit()
         return True
