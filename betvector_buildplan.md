@@ -10071,3 +10071,83 @@ the stored pref + persist via `save_user_setting`, like the WC toggle); `load_cu
 exposes all four flags; the stale "informational/E11" note is replaced. **Existing users'
 prefs are untouched** — only the default for NEW users flips (the owner keeps league=1,1,1
 / wc=0 and can self-toggle). 3 new tests; **1079/1079**.
+
+## UM — User Management Hardening · APPROVED (owner-approved 2026-07-01, building on branch `user-mgmt` → PR #4)
+
+Full owner lifecycle control over tester accounts from the **Admin** page, plus the
+visibility/access/feedback utilities that matter for running a small tester round —
+and a fix for a real delete bug the WC bet-tracker introduced. Owner-gated throughout
+(the Admin page role gate + in-function guards); temp passwords shown ONCE via
+`st.code`, never logged; every write atomic and wrapped; pure DB helpers in
+`_user_ops.py` / `auth.py`, thin escaped UI in `admin.py`; new tests per issue.
+**Shadow-safe: `value_finder.py` ×2 + `predictor.py` stay byte-for-byte unchanged — this
+epic is entirely account management, nowhere near the model/value/prediction path.**
+One commit per issue on `user-mgmt` → PR #4, exactly like the WC epics.
+
+- **UM-01 — Admin password reset.** New `admin_reset_password(user_id) -> Optional[str]`
+  (in `_user_ops.py`): in ONE transaction store a fresh `auth.generate_temp_password()`
+  hash AND set `must_change_password=1`, returning the plaintext ONCE (do NOT reuse
+  `auth.set_user_password`, which clears the flag — an admin reset must force the tester
+  to pick their own again). Admin "⚙️ Manage" gains a **Reset Password** control (confirm
+  checkbox → button → `st.code` shows the temp password with a "share out-of-band"
+  note; no `st.rerun` so it stays visible). Guard: can't reset your OWN account here
+  (the owner uses Settings → Change Password). AC: reset yields a working temp password ·
+  the tester is force-routed to the change-password gate on next login · plaintext shown
+  once, never logged · self-reset blocked.
+- **UM-02 — Edit name & email.** New `update_user_profile(user_id, name=None, email=None)
+  -> (bool, str)`: validate name non-empty; email valid + lowercased + **unique vs other
+  users** (a collision returns a clear message, not a 500). Admin "⚙️ Manage" gains an
+  **Edit profile** form pre-filled with the current name/email; a caption notes email IS
+  the login. (The persistent-login cookie is keyed on user-id, so an email change does
+  NOT log them out.) AC: rename persists · email change updates the login lookup ·
+  duplicate/invalid email rejected gracefully.
+- **UM-03 — Fix Delete (+ Clear/Reset) to cover WC bet-tracker tables** *(the bug)*.
+  `delete_user` today deletes only league `bet_log`, but `wc_bet_log` / `wc_accumulator`
+  / `wc_acca_leg` also carry a NOT-NULL `user_id` FK to `users.id` — so deleting a tester
+  who used the WC tracker throws on Neon (FK violation) or orphans rows on SQLite. Fix:
+  delete `wc_acca_leg` (by the user's accumulator ids) → `wc_accumulator` → `wc_bet_log`
+  → `bet_log` → the user, all in ONE transaction (safe FK order). Extend
+  `clear_bet_history` / `reset_everything` to also wipe the user's PERSONAL WC bets
+  (they're all personal — no system picks — so "clear/reset" should mean what the owner
+  expects). Other users' rows untouched. AC: deleting a user with WC singles +
+  accumulators succeeds and removes every one of their WC rows · other users unaffected ·
+  clear/reset covers WC bets.
+- **UM-04 — Change user role.** New `set_user_role(user_id, role) -> bool` (role ∈
+  {`viewer`, `owner`}) with a **last-owner guard**: refuse a demotion that would leave
+  zero owners (counts active+inactive owners; prevents admin lock-out). Admin "⚙️ Manage"
+  gains a role selector + Save. AC: promote viewer→owner · demote owner→viewer only when
+  another owner exists · last-owner demotion blocked · invalid role rejected.
+- **UM-05 — Last-login + never-logged-in visibility.** New nullable `users.last_login_at`
+  (ISO string; idempotent `db._apply_schema_migrations` entry applied to local + Neon),
+  set on every successful login (in the dashboard auth gate, after password verify /
+  cookie rehydrate). Admin table shows the last-login date and flags **"never logged in"**
+  (has a password but `last_login_at IS NULL` — the invited testers to chase). AC:
+  last-login updates on login · never-logged-in flag correct · migration idempotent both
+  backends · no effect on the login flow itself.
+- **UM-06 — Force logout / "sign out everywhere".** New `users.session_epoch` (Integer,
+  default 0, migration). `auth.make_session_token` embeds the epoch (`uid.epoch.exp.sig`);
+  `auth.verify_session_token` checks the token's epoch against the user's current epoch —
+  **backward-compatible**: a legacy 3-part token (`uid.exp.sig`) is treated as epoch 0, so
+  existing cookies keep working until a force-logout. Admin "⚙️ Manage" gains a **Sign out
+  everywhere** control that bumps `session_epoch` → every existing cookie for that user
+  stops verifying on its next request. AC: bumping the epoch invalidates that user's
+  persistent-login cookie · a fresh login mints a token at the new epoch and works · other
+  users unaffected · legacy tokens still verify until the first bump.
+- **UM-07 — Feedback capture.** New `user_feedback` table (id, user_id FK, created_at,
+  category, message) via `init_db`/`create_all`. A tester **"Send feedback"** form (in
+  Settings or Help) writes a row; the owner reads submissions in a new Admin **Feedback**
+  section (newest-first, escaped, name/date/category/message). Optional owner email-notify
+  reuses the existing `email_alerts` infra (guarded, never blocks the submit). AC: a
+  tester can submit feedback · it's stored + visible to the owner in Admin · all rendered
+  text escaped · submit never crashes if email is unconfigured.
+- **UM-08 — Integration test + holistic review + docs (closes epic).** One end-to-end
+  test exercising UM-01..07 against a seeded multi-user DB (incl. a tester with WC bets +
+  accumulators for the delete path); a holistic cross-issue review (owner-gating on every
+  write, atomicity, last-owner/self guards, shadow-safety = value/predictor empty diff);
+  Rule-8 Tier-1 masterplan update (users schema + admin capabilities) + version bump;
+  build-plan epic close; push → PR #4.
+
+**Deferred to a follow-up epic (owner-agreed):** *login-as / impersonate* (view the app as
+a specific tester — owner-only, banner, audited) and *per-user feature flags / a middle
+role* (finer capability grants than the owner/viewer split). More design + security weight;
+revisit once there are more than a handful of users.
