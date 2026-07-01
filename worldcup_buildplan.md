@@ -2205,7 +2205,7 @@ chosen; the accumulator/parlay variant — multi-leg, combined odds, all-legs-mu
 
 ---
 
-## WC-ACC — Accumulator (Parlay) Bets · ✅ COMPLETE 5/5 (owner-approved 2026-06-29; WC-ACC-01/02 2026-06-30, WC-ACC-03/04/05 2026-07-01; in PR #1 on branch `wc-acc`, awaiting merge)
+## WC-ACC — Accumulator (Parlay) Bets · ✅ COMPLETE 5/5 (owner-approved 2026-06-29; WC-ACC-01/02 2026-06-30, WC-ACC-03/04/05 2026-07-01; MERGED to `main` via PR #1 on 2026-07-01, rebased tip a4d8a08)
 
 Extends the WC bet tracker (WC-BET) to **accumulators**: multiple legs as one bet,
 all legs must win, combined odds = product of the legs. **Calculator + tracker, NOT
@@ -2310,3 +2310,69 @@ model/value/prediction path.
 
 Tests: `tests/test_wc_accumulator.py`. Each issue runs the full review gates +
 commit/push, exactly like WC-BET. Supersedes follow-up chip task_e5f58071.
+
+
+## WC-QUAL — "To Qualify / To Advance" Market · APPROVED (owner-approved 2026-07-01, building on branch `wc-qual`)
+
+Extends the WC personal bet-tracker (WC-BET singles + WC-ACC accumulators) with a new
+**"To qualify"** market: bet on which team ADVANCES from a knockout tie — settled on
+the winner after 90 min + extra time + penalties — as the counterpart to the existing
+"Match result (90 min)" (1X2). Loggable as a single OR an accumulator leg; knockout
+matches only; two selections (home / away, no draw). MANUAL odds — the model does not
+price it (an OPTIONAL display-only informational qualify-chance is derived from the
+stored 90-minute probabilities). Shadow-safe, user-scoped: never touches the
+model / value / prediction path — extends the same self-contained tracker as
+WC-BET / WC-ACC.
+
+The two markets it distinguishes (both stored, different data):
+- **Match result (90 min) / 1X2** — settles on the 90-MINUTE score (the WC-ACC-02
+  regulation columns).
+- **To qualify** — settles on WHO ADVANCED (the a.e.t. score, tie-broken by the
+  penalty shootout).
+
+**Schema (decided):** add nullable `WCMatch.home_pens` / `away_pens` (the shootout
+score; the regulation reconciler captures them from ESPN). `wc_bet_log` /
+`wc_acca_leg` are UNCHANGED (`market_type` is text → `"QUALIFY"` just works). Migrated
+local + Neon.
+
+**Out of scope:** group-stage "to qualify" as a futures / outright market (which two
+teams finish top-2 of a group across 3 matches) — a different multi-match bet, not
+this per-tie "to advance." This epic is the knockout-tie market only.
+
+**Issues:**
+- **WC-QUAL-01 — Data + settlement engine.** Add `home_pens` / `away_pens` to
+  `WCMatch` (migrated local + Neon); `regulation.reconcile_knockout_regulation` also
+  captures the shootout score from ESPN (`competitor.shootoutScore`) for finished
+  knockouts. New pure `_did_qualify(match, selection)` — advancer = higher a.e.t.
+  score, tie-broken by pens; returns None (defer → pending) if a tie's pens aren't
+  captured yet. Market-aware `bet_result(match, market_type, selection)` routes
+  `QUALIFY` → advancement and every other market → the existing 90-minute
+  `settlement_score` path; singles (`settle_wc_bets` / `load_wc_bets`) + acca legs
+  (`_leg_status`) all route through it. Add `QUALIFY` to `WC_MARKETS` /
+  `MARKET_LABELS` / `is_valid_selection` (home / away); `log_wc_bet` /
+  `log_wc_accumulator` reject `QUALIFY` on a group match. AC: a KO won on pens settles
+  "X to qualify" WON for the advancer / LOST for the loser · "Match result (90 min)"
+  still settles on the 90-minute score (unchanged) · group matches reject QUALIFY ·
+  unresolved advancement → pending · idempotent · never raises · shadow-safe.
+- **WC-QUAL-02 — UI: log + slip + display.** The market dropdown offers "To qualify"
+  ONLY for knockout matches (log form + slip builder); relabel 1X2 → "Match result
+  (90 min)" on knockouts so the two sit side by side. QUALIFY bets / legs display +
+  settle in the existing lists (singles + expandable acca legs). The value-pick
+  "➕ Add to slip / Log" flow stays 1X2 / O-U / BTTS only (QUALIFY is manual). AC: log
+  a QUALIFY single + acca leg on a KO match · not offered on group matches · displays
+  + settles correctly · value-pick flow unchanged.
+- **WC-QUAL-03 — Informational qualify-chance (display-only).** Pure
+  `qualify_estimate` = P(win 90) + ½·P(draw 90) from the stored `WCPrediction` probs,
+  shown as a clearly-labelled approximation when a QUALIFY selection is chosen — never
+  an edge / value signal. Reads stored rows, writes nothing (shadow-safe). AC: shows
+  an estimate only when the model has a stored prediction · labelled "approximation,
+  not a recommendation" · absent for unpredicted matches.
+- **WC-QUAL-04 — Review + docs.** Holistic review (advancement money / settlement edge
+  cases: ET-decided vs pens-decided vs unresolved; shadow safety; multi-user
+  isolation) + live end-to-end (log + settle a qualify bet on a real pens match) +
+  masterplan / build-plan docs (Rule 8 Tier-1) + version bump. Closes the mini-epic.
+
+Tests: `tests/test_wc_qualify.py`. Each issue runs the full review gates + commit /
+push to the `wc-qual` branch (a fresh PR, now that PR #1 is merged), exactly like
+WC-ACC. Cost: $0 (ESPN free; no Odds API). Value / predictor path held byte-for-byte
+unchanged.
