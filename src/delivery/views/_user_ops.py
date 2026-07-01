@@ -45,6 +45,10 @@ def _delete_wc_personal_bets(session, user_id: int) -> int:
     ]
     n_accumulators = len(acc_ids)
     if acc_ids:
+        # Delete the legs explicitly: WCAccumulator.legs has an ORM
+        # cascade="all, delete-orphan", but a bulk .delete() (used here for speed)
+        # bypasses the ORM cascade, and the FK has no DB-level ON DELETE — so without
+        # this the accumulator delete below would violate wc_acca_leg.accumulator_id.
         session.query(WCAccaLeg).filter(
             WCAccaLeg.accumulator_id.in_(acc_ids)
         ).delete(synchronize_session=False)

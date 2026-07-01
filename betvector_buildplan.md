@@ -10085,7 +10085,7 @@ epic is entirely account management, nowhere near the model/value/prediction pat
 One commit per issue on `user-mgmt` → PR #4, exactly like the WC epics.
 
 - **UM-01 — Admin password reset.** New `admin_reset_password(user_id) -> Optional[str]`
-  (in `_user_ops.py`): in ONE transaction store a fresh `auth.generate_temp_password()`
+  (in `auth.py`, co-located with the other password writers): in ONE transaction store a fresh `auth.generate_temp_password()`
   hash AND set `must_change_password=1`, returning the plaintext ONCE (do NOT reuse
   `auth.set_user_password`, which clears the flag — an admin reset must force the tester
   to pick their own again). Admin "⚙️ Manage" gains a **Reset Password** control (confirm

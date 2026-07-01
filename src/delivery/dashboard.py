@@ -68,7 +68,7 @@ import streamlit as st
 from src.config import PROJECT_ROOT
 from src.auth import (
     is_authenticated, set_session_user, get_session_user_id,
-    get_session_user_role, get_user_by_email, verify_password,
+    get_session_user_role, get_user_by_email, verify_password, record_login,
     clear_session_user, make_session_token, verify_session_token,
     SESSION_COOKIE_NAME, _cookie_secret,
 )
@@ -557,6 +557,7 @@ def _rehydrate_from_cookie(jar) -> bool:
         ident = _load_active_user(user_id)
         if ident is not None:
             set_session_user(ident[0], ident[1])
+            record_login(ident[0])   # UM-05: stamp last-seen on cookie rehydrate
             return True
     clear_login_cookie(jar)
     return False
@@ -738,6 +739,7 @@ def _handle_login(email: str, password: str, emergency_pwd: str) -> None:
             if user.password_hash and verify_password(password, user.password_hash):
                 # Successful DB login — set session, persist the cookie, reload
                 set_session_user(user.id, user.role)
+                record_login(user.id)   # UM-05: stamp last-login timestamp
                 persist_login_cookie(_cookie_jar(), user.id)
                 st.rerun()
                 return
@@ -748,6 +750,7 @@ def _handle_login(email: str, password: str, emergency_pwd: str) -> None:
     # Path 2: emergency owner fallback (password-only, no email required)
     if emergency_pwd and password == emergency_pwd:
         set_session_user(1, "owner")
+        record_login(1)   # UM-05: stamp last-login for the emergency owner path
         persist_login_cookie(_cookie_jar(), 1)
         st.rerun()
         return

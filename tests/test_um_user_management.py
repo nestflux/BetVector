@@ -21,7 +21,7 @@ import src.database.db as db_mod  # noqa: E402
 import src.database.models  # noqa: E402,F401  (register core tables on Base)
 import src.world_cup.models  # noqa: E402,F401  (register wc_* tables on Base)
 from src.auth import (  # noqa: E402
-    admin_reset_password, hash_password, verify_password,
+    admin_reset_password, hash_password, record_login, verify_password,
 )
 from src.database.db import Base  # noqa: E402
 from src.database.models import User  # noqa: E402
@@ -309,3 +309,43 @@ def test_admin_view_wires_role_change():
     src = (ROOT / "src" / "delivery" / "views" / "admin.py").read_text()
     assert "set_user_role" in src and "Update role" in src
     compile(src, "admin.py", "exec")
+
+
+# ============================================================================
+# UM-05 — Last-login + never-logged-in visibility
+# ============================================================================
+
+def test_record_login_stamps_timestamp(db):
+    uid = _mk_user(db)
+    with db() as s:
+        assert s.get(User, uid).last_login_at is None       # not signed in yet
+    record_login(uid)
+    with db() as s:
+        stamped = s.get(User, uid).last_login_at
+        assert stamped is not None and "T" in stamped       # ISO timestamp
+
+
+def test_record_login_missing_user_is_noop(db):
+    record_login(99999)                                     # must not raise
+
+
+def test_new_user_reads_as_never_logged_in(db):
+    # _mk_user gives a password but never logs in — exactly the never-logged-in
+    # condition the admin table flags (has_password AND last_login_at is NULL).
+    uid = _mk_user(db, password="secret123")
+    with db() as s:
+        u = s.get(User, uid)
+        assert u.password_hash is not None and u.last_login_at is None
+
+
+def test_admin_view_wires_last_login():
+    src = (ROOT / "src" / "delivery" / "views" / "admin.py").read_text()
+    assert "last_login_at" in src and "never_logged_in" in src
+    assert "never logged in" in src
+    compile(src, "admin.py", "exec")
+
+
+def test_dashboard_records_login_on_every_entry_path():
+    src = (ROOT / "src" / "delivery" / "dashboard.py").read_text()
+    # credential login + cookie rehydrate + emergency owner fallback
+    assert src.count("record_login(") >= 3

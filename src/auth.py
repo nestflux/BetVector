@@ -303,6 +303,25 @@ def user_must_change_password(user) -> bool:
     return bool(getattr(user, "must_change_password", 0))
 
 
+def record_login(user_id: int) -> None:
+    """Stamp the user's ``last_login_at`` with the current time (UM-05).
+
+    Called on every successful login AND cookie rehydrate, so the owner can see who's
+    actively testing — and spot an invited tester who has a password but has never
+    signed in (``last_login_at`` still NULL).  Best-effort: never raises and never
+    blocks the login if the write fails.
+    """
+    try:
+        with get_session() as session:
+            user = session.get(User, user_id)
+            if user is None:
+                return
+            user.last_login_at = datetime.utcnow().isoformat()
+            session.commit()
+    except Exception:
+        logger.exception("record_login failed for user_id=%s", user_id)
+
+
 # ============================================================================
 # User Lookup
 # ============================================================================
