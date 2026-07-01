@@ -38,6 +38,15 @@ logger = logging.getLogger(__name__)
 _TIMEOUT = 20
 
 
+def _int_or_none(v):
+    """Coerce ESPN's shootoutScore to int, or None if absent/malformed (soft — a
+    missing shootout must never drop the match)."""
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return None
+
+
 def _daterange(start: date, end: date):
     """Yield each date from start to end inclusive."""
     d = start
@@ -49,9 +58,12 @@ def _daterange(start: date, end: date):
 def fetch_espn_results_for_date(d: date) -> list[dict]:
     """Completed WC matches ESPN lists for a single date.
 
-    Each dict: ``{home_name, away_name, home_goals, away_goals, date}`` with RAW
-    (un-mapped) ESPN team display names. Network or parse failures return ``[]`` and
-    never raise — a flaky ESPN response must not break the pipeline (Rule 6).
+    Each dict: ``{home_name, away_name, home_goals, away_goals, date, espn_event_id,
+    detail, home_pens, away_pens}`` with RAW (un-mapped) ESPN team display names.
+    ``home_goals``/``away_goals`` are the a.e.t. score; ``detail`` is the status text
+    ('FT' / 'FT-Pens' / 'AET'); ``home_pens``/``away_pens`` the shootout score or None.
+    Network or parse failures return ``[]`` and never raise — a flaky ESPN response
+    must not break the pipeline (Rule 6).
     """
     try:
         resp = requests.get(
@@ -96,6 +108,10 @@ def fetch_espn_results_for_date(d: date) -> list[dict]:
             # result callers ignore these keys.
             "espn_event_id": ev.get("id"),
             "detail": status_type.get("detail") or status_type.get("description"),
+            # WC-QUAL: penalty-shootout score (present only on FT-Pens matches), for the
+            # "to qualify" market. Soft-coerced — a missing shootout is just None.
+            "home_pens": _int_or_none(home.get("shootoutScore")),
+            "away_pens": _int_or_none(away.get("shootoutScore")),
         })
     return out
 

@@ -382,6 +382,11 @@ def _apply_schema_migrations(engine: Engine) -> None:
         ("wc_matches", "home_goals_reg", "INTEGER"),
         ("wc_matches", "away_goals_reg", "INTEGER"),
         ("wc_matches", "went_to_extra_time", "INTEGER NOT NULL DEFAULT 0"),
+        # WC-QUAL (July 2026): penalty-shootout score, for the "to qualify / to advance"
+        # market to break a knockout tie level after extra time. Both nullable — NULL
+        # everywhere except a captured shootout; no existing settlement is affected.
+        ("wc_matches", "home_pens", "INTEGER"),
+        ("wc_matches", "away_pens", "INTEGER"),
     ]
 
     with engine.begin() as conn:

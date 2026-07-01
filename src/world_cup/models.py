@@ -118,6 +118,12 @@ class WCMatch(Base):
     home_goals_reg = Column(Integer, nullable=True)
     away_goals_reg = Column(Integer, nullable=True)
     went_to_extra_time = Column(Integer, nullable=False, server_default="0")
+    # WC-QUAL: penalty-shootout score, captured only when a knockout tie is level after
+    # extra time. Used solely by the "to qualify / to advance" market to break a level
+    # a.e.t. score; NULL for group matches, regulation/ET-decided knockouts, and any
+    # match with no shootout.
+    home_pens = Column(Integer, nullable=True)
+    away_pens = Column(Integer, nullable=True)
     home_xg = Column(Float, nullable=True)
     away_xg = Column(Float, nullable=True)
     attendance = Column(Integer, nullable=True)
