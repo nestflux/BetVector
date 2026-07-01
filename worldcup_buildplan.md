@@ -2368,12 +2368,17 @@ this per-tie "to advance." This epic is the knockout-tie market only.
   Gate 3 APPROVED (Streamlit AppTest confirmed the selector gracefully resets a stale
   QUALIFY pick; no regression). 4 tests (17 in test_wc_qualify.py); suite 1297. PNG
   proof on Desktop (same KO: "To qualify" won vs "Match result (90 min)" lost).
-- **WC-QUAL-03 — Informational qualify-chance (display-only).** Pure
-  `qualify_estimate` = P(win 90) + ½·P(draw 90) from the stored `WCPrediction` probs,
-  shown as a clearly-labelled approximation when a QUALIFY selection is chosen — never
-  an edge / value signal. Reads stored rows, writes nothing (shadow-safe). AC: shows
-  an estimate only when the model has a stored prediction · labelled "approximation,
-  not a recommendation" · absent for unpredicted matches.
+- **WC-QUAL-03 — Informational qualify-chance (display-only).** ✅ DONE (2026-07-01).
+  Pure `bets.qualify_estimate` = P(win 90) + ½·P(draw 90) from the stored `WCPrediction`
+  probs (home+away complementary → sum to 1); `world_cup._wc_qualify_estimate` reads the
+  PRIMARY prediction (model_name == MODEL_NAME) — a single SELECT, no writes —
+  and `_render_qualify_hint` shows an `st.caption` ("ℹ️ Model estimate: {team} ~N% to
+  qualify — an approximation (win in 90 + ½ draw), not a recommendation.") in the log
+  form + slip builder ONLY for a QUALIFY selection. Never an edge/value signal; never
+  staked/logged/settled (grep-confirmed: called nowhere in settlement/value/model).
+  Verified live on real Neon KO predictions (Brazil 51/28/21 → Brazil ~65%/Norway ~35%;
+  Colombia 68/20/12 → Colombia ~78%/Ghana ~22%). Gate 2 CLEAN · Gate 3 APPROVED
+  (read-only, display-only confirmed). 3 tests (20 in test_wc_qualify.py); suite 1300.
 - **WC-QUAL-04 — Review + docs.** Holistic review (advancement money / settlement edge
   cases: ET-decided vs pens-decided vs unresolved; shadow safety; multi-user
   isolation) + live end-to-end (log + settle a qualify bet on a real pens match) +

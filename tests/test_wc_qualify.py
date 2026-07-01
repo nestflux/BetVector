@@ -23,8 +23,8 @@ from src.database.db import Base  # noqa: E402
 import src.world_cup.regulation as reg_mod  # noqa: E402
 from src.world_cup.bets import (  # noqa: E402
     _did_qualify, bet_result, is_valid_selection, load_wc_accumulators, load_wc_bets,
-    log_wc_accumulator, log_wc_bet, market_label_for, settle_wc_accumulators,
-    settle_wc_bets,
+    log_wc_accumulator, log_wc_bet, market_label_for, qualify_estimate,
+    settle_wc_accumulators, settle_wc_bets,
 )
 from src.world_cup.regulation import reconcile_knockout_regulation  # noqa: E402
 from src.world_cup.models import WCMatch, WCTeam  # noqa: E402
@@ -274,3 +274,35 @@ def test_qualify_ui_gating_wired():
     assert "market_label_for(m, sel_stage)" in HUB_SRC     # knockout-aware label in UI
     assert '"stage": m.stage' in HUB_SRC                    # fixtures expose the stage
     compile(HUB_SRC, "world_cup.py", "exec")
+
+
+# ---- WC-QUAL-03: informational qualify-chance (display-only) -----------------
+
+def test_qualify_estimate_math():
+    # P(advance) ≈ P(win 90) + ½·P(draw); home + away sum to 1 (someone advances)
+    assert qualify_estimate(0.50, 0.30, 0.20, "home") == 0.65   # 0.50 + 0.15
+    assert qualify_estimate(0.50, 0.30, 0.20, "away") == 0.35   # 0.20 + 0.15
+    h = qualify_estimate(0.50, 0.30, 0.20, "home")
+    a = qualify_estimate(0.50, 0.30, 0.20, "away")
+    assert round(h + a, 4) == 1.0
+
+
+def test_qualify_estimate_missing_probs():
+    assert qualify_estimate(None, 0.30, 0.20, "home") is None
+    assert qualify_estimate(0.50, None, 0.20, "home") is None
+    assert qualify_estimate(None, None, None, "away") is None
+
+
+def test_qualify_estimate_wired_display_only():
+    # the reader + hint exist, read the primary prediction, and are shown ONLY for
+    # QUALIFY in both the log form and the slip builder — labelled an approximation
+    assert "def _wc_qualify_estimate" in HUB_SRC
+    assert "def _render_qualify_hint" in HUB_SRC
+    assert "WCPrediction.model_name == MODEL_NAME" in HUB_SRC   # primary prediction
+    assert "qualify_estimate(" in HUB_SRC
+    assert HUB_SRC.count("_render_qualify_hint(fmeta[fx], selection)") >= 2  # both UIs
+    assert "not a recommendation" in HUB_SRC                    # clearly labelled
+    # the reader is read-only (a SELECT; no writes) — shadow-safe
+    body = HUB_SRC.split("def _wc_qualify_estimate")[1].split("\ndef ")[0]
+    assert "select(WCPrediction" in body
+    assert ".add(" not in body and ".commit(" not in body

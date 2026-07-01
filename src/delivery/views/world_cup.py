@@ -1689,6 +1689,39 @@ def _wc_betting_fixtures() -> list:
     return out
 
 
+def _wc_qualify_estimate(match_id: int, selection: str):
+    """WC-QUAL-03: informational model estimate of P(selection advances) for the
+    qualify market — reads the primary stored prediction's 90-min 1X2 probs and
+    returns bets.qualify_estimate (an approximation, never an edge/value signal). None
+    if there's no prediction or on error. Read-only (shadow-safe)."""
+    from src.world_cup.bets import qualify_estimate
+    try:
+        with get_session() as session:
+            p = session.execute(
+                select(WCPrediction).where(
+                    WCPrediction.match_id == match_id,
+                    WCPrediction.model_name == MODEL_NAME,
+                )
+            ).scalars().first()
+        if p is None:
+            return None
+        return qualify_estimate(p.home_win_prob, p.draw_prob, p.away_win_prob,
+                                selection)
+    except Exception:
+        return None
+
+
+def _render_qualify_hint(fixture: dict, selection: str) -> None:
+    """WC-QUAL-03: under a QUALIFY selection, surface the INFORMATIONAL model
+    qualify-chance for the picked team — an approximation, never a recommendation."""
+    est = _wc_qualify_estimate(fixture["id"], selection)
+    if est is None:
+        return
+    team = fixture.get("home") if selection == "home" else fixture.get("away")
+    st.caption(f"ℹ️ Model estimate: {team} ~{est * 100:.0f}% to qualify — an "
+               "approximation (win in 90 + ½ draw), not a recommendation.")
+
+
 def _bet_summary_html(s: dict) -> str:
     """Running-P&L scoreboard strip. Net P&L / ROI coloured green(+) / red(−)."""
     net = s["net_pnl"]
@@ -1838,6 +1871,8 @@ def _render_bet_slip(uid: int) -> None:
             with c4:
                 odds = st.number_input("Odds", min_value=1.01, value=2.00, step=0.05,
                                        key="wcacca_odds")
+            if market == "QUALIFY":   # WC-QUAL-03 informational qualify-chance
+                _render_qualify_hint(fmeta[fx], selection)
             if st.button("➕ Add leg", key="wcacca_addleg"):
                 fm = fmeta[fx]
                 slip.append({
@@ -2027,6 +2062,8 @@ def _render_my_bets() -> None:
                 selection = st.selectbox(
                     "Selection", list(WC_MARKETS[market]),
                     format_func=lambda x: _SEL_LABELS.get(x, x))
+            if market == "QUALIFY":   # WC-QUAL-03 informational qualify-chance
+                _render_qualify_hint(fmeta[fx], selection)
             c4, c5, c6 = st.columns([1, 1, 2])
             with c4:
                 odds = st.number_input("Odds", min_value=1.01, value=2.00,
