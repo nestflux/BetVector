@@ -141,3 +141,151 @@ def test_view_wires_odds_autofill():
     assert src.count('st.selectbox("Bookmaker"') >= 2   # log form + slip add-leg
     assert "wc_odds_lookup(" in src and "wc_odds_books(" in src
     compile(src, "world_cup.py", "exec")
+
+
+# ============================================================================
+# WC-ODDS-02 — on-demand BTTS auto-fetch (live, US-only, budget-guarded)
+# ============================================================================
+from src.world_cup.tracker_odds import (  # noqa: E402
+    _below_budget_floor, _parse_btts, fetch_btts_odds, pick_btts,
+)
+
+# A realistic single-event odds payload (The Odds API /events/{id}/odds shape).
+_EVENTS = [{"id": "evt1", "home_team": "Alpha", "away_team": "Beta"}]
+_ODDS = {"bookmakers": [
+    {"title": "FanDuel", "markets": [
+        {"key": "h2h", "outcomes": [{"name": "Alpha", "price": 2.10}]},   # not btts
+        {"key": "btts", "outcomes": [{"name": "Yes", "price": 1.80},
+                                     {"name": "No", "price": 2.00}]}]},
+    {"title": "DraftKings", "markets": [
+        {"key": "btts", "outcomes": [{"name": "Yes", "price": 1.90},
+                                     {"name": "No", "price": 1.95}]}]},
+]}
+
+
+class _FakeResp:
+    def __init__(self, status, payload, headers=None):
+        self.status_code = status
+        self._payload = payload
+        self.headers = headers or {}
+
+    def json(self):
+        return self._payload
+
+
+def _fake_get(events=None, odds=None, remaining="400", counter=None):
+    """A stand-in for requests.get routing /events (free) vs /events/{id}/odds (paid)."""
+    events = _EVENTS if events is None else events
+    odds = _ODDS if odds is None else odds
+
+    def _get(url, params=None, timeout=None):
+        if url.endswith("/events"):
+            return _FakeResp(200, events, {"x-requests-remaining": remaining})
+        if "/events/" in url and url.endswith("/odds"):
+            if counter is not None:
+                counter["paid"] += 1
+            return _FakeResp(200, odds)
+        return _FakeResp(404, {})
+    return _get
+
+
+# ---- parse + pick (pure) ----------------------------------------------------
+
+def test_parse_btts_extracts_only_btts():
+    parsed = _parse_btts(_ODDS)
+    assert parsed == {"FanDuel": {"yes": 1.80, "no": 2.00},
+                      "DraftKings": {"yes": 1.90, "no": 1.95}}
+    assert _parse_btts({}) == {}                     # empty payload -> {}
+
+
+def test_parse_btts_skips_junk_prices():
+    event = {"bookmakers": [
+        {"title": "Book1", "markets": [
+            {"key": "btts", "outcomes": [{"name": "Yes", "price": 1.85},
+                                         {"name": "No", "price": 1.0},      # <= 1.0 -> drop
+                                         {"name": "Draw", "price": 3.0}]}]},  # not yes/no
+        {"title": "Blank", "markets": [
+            {"key": "btts", "outcomes": [{"name": "No", "price": None}]}]},  # unusable -> book dropped
+    ]}
+    assert _parse_btts(event) == {"Book1": {"yes": 1.85}}
+
+
+def test_pick_btts_specific_best_and_fallback():
+    f = {"FanDuel": {"yes": 1.80, "no": 2.00},
+         "DraftKings": {"yes": 1.90, "no": 1.95}}
+    assert pick_btts(f, "yes", "FanDuel") == {"odds": 1.80, "bookmaker": "FanDuel"}
+    assert pick_btts(f, "no", "FanDuel") == {"odds": 2.00, "bookmaker": "FanDuel"}
+    assert pick_btts(f, "yes", None) == {"odds": 1.90, "bookmaker": "DraftKings"}   # best
+    assert pick_btts(f, "yes", "Best price")["bookmaker"] == "DraftKings"
+    # chosen book didn't quote BTTS -> fall back to the best price (with its book)
+    assert pick_btts(f, "yes", "Unibet") == {"odds": 1.90, "bookmaker": "DraftKings"}
+
+
+def test_pick_btts_none_when_side_unquoted():
+    assert pick_btts({}, "yes", "FanDuel") is None
+    assert pick_btts({"X": {"no": 2.0}}, "yes", "FanDuel") is None   # nobody quoted Yes
+
+
+def test_below_budget_floor():
+    assert _below_budget_floor("5") is True          # below the hard-stop (30)
+    assert _below_budget_floor("30") is True          # at the floor -> stand down
+    assert _below_budget_floor("400") is False        # ample budget
+    assert _below_budget_floor(None) is False         # unknown -> don't block
+    assert _below_budget_floor("n/a") is False
+
+
+# ---- live fetch (mocked HTTP) ----------------------------------------------
+
+def test_fetch_btts_odds_happy_path(db, monkeypatch):
+    _seed(db, [("FanDuel", "h2h", "Alpha", 2.10, None)])   # a match to resolve
+    import src.world_cup.tracker_odds as to
+    monkeypatch.setattr(to, "_get_api_key", lambda: "KEY")
+    counter = {"paid": 0}
+    monkeypatch.setattr(to.requests, "get", _fake_get(counter=counter))
+    fetched = fetch_btts_odds(1, region="us")
+    assert fetched == {"FanDuel": {"yes": 1.80, "no": 2.00},
+                       "DraftKings": {"yes": 1.90, "no": 1.95}}
+    assert counter["paid"] == 1                       # exactly one paid (~1 credit) call
+
+
+def test_fetch_btts_odds_budget_guard_skips_paid_call(db, monkeypatch):
+    _seed(db, [("FanDuel", "h2h", "Alpha", 2.10, None)])
+    import src.world_cup.tracker_odds as to
+    monkeypatch.setattr(to, "_get_api_key", lambda: "KEY")
+    counter = {"paid": 0}
+    monkeypatch.setattr(to.requests, "get", _fake_get(remaining="5", counter=counter))
+    assert fetch_btts_odds(1) == {}                   # budget below hard-stop -> stand down
+    assert counter["paid"] == 0                       # the paid call was never made
+
+
+def test_fetch_btts_odds_no_event_match(db, monkeypatch):
+    _seed(db, [("FanDuel", "h2h", "Alpha", 2.10, None)])
+    import src.world_cup.tracker_odds as to
+    monkeypatch.setattr(to, "_get_api_key", lambda: "KEY")
+    other = [{"id": "z", "home_team": "Zed", "away_team": "Yak"}]
+    monkeypatch.setattr(to.requests, "get", _fake_get(events=other))
+    assert fetch_btts_odds(1) == {}                   # no Odds-API event for this match
+
+
+def test_fetch_btts_odds_no_api_key(db, monkeypatch):
+    import src.world_cup.tracker_odds as to
+    monkeypatch.setattr(to, "_get_api_key", lambda: "")
+    assert fetch_btts_odds(1) == {}                   # no key -> no fetch, no crash
+
+
+# ---- shadow-safety + view wiring (BTTS) -------------------------------------
+
+def test_btts_fetch_never_writes_wc_odds():
+    """The live BTTS path returns prices for DISPLAY ONLY — never persisted. Writing
+    them to wc_odds would feed the value finder and start generating BTTS value picks."""
+    src = (ROOT / "src" / "world_cup" / "tracker_odds.py").read_text()
+    assert "WCOdds(" not in src                       # never instantiated for an insert
+    assert ".add(" not in src and ".commit(" not in src and ".merge(" not in src
+
+
+def test_view_wires_btts_autofetch():
+    src = (ROOT / "src" / "delivery" / "views" / "world_cup.py").read_text()
+    assert "def _btts_cached" in src and "CACHE_TTL_ODDS" in src
+    assert "fetch_btts_odds" in src and "pick_btts(" in src
+    assert 'market_type == "BTTS"' in src             # _suggest_odds routes BTTS live
+    compile(src, "world_cup.py", "exec")

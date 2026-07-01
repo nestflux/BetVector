@@ -2441,16 +2441,22 @@ diff).
   Croatia: FanDuel 1X2 home 7.00 / best 8.00 Unibet; unstored → None). Shadow-safe
   (tracker_odds only SELECTs; value_finder×2/predictor untouched). Gate 2 CLEAN · Gate
   3 APPROVED. 9 tests (tests/test_wc_odds.py); suite 1309.
-- **WC-ODDS-02 — BTTS auto-fetch (on-demand, US-only, cached, budget-guarded).** New
-  `fetch_btts_odds(match_id, region="us")`: free `/events` resolves the Odds-API event
-  id by team pair, then ONE `/events/{id}/odds?markets=btts&regions=us` (~1 credit);
-  parse book prices; `@st.cache_data` per match so reruns/re-picks are free; budget
-  guard (skip if remaining < hard-stop 30 → manual fallback); NEVER writes `wc_odds`.
-  UI: market == BTTS → auto-fetch on selection (spinner → fill FanDuel/selected book),
-  "prices as of HH:MM" note, clean manual fallback on API-fail / no-BTTS / budget-low.
-  AC: selecting BTTS fetches once then caches · fills FanDuel BTTS price · budget-low /
-  failure → manual, never blocks logging · nothing written to `wc_odds` / value-finder
-  empty diff.
+- **WC-ODDS-02 — BTTS auto-fetch (on-demand, US-only, cached, budget-guarded).** ✅ DONE
+  (2026-07-01). New `tracker_odds.fetch_btts_odds(match_id, region="us")`: free `/events`
+  resolves the Odds-API event id by team pair, then ONE `/events/{id}/odds?markets=btts&regions=us`
+  (markets × regions = 1 × 1 = ~1 credit); `_parse_btts` pulls only the btts market,
+  `pick_btts` picks a specific book / best price / falls back to best. `@st.cache_data`
+  per match (config TTL `CACHE_TTL_ODDS` = 900s) so reruns/re-picks are free; budget
+  guard reads the FREE `/events` remaining-credit header and skips the paid call when
+  ≤ hard-stop 30 → manual fallback; NEVER writes `wc_odds`. UI: market == BTTS →
+  `_suggest_odds` routes to the cached live fetch on selection (spinner → fill
+  FanDuel/selected book), "live BTTS … (US)" caption, clean manual fallback on
+  API-fail / no-BTTS / budget-low (logging never blocked). Config
+  `dashboard.cache_ttl_odds_seconds: 900`. Shadow-safe (no `wc_odds` writes;
+  value_finder ×2 / predictor empty diff). Gate 1 (AC) 4/4 · Gate 2 CLEAN · Gate 3
+  APPROVED (1 nit applied: float-parse the budget header; 1 noted: `{}`-fetch cached
+  for the TTL = credit-conservation trade-off). +11 tests (20 in tests/test_wc_odds.py);
+  suite 1320.
 - **WC-ODDS-03 — Review + docs.** Holistic review (shadow-safety: no `wc_odds` writes,
   value_finder ×2 + predictor empty diff; budget-guard; cache correctness; multi-user)
   + live verification (auto-fill a real 1X2 + O/U from Neon odds; one real BTTS fetch

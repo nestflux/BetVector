@@ -11,7 +11,7 @@ from html import escape
 import plotly.graph_objects as go
 import streamlit as st
 
-from src.delivery._cache import CACHE_TTL_SLOW
+from src.delivery._cache import CACHE_TTL_ODDS, CACHE_TTL_SLOW
 from sqlalchemy import func as sa_func, select
 from sqlalchemy.orm import joinedload
 
@@ -1733,10 +1733,24 @@ def _book_options(match_id: int):
     return opts, idx
 
 
+@st.cache_data(ttl=CACHE_TTL_ODDS, show_spinner="Fetching BTTS odds…")
+def _btts_cached(match_id: int) -> dict:
+    """WC-ODDS-02: one on-demand LIVE BTTS fetch per match, cached so it fires at most
+    once per window (each fresh fetch is ~1 Odds API credit). Streamlit's cache is a
+    cross-session global keyed on match_id, so one fetch serves every user until the
+    TTL expires. {} when the fetch stands down (budget-low / unavailable) -> manual."""
+    from src.world_cup.tracker_odds import fetch_btts_odds
+    return fetch_btts_odds(match_id, region="us")
+
+
 def _suggest_odds(match_id: int, market_type: str, selection: str, book: str):
-    """WC-ODDS-01: stored-odds suggestion for the picked book, falling back to best
-    price when that book has no line for it. Returns {"odds", "bookmaker"} or None
-    (BTTS / QUALIFY / an unstored O/U line -> None; BTTS auto-fetch is WC-ODDS-02)."""
+    """Odds suggestion for the picked book. Stored markets (1X2 / O-U) read wc_odds
+    (WC-ODDS-01), falling back to best price when the chosen book has no line; BTTS is
+    fetched LIVE on demand and cached (WC-ODDS-02). Returns {"odds", "bookmaker"} or
+    None (QUALIFY / an unstored line / a stood-down BTTS fetch -> None)."""
+    if market_type == "BTTS":
+        from src.world_cup.tracker_odds import pick_btts
+        return pick_btts(_btts_cached(match_id), selection, book)
     from src.world_cup.tracker_odds import wc_odds_lookup
     s = wc_odds_lookup(match_id, market_type, selection, bookmaker=book)
     if s is None and book != "Best price":
@@ -1902,11 +1916,15 @@ def _render_bet_slip(uid: int) -> None:
                     "Odds", min_value=1.01,
                     value=float(leg_sugg["odds"]) if leg_sugg else 2.00, step=0.05,
                     key=f"wcacca_odds_{leg_match_id}_{market}_{selection}_{leg_book}")
-            if leg_sugg:
+            if leg_sugg and market == "BTTS":
+                st.caption(f"↳ live BTTS {leg_sugg['bookmaker']} "
+                           f"{leg_sugg['odds']:.2f} (US) — edit to your price.")
+            elif leg_sugg:
                 st.caption(f"↳ {leg_sugg['bookmaker']} {leg_sugg['odds']:.2f} — edit "
                            "to your price.")
             elif market == "BTTS":
-                st.caption("BTTS odds aren't pre-loaded — enter manually.")
+                st.caption("Couldn't fetch BTTS odds right now — enter your price "
+                           "manually.")
             if market == "QUALIFY":   # WC-QUAL-03 informational qualify-chance
                 _render_qualify_hint(fmeta[fx], selection)
             if st.button("➕ Add leg", key="wcacca_addleg"):
@@ -2120,11 +2138,15 @@ def _render_my_bets() -> None:
             with c6:
                 stake = st.number_input("Stake ($)", min_value=0.0, value=10.0,
                                         step=5.0, key="wcbet_stake")
-            if sugg:
+            if sugg and market == "BTTS":
+                st.caption(f"↳ live BTTS price from {sugg['bookmaker']} "
+                           f"({sugg['odds']:.2f}, US) — edit to your actual price.")
+            elif sugg:
                 st.caption(f"↳ auto-filled from {sugg['bookmaker']} "
                            f"({sugg['odds']:.2f}) — edit to your actual price.")
             elif market == "BTTS":
-                st.caption("BTTS odds aren't pre-loaded — enter manually.")
+                st.caption("Couldn't fetch BTTS odds right now — enter your price "
+                           "manually.")
             if st.button("Log bet", type="primary", key="wcbet_log"):
                 logged_book = (sugg["bookmaker"] if sugg
                                else (None if book == "Best price" else book))
