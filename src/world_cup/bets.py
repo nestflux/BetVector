@@ -61,6 +61,18 @@ def market_label_for(market_type, stage=None) -> str:
     return MARKET_LABELS.get(market_type, market_type)
 
 
+def qualify_estimate(home_win, draw, away_win, selection) -> Optional[float]:
+    """INFORMATIONAL model estimate of P(``selection`` ADVANCES from a knockout tie),
+    derived from the 90-minute 1X2 probabilities: P(advance) ≈ P(win in 90) + ½·P(draw)
+    — a coin-flip for the extra-time / penalty phase after a level 90 minutes
+    (WC-QUAL-03). An APPROXIMATION for display only, never an edge / value signal.
+    Returns None if the needed probabilities are missing."""
+    base = home_win if selection == "home" else away_win
+    if base is None or draw is None:
+        return None
+    return round(float(base) + 0.5 * float(draw), 4)
+
+
 def bet_outcome(market_type, selection, home_goals, away_goals) -> Optional[bool]:
     """won (True) / lost (False) / void (None) for a finished match — delegates to
     the league outcome logic. Returns None if the match isn't scored yet."""
