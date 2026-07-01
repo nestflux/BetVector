@@ -24,7 +24,7 @@ from sqlalchemy.orm import aliased
 
 from src.betting.tracker import _did_bet_win  # reuse the proven league outcome logic
 from src.database.db import get_session
-from src.world_cup.models import WCBetLog, WCMatch, WCTeam
+from src.world_cup.models import WCAccaLeg, WCAccumulator, WCBetLog, WCMatch, WCTeam
 
 # Markets this tracker accepts and the selections valid within each — matches the
 # contract of _did_bet_win, so logged bets are always settleable.
@@ -226,3 +226,276 @@ def wc_pnl_timeline(bets: list) -> list:
         out.append({"date": b.get("date"), "pnl": b["pnl"],
                     "cumulative": round(run, 2)})
     return out
+
+
+# ===========================================================================
+# Accumulators (parlays) — WC-ACC-01
+# ===========================================================================
+# An accumulator combines >= 2 legs into ONE bet: EVERY leg must win, and the
+# payout MULTIPLIES (combined odds = product of the leg odds). A VOID leg (e.g.
+# an abandoned match) drops out — it's removed from the multiplier and the
+# remaining legs still all have to win. ONE losing leg loses the whole bet.
+#
+# The pure functions below hold the money math (fully unit-testable, no DB); the
+# settle/log/load functions apply them over the wc_accumulator + wc_acca_leg
+# tables. Leg settlement reuses the SAME _did_bet_win logic as singles, so an
+# acca leg settles exactly like a single bet.
+
+# Terminal match statuses with no result to settle against — such a leg is VOID
+# (dropped from the accumulator), never scored. "postponed" stays PENDING (a
+# postponed match is expected to be replayed), matching bookmaker practice.
+_VOID_MATCH_STATUSES = ("void", "cancelled", "abandoned")
+
+
+def accumulator_odds(leg_odds) -> float:
+    """Combined decimal odds of an accumulator = the PRODUCT of the leg odds
+    (payouts multiply because every leg must win). Empty -> 1.0 (neutral)."""
+    combined = 1.0
+    for o in leg_odds:
+        combined *= float(o)
+    return round(combined, 4)
+
+
+def accumulator_status(leg_statuses) -> str:
+    """Derive an accumulator's status from its leg statuses (each 'pending' /
+    'won' / 'lost' / 'void'):
+
+      * ANY leg lost      -> 'lost'    (one loss kills the whole bet — locked in even
+                                        while other legs are still unresolved)
+      * else ANY pending  -> 'pending' (can't pay out until every leg resolves)
+      * else all void      -> 'void'   (nothing left to win — stake returned)
+      * else               -> 'won'    (every non-void leg won; void legs dropped out)
+    """
+    statuses = list(leg_statuses)
+    if not statuses:
+        return "void"   # unreachable in practice (log enforces >= 2 legs); defensive
+    if any(s == "lost" for s in statuses):
+        return "lost"
+    if any(s == "pending" for s in statuses):
+        return "pending"
+    if all(s == "void" for s in statuses):
+        return "void"
+    return "won"
+
+
+def accumulator_effective_odds(leg_odds, leg_statuses) -> float:
+    """Payout multiplier once settled = product of the odds of the legs that WON.
+    Void legs drop out (excluded from the product); a fully-void slip -> 1.0."""
+    eff = 1.0
+    for o, s in zip(leg_odds, leg_statuses):
+        if s == "won":
+            eff *= float(o)
+    return round(eff, 4)
+
+
+def accumulator_pnl(status, stake, leg_odds, leg_statuses) -> float:
+    """Profit/loss for a settled accumulator (profit only; stake returned separately
+    on a win/void):
+
+      * 'won'  -> stake * (effective_odds - 1), effective_odds EXCLUDES void legs
+      * 'lost' -> -stake
+      * 'void' / 'pending' -> 0
+    """
+    if status == "won":
+        eff = accumulator_effective_odds(leg_odds, leg_statuses)
+        return round(float(stake) * (eff - 1.0), 2)
+    if status == "lost":
+        return round(-float(stake), 2)
+    return 0.0
+
+
+def _leg_status(market_type, selection, match) -> str:
+    """Settled status of a single leg given its match row: 'pending' until the match
+    is finished + scored, then 'won'/'lost' (via the same outcome logic as singles),
+    or 'void' if the match was abandoned/cancelled (no result to settle against)."""
+    if match is None:
+        return "pending"
+    if match.status in _VOID_MATCH_STATUSES:
+        return "void"
+    if match.status != "finished" or match.home_goals is None \
+            or match.away_goals is None:
+        return "pending"
+    won = bet_outcome(market_type, selection, match.home_goals, match.away_goals)
+    return "void" if won is None else ("won" if won else "lost")
+
+
+def log_wc_accumulator(user_id: int, legs: list, stake: float, *,
+                       source: str = "manual",
+                       notes: Optional[str] = None) -> Optional[int]:
+    """Log a personal accumulator (parlay). ``legs`` is a list of >= 2 dicts, each:
+    ``{match_id, market_type, selection, odds, model_prob?, edge?}``. Validates the
+    slip (>= 2 legs, stake > 0) and EVERY leg (valid market/selection, odds > 1, the
+    match exists), freezes ``combined_odds`` = product of the leg odds, and inserts the
+    parent + legs as 'pending'. All-or-nothing: one bad leg rejects the whole slip.
+    Returns the new accumulator id, or None on bad input / DB error (never raises)."""
+    try:
+        stake = float(stake)
+    except (TypeError, ValueError):
+        return None
+    if stake <= 0:
+        return None
+    if not legs or len(legs) < 2:
+        return None
+
+    # Validate every leg up front before touching the DB.
+    clean = []
+    for leg in legs:
+        try:
+            match_id = int(leg["match_id"])
+            market_type = leg["market_type"]
+            selection = leg["selection"]
+            odds = float(leg["odds"])
+        except (KeyError, TypeError, ValueError):
+            return None
+        if not is_valid_selection(market_type, selection) or odds <= 1.0:
+            return None
+        clean.append({
+            "match_id": match_id, "market_type": market_type,
+            "selection": selection, "odds": odds,
+            "model_prob": leg.get("model_prob"), "edge": leg.get("edge"),
+        })
+
+    try:
+        with get_session() as session:
+            # Every leg's match must exist. Postgres' FK would reject a dangling row,
+            # but SQLite (local backup) doesn't enforce FKs, so check explicitly — a
+            # dangling leg would never settle and would break the display join.
+            for leg in clean:
+                if session.get(WCMatch, leg["match_id"]) is None:
+                    return None
+            combined = accumulator_odds([leg["odds"] for leg in clean])
+            acca = WCAccumulator(
+                user_id=user_id, stake=stake, combined_odds=combined,
+                source=source, notes=notes, status="pending",
+            )
+            for leg in clean:
+                acca.legs.append(WCAccaLeg(
+                    match_id=leg["match_id"], market_type=leg["market_type"],
+                    selection=leg["selection"], odds=leg["odds"],
+                    model_prob=leg["model_prob"], edge=leg["edge"], status="pending",
+                ))
+            session.add(acca)
+            session.commit()
+            session.refresh(acca)
+            return acca.id
+    except Exception:
+        return None
+
+
+def settle_wc_accumulators() -> int:
+    """Settle pending accumulators whose legs have all resolved (or one has lost), in
+    place (leg + parent status, parent pnl, settled_at). Idempotent + pipeline-safe:
+    only touches status=='pending' parents; a still-open slip is left untouched;
+    running it twice changes nothing. Never raises. Returns the count newly settled."""
+    settled = 0
+    try:
+        with get_session() as session:
+            accas = session.execute(
+                select(WCAccumulator).where(WCAccumulator.status == "pending")
+            ).scalars().all()
+            if not accas:
+                return 0
+            # Bulk-load every match referenced by a pending leg (one query).
+            match_ids = {leg.match_id for a in accas for leg in a.legs}
+            matches = {}
+            if match_ids:
+                matches = {
+                    m.id: m for m in session.execute(
+                        select(WCMatch).where(WCMatch.id.in_(match_ids))
+                    ).scalars().all()
+                }
+            now = datetime.utcnow().isoformat()
+            for acca in accas:
+                leg_statuses = [
+                    _leg_status(leg.market_type, leg.selection,
+                                matches.get(leg.match_id))
+                    for leg in acca.legs
+                ]
+                parent_status = accumulator_status(leg_statuses)
+                if parent_status == "pending":
+                    continue  # not all legs resolved (and none lost) — leave it open
+                for leg, st in zip(acca.legs, leg_statuses):
+                    if leg.status != st:
+                        leg.status = st
+                        leg.settled_at = now
+                acca.status = parent_status
+                acca.pnl = accumulator_pnl(
+                    parent_status, acca.stake,
+                    [leg.odds for leg in acca.legs], leg_statuses,
+                )
+                acca.settled_at = now
+                settled += 1
+            if settled:
+                session.commit()
+        return settled
+    except Exception:
+        return 0
+
+
+def load_wc_accumulators(user_id: int) -> list:
+    """A user's accumulators, newest first, as plain dicts with READ-TIME settlement
+    (leg statuses + parent status/pnl recomputed live from finished matches WITHOUT
+    writing — so the display is correct even before settle_wc_accumulators has run).
+
+    Each dict: id, stake, combined_odds, effective_odds, status, pnl, source, notes,
+    placed_at, settled_at, n_legs, and 'legs' — each leg with match info + live status.
+    Returns [] on error."""
+    out = []
+    try:
+        with get_session() as session:
+            accas = session.execute(
+                select(WCAccumulator)
+                .where(WCAccumulator.user_id == user_id)
+                .order_by(WCAccumulator.placed_at.desc())
+            ).scalars().all()
+            if not accas:
+                return []
+            # Bulk-load matches + team names for every leg (one query).
+            match_ids = {leg.match_id for a in accas for leg in a.legs}
+            minfo = {}
+            if match_ids:
+                HomeTeam = aliased(WCTeam)
+                AwayTeam = aliased(WCTeam)
+                for m, home, away in session.execute(
+                    select(WCMatch, HomeTeam.name, AwayTeam.name)
+                    .join(HomeTeam, WCMatch.home_team_id == HomeTeam.id)
+                    .join(AwayTeam, WCMatch.away_team_id == AwayTeam.id)
+                    .where(WCMatch.id.in_(match_ids))
+                ).all():
+                    minfo[m.id] = (m, home, away)
+
+            for acca in accas:
+                legs_out, leg_statuses, leg_odds = [], [], []
+                for leg in acca.legs:
+                    m, home, away = minfo.get(leg.match_id, (None, None, None))
+                    st = _leg_status(leg.market_type, leg.selection, m)
+                    leg_statuses.append(st)
+                    leg_odds.append(leg.odds)
+                    legs_out.append({
+                        "id": leg.id, "match_id": leg.match_id,
+                        "date": m.date if m else None,
+                        "home": home, "away": away,
+                        "home_goals": m.home_goals if m else None,
+                        "away_goals": m.away_goals if m else None,
+                        "match_status": m.status if m else None,
+                        "market_type": leg.market_type,
+                        "market_label": MARKET_LABELS.get(leg.market_type,
+                                                          leg.market_type),
+                        "selection": leg.selection, "odds": leg.odds, "status": st,
+                        "model_prob": leg.model_prob, "edge": leg.edge,
+                    })
+                status = accumulator_status(leg_statuses)
+                out.append({
+                    "id": acca.id, "stake": acca.stake,
+                    "combined_odds": acca.combined_odds,
+                    "effective_odds": accumulator_effective_odds(leg_odds,
+                                                                 leg_statuses),
+                    "status": status,
+                    "pnl": accumulator_pnl(status, acca.stake, leg_odds, leg_statuses),
+                    "source": acca.source, "notes": acca.notes,
+                    "placed_at": acca.placed_at, "settled_at": acca.settled_at,
+                    "n_legs": len(legs_out), "legs": legs_out,
+                })
+        return out
+    except Exception:
+        return []

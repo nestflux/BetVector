@@ -2205,7 +2205,7 @@ chosen; the accumulator/parlay variant — multi-leg, combined odds, all-legs-mu
 
 ---
 
-## WC-ACC — Accumulator (Parlay) Bets · PLANNED (owner-approved 2026-06-29, NOT yet built)
+## WC-ACC — Accumulator (Parlay) Bets · IN PROGRESS (owner-approved 2026-06-29; WC-ACC-01 DONE 2026-06-30)
 
 Extends the WC bet tracker (WC-BET) to **accumulators**: multiple legs as one bet,
 all legs must win, combined odds = product of the legs. **Calculator + tracker, NOT
@@ -2224,15 +2224,23 @@ model/value/prediction path.
   MERGE singles + accumulators for combined P&L.
 
 **Issues:**
-- **WC-ACC-01 — Data model + settlement engine.** New `wc_accumulator` + `wc_acca_leg`
-  tables (created local + Neon). Pure fns in `world_cup.bets`: `accumulator_odds`
+- **WC-ACC-01 — Data model + settlement engine.** ✅ DONE (2026-06-30). New
+  `wc_accumulator` + `wc_acca_leg` tables (created local + Neon via create_all — no
+  data migration). Pure fns in `world_cup.bets`: `accumulator_odds`
   (product of leg odds), `accumulator_status` (lost if ANY leg lost; won if ALL win;
-  void legs excluded; pending until all resolve; void if all void), `accumulator_pnl`
-  (effective odds recompute EXCLUDING void legs), `settle_wc_accumulators`
-  (idempotent, pipeline-safe), `log_wc_accumulator` (≥2 legs; each valid
-  market/selection + odds>1; stake>0). AC: combined odds correct · one losing leg →
-  whole acca lost · all-win → payout = stake×combined · void leg drops out + odds
-  recompute · pending until all settle · idempotent · user-scoped · never raises.
+  void legs excluded; pending until all resolve; void if all void),
+  `accumulator_effective_odds` + `accumulator_pnl` (effective odds recompute EXCLUDING
+  void legs), `settle_wc_accumulators` (idempotent, pipeline-safe),
+  `log_wc_accumulator` (≥2 legs; each valid market/selection + odds>1; stake>0;
+  all-or-nothing; match-existence guard), `load_wc_accumulators` (read-time
+  settlement, user-scoped, parent + expandable legs). Leg settlement reuses
+  `betting.tracker._did_bet_win`; shadow-safe (predictor.py/value_finder.py empty
+  diff); singles `wc_bet_log` byte-for-byte unchanged. Leg carries nullable
+  `model_prob`/`edge` frozen at log (for the WC-ACC-03 edge readout). AC 8/8: combined
+  odds correct · one losing leg → whole acca lost · all-win → payout = stake×combined ·
+  void leg drops out + odds recompute · pending until all settle · idempotent ·
+  user-scoped · never raises. Gate 2 CLEAN · Gate 3 APPROVED. 16 tests
+  (tests/test_wc_accumulator.py); suite 1250.
 - **WC-ACC-02 — Knockout 90-minute settlement (correctness; ALSO fixes singles).**
   Match-result / O-U / BTTS legs settle on the 90-MINUTE score (bookmaker
   convention), not extra-time/penalties. Investigate ESPN regulation vs final score;

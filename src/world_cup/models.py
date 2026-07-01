@@ -454,3 +454,90 @@ class WCBetLog(Base):
             f"WCBetLog(user={self.user_id}, match={self.match_id}, "
             f"{self.market_type}/{self.selection} @ {self.odds}, status={self.status})"
         )
+
+
+class WCAccumulator(Base):
+    """A user's PERSONAL World Cup ACCUMULATOR (parlay) — two or more legs combined
+    into ONE bet where EVERY leg must win for the bet to pay out, and the payout
+    MULTIPLIES (combined odds = product of the leg odds). Sits alongside the single
+    bets in ``wc_bet_log``; both are per-user and settle off ``wc_matches`` scores.
+
+    This is a calculator + tracker, NEVER a recommender: the user builds the slip,
+    the system freezes the combined odds at log time, settles all-legs-must-win, and
+    tracks P&L. It never writes to the model / value / prediction path.
+
+    ``combined_odds`` is frozen when the slip is logged (the product of the leg odds
+    the user actually got). At settlement the *effective* odds are recomputed from the
+    legs that actually won, so a VOID leg (e.g. an abandoned match) simply drops out
+    of the multiplier — matching standard bookmaker accumulator rules.
+    """
+
+    __tablename__ = "wc_accumulator"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    stake = Column(Float, nullable=False)
+    combined_odds = Column(Float, nullable=False)   # product of leg odds, frozen at log
+    source = Column(String, nullable=True)          # research_card / deep_dive / manual
+    status = Column(String, nullable=False, server_default="pending")  # pending/won/lost/void
+    pnl = Column(Float, nullable=True)              # profit/loss once settled
+    notes = Column(String, nullable=True)
+    placed_at = Column(String, nullable=False, server_default=func.now())
+    settled_at = Column(String, nullable=True)
+
+    # Deleting an accumulator removes its legs (parent owns the legs).
+    legs = relationship(
+        "WCAccaLeg", back_populates="accumulator",
+        cascade="all, delete-orphan", order_by="WCAccaLeg.id",
+    )
+
+    __table_args__ = (
+        Index("ix_wc_acca_user", "user_id"),
+        Index("ix_wc_acca_status", "status"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"WCAccumulator(id={self.id}, user={self.user_id}, "
+            f"odds={self.combined_odds}, status={self.status})"
+        )
+
+
+class WCAccaLeg(Base):
+    """One leg of a WC accumulator (``WCAccumulator``). Each leg is a single
+    market/selection on one match, using the canonical convention of
+    ``betting.tracker._did_bet_win`` so it settles by the exact same proven logic as a
+    single bet. A leg resolves to ``won`` / ``lost`` / ``void`` (dropped from the
+    payout) / ``pending``; the parent's status and P&L are derived from the legs.
+
+    ``model_prob`` / ``edge`` are captured (frozen) at log time when a leg comes from a
+    model tip — used only for the INFORMATIVE combined-edge readout, never recomputed
+    and never fed back into the model.
+    """
+
+    __tablename__ = "wc_acca_leg"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    accumulator_id = Column(Integer, ForeignKey("wc_accumulator.id"), nullable=False)
+    match_id = Column(Integer, ForeignKey("wc_matches.id"), nullable=False)
+    market_type = Column(String, nullable=False)   # 1X2 / OU15 / OU25 / OU35 / BTTS
+    selection = Column(String, nullable=False)      # home/draw/away/over/under/yes/no
+    odds = Column(Float, nullable=False)            # decimal odds for this leg
+    # Captured at log time when the leg comes from a model tip (frozen, never recomputed):
+    model_prob = Column(Float, nullable=True)
+    edge = Column(Float, nullable=True)
+    status = Column(String, nullable=False, server_default="pending")  # pending/won/lost/void
+    settled_at = Column(String, nullable=True)
+
+    accumulator = relationship("WCAccumulator", back_populates="legs")
+
+    __table_args__ = (
+        Index("ix_wc_acca_leg_parent", "accumulator_id"),
+        Index("ix_wc_acca_leg_match", "match_id"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"WCAccaLeg(acca={self.accumulator_id}, match={self.match_id}, "
+            f"{self.market_type}/{self.selection} @ {self.odds}, status={self.status})"
+        )
