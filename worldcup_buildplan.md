@@ -2205,7 +2205,7 @@ chosen; the accumulator/parlay variant — multi-leg, combined odds, all-legs-mu
 
 ---
 
-## WC-ACC — Accumulator (Parlay) Bets · IN PROGRESS (owner-approved 2026-06-29; WC-ACC-01 DONE 2026-06-30)
+## WC-ACC — Accumulator (Parlay) Bets · IN PROGRESS (owner-approved 2026-06-29; WC-ACC-01 + WC-ACC-02 DONE 2026-06-30)
 
 Extends the WC bet tracker (WC-BET) to **accumulators**: multiple legs as one bet,
 all legs must win, combined odds = product of the legs. **Calculator + tracker, NOT
@@ -2242,12 +2242,24 @@ model/value/prediction path.
   user-scoped · never raises. Gate 2 CLEAN · Gate 3 APPROVED. 16 tests
   (tests/test_wc_accumulator.py); suite 1250.
 - **WC-ACC-02 — Knockout 90-minute settlement (correctness; ALSO fixes singles).**
-  Match-result / O-U / BTTS legs settle on the 90-MINUTE score (bookmaker
-  convention), not extra-time/penalties. Investigate ESPN regulation vs final score;
-  store the regulation score (nullable home_goals_ft/away_goals_ft or a flag); settle
-  knockout legs off it. Group stage unaffected (always 90 min). AC: a KO tie won on
-  penalties (1-1 after 90) settles a "home win" leg as NOT won · group-stage
-  settlement unchanged · singles + acca legs both use the correct score.
+  ✅ DONE (2026-06-30). Match-result / O-U / BTTS legs settle on the 90-MINUTE score
+  (bookmaker convention), not extra-time/penalties. INVESTIGATION (real ESPN data):
+  ESPN's free `keyEvents` feed carries a `period` on every goal (1-2 = regulation,
+  3-4 = ET, 5 = shootout); counting periods 1-2 reconstructs the 90-minute score, and
+  a per-team SELF-CHECK against the official final (a.e.t.) score guards it (defers if
+  it can't reconcile — never mis-settles). Verified on the 2022 final (2-2 at 90 vs
+  3-3 a.e.t.) + the live 2026 shootouts (Germany 1-1 Paraguay, Netherlands 1-1
+  Morocco). SCHEMA (migrated local + Neon): `WCMatch.home_goals_reg`/`away_goals_reg`
+  (nullable, the 90-min score) + `went_to_extra_time` (flag). New
+  `src/world_cup/regulation.py`: `reconstruct_regulation_score` (self-checked) +
+  `reconcile_knockout_regulation` (finds finished KO matches, matches to ESPN events
+  by date+pair, maps orientation, writes reg+flag; idempotent, self-healing, never
+  raises), wired into morning+evening BEFORE settlement. `bets.settlement_score`
+  routes singles (settle/load) AND acca legs (`_leg_status`) through the 90-min score.
+  Shadow-safe (predictor/value_finder empty diff). A KO awaiting reconstruction stays
+  PENDING. AC 3/3: KO pens-win settles "home win" NOT won · group-stage unchanged ·
+  singles + acca legs both correct. Gate 2 CLEAN · Gate 3 APPROVED. 18 tests
+  (tests/test_wc_regulation.py); suite 1268.
 - **WC-ACC-03 — Bet-slip builder + combined-edge readout (INFORMATIVE — CONFIRMED).**
   Session-state bet slip in the My Bets tab. "➕ Add to slip" on the model value picks
   (extend the existing log-from-advice control) + manual add. Slip panel: legs,

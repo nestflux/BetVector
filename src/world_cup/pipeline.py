@@ -144,6 +144,14 @@ def _run_morning() -> dict:
     from src.world_cup.results_espn import self_heal_wc_results
     results["espn_self_heal"] = _step("ESPN Results Self-Heal", self_heal_wc_results)
 
+    # 1a-ii. Reconcile knockout 90-minute (regulation) scores BEFORE any settlement,
+    # so a knockout decided in extra time / penalties settles on the 90-minute score
+    # (bookmaker convention for 1X2 / O-U / BTTS), not the a.e.t. score (WC-ACC-02).
+    # Pipeline-safe (never raises); group matches are untouched.
+    from src.world_cup.regulation import reconcile_knockout_regulation
+    results["regulation"] = _step("Reconcile KO Regulation Scores",
+                                  reconcile_knockout_regulation)
+
     # 1b. Capture closing lines (CLV) for matches that just finished — WC-10-02.
     # The morning run is now the daily spine (the 22:00 evening run is retired), so
     # it must settle CLV on overnight completions, not just refresh today's board.
@@ -265,6 +273,14 @@ def _run_evening() -> dict:
     # Odds API hasn't settled yet still lands tonight (free, results-only, idempotent).
     from src.world_cup.results_espn import self_heal_wc_results
     results["espn_self_heal"] = _step("ESPN Results Self-Heal", self_heal_wc_results)
+
+    # 1a-ii. Reconcile knockout 90-minute (regulation) scores BEFORE any settlement,
+    # so a knockout decided in extra time / penalties settles on the 90-minute score
+    # (bookmaker convention for 1X2 / O-U / BTTS), not the a.e.t. score (WC-ACC-02).
+    # Pipeline-safe (never raises); group matches are untouched.
+    from src.world_cup.regulation import reconcile_knockout_regulation
+    results["regulation"] = _step("Reconcile KO Regulation Scores",
+                                  reconcile_knockout_regulation)
 
     # 1b. Freeze closing lines + CLV for picks whose match just finished (WC-09-01)
     from src.world_cup.value_finder import capture_wc_closing_lines

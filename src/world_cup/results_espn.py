@@ -90,6 +90,12 @@ def fetch_espn_results_for_date(d: date) -> list[dict]:
             "home_goals": home_goals,
             "away_goals": away_goals,
             "date": ev_date,
+            # WC-ACC-02: event id + status detail let the regulation reconciler pull
+            # the match's keyEvents and tell a 90-minute finish ('FT') from one that
+            # ran to extra time / penalties ('FT-Pens', 'AET'). Additive — existing
+            # result callers ignore these keys.
+            "espn_event_id": ev.get("id"),
+            "detail": status_type.get("detail") or status_type.get("description"),
         })
     return out
 
