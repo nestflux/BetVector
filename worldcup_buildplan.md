@@ -2205,7 +2205,7 @@ chosen; the accumulator/parlay variant — multi-leg, combined odds, all-legs-mu
 
 ---
 
-## WC-ACC — Accumulator (Parlay) Bets · IN PROGRESS (owner-approved 2026-06-29; WC-ACC-01/02 DONE 2026-06-30, WC-ACC-03 DONE 2026-07-01; in PR #1 on branch `wc-acc`)
+## WC-ACC — Accumulator (Parlay) Bets · IN PROGRESS (owner-approved 2026-06-29; WC-ACC-01/02 DONE 2026-06-30, WC-ACC-03/04 DONE 2026-07-01; WC-ACC-05 next; in PR #1 on branch `wc-acc`)
 
 Extends the WC bet tracker (WC-BET) to **accumulators**: multiple legs as one bet,
 all legs must win, combined odds = product of the legs. **Calculator + tracker, NOT
@@ -2276,12 +2276,22 @@ model/value/prediction path.
   /predictor empty diff). AC 5/5: add/remove legs · combined odds+payout live · logs a
   valid acca (≥2) · same-match warning · never suggests combos. Gate 2 CLEAN · Gate 3
   APPROVED. 6 tests (22 in test_wc_accumulator.py); suite 1274. PNG proof on Desktop.
-- **WC-ACC-04 — Display accumulators + pipeline settlement.** Parent row (combined
-  odds, stake, status, payout) with EXPANDABLE legs in the My Bets list; fold acca
-  P&L into the scoreboard + cumulative-P&L chart (merge singles + accas); wire
-  `settle_wc_accumulators` into the morning + evening pipeline. AC: accas display with
-  expandable legs + correct status/P&L · scoreboard + chart include acca P&L ·
-  pipeline settles accas · read-time settlement keeps the display consistent.
+- **WC-ACC-04 — Display accumulators + pipeline settlement.** ✅ DONE (2026-07-01).
+  NEW pure `bets.combined_bet_summary`/`combined_pnl_timeline` merge singles + accas
+  into ONE scoreboard + ONE cumulative curve (each bet = one unit; an acca's settle
+  date = its LATEST leg date). My Bets tab (`_render_my_bets`) loads singles
+  (load_wc_bets) + accas (load_wc_accumulators, read-time settled), shows the merged
+  scoreboard/chart, then a "🎫 Accumulators" section — each acca an `st.expander`
+  (parent header `_acca_expander_label`: status icon · N-leg · combined odds · stake ·
+  P&L settled / "→ $X potential" pending) with legs (`_acca_leg_row_html`: teams ·
+  market/sel · odds · per-leg status) — above "🎟️ Single bets". `settle_wc_accumulators`
+  wired into morning+evening AFTER reconcile_knockout_regulation + settle_wc_bets (so
+  KO accas settle on the 90-min score; a KO awaiting reconstruction stays pending).
+  Singles-only wc_bet_summary/wc_pnl_timeline retained (still tested). Shadow-safe.
+  AC 4/4: expandable legs + correct status/P&L · scoreboard + chart include acca P&L ·
+  pipeline settles accas · read-time == persisted. Gate 2 CLEAN · Gate 3 APPROVED.
+  6 tests (30 in test_wc_accumulator.py) + 2 wiring assertions updated; suite 1280.
+  PNG proof on Desktop.
 - **WC-ACC-05 — Review + docs.** Independent code-review agent (money/P&L, settlement
   edge cases incl. void + knockout, multi-user isolation, shadow safety); live
   verification (build + log an acca + settle it); masterplan/build-plan docs (Rule 8

@@ -175,7 +175,8 @@ def test_my_bets_tab_wired():
     assert "def _render_my_bets" in HUB_SRC and "_render_my_bets()" in HUB_SRC
     assert "get_session_user_id()" in HUB_SRC        # user-scoped
     assert "log_wc_bet(" in HUB_SRC                   # the form logs a bet
-    assert "load_wc_bets(" in HUB_SRC and "wc_bet_summary(" in HUB_SRC
+    # WC-ACC-04: the scoreboard now merges singles + accumulators.
+    assert "load_wc_bets(" in HUB_SRC and "combined_bet_summary(" in HUB_SRC
     compile(HUB_SRC, "world_cup.py", "exec")
 
 
@@ -260,4 +261,4 @@ def test_pnl_timeline_cumulative():
 def test_pipeline_and_chart_wired():
     pl = (ROOT / "src" / "world_cup" / "pipeline.py").read_text()
     assert pl.count("settle_wc_bets") >= 2       # wired into morning + evening runs
-    assert "wc_pnl_timeline(bets)" in HUB_SRC     # cumulative-P&L chart in My Bets
+    assert "combined_pnl_timeline(" in HUB_SRC    # cumulative-P&L chart (singles+accas)
