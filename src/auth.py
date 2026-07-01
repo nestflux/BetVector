@@ -227,6 +227,36 @@ def set_user_password(user_id: int, new_password: str) -> bool:
         return False
 
 
+def admin_reset_password(user_id: int) -> Optional[str]:
+    """Owner-driven password reset for ANOTHER user's account (UM-01).
+
+    Generates a fresh temporary password, stores its PBKDF2 hash, and sets
+    ``must_change_password=1`` so the user is force-routed to choose their own on
+    next login — the owner never keeps their password.  Returns the plaintext temp
+    password ONCE for the owner to pass on out-of-band, or None on failure / unknown
+    user.
+
+    This deliberately does NOT call :func:`set_user_password`: that helper *clears*
+    the forced-change flag (it's the self-service path where the user has just chosen
+    their own secret), whereas an admin reset must *re-arm* the forced change so the
+    owner-set temporary password can't become permanent.  All in one transaction.
+    """
+    try:
+        temp_password = generate_temp_password()
+        with get_session() as session:
+            user = session.get(User, user_id)
+            if user is None:
+                return None
+            user.password_hash = hash_password(temp_password)
+            user.must_change_password = 1
+            user.updated_at = datetime.utcnow().isoformat()
+            session.commit()
+            return temp_password
+    except Exception:
+        logger.exception("admin_reset_password failed for user_id=%s", user_id)
+        return None
+
+
 def change_own_password(
     user_id: int,
     current_password: str,
