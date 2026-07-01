@@ -2312,7 +2312,7 @@ Tests: `tests/test_wc_accumulator.py`. Each issue runs the full review gates +
 commit/push, exactly like WC-BET. Supersedes follow-up chip task_e5f58071.
 
 
-## WC-QUAL — "To Qualify / To Advance" Market · APPROVED (owner-approved 2026-07-01, building on branch `wc-qual`)
+## WC-QUAL — "To Qualify / To Advance" Market · ✅ COMPLETE 4/4 (owner-approved 2026-07-01; in PR #2 on branch `wc-qual`, awaiting merge)
 
 Extends the WC personal bet-tracker (WC-BET singles + WC-ACC accumulators) with a new
 **"To qualify"** market: bet on which team ADVANCES from a knockout tie — settled on
@@ -2379,10 +2379,20 @@ this per-tie "to advance." This epic is the knockout-tie market only.
   Verified live on real Neon KO predictions (Brazil 51/28/21 → Brazil ~65%/Norway ~35%;
   Colombia 68/20/12 → Colombia ~78%/Ghana ~22%). Gate 2 CLEAN · Gate 3 APPROVED
   (read-only, display-only confirmed). 3 tests (20 in test_wc_qualify.py); suite 1300.
-- **WC-QUAL-04 — Review + docs.** Holistic review (advancement money / settlement edge
-  cases: ET-decided vs pens-decided vs unresolved; shadow safety; multi-user
-  isolation) + live end-to-end (log + settle a qualify bet on a real pens match) +
-  masterplan / build-plan docs (Rule 8 Tier-1) + version bump. Closes the mini-epic.
+- **WC-QUAL-04 — Review + docs.** ✅ DONE (2026-07-01), CLOSES the epic. Holistic
+  independent review of all 4 issues **APPROVED** — traced every money path: QUALIFY
+  settles on advancement while 1X2/O-U/BTTS keep settling on the 90-min score
+  (WC-ACC path byte-unchanged); a KO awaiting shootout capture stays PENDING (never
+  settles wrong); QUALIFY structurally never yields "void"; singles + acca legs both
+  route the market-aware `bet_result`; read-time == persisted; multi-user isolated;
+  shadow-safe (value_finder×2/predictor empty diff; only the 2 pens cols + user tables
+  written). Applied the one review nit (clear stale pens on an ET→FT re-check). LIVE
+  E2E (real fns, fresh DB): Spain 1-1 Morocco a.e.t., Spain win 4-2 pens → "Spain to
+  qualify" WON +7.00 · "Morocco to qualify" LOST · "Spain — Match result (90 min)"
+  LOST (90-min draw) · (qualify+group-win) acca WON +15.50 — the SAME KO settles the
+  two markets to OPPOSITE results. Informational estimate verified live on real Neon
+  KO predictions. Rule-8 Tier-1: masterplan 1.10 → 1.11 + §13.16 WC-QUAL paragraph.
+  Suite 1300.
 
 Tests: `tests/test_wc_qualify.py`. Each issue runs the full review gates + commit /
 push to the `wc-qual` branch (a fresh PR, now that PR #1 is merged), exactly like

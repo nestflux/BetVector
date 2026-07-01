@@ -187,6 +187,8 @@ def reconcile_knockout_regulation(today: str | None = None,
                         match.went_to_extra_time = 0
                         match.home_goals_reg = None  # clear any stale regulation score
                         match.away_goals_reg = None
+                        match.home_pens = None       # + stale shootout score (WC-QUAL)
+                        match.away_pens = None
                     continue
                 extra_time += 1
                 match.went_to_extra_time = 1
