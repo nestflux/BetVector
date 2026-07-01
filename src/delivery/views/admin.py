@@ -26,7 +26,12 @@ from typing import Dict, List, Optional
 
 import streamlit as st
 
-from src.auth import get_session_user_id, get_session_user_role, hash_password
+from src.auth import (
+    admin_reset_password,
+    get_session_user_id,
+    get_session_user_role,
+    hash_password,
+)
 from src.database.db import get_session
 from src.database.models import BetLog, User
 
@@ -423,6 +428,47 @@ for u in all_users:
                     st.rerun()
                 else:
                     st.error("Failed to clear bet history.")
+
+        # -- Reset Password (owner-driven; not for your own account) --
+        # The owner resets a tester who's locked out / forgot their password.
+        # A fresh temporary password is generated and shown ONCE; the tester is
+        # forced to choose their own on next login (must_change_password=1), so
+        # the owner never permanently holds it. Your OWN account uses Settings →
+        # Change Password instead (you know your current one).
+        if not is_self:
+            st.divider()
+            st.markdown(
+                f'<div style="font-family: Inter, sans-serif; font-size: 13px; '
+                f'font-weight: 600; color: {COLOURS["text"]}; margin-bottom: 4px;">'
+                f'Reset Password</div>'
+                f'<div style="font-family: Inter, sans-serif; font-size: 12px; '
+                f'color: {COLOURS["text_secondary"]}; margin-bottom: 8px;">'
+                f'Generates a new temporary password (shown once). '
+                f'{u["name"]} must set their own on next login.</div>',
+                unsafe_allow_html=True,
+            )
+            confirm_pw_admin = st.checkbox(
+                "Confirm password reset",
+                key=f"admin_confirm_pw_{u['id']}",
+            )
+            if st.button(
+                "🔑 Reset Password",
+                key=f"admin_reset_pw_{u['id']}",
+                type="secondary",
+                disabled=not confirm_pw_admin,
+                use_container_width=True,
+            ):
+                temp_pw = admin_reset_password(u["id"])
+                if temp_pw:
+                    # No st.rerun — the code block must stay on screen so the owner
+                    # can copy the one-time password before it disappears.
+                    st.success(
+                        f"New temporary password for {u['name']} — share it "
+                        f"out-of-band. They'll be asked to set their own on login."
+                    )
+                    st.code(temp_pw, language=None)
+                else:
+                    st.error("Failed to reset password.")
 
         # -- Delete User (destructive — viewers only, owner protected) --
         st.divider()
