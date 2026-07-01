@@ -2398,3 +2398,61 @@ Tests: `tests/test_wc_qualify.py`. Each issue runs the full review gates + commi
 push to the `wc-qual` branch (a fresh PR, now that PR #1 is merged), exactly like
 WC-ACC. Cost: $0 (ESPN free; no Odds API). Value / predictor path held byte-for-byte
 unchanged.
+
+
+## WC-ODDS — Odds auto-fill + bookmaker selection · APPROVED (owner-approved 2026-07-01, building on branch `wc-odds`)
+
+In the WC bet-tracker's log form AND the accumulator slip builder, pre-fill the odds
+when a match + market + selection is chosen, with a **bookmaker selector** — **FanDuel
+default** (config `default_bookmaker`), any book that has a price, or **"Best price"**
+(highest across the ~57 books). Odds field stays EDITABLE (log the price you actually
+got). Singles + accumulator legs; per-leg book on the slip (best-price-per-leg
+maximises the combined odds). Owner-approved credit model: 1X2 + O/U auto-fill FREE
+from stored `wc_odds`; BTTS AUTO-FETCHes live (US-only, per-match cached, ~1 credit
+per new match, budget-guarded); "To qualify" stays manual.
+
+**Coverage:** 1X2 → stored `wc_odds` `h2h`; O/U → stored `totals` (mainly the 2.5
+line); BTTS → live per-event fetch (us region); QUALIFY / unstored O/U lines →
+manual. Live quota at plan time: 488/500 remaining; rest-of-WC est ~175–195 credits
+incl. BTTS (owner analysis) — ample headroom.
+
+**Schema:** NONE. No new tables/columns. One config value `default_bookmaker: "FanDuel"`
+in `settings.yaml`.
+
+**Shadow-safety (load-bearing):** reading `wc_odds` for 1X2/O-U auto-fill is read-only.
+The BTTS fetch is cached in-app (`st.cache_data`) and NEVER written back to `wc_odds`
+— writing BTTS prices into `wc_odds` would feed `value_finder` and start generating
+BTTS value picks, changing the model/value path. Keeping BTTS out of `wc_odds`
+preserves the tracker's shadow-safety (`value_finder.py` ×2 + `predictor.py` empty
+diff).
+
+**Issues:**
+- **WC-ODDS-01 — Odds lookup + bookmaker selector (stored: 1X2 + O/U).** Read-only
+  `wc_odds_lookup(match_id, market, selection, bookmaker)` mapping tracker markets →
+  `wc_odds` (1X2 → `h2h` by team name / "Draw"; O/U → `totals` "Over"/"Under" + point);
+  `wc_odds_books(match_id)` for the selector; "Best price" = max across books. Config
+  `default_bookmaker: "FanDuel"`. UI: a bookmaker dropdown (FanDuel default; per-leg on
+  the slip) on the log form + slip add-leg form; auto-fill the odds input from the
+  lookup (fresh suggestion per match/market/selection/book; still editable); chosen
+  book with no price → fall back to best price + note; unstored → manual. AC: 1X2/O-U
+  pre-fill from FanDuel · switching book / "Best price" re-fills · missing line →
+  manual · read-only, value path untouched.
+- **WC-ODDS-02 — BTTS auto-fetch (on-demand, US-only, cached, budget-guarded).** New
+  `fetch_btts_odds(match_id, region="us")`: free `/events` resolves the Odds-API event
+  id by team pair, then ONE `/events/{id}/odds?markets=btts&regions=us` (~1 credit);
+  parse book prices; `@st.cache_data` per match so reruns/re-picks are free; budget
+  guard (skip if remaining < hard-stop 30 → manual fallback); NEVER writes `wc_odds`.
+  UI: market == BTTS → auto-fetch on selection (spinner → fill FanDuel/selected book),
+  "prices as of HH:MM" note, clean manual fallback on API-fail / no-BTTS / budget-low.
+  AC: selecting BTTS fetches once then caches · fills FanDuel BTTS price · budget-low /
+  failure → manual, never blocks logging · nothing written to `wc_odds` / value-finder
+  empty diff.
+- **WC-ODDS-03 — Review + docs.** Holistic review (shadow-safety: no `wc_odds` writes,
+  value_finder ×2 + predictor empty diff; budget-guard; cache correctness; multi-user)
+  + live verification (auto-fill a real 1X2 + O/U from Neon odds; one real BTTS fetch
+  showing the ~1-credit cost + FanDuel price) + masterplan / build-plan docs (Rule 8
+  Tier-1) + version bump. Closes the epic.
+
+Tests: `tests/test_wc_odds.py` (mapping, best-price, book selector, budget-guard
+fallback, cache behaviour, shadow-safety = no `wc_odds` writes). Each issue: full
+review gates + commit/push to `wc-odds` → PR #3, exactly like WC-ACC/WC-QUAL.
