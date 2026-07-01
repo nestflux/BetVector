@@ -2427,7 +2427,8 @@ preserves the tracker's shadow-safety (`value_finder.py` ×2 + `predictor.py` em
 diff).
 
 **Issues:**
-- **WC-ODDS-01 — Odds lookup + bookmaker selector (stored: 1X2 + O/U).** Read-only
+- **WC-ODDS-01 — Odds lookup + bookmaker selector (stored: 1X2 + O/U).** ✅ DONE
+  (2026-07-01). NEW read-only `src/world_cup/tracker_odds.py`.
   `wc_odds_lookup(match_id, market, selection, bookmaker)` mapping tracker markets →
   `wc_odds` (1X2 → `h2h` by team name / "Draw"; O/U → `totals` "Over"/"Under" + point);
   `wc_odds_books(match_id)` for the selector; "Best price" = max across books. Config
@@ -2436,7 +2437,10 @@ diff).
   lookup (fresh suggestion per match/market/selection/book; still editable); chosen
   book with no price → fall back to best price + note; unstored → manual. AC: 1X2/O-U
   pre-fill from FanDuel · switching book / "Best price" re-fills · missing line →
-  manual · read-only, value path untouched.
+  manual · read-only, value path untouched. Verified on real Neon odds (Panama v
+  Croatia: FanDuel 1X2 home 7.00 / best 8.00 Unibet; unstored → None). Shadow-safe
+  (tracker_odds only SELECTs; value_finder×2/predictor untouched). Gate 2 CLEAN · Gate
+  3 APPROVED. 9 tests (tests/test_wc_odds.py); suite 1309.
 - **WC-ODDS-02 — BTTS auto-fetch (on-demand, US-only, cached, budget-guarded).** New
   `fetch_btts_odds(match_id, region="us")`: free `/events` resolves the Odds-API event
   id by team pair, then ONE `/events/{id}/odds?markets=btts&regions=us` (~1 credit);
