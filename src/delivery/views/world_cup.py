@@ -605,19 +605,38 @@ def _render_log_pick_control(picks: list) -> None:
         with c2:
             stake = st.number_input("Stake ($)", min_value=0.0, value=10.0,
                                     step=5.0, key="wc_logpick_stake")
-        if st.button("➕ Log this pick", type="primary", key="wc_logpick_btn"):
-            bid = log_wc_bet(
-                get_session_user_id(), p["match_id"], p["market"], p["selection"],
-                float(odds), float(stake), bookmaker=p.get("bookmaker"),
-                model_prob=p.get("model_prob"), edge=p.get("edge"),
-                source="research_card")
-            if bid:
-                st.toast("🎯 Logged to My Bets", icon="🎯")
+        b1, b2 = st.columns(2)
+        with b1:
+            if st.button("➕ Log this pick", type="primary", key="wc_logpick_btn"):
+                bid = log_wc_bet(
+                    get_session_user_id(), p["match_id"], p["market"], p["selection"],
+                    float(odds), float(stake), bookmaker=p.get("bookmaker"),
+                    model_prob=p.get("model_prob"), edge=p.get("edge"),
+                    source="research_card")
+                if bid:
+                    st.toast("🎯 Logged to My Bets", icon="🎯")
+                    st.rerun()
+                else:
+                    st.error("Couldn't log — odds must be > 1 and stake > 0.")
+        with b2:
+            # WC-ACC-03: stage this pick as a leg on the accumulator slip (assembled
+            # in the 🎟️ My Bets tab). Captures model_prob / edge frozen at add time.
+            if st.button("➕ Add to slip", key="wc_addslip_btn"):
+                slip = st.session_state.setdefault("wc_acca_slip", [])
+                slip.append({
+                    "match_id": p["match_id"], "home": p["home"], "away": p["away"],
+                    "market_type": p["market"],
+                    "market_label": MARKET_LABELS.get(p["market"], p["market"]),
+                    "selection": p["selection"], "odds": float(odds),
+                    "model_prob": p.get("model_prob"), "edge": p.get("edge"),
+                    "bookmaker": p.get("bookmaker"), "source": "research_card",
+                })
+                st.session_state["wc_acca_slip"] = slip
+                st.toast("🎫 Added to slip — build it in 🎟️ My Bets", icon="🎫")
                 st.rerun()
-            else:
-                st.error("Couldn't log — odds must be > 1 and stake > 0.")
         st.caption("Odds default to the best book price — edit to what you actually "
-                   "got. Tracked in 🎟️ My Bets, marked 🎯 (logged from a model tip).")
+                   "got. **Log** tracks it as a single 🎯 bet; **Add to slip** stages "
+                   "it as an accumulator leg in 🎟️ My Bets.")
 
 
 def _render_value_bets() -> None:
@@ -1663,6 +1682,7 @@ def _wc_betting_fixtures() -> list:
             away = m.away_team.name if m.away_team else "?"
             tag = "" if m.status == "scheduled" else " (FT)"
             out.append({"id": m.id, "date": m.date, "status": m.status,
+                        "home": home, "away": away,
                         "label": f"{m.date} · {home} v {away}{tag}"})
     except Exception:
         return []
@@ -1731,6 +1751,174 @@ def _bet_row_html(b: dict) -> str:
         f'<span style="min-width:78px;text-align:right;'
         f'font-family:JetBrains Mono,monospace;">{pnl}</span></div>'
     )
+
+
+# --- Accumulator (parlay) slip builder — WC-ACC-03 ---------------------------
+
+def _slip_leg_row_html(lg: dict) -> str:
+    """One leg on the accumulator slip: teams · market/selection · odds. 🎯 marks a
+    leg staged from a model pick. All dynamic text escaped."""
+    mk = escape(lg.get("market_label", lg["market_type"]))
+    sel = escape(_SEL_LABELS.get(lg["selection"], lg["selection"]))
+    teams = escape(f'{lg.get("home", "?")} v {lg.get("away", "?")}')
+    tip = (f' <span style="color:{ACCENT};" title="from a model pick">🎯</span>'
+           if (lg.get("source") or "manual") != "manual" else "")
+    return (
+        f'<div style="display:flex;gap:10px;align-items:center;padding:5px 8px;'
+        f'border-bottom:1px solid {BORDER};font-size:0.82rem;">'
+        f'<span style="flex:2;color:{TEXT};">{teams}{tip}</span>'
+        f'<span style="flex:2;color:{TEXT_DIM};">{mk} · {sel}</span>'
+        f'<span style="color:{TEXT};font-family:JetBrains Mono,monospace;">'
+        f'@{lg["odds"]:.2f}</span></div>'
+    )
+
+
+def _slip_readout_html(readout: dict, stake: float, payout: float) -> str:
+    """Combined-slip readout strip: legs · combined odds · potential payout · and,
+    when EVERY leg has a model estimate, the INFORMATIVE combined model prob + edge.
+    Edge coloured green(+)/red(−). All escaped."""
+    cells = [
+        ("Legs", str(readout["n_legs"]), TEXT),
+        ("Combined odds", f'{readout["combined_odds"]:.2f}', TEXT),
+        ("Stake", f"${stake:,.2f}", TEXT_DIM),
+        ("Potential payout", f"${payout:,.2f}", GREEN),
+    ]
+    if readout["model_prob"] is not None:
+        edge = readout["edge"] or 0.0
+        ecol = GREEN if edge > 0 else (RED if edge < 0 else TEXT_DIM)
+        cells.append(("Model prob", f'{readout["model_prob"] * 100:.1f}%', TEXT))
+        cells.append(("Combined edge", f'{edge * 100:+.1f}%', ecol))
+    inner = "".join(
+        f'<div style="flex:1;min-width:80px;text-align:center;padding:8px 6px;">'
+        f'<div style="color:{c};font-family:JetBrains Mono,monospace;font-weight:700;'
+        f'font-size:1.0rem;">{escape(v)}</div>'
+        f'<div style="color:{TEXT_DIM};font-size:0.66rem;text-transform:uppercase;'
+        f'letter-spacing:0.5px;margin-top:2px;">{escape(label)}</div></div>'
+        for label, v, c in cells
+    )
+    return (f'<div style="display:flex;flex-wrap:wrap;gap:4px;border:1px solid {BORDER};'
+            f'border-radius:8px;background:{SURFACE};margin:8px 0;">{inner}</div>')
+
+
+def _render_bet_slip(uid: int) -> None:
+    """WC-ACC-03: build an accumulator (parlay). Add legs (manually or staged from a
+    model pick in the Today & Bets tab), see combined odds / payout / an INFORMATIVE
+    combined edge, get a same-match correlation warning, and log it as a tracked
+    accumulator. Calculator + tracker only — it prices the slip you built, never
+    suggests a combination."""
+    from src.world_cup.bets import (
+        MARKET_LABELS, WC_MARKETS, accumulator_slip_readout, log_wc_accumulator,
+    )
+    slip = st.session_state.setdefault("wc_acca_slip", [])
+    title = "🎫 Build an accumulator (parlay)" + (f" · {len(slip)} legs" if slip else "")
+    with st.expander(title, expanded=bool(slip)):
+        st.caption("Combine 2+ selections into one bet — every leg must win and the "
+                   "odds multiply. This prices the slip you build; it never suggests "
+                   "combinations.")
+
+        # --- add a leg manually ---
+        fixtures = _wc_betting_fixtures()
+        if fixtures:
+            labels = [f["label"] for f in fixtures]
+            fmeta = {f["label"]: f for f in fixtures}
+            c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
+            with c1:
+                fx = st.selectbox("Match", labels, key="wcacca_match")
+            with c2:
+                market = st.selectbox("Market", list(WC_MARKETS.keys()),
+                                      key="wcacca_market",
+                                      format_func=lambda m: MARKET_LABELS.get(m, m))
+            with c3:
+                selection = st.selectbox("Selection", list(WC_MARKETS[market]),
+                                         key="wcacca_sel",
+                                         format_func=lambda x: _SEL_LABELS.get(x, x))
+            with c4:
+                odds = st.number_input("Odds", min_value=1.01, value=2.00, step=0.05,
+                                       key="wcacca_odds")
+            if st.button("➕ Add leg", key="wcacca_addleg"):
+                fm = fmeta[fx]
+                slip.append({
+                    "match_id": fm["id"], "home": fm.get("home"),
+                    "away": fm.get("away"), "market_type": market,
+                    "market_label": MARKET_LABELS.get(market, market),
+                    "selection": selection, "odds": float(odds),
+                    "model_prob": None, "edge": None, "source": "manual",
+                })
+                st.session_state["wc_acca_slip"] = slip
+                st.rerun()
+
+        if not slip:
+            st.caption("No legs yet. Add one above, or tap **➕ Add to slip** on a "
+                       "model value pick in the 📋 Today & Bets tab.")
+            return
+
+        # --- current legs (each removable) ---
+        st.markdown(
+            f'<div style="border:1px solid {BORDER};border-radius:8px;'
+            f'overflow:hidden;margin-bottom:4px;">'
+            + "".join(_slip_leg_row_html(lg) for lg in slip) + "</div>",
+            unsafe_allow_html=True,
+        )
+        rm_cols = st.columns(min(len(slip), 6) or 1)
+        for i, lg in enumerate(slip):
+            with rm_cols[i % len(rm_cols)]:
+                if st.button(f"✕ leg {i + 1}", key=f"wcacca_rm_{i}"):
+                    slip.pop(i)
+                    st.session_state["wc_acca_slip"] = slip
+                    st.rerun()
+
+        readout = accumulator_slip_readout(slip)
+
+        # Same-match correlation warning (multiplying correlated odds is invalid).
+        for cor in readout["correlated"]:
+            # st.warning renders Markdown (not raw HTML), and WC team names are
+            # curated — pass the label through as the rest of the file does.
+            st.warning(
+                f"⚠️ {cor['count']} legs are on the same match ({cor['label']}). "
+                "Same-match outcomes are correlated, so the combined odds and edge "
+                "below assume independence and aren't accurate — books usually price "
+                "these separately as a 'same-game multi'."
+            )
+
+        c1, c2 = st.columns([1, 2])
+        with c1:
+            stake = st.number_input("Stake ($)", min_value=0.0, value=10.0, step=5.0,
+                                    key="wcacca_stake")
+        payout = float(stake) * readout["combined_odds"]
+        with c2:
+            st.markdown(_slip_readout_html(readout, float(stake), payout),
+                        unsafe_allow_html=True)
+
+        if readout["model_prob"] is not None:
+            st.caption("Combined model prob / edge are INFORMATIVE — the model's joint "
+                       "estimate assuming the legs are independent (uncertainty and "
+                       "margin compound across legs). Not a recommendation.")
+        else:
+            st.caption("Add all legs from model picks to see an informative combined "
+                       "edge (manual legs have no model estimate).")
+
+        can_log = len(slip) >= 2 and stake > 0
+        lc, cc = st.columns([2, 1])
+        with lc:
+            if st.button("🎫 Log accumulator", type="primary", disabled=not can_log,
+                         key="wcacca_log"):
+                src = ("research_card"
+                       if any((lg.get("source") or "manual") != "manual" for lg in slip)
+                       else "manual")
+                aid = log_wc_accumulator(uid, slip, float(stake), source=src)
+                if aid:
+                    st.session_state["wc_acca_slip"] = []
+                    st.toast("🎫 Accumulator logged", icon="🎫")
+                    st.rerun()
+                else:
+                    st.error("Couldn't log — need ≥ 2 valid legs (each at odds > 1) "
+                             "and a stake > 0.")
+        with cc:
+            if st.button("Clear slip", key="wcacca_clear"):
+                st.session_state["wc_acca_slip"] = []
+                st.rerun()
+        if len(slip) < 2:
+            st.caption("Add at least 2 legs to log an accumulator.")
 
 
 def _render_my_bets() -> None:
@@ -1812,9 +2000,13 @@ def _render_my_bets() -> None:
                 else:
                     st.error("Couldn't log that bet — odds must be > 1 and stake > 0.")
 
+    # WC-ACC-03: accumulator (parlay) slip builder — always available, even before
+    # any single bets are logged.
+    _render_bet_slip(uid)
+
     if not bets:
-        st.info("No bets logged yet — log one above, or tap ➕ on a model pick in "
-                "the research card / deep dive.")
+        st.info("No bets logged yet — log one above, build an accumulator, or tap ➕ "
+                "on a model pick in the 📋 Today & Bets tab.")
         return
 
     st.markdown(

@@ -2205,7 +2205,7 @@ chosen; the accumulator/parlay variant — multi-leg, combined odds, all-legs-mu
 
 ---
 
-## WC-ACC — Accumulator (Parlay) Bets · IN PROGRESS (owner-approved 2026-06-29; WC-ACC-01 + WC-ACC-02 DONE 2026-06-30)
+## WC-ACC — Accumulator (Parlay) Bets · IN PROGRESS (owner-approved 2026-06-29; WC-ACC-01/02 DONE 2026-06-30, WC-ACC-03 DONE 2026-07-01; in PR #1 on branch `wc-acc`)
 
 Extends the WC bet tracker (WC-BET) to **accumulators**: multiple legs as one bet,
 all legs must win, combined odds = product of the legs. **Calculator + tracker, NOT
@@ -2261,13 +2261,21 @@ model/value/prediction path.
   singles + acca legs both correct. Gate 2 CLEAN · Gate 3 APPROVED. 18 tests
   (tests/test_wc_regulation.py); suite 1268.
 - **WC-ACC-03 — Bet-slip builder + combined-edge readout (INFORMATIVE — CONFIRMED).**
-  Session-state bet slip in the My Bets tab. "➕ Add to slip" on the model value picks
-  (extend the existing log-from-advice control) + manual add. Slip panel: legs,
-  combined odds, stake, potential payout, "Log accumulator." INFORMATIVE combined
-  model-prob + edge readout for the slip the user built, + a CORRELATION WARNING when
-  two legs share a match (multiplying correlated odds is invalid). NO recommender.
-  AC: add/remove legs · combined odds + payout update live · logs a valid acca (≥2
-  legs) · same-match legs trigger the warning · never suggests combos.
+  ✅ DONE (2026-07-01). Session-state bet slip (`wc_acca_slip`) in the My Bets tab
+  (`world_cup._render_bet_slip`): manual add-leg (match/market/selection/odds) +
+  "➕ Add to slip" on the model value picks (extends `_render_log_pick_control`,
+  captures model_prob/edge frozen). Slip panel: removable legs, live combined odds +
+  potential payout, "🎫 Log accumulator" (≥2 legs + stake>0 → reuses WC-ACC-01
+  `log_wc_accumulator`), Clear slip. NEW pure `bets.accumulator_slip_readout`:
+  combined_odds (product), implied_prob, combined MODEL prob (product of per-leg
+  probs, only when ALL legs have one), edge (model−implied), same-match `correlated`
+  groups. INFORMATIVE readout shown only when every leg has a model estimate (framed
+  "not a recommendation"); CORRELATION WARNING (`st.warning`) when 2+ legs share a
+  match (independence assumption breaks). Pure escaped HTML helpers
+  `_slip_leg_row_html`/`_slip_readout_html`. NO recommender. Shadow-safe (value_finder
+  /predictor empty diff). AC 5/5: add/remove legs · combined odds+payout live · logs a
+  valid acca (≥2) · same-match warning · never suggests combos. Gate 2 CLEAN · Gate 3
+  APPROVED. 6 tests (22 in test_wc_accumulator.py); suite 1274. PNG proof on Desktop.
 - **WC-ACC-04 — Display accumulators + pipeline settlement.** Parent row (combined
   odds, stake, status, payout) with EXPANDABLE legs in the My Bets list; fold acca
   P&L into the scoreboard + cumulative-P&L chart (merge singles + accas); wire

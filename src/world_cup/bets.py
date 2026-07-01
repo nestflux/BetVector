@@ -528,3 +528,55 @@ def load_wc_accumulators(user_id: int) -> list:
         return out
     except Exception:
         return []
+
+
+def accumulator_slip_readout(legs) -> dict:
+    """INFORMATIVE combined readout for a bet slip the user is building (WC-ACC-03).
+
+    A CALCULATOR, not a recommender — it never suggests a combination, it only
+    describes the one the user assembled:
+      * combined_odds  — product of the leg odds (what the parlay pays per unit)
+      * implied_prob   — 1 / combined_odds (the market's implied chance of it landing)
+      * model_prob     — product of the per-leg model probabilities, but ONLY when
+                         EVERY leg carries one (a missing leg makes the product
+                         meaningless); None otherwise
+      * edge           — model_prob − implied_prob (None if model_prob is None)
+      * correlated     — same-match groups: any match with >1 leg on the slip
+
+    The combined model prob / edge ASSUME the legs are independent (their joint
+    probability is the product of the singles). That's why same-match legs are
+    surfaced in ``correlated``: their outcomes are correlated, so multiplying their
+    odds/probabilities is invalid and the combined numbers can't be trusted for them.
+    Pure — takes the session-state slip, returns a dict; never raises."""
+    legs = list(legs)
+    combined = 1.0
+    for lg in legs:
+        combined *= float(lg["odds"])
+    combined = round(combined, 4)
+    implied = round(1.0 / combined, 4) if combined > 0 else None
+
+    probs = [lg.get("model_prob") for lg in legs]
+    model_prob = None
+    if legs and all(p is not None for p in probs):
+        mp = 1.0
+        for p in probs:
+            mp *= float(p)
+        model_prob = round(mp, 4)
+    edge = (round(model_prob - implied, 4)
+            if (model_prob is not None and implied is not None) else None)
+
+    # Same-match correlation — any match_id that appears on more than one leg.
+    groups: dict = {}
+    for lg in legs:
+        groups.setdefault(lg.get("match_id"), []).append(lg)
+    correlated = [
+        {"match_id": mid,
+         "label": f'{grp[0].get("home", "?")} v {grp[0].get("away", "?")}',
+         "count": len(grp)}
+        for mid, grp in groups.items() if len(grp) > 1
+    ]
+
+    return {
+        "n_legs": len(legs), "combined_odds": combined, "implied_prob": implied,
+        "model_prob": model_prob, "edge": edge, "correlated": correlated,
+    }

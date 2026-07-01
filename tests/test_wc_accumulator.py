@@ -22,8 +22,8 @@ import src.database.models  # noqa: E402,F401  (register User/users table on Bas
 from src.database.db import Base  # noqa: E402
 from src.world_cup.bets import (  # noqa: E402
     accumulator_effective_odds, accumulator_odds, accumulator_pnl,
-    accumulator_status, load_wc_accumulators, log_wc_accumulator,
-    settle_wc_accumulators,
+    accumulator_slip_readout, accumulator_status, load_wc_accumulators,
+    log_wc_accumulator, settle_wc_accumulators,
 )
 from src.world_cup.models import WCAccaLeg, WCAccumulator, WCMatch, WCTeam  # noqa: E402
 
@@ -255,3 +255,86 @@ def test_new_tables_registered_on_base():
     # create_all builds these on both SQLite (local) and Postgres (Neon)
     assert "wc_accumulator" in Base.metadata.tables
     assert "wc_acca_leg" in Base.metadata.tables
+
+
+# ---- WC-ACC-03: slip builder readout + view wiring --------------------------
+
+def test_slip_readout_combined_and_edge():
+    legs = [
+        {"match_id": 1, "home": "A", "away": "B", "odds": 2.0, "model_prob": 0.55},
+        {"match_id": 2, "home": "C", "away": "D", "odds": 3.0, "model_prob": 0.40},
+    ]
+    r = accumulator_slip_readout(legs)
+    assert r["n_legs"] == 2
+    assert r["combined_odds"] == 6.0
+    assert r["implied_prob"] == round(1 / 6.0, 4)
+    assert r["model_prob"] == round(0.55 * 0.40, 4)          # 0.22, independence assumed
+    assert r["edge"] == round(0.22 - (1 / 6.0), 4)           # +5.3pp
+    assert r["correlated"] == []
+
+
+def test_slip_readout_missing_model_prob_hides_edge():
+    legs = [
+        {"match_id": 1, "home": "A", "away": "B", "odds": 2.0, "model_prob": 0.55},
+        {"match_id": 2, "home": "C", "away": "D", "odds": 3.0},   # manual leg, no prob
+    ]
+    r = accumulator_slip_readout(legs)
+    assert r["combined_odds"] == 6.0
+    assert r["model_prob"] is None and r["edge"] is None       # one leg lacks an estimate
+
+
+def test_slip_readout_same_match_correlation():
+    legs = [
+        {"match_id": 7, "home": "A", "away": "B", "odds": 2.0},
+        {"match_id": 7, "home": "A", "away": "B", "odds": 1.8},   # same match -> correlated
+        {"match_id": 9, "home": "C", "away": "D", "odds": 2.5},
+    ]
+    r = accumulator_slip_readout(legs)
+    assert len(r["correlated"]) == 1
+    assert r["correlated"][0]["match_id"] == 7
+    assert r["correlated"][0]["count"] == 2
+    assert r["correlated"][0]["label"] == "A v B"
+
+
+def test_slip_readout_empty():
+    r = accumulator_slip_readout([])
+    assert r["n_legs"] == 0 and r["combined_odds"] == 1.0
+    assert r["model_prob"] is None and r["correlated"] == []
+
+
+HUB_SRC_ACC = (ROOT / "src" / "delivery" / "views" / "world_cup.py").read_text()
+
+
+def test_slip_builder_wired():
+    assert "def _render_bet_slip" in HUB_SRC_ACC
+    assert "_render_bet_slip(uid)" in HUB_SRC_ACC             # called in My Bets
+    assert "accumulator_slip_readout(" in HUB_SRC_ACC          # combined readout
+    assert "log_wc_accumulator(" in HUB_SRC_ACC                # logs the acca
+    assert "wc_acca_slip" in HUB_SRC_ACC                       # session-state slip
+    assert "➕ Add to slip" in HUB_SRC_ACC                     # stage from a value pick
+    compile(HUB_SRC_ACC, "world_cup.py", "exec")
+
+
+def test_slip_html_helpers_render():
+    import ast
+    from html import escape as _esc
+    ns = {
+        "escape": _esc, "GREEN": "#3FB950", "RED": "#F85149", "TEXT": "#E6EDF3",
+        "TEXT_DIM": "#8B949E", "BORDER": "#30363D", "SURFACE": "#161B22",
+        "YELLOW": "#D29922", "ACCENT": "#58A6FF",
+        "_SEL_LABELS": {"over": "Over", "home": "Home"},
+    }
+    pure = {"_slip_leg_row_html", "_slip_readout_html"}
+    for node in ast.parse(HUB_SRC_ACC).body:
+        if isinstance(node, ast.FunctionDef) and node.name in pure:
+            exec(compile(ast.Module(body=[node], type_ignores=[]), "<wc>", "exec"), ns)
+
+    leg = ns["_slip_leg_row_html"]({
+        "market_type": "OU25", "market_label": "Over/Under 2.5", "selection": "over",
+        "home": "Brazil", "away": "Spain", "odds": 1.9, "source": "research_card"})
+    assert "Brazil v Spain" in leg and "@1.90" in leg and "🎯" in leg
+
+    readout = {"n_legs": 3, "combined_odds": 7.5, "implied_prob": 0.1333,
+               "model_prob": 0.18, "edge": 0.0467, "correlated": []}
+    out = ns["_slip_readout_html"](readout, 10.0, 75.0)
+    assert "7.50" in out and "$75.00" in out and "+4.7%" in out and "18.0%" in out
