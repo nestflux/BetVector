@@ -180,6 +180,54 @@ def reactivate_user(user_id: int) -> bool:
         return False
 
 
+def update_user_profile(user_id, name=None, email=None):
+    """Owner-driven edit of an existing account's display name and/or login email
+    (UM-02).  Only the fields that are passed change.
+
+    Validation:
+    - ``name`` (if given): non-empty after stripping.
+    - ``email`` (if given): looks like an address AND is not already used by
+      ANOTHER user — email IS the login, so a collision would let two accounts
+      claim the same sign-in.  Stored lowercased/trimmed, matching account creation.
+
+    Returns ``(ok, message)`` — ``message`` is a user-facing error when ``ok`` is
+    False, or a short success note otherwise.  Never raises.
+    """
+    new_name = name.strip() if name is not None else None
+    new_email = email.strip().lower() if email is not None else None
+
+    if new_name is not None and not new_name:
+        return False, "Name can't be empty."
+    if new_email is not None:
+        # Light structural check (an "@" with a dotted domain) — mirrors the
+        # admin create form; the real guard is the uniqueness check below.
+        domain = new_email.split("@")[-1] if "@" in new_email else ""
+        if "@" not in new_email or "." not in domain:
+            return False, "Please enter a valid email address."
+
+    try:
+        with get_session() as session:
+            user = session.get(User, user_id)
+            if user is None:
+                return False, "User not found."
+            if new_email is not None:
+                clash = (
+                    session.query(User)
+                    .filter(User.email == new_email, User.id != user_id)
+                    .first()
+                )
+                if clash is not None:
+                    return False, "That email is already used by another account."
+                user.email = new_email
+            if new_name is not None:
+                user.name = new_name
+            user.updated_at = datetime.utcnow().isoformat()
+            session.commit()
+        return True, "Profile updated."
+    except Exception:
+        return False, "Could not update the profile — please try again."
+
+
 def delete_user(user_id: int) -> bool:
     """Permanently delete a viewer account and all its bet history.
 

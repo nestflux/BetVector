@@ -45,6 +45,7 @@ from src.delivery.views._user_ops import (
     delete_user,
     reactivate_user,
     reset_bankroll,
+    update_user_profile,
 )
 
 
@@ -364,6 +365,40 @@ for u in all_users:
     # Placed below the row columns so it doesn't push the layout sideways.
     placed_count = get_user_placed_count(u["id"])
     with st.expander(f"⚙️ Manage {u['name']}", expanded=False):
+        # -- Edit profile (name + login email) --
+        st.markdown(
+            f'<div style="font-family: Inter, sans-serif; font-size: 13px; '
+            f'font-weight: 600; color: {COLOURS["text"]}; margin-bottom: 4px;">'
+            f'Edit Profile</div>',
+            unsafe_allow_html=True,
+        )
+        with st.form(f"admin_edit_profile_{u['id']}", border=False):
+            edit_col1, edit_col2 = st.columns(2)
+            with edit_col1:
+                edit_name = st.text_input(
+                    "Name", value=u["name"], key=f"admin_edit_name_{u['id']}",
+                )
+            with edit_col2:
+                edit_email = st.text_input(
+                    "Email (login)",
+                    # load_all_users_admin stores "—" for a NULL email; show blank.
+                    value="" if u["email"] == "—" else u["email"],
+                    key=f"admin_edit_email_{u['id']}",
+                    help="This is the address the user signs in with.",
+                )
+            if st.form_submit_button("Save profile", type="secondary"):
+                ok, msg = update_user_profile(
+                    u["id"], name=edit_name, email=edit_email,
+                )
+                if ok:
+                    st.toast(
+                        f"Updated {edit_name.strip() or u['name']}", icon="✅",
+                    )
+                    st.rerun()
+                else:
+                    st.warning(msg)
+
+        st.divider()
         action_col1, action_col2 = st.columns(2)
 
         # -- Reset Bankroll --
