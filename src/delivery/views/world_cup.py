@@ -1722,6 +1722,28 @@ def _render_qualify_hint(fixture: dict, selection: str) -> None:
                "approximation (win in 90 + ½ draw), not a recommendation.")
 
 
+def _book_options(match_id: int):
+    """WC-ODDS-01: bookmaker-selector options for a match — the stored books (default
+    book first) + "Best price". Returns (options, default_index)."""
+    from src.world_cup.tracker_odds import default_bookmaker, wc_odds_books
+    books = wc_odds_books(match_id)
+    opts = (books + ["Best price"]) if books else ["Best price"]
+    dbk = default_bookmaker()
+    idx = opts.index(dbk) if dbk in opts else len(opts) - 1
+    return opts, idx
+
+
+def _suggest_odds(match_id: int, market_type: str, selection: str, book: str):
+    """WC-ODDS-01: stored-odds suggestion for the picked book, falling back to best
+    price when that book has no line for it. Returns {"odds", "bookmaker"} or None
+    (BTTS / QUALIFY / an unstored O/U line -> None; BTTS auto-fetch is WC-ODDS-02)."""
+    from src.world_cup.tracker_odds import wc_odds_lookup
+    s = wc_odds_lookup(match_id, market_type, selection, bookmaker=book)
+    if s is None and book != "Best price":
+        s = wc_odds_lookup(match_id, market_type, selection, bookmaker=None)
+    return s
+
+
 def _bet_summary_html(s: dict) -> str:
     """Running-P&L scoreboard strip. Net P&L / ROI coloured green(+) / red(−)."""
     net = s["net_pnl"]
@@ -1854,7 +1876,7 @@ def _render_bet_slip(uid: int) -> None:
         if fixtures:
             labels = [f["label"] for f in fixtures]
             fmeta = {f["label"]: f for f in fixtures}
-            c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
+            c1, c2, c3, c4, c5 = st.columns([2, 1, 1, 1.2, 1])
             with c1:
                 fx = st.selectbox("Match", labels, key="wcacca_match")
             # WC-QUAL: "To qualify" is offered only for knockout ties; the match-result
@@ -1868,19 +1890,36 @@ def _render_bet_slip(uid: int) -> None:
                 selection = st.selectbox("Selection", list(WC_MARKETS[market]),
                                          key="wcacca_sel",
                                          format_func=lambda x: _SEL_LABELS.get(x, x))
+            # WC-ODDS-01: per-leg bookmaker (FanDuel default) + odds auto-fill.
+            leg_match_id = fmeta[fx]["id"]
+            leg_book_opts, leg_bk_idx = _book_options(leg_match_id)
             with c4:
-                odds = st.number_input("Odds", min_value=1.01, value=2.00, step=0.05,
-                                       key="wcacca_odds")
+                leg_book = st.selectbox("Bookmaker", leg_book_opts, index=leg_bk_idx,
+                                        key="wcacca_book")
+            leg_sugg = _suggest_odds(leg_match_id, market, selection, leg_book)
+            with c5:
+                odds = st.number_input(
+                    "Odds", min_value=1.01,
+                    value=float(leg_sugg["odds"]) if leg_sugg else 2.00, step=0.05,
+                    key=f"wcacca_odds_{leg_match_id}_{market}_{selection}_{leg_book}")
+            if leg_sugg:
+                st.caption(f"↳ {leg_sugg['bookmaker']} {leg_sugg['odds']:.2f} — edit "
+                           "to your price.")
+            elif market == "BTTS":
+                st.caption("BTTS odds aren't pre-loaded — enter manually.")
             if market == "QUALIFY":   # WC-QUAL-03 informational qualify-chance
                 _render_qualify_hint(fmeta[fx], selection)
             if st.button("➕ Add leg", key="wcacca_addleg"):
                 fm = fmeta[fx]
+                leg_bookmaker = (leg_sugg["bookmaker"] if leg_sugg
+                                 else (None if leg_book == "Best price" else leg_book))
                 slip.append({
                     "match_id": fm["id"], "home": fm.get("home"),
                     "away": fm.get("away"), "market_type": market,
                     "market_label": market_label_for(market, sel_stage),
                     "selection": selection, "odds": float(odds),
-                    "model_prob": None, "edge": None, "source": "manual",
+                    "model_prob": None, "edge": None, "bookmaker": leg_bookmaker,
+                    "source": "manual",
                 })
                 st.session_state["wc_acca_slip"] = slip
                 st.rerun()
@@ -2064,18 +2103,33 @@ def _render_my_bets() -> None:
                     format_func=lambda x: _SEL_LABELS.get(x, x))
             if market == "QUALIFY":   # WC-QUAL-03 informational qualify-chance
                 _render_qualify_hint(fmeta[fx], selection)
-            c4, c5, c6 = st.columns([1, 1, 2])
+            # WC-ODDS-01: bookmaker selector (FanDuel default) + odds auto-fill from
+            # the stored book price (falls back to best price; editable).
+            match_id = fmeta[fx]["id"]
+            book_opts, bk_idx = _book_options(match_id)
+            c4, c5, c6 = st.columns([1.3, 1, 1])
             with c4:
-                odds = st.number_input("Odds", min_value=1.01, value=2.00,
-                                       step=0.05, key="wcbet_odds")
+                book = st.selectbox("Bookmaker", book_opts, index=bk_idx,
+                                    key="wcbet_book")
+            sugg = _suggest_odds(match_id, market, selection, book)
             with c5:
+                odds = st.number_input(
+                    "Odds", min_value=1.01,
+                    value=float(sugg["odds"]) if sugg else 2.00, step=0.05,
+                    key=f"wcbet_odds_{match_id}_{market}_{selection}_{book}")
+            with c6:
                 stake = st.number_input("Stake ($)", min_value=0.0, value=10.0,
                                         step=5.0, key="wcbet_stake")
-            with c6:
-                book = st.text_input("Bookmaker (optional)", key="wcbet_book")
+            if sugg:
+                st.caption(f"↳ auto-filled from {sugg['bookmaker']} "
+                           f"({sugg['odds']:.2f}) — edit to your actual price.")
+            elif market == "BTTS":
+                st.caption("BTTS odds aren't pre-loaded — enter manually.")
             if st.button("Log bet", type="primary", key="wcbet_log"):
-                bid = log_wc_bet(uid, fmeta[fx]["id"], market, selection, float(odds),
-                                 float(stake), bookmaker=(book or None),
+                logged_book = (sugg["bookmaker"] if sugg
+                               else (None if book == "Best price" else book))
+                bid = log_wc_bet(uid, match_id, market, selection, float(odds),
+                                 float(stake), bookmaker=logged_book,
                                  source="manual")
                 if bid:
                     st.toast("✅ Bet logged", icon="✅")

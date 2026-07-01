@@ -238,6 +238,10 @@ scraping:
     #   h2h = match result (1X2 — home/draw/away)
     #   totals = over/under goals (1.5, 2.5, 3.5)
     markets: "h2h,totals"
+    # WC-ODDS: default bookmaker pre-selected in the bet-tracker odds auto-fill.
+    # The selector still offers every stored book + "Best price"; FanDuel is a US
+    # book, aligning with the on-demand BTTS pull (US region).
+    default_bookmaker: "FanDuel"
     # Bookmaker key → display name mapping
     # Keys are lowercase string identifiers used by The Odds API
     bookmaker_map:
