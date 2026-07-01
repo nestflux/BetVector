@@ -2202,3 +2202,62 @@ User-scoped (user_id); markets 1X2 / O-U 1.5·2.5·3.5 / BTTS.
 Tests: `tests/test_wc_bet_tracker.py`. Owner-approved 2026-06-29 (inline logging
 chosen; the accumulator/parlay variant — multi-leg, combined odds, all-legs-must-win
 — is deferred to a follow-up to be plan-first, chip task_e5f58071).
+
+---
+
+## WC-ACC — Accumulator (Parlay) Bets · PLANNED (owner-approved 2026-06-29, NOT yet built)
+
+Extends the WC bet tracker (WC-BET) to **accumulators**: multiple legs as one bet,
+all legs must win, combined odds = product of the legs. **Calculator + tracker, NOT
+a recommender** — the user builds the slip; the system computes combined odds/payout,
+settles all-legs-must-win, and tracks P&L; it never picks the combination. Owner
+confirmed the *informative* combined-edge display (WC-ACC-03). Shadow-safe,
+user-scoped; reuses `betting.tracker._did_bet_win` per leg; never touches the
+model/value/prediction path.
+
+**Schema (decided):**
+- `wc_accumulator` (parent): id, user_id (FK), stake, combined_odds (frozen at log),
+  status (pending/won/lost/void), pnl, source, notes, placed_at, settled_at.
+- `wc_acca_leg` (legs): id, accumulator_id (FK), match_id (FK), market_type,
+  selection, odds, status, settled_at.
+- `wc_bet_log` (singles) unchanged; the My Bets scoreboard + cumulative-P&L chart
+  MERGE singles + accumulators for combined P&L.
+
+**Issues:**
+- **WC-ACC-01 — Data model + settlement engine.** New `wc_accumulator` + `wc_acca_leg`
+  tables (created local + Neon). Pure fns in `world_cup.bets`: `accumulator_odds`
+  (product of leg odds), `accumulator_status` (lost if ANY leg lost; won if ALL win;
+  void legs excluded; pending until all resolve; void if all void), `accumulator_pnl`
+  (effective odds recompute EXCLUDING void legs), `settle_wc_accumulators`
+  (idempotent, pipeline-safe), `log_wc_accumulator` (≥2 legs; each valid
+  market/selection + odds>1; stake>0). AC: combined odds correct · one losing leg →
+  whole acca lost · all-win → payout = stake×combined · void leg drops out + odds
+  recompute · pending until all settle · idempotent · user-scoped · never raises.
+- **WC-ACC-02 — Knockout 90-minute settlement (correctness; ALSO fixes singles).**
+  Match-result / O-U / BTTS legs settle on the 90-MINUTE score (bookmaker
+  convention), not extra-time/penalties. Investigate ESPN regulation vs final score;
+  store the regulation score (nullable home_goals_ft/away_goals_ft or a flag); settle
+  knockout legs off it. Group stage unaffected (always 90 min). AC: a KO tie won on
+  penalties (1-1 after 90) settles a "home win" leg as NOT won · group-stage
+  settlement unchanged · singles + acca legs both use the correct score.
+- **WC-ACC-03 — Bet-slip builder + combined-edge readout (INFORMATIVE — CONFIRMED).**
+  Session-state bet slip in the My Bets tab. "➕ Add to slip" on the model value picks
+  (extend the existing log-from-advice control) + manual add. Slip panel: legs,
+  combined odds, stake, potential payout, "Log accumulator." INFORMATIVE combined
+  model-prob + edge readout for the slip the user built, + a CORRELATION WARNING when
+  two legs share a match (multiplying correlated odds is invalid). NO recommender.
+  AC: add/remove legs · combined odds + payout update live · logs a valid acca (≥2
+  legs) · same-match legs trigger the warning · never suggests combos.
+- **WC-ACC-04 — Display accumulators + pipeline settlement.** Parent row (combined
+  odds, stake, status, payout) with EXPANDABLE legs in the My Bets list; fold acca
+  P&L into the scoreboard + cumulative-P&L chart (merge singles + accas); wire
+  `settle_wc_accumulators` into the morning + evening pipeline. AC: accas display with
+  expandable legs + correct status/P&L · scoreboard + chart include acca P&L ·
+  pipeline settles accas · read-time settlement keeps the display consistent.
+- **WC-ACC-05 — Review + docs.** Independent code-review agent (money/P&L, settlement
+  edge cases incl. void + knockout, multi-user isolation, shadow safety); live
+  verification (build + log an acca + settle it); masterplan/build-plan docs (Rule 8
+  Tier-1) + version bump.
+
+Tests: `tests/test_wc_accumulator.py`. Each issue runs the full review gates +
+commit/push, exactly like WC-BET. Supersedes follow-up chip task_e5f58071.
