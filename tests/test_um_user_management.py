@@ -263,3 +263,49 @@ def test_reset_everything_removes_wc_bets(db):
         assert s.query(WCBetLog).filter_by(user_id=uid).count() == 0
         assert s.query(WCAccumulator).filter_by(user_id=uid).count() == 0
         assert s.query(WCAccaLeg).count() == 0
+
+
+# ============================================================================
+# UM-04 — Change user role
+# ============================================================================
+from src.delivery.views._user_ops import set_user_role  # noqa: E402
+
+
+def test_set_role_promote_viewer_to_owner(db):
+    uid = _mk_user(db, role="viewer")
+    assert set_user_role(uid, "owner") is True
+    with db() as s:
+        assert s.get(User, uid).role == "owner"
+
+
+def test_set_role_demote_owner_when_another_owner_exists(db):
+    owner1 = _mk_user(db, name="O1", email="o1@x.com", role="owner")  # noqa: F841
+    owner2 = _mk_user(db, name="O2", email="o2@x.com", role="owner")
+    assert set_user_role(owner2, "viewer") is True                    # o1 still owner
+    with db() as s:
+        assert s.get(User, owner2).role == "viewer"
+
+
+def test_set_role_blocks_last_owner_demotion(db):
+    only_owner = _mk_user(db, name="Solo", email="solo@x.com", role="owner")
+    _mk_user(db, name="V", email="v@x.com", role="viewer")            # viewers don't count
+    assert set_user_role(only_owner, "viewer") is False              # refused
+    with db() as s:
+        assert s.get(User, only_owner).role == "owner"               # unchanged
+
+
+def test_set_role_rejects_invalid_role(db):
+    uid = _mk_user(db, role="viewer")
+    assert set_user_role(uid, "superadmin") is False
+    with db() as s:
+        assert s.get(User, uid).role == "viewer"
+
+
+def test_set_role_missing_user(db):
+    assert set_user_role(99999, "owner") is False
+
+
+def test_admin_view_wires_role_change():
+    src = (ROOT / "src" / "delivery" / "views" / "admin.py").read_text()
+    assert "set_user_role" in src and "Update role" in src
+    compile(src, "admin.py", "exec")

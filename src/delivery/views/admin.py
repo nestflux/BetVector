@@ -45,6 +45,7 @@ from src.delivery.views._user_ops import (
     delete_user,
     reactivate_user,
     reset_bankroll,
+    set_user_role,
     update_user_profile,
 )
 
@@ -397,6 +398,34 @@ for u in all_users:
                     st.rerun()
                 else:
                     st.warning(msg)
+
+        # -- Change role (viewer <-> owner; the last owner can't be demoted) --
+        role_col1, role_col2 = st.columns([2, 1])
+        with role_col1:
+            new_role_sel = st.selectbox(
+                "Role",
+                options=["viewer", "owner"],
+                index=0 if u["role"] == "viewer" else 1,
+                key=f"admin_role_{u['id']}",
+                help="Owner: full admin access. Viewer: sees picks, tracks own bankroll.",
+            )
+        with role_col2:
+            # Spacer so the button lines up with the selectbox input, not its label.
+            st.markdown("<div style='height: 28px'></div>", unsafe_allow_html=True)
+            if st.button(
+                "Update role",
+                key=f"admin_setrole_{u['id']}",
+                type="secondary",
+                disabled=(new_role_sel == u["role"]),
+                use_container_width=True,
+            ):
+                if set_user_role(u["id"], new_role_sel):
+                    st.toast(f"{u['name']} is now {new_role_sel}", icon="✅")
+                    st.rerun()
+                else:
+                    st.error(
+                        "Couldn't change role — the last owner can't be demoted."
+                    )
 
         st.divider()
         action_col1, action_col2 = st.columns(2)
