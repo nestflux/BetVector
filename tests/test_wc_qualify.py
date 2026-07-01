@@ -23,7 +23,8 @@ from src.database.db import Base  # noqa: E402
 import src.world_cup.regulation as reg_mod  # noqa: E402
 from src.world_cup.bets import (  # noqa: E402
     _did_qualify, bet_result, is_valid_selection, load_wc_accumulators, load_wc_bets,
-    log_wc_accumulator, log_wc_bet, settle_wc_accumulators, settle_wc_bets,
+    log_wc_accumulator, log_wc_bet, market_label_for, settle_wc_accumulators,
+    settle_wc_bets,
 )
 from src.world_cup.regulation import reconcile_knockout_regulation  # noqa: E402
 from src.world_cup.models import WCMatch, WCTeam  # noqa: E402
@@ -226,3 +227,50 @@ def test_reconcile_maps_flipped_pens_orientation(monkeypatch, db):
         # stored home is Morocco -> home_pens should be Morocco's 2, not Spain's 4
         assert m.home_pens == 2 and m.away_pens == 4
         assert _did_qualify(m, "away") is True     # Spain (stored away) advanced
+
+
+# ---- WC-QUAL-02: knockout-aware labels + UI gating --------------------------
+
+HUB_SRC = (ROOT / "src" / "delivery" / "views" / "world_cup.py").read_text()
+
+
+def test_market_label_for_knockout_aware():
+    assert market_label_for("1X2", "group") == "Match result"
+    assert market_label_for("1X2", None) == "Match result"          # unknown stage
+    assert market_label_for("1X2", "round_of_32") == "Match result (90 min)"
+    assert market_label_for("QUALIFY", "round_of_16") == "To qualify"
+    assert market_label_for("OU25", "round_of_32") == "Over/Under 2.5"
+
+
+def test_loaders_use_knockout_aware_label(db):
+    ko = _match(db, stage="round_of_32", home_goals=2, away_goals=1)
+    grp = _match(db, stage="group", home_goals=2, away_goals=1)
+    log_wc_bet(1, ko, "1X2", "home", 2.0, 10.0)
+    log_wc_bet(1, ko, "QUALIFY", "home", 1.6, 10.0)
+    log_wc_bet(1, grp, "1X2", "home", 2.0, 10.0)
+    by = {(b["match_id"], b["market_type"]): b["market_label"] for b in load_wc_bets(1)}
+    assert by[(ko, "1X2")] == "Match result (90 min)"    # knockout 1X2 relabelled
+    assert by[(ko, "QUALIFY")] == "To qualify"
+    assert by[(grp, "1X2")] == "Match result"            # group keeps plain label
+
+
+def test_acca_leg_uses_knockout_aware_label(db):
+    ko = _match(db, stage="round_of_32", home_goals=2, away_goals=1)
+    grp = _match(db, stage="group", home_goals=3, away_goals=0,
+                 home="Brazil", away="Chile")
+    log_wc_accumulator(1, [
+        {"match_id": ko, "market_type": "1X2", "selection": "home", "odds": 2.0},
+        {"match_id": grp, "market_type": "1X2", "selection": "home", "odds": 1.5},
+    ], 10.0)
+    legs = {lg["match_id"]: lg["market_label"]
+            for lg in load_wc_accumulators(1)[0]["legs"]}
+    assert legs[ko] == "Match result (90 min)" and legs[grp] == "Match result"
+
+
+def test_qualify_ui_gating_wired():
+    # "To qualify" offered only for knockout matches — gated in BOTH selectors
+    # (the log form + the slip builder).
+    assert HUB_SRC.count('m != "QUALIFY" or sel_stage != "group"') >= 2
+    assert "market_label_for(m, sel_stage)" in HUB_SRC     # knockout-aware label in UI
+    assert '"stage": m.stage' in HUB_SRC                    # fixtures expose the stage
+    compile(HUB_SRC, "world_cup.py", "exec")

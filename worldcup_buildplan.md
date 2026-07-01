@@ -2356,13 +2356,18 @@ this per-tie "to advance." This epic is the knockout-tie market only.
   unresolved advancement → pending · idempotent · never raises · shadow-safe. Gate 2
   CLEAN · Gate 3 APPROVED (money-settlement correct; refactor provably behaviour-
   preserving for the 90-min/void path). 13 tests (tests/test_wc_qualify.py); suite 1293.
-- **WC-QUAL-02 — UI: log + slip + display.** The market dropdown offers "To qualify"
-  ONLY for knockout matches (log form + slip builder); relabel 1X2 → "Match result
-  (90 min)" on knockouts so the two sit side by side. QUALIFY bets / legs display +
-  settle in the existing lists (singles + expandable acca legs). The value-pick
-  "➕ Add to slip / Log" flow stays 1X2 / O-U / BTTS only (QUALIFY is manual). AC: log
-  a QUALIFY single + acca leg on a KO match · not offered on group matches · displays
-  + settles correctly · value-pick flow unchanged.
+- **WC-QUAL-02 — UI: log + slip + display.** ✅ DONE (2026-07-01). New pure
+  `bets.market_label_for(market, stage)` (knockout-aware label: 1X2 → "Match result
+  (90 min)" on a KO, else plain; "To qualify" for QUALIFY); load_wc_bets +
+  load_wc_accumulators set market_label through it. `_wc_betting_fixtures` returns the
+  stage; the log form (_render_my_bets) + slip builder (_render_bet_slip) build the
+  market list as `[m for m in WC_MARKETS if m != "QUALIFY" or sel_stage != "group"]`
+  (QUALIFY offered ONLY on knockouts) + use market_label_for as the selectbox label.
+  Value-pick flow byte-for-byte unchanged (QUALIFY structurally unreachable — manual
+  only). Label/UI-only: the WC-QUAL-01 settlement engine untouched. Gate 2 CLEAN ·
+  Gate 3 APPROVED (Streamlit AppTest confirmed the selector gracefully resets a stale
+  QUALIFY pick; no regression). 4 tests (17 in test_wc_qualify.py); suite 1297. PNG
+  proof on Desktop (same KO: "To qualify" won vs "Match result (90 min)" lost).
 - **WC-QUAL-03 — Informational qualify-chance (display-only).** Pure
   `qualify_estimate` = P(win 90) + ½·P(draw 90) from the stored `WCPrediction` probs,
   shown as a clearly-labelled approximation when a QUALIFY selection is chosen — never

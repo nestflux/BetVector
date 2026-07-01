@@ -1682,7 +1682,7 @@ def _wc_betting_fixtures() -> list:
             away = m.away_team.name if m.away_team else "?"
             tag = "" if m.status == "scheduled" else " (FT)"
             out.append({"id": m.id, "date": m.date, "status": m.status,
-                        "home": home, "away": away,
+                        "home": home, "away": away, "stage": m.stage,
                         "label": f"{m.date} · {home} v {away}{tag}"})
     except Exception:
         return []
@@ -1807,7 +1807,7 @@ def _render_bet_slip(uid: int) -> None:
     accumulator. Calculator + tracker only — it prices the slip you built, never
     suggests a combination."""
     from src.world_cup.bets import (
-        MARKET_LABELS, WC_MARKETS, accumulator_slip_readout, log_wc_accumulator,
+        WC_MARKETS, accumulator_slip_readout, log_wc_accumulator, market_label_for,
     )
     slip = st.session_state.setdefault("wc_acca_slip", [])
     title = "🎫 Build an accumulator (parlay)" + (f" · {len(slip)} legs" if slip else "")
@@ -1824,10 +1824,13 @@ def _render_bet_slip(uid: int) -> None:
             c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
             with c1:
                 fx = st.selectbox("Match", labels, key="wcacca_match")
+            # WC-QUAL: "To qualify" is offered only for knockout ties; the match-result
+            # market is relabelled "(90 min)" on a knockout so the two are distinct.
+            sel_stage = fmeta[fx]["stage"]
+            markets = [m for m in WC_MARKETS if m != "QUALIFY" or sel_stage != "group"]
             with c2:
-                market = st.selectbox("Market", list(WC_MARKETS.keys()),
-                                      key="wcacca_market",
-                                      format_func=lambda m: MARKET_LABELS.get(m, m))
+                market = st.selectbox("Market", markets, key="wcacca_market",
+                                      format_func=lambda m: market_label_for(m, sel_stage))
             with c3:
                 selection = st.selectbox("Selection", list(WC_MARKETS[market]),
                                          key="wcacca_sel",
@@ -1840,7 +1843,7 @@ def _render_bet_slip(uid: int) -> None:
                 slip.append({
                     "match_id": fm["id"], "home": fm.get("home"),
                     "away": fm.get("away"), "market_type": market,
-                    "market_label": MARKET_LABELS.get(market, market),
+                    "market_label": market_label_for(market, sel_stage),
                     "selection": selection, "odds": float(odds),
                     "model_prob": None, "edge": None, "source": "manual",
                 })
@@ -1961,8 +1964,8 @@ def _render_my_bets() -> None:
     logged-in user; bets auto-settle off final scores (read-time + pipeline)."""
     from src.auth import get_session_user_id
     from src.world_cup.bets import (
-        MARKET_LABELS, WC_MARKETS, combined_bet_summary, combined_pnl_timeline,
-        load_wc_accumulators, load_wc_bets, log_wc_bet,
+        WC_MARKETS, combined_bet_summary, combined_pnl_timeline, load_wc_accumulators,
+        load_wc_bets, log_wc_bet, market_label_for,
     )
     _section_header("My Bets")
     uid = get_session_user_id()
@@ -2009,14 +2012,17 @@ def _render_my_bets() -> None:
             st.caption("No World Cup fixtures available to bet on right now.")
         else:
             labels = [f["label"] for f in fixtures]
-            ids = {f["label"]: f["id"] for f in fixtures}
+            fmeta = {f["label"]: f for f in fixtures}
             c1, c2, c3 = st.columns([2, 1, 1])
             with c1:
                 fx = st.selectbox("Match", labels, key="wcbet_match")
+            # WC-QUAL: offer "To qualify" only for knockout ties; relabel 1X2 there.
+            sel_stage = fmeta[fx]["stage"]
+            markets = [m for m in WC_MARKETS if m != "QUALIFY" or sel_stage != "group"]
             with c2:
                 market = st.selectbox(
-                    "Market", list(WC_MARKETS.keys()), key="wcbet_market",
-                    format_func=lambda m: MARKET_LABELS.get(m, m))
+                    "Market", markets, key="wcbet_market",
+                    format_func=lambda m: market_label_for(m, sel_stage))
             with c3:
                 selection = st.selectbox(
                     "Selection", list(WC_MARKETS[market]),
@@ -2031,7 +2037,7 @@ def _render_my_bets() -> None:
             with c6:
                 book = st.text_input("Bookmaker (optional)", key="wcbet_book")
             if st.button("Log bet", type="primary", key="wcbet_log"):
-                bid = log_wc_bet(uid, ids[fx], market, selection, float(odds),
+                bid = log_wc_bet(uid, fmeta[fx]["id"], market, selection, float(odds),
                                  float(stake), bookmaker=(book or None),
                                  source="manual")
                 if bid:
