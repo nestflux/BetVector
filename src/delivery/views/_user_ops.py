@@ -269,6 +269,39 @@ def update_user_profile(user_id, name=None, email=None):
         return False, "Could not update the profile — please try again."
 
 
+def set_user_role(user_id, role) -> bool:
+    """Change a user's role between ``"viewer"`` and ``"owner"`` (UM-04).
+
+    Last-owner guard: never demote the ONLY owner — the app must always keep at least
+    one owner who can reach the Admin page, or nobody could ever manage users again
+    (mirrors the owner-protection on deactivate/delete). Owners are counted regardless
+    of ``is_active``.
+
+    Returns True on success; False on an invalid role, an unknown user, or a demotion
+    that would leave zero owners. Never raises.
+    """
+    if role not in ("viewer", "owner"):
+        return False
+    try:
+        with get_session() as session:
+            user = session.get(User, user_id)
+            if user is None:
+                return False
+            # Demoting an owner? Refuse if they're the last one standing.
+            if user.role == "owner" and role != "owner":
+                owner_count = (
+                    session.query(User).filter(User.role == "owner").count()
+                )
+                if owner_count <= 1:
+                    return False
+            user.role = role
+            user.updated_at = datetime.utcnow().isoformat()
+            session.commit()
+        return True
+    except Exception:
+        return False
+
+
 def delete_user(user_id: int) -> bool:
     """Permanently delete a viewer account and all its bet history.
 
