@@ -52,6 +52,15 @@ def is_valid_selection(market_type: str, selection: str) -> bool:
     return market_type in WC_MARKETS and selection in WC_MARKETS[market_type]
 
 
+def market_label_for(market_type, stage=None) -> str:
+    """Display label for a market, made knockout-aware (WC-QUAL): on a knockout tie the
+    match-result market reads 'Match result (90 min)' so it sits clearly beside
+    'To qualify'. Group matches (and unknown stage) keep the plain label."""
+    if market_type == "1X2" and stage and stage != "group":
+        return "Match result (90 min)"
+    return MARKET_LABELS.get(market_type, market_type)
+
+
 def bet_outcome(market_type, selection, home_goals, away_goals) -> Optional[bool]:
     """won (True) / lost (False) / void (None) for a finished match — delegates to
     the league outcome logic. Returns None if the match isn't scored yet."""
@@ -238,7 +247,7 @@ def load_wc_bets(user_id: int) -> list:
                     "home_goals": match.home_goals, "away_goals": match.away_goals,
                     "match_status": match.status,
                     "market_type": bet.market_type,
-                    "market_label": MARKET_LABELS.get(bet.market_type, bet.market_type),
+                    "market_label": market_label_for(bet.market_type, match.stage),
                     "selection": bet.selection, "odds": bet.odds, "stake": bet.stake,
                     "bookmaker": bet.bookmaker, "status": status, "pnl": pnl,
                     "model_prob": bet.model_prob, "edge": bet.edge,
@@ -556,8 +565,8 @@ def load_wc_accumulators(user_id: int) -> list:
                         "away_goals": m.away_goals if m else None,
                         "match_status": m.status if m else None,
                         "market_type": leg.market_type,
-                        "market_label": MARKET_LABELS.get(leg.market_type,
-                                                          leg.market_type),
+                        "market_label": market_label_for(leg.market_type,
+                                                         m.stage if m else None),
                         "selection": leg.selection, "odds": leg.odds, "status": st,
                         "model_prob": leg.model_prob, "edge": leg.edge,
                     })
