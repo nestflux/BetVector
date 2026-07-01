@@ -2340,7 +2340,7 @@ teams finish top-2 of a group across 3 matches) — a different multi-match bet,
 this per-tie "to advance." This epic is the knockout-tie market only.
 
 **Issues:**
-- **WC-QUAL-01 — Data + settlement engine.** Add `home_pens` / `away_pens` to
+- **WC-QUAL-01 — Data + settlement engine.** ✅ DONE (2026-07-01). Add `home_pens` / `away_pens` to
   `WCMatch` (migrated local + Neon); `regulation.reconcile_knockout_regulation` also
   captures the shootout score from ESPN (`competitor.shootoutScore`) for finished
   knockouts. New pure `_did_qualify(match, selection)` — advancer = higher a.e.t.
@@ -2353,7 +2353,9 @@ this per-tie "to advance." This epic is the knockout-tie market only.
   `log_wc_accumulator` reject `QUALIFY` on a group match. AC: a KO won on pens settles
   "X to qualify" WON for the advancer / LOST for the loser · "Match result (90 min)"
   still settles on the 90-minute score (unchanged) · group matches reject QUALIFY ·
-  unresolved advancement → pending · idempotent · never raises · shadow-safe.
+  unresolved advancement → pending · idempotent · never raises · shadow-safe. Gate 2
+  CLEAN · Gate 3 APPROVED (money-settlement correct; refactor provably behaviour-
+  preserving for the 90-min/void path). 13 tests (tests/test_wc_qualify.py); suite 1293.
 - **WC-QUAL-02 — UI: log + slip + display.** The market dropdown offers "To qualify"
   ONLY for knockout matches (log form + slip builder); relabel 1X2 → "Match result
   (90 min)" on knockouts so the two sit side by side. QUALIFY bets / legs display +

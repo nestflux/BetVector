@@ -190,6 +190,16 @@ def reconcile_knockout_regulation(today: str | None = None,
                     continue
                 extra_time += 1
                 match.went_to_extra_time = 1
+                # WC-QUAL: capture the shootout score (for the "to qualify" market),
+                # mapping ESPN's orientation onto the stored row. Independent of the
+                # 90-minute reconstruction below — a qualify bet settles on the shootout
+                # even if the regulation score can't be reconstructed.
+                hp, ap = event.get("home_pens"), event.get("away_pens")
+                if hp is not None and ap is not None:
+                    if _to_db_name(event["home_name"]) == home_name:
+                        match.home_pens, match.away_pens = hp, ap
+                    else:
+                        match.home_pens, match.away_pens = ap, hp
                 # Self-check runs against the ESPN event's OWN final score (both come
                 # from the same ESPN feed this run, so they're internally consistent) —
                 # not the stored a.e.t. final.

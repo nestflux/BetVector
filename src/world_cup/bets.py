@@ -34,12 +34,16 @@ WC_MARKETS = {
     "OU25": ("over", "under"),
     "OU35": ("over", "under"),
     "BTTS": ("yes", "no"),
+    # WC-QUAL: knockout-tie "to qualify / to advance" — settles on WHO PROGRESSES
+    # (a.e.t. + penalties), NOT via _did_bet_win. Knockout matches only; no draw.
+    "QUALIFY": ("home", "away"),
 }
 
 # Friendly labels for display (the view can import these).
 MARKET_LABELS = {
     "1X2": "Match result", "OU15": "Over/Under 1.5", "OU25": "Over/Under 2.5",
     "OU35": "Over/Under 3.5", "BTTS": "Both teams to score",
+    "QUALIFY": "To qualify",
 }
 
 
@@ -88,6 +92,45 @@ def settlement_score(match):
     return (int(match.home_goals), int(match.away_goals))
 
 
+def _did_qualify(match, selection) -> Optional[bool]:
+    """Did ``selection`` (home/away) ADVANCE from this knockout tie? — the winner after
+    90 min + extra time + penalties (WC-QUAL). Uses the a.e.t. score (home_goals /
+    away_goals include extra time), tie-broken by the penalty shootout (home_pens /
+    away_pens). Returns None (defer -> pending) until the advancer is resolved: a group
+    match has no per-tie advancer; a level a.e.t. score needs the shootout captured.
+    ``getattr`` defaults keep it safe on older/mock rows."""
+    if getattr(match, "stage", None) == "group":
+        return None
+    if match.status != "finished" or match.home_goals is None \
+            or match.away_goals is None:
+        return None
+    hg, ag = int(match.home_goals), int(match.away_goals)   # a.e.t. score (incl. ET)
+    if hg != ag:
+        winner = "home" if hg > ag else "away"
+    else:
+        hp = getattr(match, "home_pens", None)
+        ap = getattr(match, "away_pens", None)
+        if hp is None or ap is None or int(hp) == int(ap):
+            return None  # level after ET, shootout not captured (or tied) -> defer
+        winner = "home" if int(hp) > int(ap) else "away"
+    return selection == winner
+
+
+def bet_result(match, market_type, selection) -> str:
+    """Settled status of a bet on ``match``: 'won' / 'lost' / 'void' / 'pending'. The
+    single settlement entry point for singles AND accumulator legs. Routes by market:
+    QUALIFY settles on WHO ADVANCED (a.e.t. + penalties); every other market settles on
+    the 90-MINUTE score (WC-ACC-02). Returns 'pending' when not yet settleable."""
+    if market_type == "QUALIFY":
+        won = _did_qualify(match, selection)
+        return "pending" if won is None else ("won" if won else "lost")
+    score = settlement_score(match)
+    if score is None:
+        return "pending"
+    won = _did_bet_win(market_type, selection, score[0], score[1])
+    return "void" if won is None else ("won" if won else "lost")
+
+
 def log_wc_bet(user_id: int, match_id: int, market_type: str, selection: str,
                odds: float, stake: float, *, bookmaker: Optional[str] = None,
                model_prob: Optional[float] = None, edge: Optional[float] = None,
@@ -110,7 +153,12 @@ def log_wc_bet(user_id: int, match_id: int, market_type: str, selection: str,
             # never display (load_wc_bets inner-joins WCMatch) nor settle. Postgres'
             # FK would reject it, but SQLite (local backup) doesn't enforce FKs, so
             # check explicitly.
-            if session.get(WCMatch, match_id) is None:
+            match = session.get(WCMatch, match_id)
+            if match is None:
+                return None
+            # "To qualify" only makes sense for a knockout tie — reject it on a group
+            # match (which has no single per-match advancer).
+            if market_type == "QUALIFY" and getattr(match, "stage", None) == "group":
                 return None
             bet = WCBetLog(
                 user_id=user_id, match_id=match_id, market_type=market_type,
@@ -140,11 +188,10 @@ def settle_wc_bets() -> int:
                 .where(WCBetLog.status == "pending", WCMatch.status == "finished")
             ).all()
             for bet, match in rows:
-                score = settlement_score(match)  # 90-minute score (WC-ACC-02)
-                if score is None:
-                    continue  # not scored / knockout ET score unresolved — leave pending
-                won = _did_bet_win(bet.market_type, bet.selection, score[0], score[1])
-                bet.status = "void" if won is None else ("won" if won else "lost")
+                status = bet_result(match, bet.market_type, bet.selection)
+                if status == "pending":
+                    continue  # not settleable yet (KO 90-min / qualify unresolved)
+                bet.status = status
                 bet.pnl = bet_pnl(bet.status, bet.stake, bet.odds)
                 bet.settled_at = datetime.utcnow().isoformat()
                 settled += 1
@@ -181,11 +228,9 @@ def load_wc_bets(user_id: int) -> list:
                 # result immediately without writing. Settles on the 90-minute score
                 # (WC-ACC-02) — a knockout awaiting ET reconstruction stays pending.
                 if status == "pending" and match.status == "finished":
-                    score = settlement_score(match)
-                    if score is not None:
-                        won = _did_bet_win(bet.market_type, bet.selection,
-                                           score[0], score[1])
-                        status = "void" if won is None else ("won" if won else "lost")
+                    r = bet_result(match, bet.market_type, bet.selection)
+                    if r != "pending":
+                        status = r
                         pnl = bet_pnl(status, bet.stake, bet.odds)
                 out.append({
                     "id": bet.id, "match_id": bet.match_id, "date": match.date,
@@ -341,11 +386,8 @@ def _leg_status(market_type, selection, match) -> str:
         return "void"
     if match.status != "finished":
         return "pending"
-    score = settlement_score(match)
-    if score is None:
-        return "pending"  # finished but 90-minute score not resolved (KO awaiting ET)
-    won = _did_bet_win(market_type, selection, score[0], score[1])
-    return "void" if won is None else ("won" if won else "lost")
+    # Market-aware settlement (WC-QUAL): QUALIFY on advancement, else the 90-min score.
+    return bet_result(match, market_type, selection)
 
 
 def log_wc_accumulator(user_id: int, legs: list, stake: float, *,
@@ -390,7 +432,13 @@ def log_wc_accumulator(user_id: int, legs: list, stake: float, *,
             # but SQLite (local backup) doesn't enforce FKs, so check explicitly — a
             # dangling leg would never settle and would break the display join.
             for leg in clean:
-                if session.get(WCMatch, leg["match_id"]) is None:
+                m = session.get(WCMatch, leg["match_id"])
+                if m is None:
+                    return None
+                # "To qualify" legs are knockout-only — reject the whole slip if one
+                # lands on a group match.
+                if leg["market_type"] == "QUALIFY" \
+                        and getattr(m, "stage", None) == "group":
                     return None
             combined = accumulator_odds([leg["odds"] for leg in clean])
             acca = WCAccumulator(
