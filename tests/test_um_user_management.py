@@ -98,3 +98,70 @@ def test_admin_view_wires_password_reset():
     assert "if not is_self:" in src              # your own account is excluded
     assert "st.code(temp_pw" in src              # one-time display of the temp password
     compile(src, "admin.py", "exec")
+
+
+# ============================================================================
+# UM-02 — Edit name & email
+# ============================================================================
+from src.delivery.views._user_ops import update_user_profile  # noqa: E402
+
+
+def test_update_profile_rename(db):
+    uid = _mk_user(db, name="Old Name")
+    ok, _ = update_user_profile(uid, name="New Name")
+    assert ok
+    with db() as s:
+        assert s.get(User, uid).name == "New Name"
+
+
+def test_update_profile_email_lowercased(db):
+    uid = _mk_user(db, email="old@example.com")
+    ok, _ = update_user_profile(uid, email="  New@Example.COM ")
+    assert ok
+    with db() as s:
+        assert s.get(User, uid).email == "new@example.com"     # trimmed + lowered
+
+
+def test_update_profile_rejects_duplicate_email(db):
+    a = _mk_user(db, name="A", email="a@example.com")          # noqa: F841
+    b = _mk_user(db, name="B", email="b@example.com")
+    ok, msg = update_user_profile(b, email="a@example.com")     # collides with A
+    assert not ok and "already used" in msg.lower()
+    with db() as s:
+        assert s.get(User, b).email == "b@example.com"          # unchanged
+
+
+def test_update_profile_rejects_invalid_email(db):
+    uid = _mk_user(db, email="good@example.com")
+    ok, msg = update_user_profile(uid, email="notanemail")
+    assert not ok and "valid email" in msg.lower()
+    with db() as s:
+        assert s.get(User, uid).email == "good@example.com"     # unchanged
+
+
+def test_update_profile_rejects_empty_name(db):
+    uid = _mk_user(db, name="Keep")
+    ok, msg = update_user_profile(uid, name="   ")
+    assert not ok and "empty" in msg.lower()
+    with db() as s:
+        assert s.get(User, uid).name == "Keep"
+
+
+def test_update_profile_partial_name_only_keeps_email(db):
+    uid = _mk_user(db, name="A", email="keep@example.com")
+    ok, _ = update_user_profile(uid, name="B")                 # email not passed
+    assert ok
+    with db() as s:
+        u = s.get(User, uid)
+        assert u.name == "B" and u.email == "keep@example.com"
+
+
+def test_update_profile_missing_user(db):
+    ok, msg = update_user_profile(99999, name="X")
+    assert not ok and "not found" in msg.lower()
+
+
+def test_admin_view_wires_profile_edit():
+    src = (ROOT / "src" / "delivery" / "views" / "admin.py").read_text()
+    assert "update_user_profile" in src and "Save profile" in src
+    compile(src, "admin.py", "exec")
