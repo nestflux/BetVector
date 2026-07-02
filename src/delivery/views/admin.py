@@ -25,6 +25,7 @@ import html
 from datetime import datetime
 from typing import Dict, List, Optional
 
+import plotly.graph_objects as go
 import streamlit as st
 
 from src.auth import (
@@ -41,6 +42,12 @@ from src.database.models import BetLog, User
 # settings.py has module-level Streamlit rendering code — importing from it
 # would execute that code in the admin page's context, corrupting the layout.
 # _user_ops.py contains only pure DB operations with no Streamlit imports.
+from src.delivery.views._feedback_ops import (
+    load_feedback_questions,
+    load_survey_aggregates,
+    load_text_answers,
+    survey_count,
+)
 from src.delivery.views._user_ops import (
     clear_bet_history,
     deactivate_user,
@@ -742,6 +749,98 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# ---- Questionnaire results (aggregated, FB-04) ----
+# The short structured survey (config-driven, FB-01) aggregated across all testers:
+# a bar per scale / select / multiselect question, and the raw lines for text
+# questions. Higher-signal than the open messages, so it leads.
+_n_surveys = survey_count()
+st.markdown(
+    f'<div style="font-family: Inter, sans-serif; font-size: 13px; '
+    f'font-weight: 600; color: {COLOURS["text"]}; margin: 4px 0 8px 0;">'
+    f'Questionnaire results</div>',
+    unsafe_allow_html=True,
+)
+if _n_surveys == 0:
+    st.markdown(
+        f'<p style="font-family: Inter, sans-serif; font-size: 13px; '
+        f'color: {COLOURS["text_secondary"]};">No questionnaire responses yet.</p>',
+        unsafe_allow_html=True,
+    )
+else:
+    _aggs = load_survey_aggregates()
+    st.markdown(
+        f'<p style="font-family: JetBrains Mono, monospace; font-size: 12px; '
+        f'color: {COLOURS["text_secondary"]}; margin-bottom: 10px;">'
+        f'{_n_surveys} response(s).</p>',
+        unsafe_allow_html=True,
+    )
+    for _q in load_feedback_questions():
+        _key, _qtype, _prompt = _q["key"], _q["type"], _q["prompt"]
+        st.markdown(
+            f'<div style="font-family: Inter, sans-serif; font-size: 13px; '
+            f'font-weight: 600; color: {COLOURS["text"]}; margin: 8px 0 2px 0;">'
+            f'{html.escape(_prompt)}</div>',
+            unsafe_allow_html=True,
+        )
+        if _qtype == "text":
+            _texts = load_text_answers(_key)
+            if not _texts:
+                st.markdown(
+                    f'<p style="font-size: 12px; color: {COLOURS["text_secondary"]};">'
+                    f'— no answers</p>', unsafe_allow_html=True,
+                )
+            for _t in _texts:
+                st.markdown(
+                    f'<div style="font-family: Inter, sans-serif; font-size: 13px; '
+                    f'color: {COLOURS["text"]}; border-left: 2px solid '
+                    f'{COLOURS["border"]}; padding: 2px 0 2px 10px; margin: 2px 0;">'
+                    f'{html.escape(_t)}</div>', unsafe_allow_html=True,
+                )
+            continue
+        # scale / select / multiselect → a bar of counts per option, in a stable order.
+        _counts = _aggs.get(_key, {})
+        if not _counts:
+            st.markdown(
+                f'<p style="font-size: 12px; color: {COLOURS["text_secondary"]};">'
+                f'— no answers</p>', unsafe_allow_html=True,
+            )
+            continue
+        if _qtype == "scale":
+            _labels = [str(i) for i in range(_q["min"], _q["max"] + 1)]
+        elif _qtype in ("select", "multiselect"):
+            # configured options first, then any stray answers not in the option list
+            _opts = _q.get("options", [])
+            _labels = _opts + [a for a in _counts if a not in _opts]
+        else:
+            _labels = list(_counts.keys())
+        _values = [_counts.get(lbl, 0) for lbl in _labels]
+        _fig = go.Figure(go.Bar(x=_labels, y=_values, marker_color=COLOURS["green"]))
+        _fig.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(family="JetBrains Mono, monospace",
+                      color=COLOURS["text_secondary"], size=11),
+            xaxis=dict(showgrid=False, zeroline=False, type="category"),
+            yaxis=dict(gridcolor=COLOURS["border"], zeroline=False, dtick=1),
+            margin=dict(l=30, r=10, t=6, b=24), height=200, showlegend=False,
+        )
+        # For a 0-10 scale, a mean is a useful one-number summary.
+        if _qtype == "scale":
+            _total = sum(_values)
+            if _total:
+                _mean = sum(int(lbl) * n for lbl, n in zip(_labels, _values)) / _total
+                st.markdown(
+                    f'<p style="font-family: JetBrains Mono, monospace; font-size: 12px; '
+                    f'color: {COLOURS["green"]}; margin: 0;">average {_mean:.1f}</p>',
+                    unsafe_allow_html=True,
+                )
+        st.plotly_chart(_fig, use_container_width=True, key=f"fb_survey_chart_{_key}")
+
+st.markdown(
+    f'<div style="font-family: Inter, sans-serif; font-size: 13px; '
+    f'font-weight: 600; color: {COLOURS["text"]}; margin: 14px 0 8px 0;">'
+    f'Open messages</div>',
+    unsafe_allow_html=True,
+)
 feedback_items = load_all_feedback()
 if not feedback_items:
     st.markdown(

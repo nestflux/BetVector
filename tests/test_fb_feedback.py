@@ -197,3 +197,26 @@ def test_dashboard_wires_feedback_fab():
     assert "st-key-feedback_fab" in src           # fixed-position via the stable key class
     assert "render_feedback_fab()" in src         # called in main() after nav.run()
     compile(src, "dashboard.py", "exec")
+
+
+# ============================================================================
+# FB-04 — owner analytics in Admin
+# ============================================================================
+
+def test_scale_question_aggregates_for_chart(db):
+    uid = _mk_user(db)
+    submit_survey(uid, {"keep_using": 8})
+    submit_survey(uid, {"keep_using": 8})
+    submit_survey(uid, {"keep_using": 10})
+    # backs the FB-04 0-10 bar chart / average
+    assert load_survey_aggregates()["keep_using"] == {"8": 2, "10": 1}
+
+
+def test_admin_wires_questionnaire_analytics():
+    src = (ROOT / "src" / "delivery" / "views" / "admin.py").read_text()
+    assert "load_survey_aggregates" in src and "load_feedback_questions" in src
+    assert "survey_count" in src and "load_text_answers" in src
+    assert "Questionnaire results" in src
+    assert "go.Bar(" in src                       # per-question bar charts
+    assert "html.escape(_prompt)" in src and "html.escape(_t)" in src   # escaped
+    compile(src, "admin.py", "exec")
