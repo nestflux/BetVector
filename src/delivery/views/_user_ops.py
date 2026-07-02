@@ -21,7 +21,9 @@ Master Plan refs: MP §6 Schema (users, bet_log tables)
 from datetime import datetime
 
 from src.database.db import get_session
-from src.database.models import BetLog, User, UserFeedback
+from src.database.models import (
+    BetLog, FeedbackAnswer, FeedbackSurvey, User, UserFeedback,
+)
 from src.world_cup.models import WCAccaLeg, WCAccumulator, WCBetLog
 
 
@@ -403,7 +405,8 @@ def delete_user(user_id: int) -> bool:
             # users.id) BEFORE the user row, or the delete violates the constraint:
             #   - league bets (bet_log)
             #   - WC personal bets (wc_acca_leg -> wc_accumulator -> wc_bet_log)
-            #   - feedback (user_feedback)
+            #   - feedback message (user_feedback)
+            #   - questionnaire (feedback_answer -> feedback_survey)
             # all in one transaction. Other users' rows are untouched.
             session.query(BetLog).filter(
                 BetLog.user_id == user_id,
@@ -412,6 +415,19 @@ def delete_user(user_id: int) -> bool:
             # Feedback rows also FK users.id (UM-07) — remove them before the user.
             session.query(UserFeedback).filter(
                 UserFeedback.user_id == user_id,
+            ).delete(synchronize_session=False)
+            # Questionnaire responses (feedback_answer → feedback_survey), FK to
+            # users.id (FB-01) — answers first (child), then surveys.
+            survey_ids = [
+                s_id for (s_id,) in session.query(FeedbackSurvey.id)
+                .filter(FeedbackSurvey.user_id == user_id).all()
+            ]
+            if survey_ids:
+                session.query(FeedbackAnswer).filter(
+                    FeedbackAnswer.survey_id.in_(survey_ids)
+                ).delete(synchronize_session=False)
+            session.query(FeedbackSurvey).filter(
+                FeedbackSurvey.user_id == user_id,
             ).delete(synchronize_session=False)
             session.delete(user)
             session.commit()

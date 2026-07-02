@@ -177,6 +177,67 @@ class UserFeedback(Base):
         return f"UserFeedback(id={self.id}, user={self.user_id}, cat={self.category})"
 
 
+class FeedbackSurvey(Base):
+    """One submission of the short structured feedback questionnaire (FB-01).
+
+    The questionnaire is a separate, guided channel from the open-text
+    ``user_feedback`` message: its questions come from ``config/settings.yaml``
+    (``feedback:``) and each answer is stored NORMALIZED in ``feedback_answer`` (one
+    row per answer — so a multi-select stores several), keyed by ``question_key``, so
+    responses aggregate with a ``GROUP BY`` and the question set can change in config
+    without a schema migration. Deleted with the user in ``delete_user``.
+    """
+
+    __tablename__ = "feedback_survey"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(String, nullable=False, server_default=func.now())
+
+    # Deleting a survey removes its answers (parent owns the answers).
+    answers = relationship(
+        "FeedbackAnswer", back_populates="survey",
+        cascade="all, delete-orphan", order_by="FeedbackAnswer.id",
+    )
+
+    __table_args__ = (
+        Index("ix_feedback_survey_user", "user_id"),
+    )
+
+    def __repr__(self) -> str:
+        return f"FeedbackSurvey(id={self.id}, user={self.user_id})"
+
+
+class FeedbackAnswer(Base):
+    """One answer within a :class:`FeedbackSurvey` (FB-01).
+
+    ``question_key`` matches a key in the config question set; ``answer`` is the
+    chosen option / scale value / free text, stored as a string (scale values are
+    stored as their string form and parsed back when aggregating). A multi-select
+    question produces one row per selected option.
+    """
+
+    __tablename__ = "feedback_answer"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    survey_id = Column(Integer, ForeignKey("feedback_survey.id"), nullable=False)
+    question_key = Column(String, nullable=False)
+    answer = Column(String, nullable=False)
+
+    survey = relationship("FeedbackSurvey", back_populates="answers")
+
+    __table_args__ = (
+        Index("ix_feedback_answer_survey", "survey_id"),
+        Index("ix_feedback_answer_key", "question_key"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"FeedbackAnswer(survey={self.survey_id}, "
+            f"q={self.question_key}, a={self.answer!r})"
+        )
+
+
 # ============================================================================
 # 2. LEAGUES
 # ============================================================================
