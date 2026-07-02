@@ -10072,7 +10072,15 @@ exposes all four flags; the stale "informational/E11" note is replaced. **Existi
 prefs are untouched** — only the default for NEW users flips (the owner keeps league=1,1,1
 / wc=0 and can self-toggle). 3 new tests; **1079/1079**.
 
-## UM — User Management Hardening · APPROVED (owner-approved 2026-07-01, building on branch `user-mgmt` → PR #4)
+## UM — User Management Hardening · ✅ COMPLETE 8/8 (owner-approved 2026-07-01; branch `user-mgmt` → PR #4; masterplan v1.12 → v1.13)
+
+**Outcome (2026-07-01):** all 8 issues done. UM-01..04 independently reviewed → Gate 2
+**CLEAN** · Gate 3 **APPROVED**; UM-05..07 + the whole epic → holistic review **APPROVED**
+(the UM-06 session-token change scrutinised as security-critical — the HMAC binds the
+epoch, so a token can't be forged or downgraded, and legacy 3-part cookies still verify).
+New `users.last_login_at`, `users.session_epoch`, and the `user_feedback` table are on
+LOCAL + Neon. Shadow-safe (`value_finder` ×2 + `predictor` empty diff vs `main`). Full
+suite **1364**. Commits 2229f3d/abcaf5b/2c50ba1/356a67e/6e868ec/7013d0c/3669c75 (+ close).
 
 Full owner lifecycle control over tester accounts from the **Admin** page, plus the
 visibility/access/feedback utilities that matter for running a small tester round —
