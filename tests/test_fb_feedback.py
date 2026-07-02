@@ -183,3 +183,17 @@ def test_settings_links_to_feedback_page_without_inline_form():
     assert 'st.switch_page("views/feedback.py")' in src   # links to the page
     assert 'st.form("feedback_form"' not in src           # the inline form was removed
     compile(src, "settings.py", "exec")
+
+
+# ============================================================================
+# FB-03 — floating button + quick-feedback dialog
+# ============================================================================
+
+def test_dashboard_wires_feedback_fab():
+    src = (ROOT / "src" / "delivery" / "dashboard.py").read_text()
+    assert "def render_feedback_fab" in src
+    assert "@st.dialog" in src and "def _feedback_dialog" in src
+    assert "submit_feedback(" in src              # the dialog stores feedback
+    assert "st-key-feedback_fab" in src           # fixed-position via the stable key class
+    assert "render_feedback_fab()" in src         # called in main() after nav.run()
+    compile(src, "dashboard.py", "exec")
