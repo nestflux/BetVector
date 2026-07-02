@@ -68,6 +68,8 @@ def submit_survey(user_id, answers) -> bool:
     for key, val in answers.items():
         values = val if isinstance(val, (list, tuple, set)) else [val]
         for v in values:
+            if v is None:            # an unanswered select/radio → skip (not "None")
+                continue
             s = str(v).strip()
             if s:
                 rows.append((str(key), s))
