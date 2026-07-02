@@ -431,3 +431,72 @@ def test_admin_view_wires_signout():
 def test_dashboard_wires_epoch_check():
     src = (ROOT / "src" / "delivery" / "dashboard.py").read_text()
     assert "session_token_epoch(token)" in src and "get_session_epoch(" in src
+
+
+# ============================================================================
+# UM-07 — Feedback capture
+# ============================================================================
+from src.database.models import UserFeedback  # noqa: E402
+from src.delivery.views._user_ops import (  # noqa: E402
+    load_all_feedback, owner_user_id, submit_feedback,
+)
+
+
+def test_submit_and_load_feedback(db):
+    uid = _mk_user(db, name="Tessa", email="tessa@x.com")
+    assert submit_feedback(uid, "The odds didn't load", "Bug") is True
+    items = load_all_feedback()
+    assert len(items) == 1
+    assert items[0]["name"] == "Tessa"
+    assert items[0]["category"] == "Bug"
+    assert items[0]["message"] == "The odds didn't load"
+
+
+def test_submit_feedback_rejects_empty(db):
+    uid = _mk_user(db)
+    assert submit_feedback(uid, "   ", "Bug") is False
+    assert load_all_feedback() == []
+
+
+def test_load_feedback_newest_first(db):
+    uid = _mk_user(db)
+    with db() as s:
+        s.add(UserFeedback(user_id=uid, message="older", category="Idea",
+                           created_at="2026-01-01T00:00:00"))
+        s.add(UserFeedback(user_id=uid, message="newer", category="Idea",
+                           created_at="2026-02-01T00:00:00"))
+        s.commit()
+    assert [i["message"] for i in load_all_feedback()] == ["newer", "older"]
+
+
+def test_owner_user_id_resolves_owner(db):
+    _mk_user(db, name="V", email="v@x.com", role="viewer")
+    oid = _mk_user(db, name="O", email="o@x.com", role="owner")
+    assert owner_user_id() == oid
+
+
+def test_owner_user_id_none_when_no_owner(db):
+    _mk_user(db, role="viewer")
+    assert owner_user_id() is None
+
+
+def test_delete_user_removes_their_feedback_only(db):
+    keep = _mk_user(db, name="K", email="k@x.com", role="owner")   # owner survives
+    victim = _mk_user(db, name="V", email="v@x.com", role="viewer")
+    submit_feedback(victim, "bye", "Other")
+    submit_feedback(keep, "mine", "Idea")
+    assert delete_user(victim) is True                            # FK-safe with feedback
+    assert [i["message"] for i in load_all_feedback()] == ["mine"]
+
+
+def test_settings_wires_feedback_form():
+    src = (ROOT / "src" / "delivery" / "views" / "settings.py").read_text()
+    assert "submit_feedback" in src and "Send Feedback" in src
+    compile(src, "settings.py", "exec")
+
+
+def test_admin_wires_feedback_display_escaped():
+    src = (ROOT / "src" / "delivery" / "views" / "admin.py").read_text()
+    assert "load_all_feedback" in src
+    assert "html.escape(fb" in src            # tester-controlled text is escaped
+    compile(src, "admin.py", "exec")

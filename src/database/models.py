@@ -152,6 +152,31 @@ class User(Base):
         )
 
 
+class UserFeedback(Base):
+    """A tester's feedback message (UM-07).
+
+    Captured in-app so the owner can read it on the Admin page (and, best-effort,
+    receive it by email).  User-scoped like every personal record; a NEW table (no
+    ALTER migration — created by ``create_all``).  Deleted with the user in
+    ``delete_user`` (NOT NULL FK to ``users.id``).
+    """
+
+    __tablename__ = "user_feedback"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    category = Column(String, nullable=True)   # Bug / Idea / Other (free-form label)
+    message = Column(String, nullable=False)
+    created_at = Column(String, nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        Index("ix_user_feedback_user", "user_id"),
+    )
+
+    def __repr__(self) -> str:
+        return f"UserFeedback(id={self.id}, user={self.user_id}, cat={self.category})"
+
+
 # ============================================================================
 # 2. LEAGUES
 # ============================================================================

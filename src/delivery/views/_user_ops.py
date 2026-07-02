@@ -21,7 +21,7 @@ Master Plan refs: MP §6 Schema (users, bet_log tables)
 from datetime import datetime
 
 from src.database.db import get_session
-from src.database.models import BetLog, User
+from src.database.models import BetLog, User, UserFeedback
 from src.world_cup.models import WCAccaLeg, WCAccumulator, WCBetLog
 
 
@@ -273,6 +273,70 @@ def update_user_profile(user_id, name=None, email=None):
         return False, "Could not update the profile — please try again."
 
 
+def submit_feedback(user_id, message, category=None) -> bool:
+    """Store a tester's feedback message (UM-07). Empty messages are rejected;
+    returns True on success, False otherwise. Never raises."""
+    msg = (message or "").strip()
+    if not msg:
+        return False
+    try:
+        with get_session() as session:
+            session.add(UserFeedback(
+                user_id=user_id,
+                category=((category or "").strip() or None),
+                message=msg,
+                created_at=datetime.utcnow().isoformat(),
+            ))
+            session.commit()
+        return True
+    except Exception:
+        return False
+
+
+def load_all_feedback(limit: int = 100) -> list:
+    """All feedback submissions, newest first, each with the submitter's name (UM-07).
+    A left join keeps a row even if the submitter was later deleted. [] on error."""
+    try:
+        with get_session() as session:
+            rows = (
+                session.query(UserFeedback, User.name)
+                .join(User, UserFeedback.user_id == User.id, isouter=True)
+                .order_by(UserFeedback.created_at.desc())
+                .limit(limit)
+                .all()
+            )
+            return [
+                {
+                    "id": fb.id,
+                    "user_id": fb.user_id,
+                    "name": name or "—",
+                    "category": fb.category or "—",
+                    "message": fb.message,
+                    # ISO "YYYY-MM-DDTHH:MM..." → "YYYY-MM-DD HH:MM" for display.
+                    "created_at": (fb.created_at or "")[:16].replace("T", " ") or "—",
+                }
+                for fb, name in rows
+            ]
+    except Exception:
+        return []
+
+
+def owner_user_id():
+    """The primary owner's user id (lowest-id owner), or None — used to route
+    owner-facing notifications such as the UM-07 feedback email. Never raises."""
+    try:
+        with get_session() as session:
+            row = (
+                session.query(User.id)
+                .filter(User.role == "owner")
+                .order_by(User.id)
+                .first()
+            )
+            return row[0] if row else None
+    except Exception:
+        return None
+
+
 def set_user_role(user_id, role) -> bool:
     """Change a user's role between ``"viewer"`` and ``"owner"`` (UM-04).
 
@@ -339,11 +403,16 @@ def delete_user(user_id: int) -> bool:
             # users.id) BEFORE the user row, or the delete violates the constraint:
             #   - league bets (bet_log)
             #   - WC personal bets (wc_acca_leg -> wc_accumulator -> wc_bet_log)
+            #   - feedback (user_feedback)
             # all in one transaction. Other users' rows are untouched.
             session.query(BetLog).filter(
                 BetLog.user_id == user_id,
             ).delete(synchronize_session=False)
             _delete_wc_personal_bets(session, user_id)
+            # Feedback rows also FK users.id (UM-07) — remove them before the user.
+            session.query(UserFeedback).filter(
+                UserFeedback.user_id == user_id,
+            ).delete(synchronize_session=False)
             session.delete(user)
             session.commit()
         return True
