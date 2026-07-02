@@ -500,3 +500,60 @@ def test_admin_wires_feedback_display_escaped():
     assert "load_all_feedback" in src
     assert "html.escape(fb" in src            # tester-controlled text is escaped
     compile(src, "admin.py", "exec")
+
+
+# ============================================================================
+# UM-08 — end-to-end lifecycle (all seven capabilities together)
+# ============================================================================
+
+def test_um_full_tester_lifecycle(db):
+    """An owner manages a tester through the whole lifecycle: edit → login →
+    feedback → password reset → sign-out-everywhere → role change → delete
+    (with WC bets + feedback), sparing everyone else."""
+    owner = _mk_user(db, name="Owner", email="owner@x.com", role="owner")
+    tester = _mk_user(db, name="Tester One", email="tester@x.com", role="viewer",
+                      password="temp1234", must_change=1)
+
+    # never logged in yet
+    with db() as s:
+        assert s.get(User, tester).last_login_at is None
+
+    # UM-02: fix the name + email
+    ok, _ = update_user_profile(tester, name="Tester Uno", email="uno@x.com")
+    assert ok
+
+    # UM-05: they log in → last_login stamped
+    record_login(tester)
+    with db() as s:
+        assert s.get(User, tester).last_login_at is not None
+
+    # UM-07: they submit feedback (owner can read it)
+    assert submit_feedback(tester, "Loving the odds auto-fill", "Idea")
+    assert any(i["message"].startswith("Loving") for i in load_all_feedback())
+
+    # UM-01: owner resets their password → forced change re-armed, temp works
+    temp = admin_reset_password(tester)
+    with db() as s:
+        u = s.get(User, tester)
+        assert temp and u.must_change_password == 1
+        assert verify_password(temp, u.password_hash)
+
+    # UM-06: sign out everywhere → epoch bumps
+    before = get_session_epoch(tester)
+    assert bump_session_epoch(tester)
+    assert get_session_epoch(tester) == before + 1
+
+    # UM-04: promote to owner, then back to viewer (another owner exists throughout)
+    assert set_user_role(tester, "owner")
+    assert set_user_role(tester, "viewer")
+
+    # UM-03/07: give them WC bets, then delete — every referencing row goes, others stay
+    _seed_wc_match(db)
+    _add_wc_bets(db, tester)
+    assert delete_user(tester) is True
+    with db() as s:
+        assert s.get(User, tester) is None
+        assert s.query(WCBetLog).filter_by(user_id=tester).count() == 0
+        assert s.query(WCAccumulator).filter_by(user_id=tester).count() == 0
+    assert all(i["user_id"] != tester for i in load_all_feedback())
+    assert owner_user_id() == owner                 # the original owner is untouched
