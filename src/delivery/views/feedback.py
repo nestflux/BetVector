@@ -15,36 +15,12 @@ Read/write only touches the feedback tables — nowhere near the model/value pat
 import streamlit as st
 
 from src.auth import get_session_user_id
-from src.database.db import get_session
-from src.database.models import User
 from src.delivery.views._feedback_ops import load_feedback_questions, submit_survey
-from src.delivery.views._user_ops import owner_user_id, submit_feedback
+from src.delivery.views._user_ops import notify_owner_of_feedback, submit_feedback
 
-# Resolve the current user's id (+ name for the notify email). A tiny read; never
-# import from settings.py (its module-level code renders the whole Settings page).
+# The current user's id. A tiny read; never import from settings.py (its module-level
+# code renders the whole Settings page).
 _uid = get_session_user_id()
-try:
-    with get_session() as _s:
-        _u = _s.get(User, _uid)
-        _uname = _u.name if _u else "a user"
-except Exception:
-    _uname = "a user"
-
-
-def _notify_owner(category: str, message: str) -> None:
-    """Best-effort: email the owner about a new open-form submission. Never raises,
-    never blocks the submit (the message is already stored + on the Admin page)."""
-    try:
-        oid = owner_user_id()
-        if oid:
-            from src.delivery.email_alerts import send_alert
-            send_alert(
-                oid,
-                f"BetVector feedback from {_uname}",
-                f"[{category}]\n\n{message.strip()}",
-            )
-    except Exception:
-        pass
 
 
 # ---- Page header ------------------------------------------------------------
@@ -75,7 +51,7 @@ if fbp_sent:
     if not (fbp_message or "").strip():
         st.warning("Please enter a message before sending.")
     elif submit_feedback(_uid, fbp_message, fbp_category):
-        _notify_owner(fbp_category, fbp_message)
+        notify_owner_of_feedback(_uid, fbp_category, fbp_message)
         st.success("✅ Thanks — your feedback was sent.")
     else:
         st.error("Couldn't send your feedback — please try again.")
