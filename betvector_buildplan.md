@@ -10159,3 +10159,60 @@ One commit per issue on `user-mgmt` → PR #4, exactly like the WC epics.
 a specific tester — owner-only, banner, audited) and *per-user feature flags / a middle
 role* (finer capability grants than the owner/viewer split). More design + security weight;
 revisit once there are more than a handful of users.
+
+## FB — Feedback Experience · APPROVED (owner-approved 2026-07-01, building on branch `feedback` → PR #5)
+
+Make feedback a first-class, visible channel and add a short structured questionnaire
+alongside the open form — the owner is actively collecting tester feedback to guide
+direction. Builds directly on UM-07 (the `user_feedback` table + `submit_feedback` /
+`load_all_feedback` / owner email-notify). Owner chose **both** an open form AND a
+questionnaire, surfaced via a **sidebar entry + a floating button**. Streamlit 1.41
+confirmed (has `st.dialog`, so the floating button opens a real modal). **Shadow-safe:
+feedback only — `value_finder.py` ×2 + `predictor.py` byte-for-byte unchanged, nowhere
+near the model/value/prediction path.** Owner-gated analytics, atomic writes, every
+rendered field escaped; per-issue tests + 3 gates; one commit per issue on `feedback`
+→ PR #5.
+
+- **FB-01 — Config-driven questionnaire + structured storage.** Questions live in
+  `config/settings.yaml` (`feedback:` — a list of `{key, prompt, type, options}` where
+  type ∈ scale / select / multiselect / text), so the owner can add / reorder / reword
+  questions without a code or schema change (Rule 6). Answers land in a NORMALIZED pair
+  of tables — `feedback_survey` (id, user_id FK, created_at) + `feedback_answer` (id,
+  survey_id FK, question_key, answer) — so multi-select fits (one row per choice) and
+  aggregation is a `GROUP BY question_key, answer` (NOT stuffed into the open-text blob).
+  New tables via `create_all` (applied to local + Neon); a survey's answers are removed
+  with the user in `delete_user`. Helpers (in a small feedback-ops module):
+  `load_feedback_questions()` (from config), `submit_survey(user_id, answers)` (one
+  transaction), `load_survey_aggregates()` / `load_recent_surveys()`. Initial question
+  set: keep-using 0–10 · most-useful (multiselect: Today's Picks / WC tracker / Deep dive
+  / Bankroll / Model Health) · trust-the-model (Not yet / Somewhat / Yes) · frequency
+  (Daily / A few times a week / Rarely) · one open "confusing or missing?". AC:
+  questions read from config · a submission stores one row per answer · multi-select
+  stores multiple · aggregates group correctly · shadow-safe.
+- **FB-02 — Dedicated Feedback page (open form + questionnaire).** New
+  `src/delivery/views/feedback.py` with two blocks — **💬 Send feedback** (the open form,
+  reusing UM-07's `submit_feedback`) and **📋 Quick questions** (renders the config
+  questionnaire dynamically; submit → `submit_survey`). Registered in the nav for ALL
+  users. The Settings feedback section is replaced by a one-line link to the page (no
+  duplicate form). AC: both blocks work · questionnaire renders every configured
+  question by type · Settings links to the page · all dynamic text escaped.
+- **FB-03 — Visibility: sidebar entry + floating button.** The nav registration gives
+  the always-visible **sidebar** entry; a fixed-position **floating "💬" button** on
+  every page opens an `@st.dialog` quick-feedback modal (open form + a one-tap "quick
+  rating"), wired centrally in `dashboard.py` (mirroring the existing `render_help_link`
+  pattern) so every page gets it without per-view edits. AC: sidebar entry visible on
+  every page · floating button opens the dialog · submitting from the dialog stores
+  feedback · no layout regressions.
+- **FB-04 — Owner analytics in Admin.** The Admin Feedback section gains an AGGREGATED
+  questionnaire view — response distributions (an NPS-style 0–10 histogram, "most useful"
+  bar counts, trust / frequency breakdowns via Plotly) from `feedback_answer` GROUP BY,
+  alongside the raw open messages (UM-07). Owner-only (behind the existing Admin role
+  gate). AC: aggregates render per question · multi-select counted correctly · empty
+  state when no responses · escaped.
+- **FB-05 — Holistic review + docs (closes epic).** Holistic cross-issue review;
+  Rule 8 Tier-1 masterplan update (feedback schema + the FB epic paragraph) + version
+  1.13 → 1.14; build-plan epic close; push → PR #5.
+
+Tests per issue (config→question load, survey submit + multi-select, aggregation math,
+view AST/escaping, dialog wiring, delete-user cascade). Each issue: full 3-gate +
+commit/push to `feedback` → PR #5, exactly like UM / WC-ODDS.
