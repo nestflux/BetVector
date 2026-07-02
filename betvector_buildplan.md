@@ -10160,7 +10160,17 @@ a specific tester — owner-only, banner, audited) and *per-user feature flags /
 role* (finer capability grants than the owner/viewer split). More design + security weight;
 revisit once there are more than a handful of users.
 
-## FB — Feedback Experience · APPROVED (owner-approved 2026-07-01, building on branch `feedback` → PR #5)
+## FB — Feedback Experience · ✅ COMPLETE 5/5 (owner-approved 2026-07-01; branch `feedback` → PR #5; masterplan v1.13 → v1.14)
+
+**Outcome (2026-07-01):** all 5 issues done. Holistic cross-issue review **APPROVED**
+(aggregation correctness, config safety, FB-02 `switch_page` test-safety, FB-03 dialog
+open/close, FB-04 XSS + owner-gating, delete-cascade FK order all verified). Neon
+round-trip: submitted a questionnaire on real Postgres → aggregated (multi-select per
+option) → cleaned up (0 residue). New `feedback_survey` + `feedback_answer` tables on
+LOCAL + Neon. Shadow-safe (`value_finder` ×2 + `predictor` empty diff vs `main`). The
+open-form owner-notify is a shared `notify_owner_of_feedback` helper (DRY, from the
+review). Full suite **1379**. Commits e968e25/54783e5/83ee210/aa3b6f7 (+ close).
+NOTE: the FB-03 floating button + dialog are display-only — eyeball on redeploy.
 
 Make feedback a first-class, visible channel and add a short structured questionnaire
 alongside the open form — the owner is actively collecting tester feedback to guide

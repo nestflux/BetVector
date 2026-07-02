@@ -151,8 +151,9 @@ def _feedback_dialog() -> None:
     dialog via ``st.rerun`` (so the click-away / X close can't reopen it — the trigger
     button is False on the next run).
     """
-    from src.database.models import User
-    from src.delivery.views._user_ops import owner_user_id, submit_feedback
+    from src.delivery.views._user_ops import (
+        notify_owner_of_feedback, submit_feedback,
+    )
 
     uid = get_session_user_id()
     st.caption("A quick note — bug, idea, or anything. It goes straight to the team.")
@@ -164,18 +165,7 @@ def _feedback_dialog() -> None:
         if not (msg or "").strip():
             st.warning("Please enter a message before sending.")
         elif submit_feedback(uid, msg, cat):
-            try:
-                oid = owner_user_id()
-                if oid:
-                    from src.database.db import get_session
-                    from src.delivery.email_alerts import send_alert
-                    with get_session() as _s:
-                        _u = _s.get(User, uid)
-                        _name = _u.name if _u else "a user"
-                    send_alert(oid, f"BetVector feedback from {_name}",
-                               f"[{cat}]\n\n{msg.strip()}")
-            except Exception:
-                pass
+            notify_owner_of_feedback(uid, cat, msg)   # shared best-effort notify
             st.success("✅ Thanks — sent!")
             st.rerun()   # closes the dialog
         else:

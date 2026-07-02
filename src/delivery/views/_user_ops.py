@@ -339,6 +339,29 @@ def owner_user_id():
         return None
 
 
+def notify_owner_of_feedback(user_id, category, message) -> None:
+    """Best-effort: email the owner about a new OPEN-form feedback submission (UM-07 /
+    FB). Resolves the submitter's name + the primary owner, then sends via the existing
+    email_alerts. Never raises and never blocks — the message is already stored, so a
+    missing / failed email is silently ignored. Shared by the Feedback page and the
+    floating-button dialog so the notify logic lives in exactly one place."""
+    try:
+        oid = owner_user_id()
+        if not oid:
+            return
+        with get_session() as session:
+            u = session.get(User, user_id)
+            name = u.name if u else "a user"
+        from src.delivery.email_alerts import send_alert   # lazy: keep this module light
+        send_alert(
+            oid,
+            f"BetVector feedback from {name}",
+            f"[{category}]\n\n{str(message).strip()}",
+        )
+    except Exception:
+        pass
+
+
 def set_user_role(user_id, role) -> bool:
     """Change a user's role between ``"viewer"`` and ``"owner"`` (UM-04).
 
