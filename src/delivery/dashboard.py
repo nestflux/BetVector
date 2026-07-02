@@ -142,6 +142,69 @@ def render_help_link(page_title: str) -> None:
             st.switch_page("views/help.py")
 
 
+@st.dialog("💬 Send feedback")
+def _feedback_dialog() -> None:
+    """FB-03: the quick open-feedback form shown by the floating button's modal.
+
+    A trimmed version of the Feedback page's open form (category + message), reusing
+    UM-07's ``submit_feedback`` + best-effort owner email notify. Submitting closes the
+    dialog via ``st.rerun`` (so the click-away / X close can't reopen it — the trigger
+    button is False on the next run).
+    """
+    from src.database.models import User
+    from src.delivery.views._user_ops import owner_user_id, submit_feedback
+
+    uid = get_session_user_id()
+    st.caption("A quick note — bug, idea, or anything. It goes straight to the team.")
+    cat = st.selectbox("Type", options=["Bug", "Idea", "Question", "Other"],
+                       key="fab_category")
+    msg = st.text_area("Your feedback", key="fab_message",
+                       placeholder="What happened, or what would you like to see?")
+    if st.button("Send feedback", key="fab_send", type="primary"):
+        if not (msg or "").strip():
+            st.warning("Please enter a message before sending.")
+        elif submit_feedback(uid, msg, cat):
+            try:
+                oid = owner_user_id()
+                if oid:
+                    from src.database.db import get_session
+                    from src.delivery.email_alerts import send_alert
+                    with get_session() as _s:
+                        _u = _s.get(User, uid)
+                        _name = _u.name if _u else "a user"
+                    send_alert(oid, f"BetVector feedback from {_name}",
+                               f"[{cat}]\n\n{msg.strip()}")
+            except Exception:
+                pass
+            st.success("✅ Thanks — sent!")
+            st.rerun()   # closes the dialog
+        else:
+            st.error("Couldn't send — please try again.")
+
+
+def render_feedback_fab() -> None:
+    """FB-03: a floating "💬" button, bottom-right on every authenticated page, that
+    opens the quick-feedback modal. Called from main() after nav.run().
+
+    The button is a normal ``st.button`` fixed-positioned via its stable
+    ``st-key-feedback_fab`` class (so no fragile DOM targeting), and the dialog is
+    opened only on a fresh click — Streamlit's ``@st.dialog`` handles the modal.
+    """
+    st.markdown(
+        "<style>"
+        ".st-key-feedback_fab{position:fixed;bottom:24px;right:24px;z-index:9990;"
+        "width:auto;}"
+        ".st-key-feedback_fab button{border-radius:50%;width:52px;height:52px;"
+        "font-size:22px;box-shadow:0 4px 12px rgba(0,0,0,0.4);"
+        "background:#3FB950;color:#0D1117;border:none;padding:0;}"
+        ".st-key-feedback_fab button:hover{background:#2EA043;color:#0D1117;}"
+        "</style>",
+        unsafe_allow_html=True,
+    )
+    if st.button("💬", key="feedback_fab", help="Send feedback"):
+        _feedback_dialog()
+
+
 # ============================================================================
 # Page Config — must be first Streamlit call
 # ============================================================================
@@ -1119,6 +1182,8 @@ def main() -> None:
     # shown above the page content for any page that has a tour card.
     render_help_link(getattr(nav, "title", ""))
     nav.run()
+    # FB-03: floating feedback button, bottom-right on every authenticated page.
+    render_feedback_fab()
 
 
 if __name__ == "__main__":
