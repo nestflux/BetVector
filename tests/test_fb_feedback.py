@@ -149,3 +149,37 @@ def test_delete_user_removes_their_surveys(db):
         assert s.query(FeedbackSurvey).filter_by(user_id=victim).count() == 0
         assert s.query(FeedbackAnswer).count() == 1   # only keep's one answer
         assert s.query(FeedbackSurvey).filter_by(user_id=keep).count() == 1
+
+
+# ============================================================================
+# FB-02 — dedicated Feedback page (open form + questionnaire) + wiring
+# ============================================================================
+
+def test_submit_survey_skips_none_answers(db):
+    uid = _mk_user(db)
+    # an unanswered st.radio yields None → it must be skipped, not stored as "None"
+    assert submit_survey(uid, {"trust_model": None, "keep_using": 7}) is True
+    with db() as s:
+        keys = [a.question_key for a in s.query(FeedbackAnswer).all()]
+        assert keys == ["keep_using"]                 # the None answer was dropped
+
+
+def test_feedback_page_wires_both_channels():
+    src = (ROOT / "src" / "delivery" / "views" / "feedback.py").read_text()
+    assert "submit_feedback(" in src and "submit_survey(" in src
+    assert "load_feedback_questions(" in src
+    for widget in ("st.slider(", "st.radio(", "st.multiselect(", "st.text_input("):
+        assert widget in src                          # every question type rendered
+    compile(src, "feedback.py", "exec")
+
+
+def test_feedback_page_registered_in_nav():
+    src = (ROOT / "src" / "delivery" / "dashboard.py").read_text()
+    assert '"views/feedback.py"' in src
+
+
+def test_settings_links_to_feedback_page_without_inline_form():
+    src = (ROOT / "src" / "delivery" / "views" / "settings.py").read_text()
+    assert 'st.switch_page("views/feedback.py")' in src   # links to the page
+    assert 'st.form("feedback_form"' not in src           # the inline form was removed
+    compile(src, "settings.py", "exec")

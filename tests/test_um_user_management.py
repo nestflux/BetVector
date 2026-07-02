@@ -490,9 +490,13 @@ def test_delete_user_removes_their_feedback_only(db):
 
 
 def test_settings_wires_feedback_form():
-    src = (ROOT / "src" / "delivery" / "views" / "settings.py").read_text()
-    assert "submit_feedback" in src and "Send Feedback" in src
-    compile(src, "settings.py", "exec")
+    # FB-02 relocated the open feedback form to the dedicated Feedback page; Settings
+    # now links there. The open form (submit_feedback) lives on the page.
+    settings_src = (ROOT / "src" / "delivery" / "views" / "settings.py").read_text()
+    feedback_src = (ROOT / "src" / "delivery" / "views" / "feedback.py").read_text()
+    assert "views/feedback.py" in settings_src        # Settings points to the page
+    assert "submit_feedback" in feedback_src          # the open form lives there now
+    compile(settings_src, "settings.py", "exec")
 
 
 def test_admin_wires_feedback_display_escaped():

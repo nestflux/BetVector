@@ -866,6 +866,13 @@ def get_pages() -> list:
             title="Help",
             icon="❓",
         ),
+        # FB-02: Feedback — an open form + a short structured questionnaire, visible
+        # in the nav for all users (the floating button in FB-03 also reaches it).
+        st.Page(
+            "views/feedback.py",
+            title="Feedback",
+            icon="💬",
+        ),
         st.Page(
             "views/match_detail.py",
             title="Match Deep Dive",
