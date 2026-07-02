@@ -430,3 +430,37 @@ enums:
   calibration_methods: ["platt", "isotonic"]
   trigger_types:      ["automatic", "manual", "scheduled"]
   market_assessments: ["profitable", "promising", "insufficient", "unprofitable"]
+
+# ============================================================================
+# Feedback questionnaire (FB-01)
+# ============================================================================
+# The short structured survey shown alongside the open feedback form. Edit / reorder
+# / reword these freely — answers are stored normalized by `key`, so changing the
+# question set needs NO schema migration (older answers keep their old keys).
+#   type: scale       -> a min..max slider (needs min + max)
+#         select       -> pick exactly one of `options`
+#         multiselect  -> pick any of `options` (stored one row per choice)
+#         text         -> a free-text line
+# Keep it SHORT (a long survey gets abandoned).
+feedback:
+  questions:
+    - key: keep_using
+      prompt: "How likely are you to keep using BetVector?"
+      type: scale
+      min: 0
+      max: 10
+    - key: most_useful
+      prompt: "Which parts are most useful to you?"
+      type: multiselect
+      options: ["Today's Picks", "World Cup tracker", "Deep dive", "Bankroll", "Model Health"]
+    - key: trust_model
+      prompt: "Do you trust the model's picks?"
+      type: select
+      options: ["Not yet", "Somewhat", "Yes"]
+    - key: frequency
+      prompt: "How often do you check BetVector?"
+      type: select
+      options: ["Daily", "A few times a week", "Rarely"]
+    - key: confusing
+      prompt: "What's one thing that's confusing or missing?"
+      type: text
