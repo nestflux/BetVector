@@ -38,9 +38,11 @@ from src.database.models import BetLog, InjuryFlag, League, Team, User
 from src.delivery.views._user_ops import (
     clear_bet_history,
     deactivate_user,
+    owner_user_id,
     reactivate_user,
     reset_bankroll,
     reset_everything,
+    submit_feedback,
 )
 
 
@@ -1080,6 +1082,54 @@ else:
             st.success(f"✅ {msg}")
         else:
             st.warning(msg)
+
+    # ==================================================================
+    # Section: Send Feedback — self-service, all users (UM-07)
+    # ==================================================================
+    # Lets a tester send the owner a bug report / idea straight from the app.
+    # Stored on the Admin page; also emailed to the owner best-effort.
+    st.divider()
+    st.markdown(
+        '<div class="bv-section-header">💬 Send Feedback</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f'<p style="font-family: Inter, sans-serif; font-size: 13px; '
+        f'color: {COLOURS["text_secondary"]}; margin-bottom: 12px;">'
+        f'Found a bug or have an idea? Send it straight to the team.'
+        f'</p>',
+        unsafe_allow_html=True,
+    )
+    with st.form("feedback_form", border=False, clear_on_submit=True):
+        fb_category = st.selectbox(
+            "Type", options=["Bug", "Idea", "Question", "Other"], key="fb_category",
+        )
+        fb_message = st.text_area(
+            "Your feedback", key="fb_message",
+            placeholder="What happened, or what would you like to see?",
+        )
+        fb_submitted = st.form_submit_button("Send feedback", type="primary")
+
+    if fb_submitted:
+        if not (fb_message or "").strip():
+            st.warning("Please enter a message before sending.")
+        elif submit_feedback(user_data["id"], fb_message, fb_category):
+            # Best-effort: notify the owner by email. Never blocks the submit — the
+            # message is already stored and visible on the Admin page regardless.
+            try:
+                oid = owner_user_id()
+                if oid:
+                    from src.delivery.email_alerts import send_alert
+                    send_alert(
+                        oid,
+                        f"BetVector feedback from {user_data.get('name', 'a user')}",
+                        f"[{fb_category}]\n\n{fb_message.strip()}",
+                    )
+            except Exception:
+                pass
+            st.success("✅ Thanks — your feedback was sent.")
+        else:
+            st.error("Couldn't send your feedback — please try again.")
 
     # ==================================================================
     # Section 6: Danger Zone — Per-User Reset Controls (E34-04)

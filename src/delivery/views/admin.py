@@ -21,6 +21,7 @@ Security model:
 Master Plan refs: MP §9 Dashboard, MP §6 Schema (users table)
 """
 
+import html
 from datetime import datetime
 from typing import Dict, List, Optional
 
@@ -44,6 +45,7 @@ from src.delivery.views._user_ops import (
     clear_bet_history,
     deactivate_user,
     delete_user,
+    load_all_feedback,
     reactivate_user,
     reset_bankroll,
     set_user_role,
@@ -726,3 +728,45 @@ if create_submitted:
             st.error(
                 "Failed to create user. The email address may already be in use."
             )
+
+st.divider()
+
+# ============================================================================
+# Section 3: Feedback (UM-07)
+# ============================================================================
+# Testers submit feedback from Settings → 💬 Send Feedback; the owner reads it
+# here. Every dynamic field is HTML-escaped (a tester controls the message text).
+
+st.markdown(
+    '<div class="bv-section-header">Feedback</div>',
+    unsafe_allow_html=True,
+)
+
+feedback_items = load_all_feedback()
+if not feedback_items:
+    st.markdown(
+        f'<p style="font-family: Inter, sans-serif; font-size: 13px; '
+        f'color: {COLOURS["text_secondary"]};">No feedback submitted yet.</p>',
+        unsafe_allow_html=True,
+    )
+else:
+    st.markdown(
+        f'<p style="font-family: Inter, sans-serif; font-size: 13px; '
+        f'color: {COLOURS["text_secondary"]}; margin-bottom: 12px;">'
+        f'{len(feedback_items)} message(s), newest first.</p>',
+        unsafe_allow_html=True,
+    )
+    for fb in feedback_items:
+        st.markdown(
+            f'<div style="border: 1px solid {COLOURS["border"]}; border-radius: 6px; '
+            f'padding: 10px 12px; margin-bottom: 8px; background: {COLOURS["surface"]};">'
+            f'<div style="font-family: JetBrains Mono, monospace; font-size: 11px; '
+            f'color: {COLOURS["text_secondary"]};">'
+            f'{html.escape(fb["name"])} · {html.escape(fb["category"])} · '
+            f'{html.escape(fb["created_at"])}</div>'
+            f'<div style="font-family: Inter, sans-serif; font-size: 14px; '
+            f'color: {COLOURS["text"]}; margin-top: 4px; white-space: pre-wrap;">'
+            f'{html.escape(fb["message"])}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
